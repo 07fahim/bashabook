@@ -1,0 +1,42 @@
+import { describe, it, expect } from 'vitest';
+import { daysOfMonth, weightedMeals, daysPresent, headcount, isLocked, type MealMember, type MealChange } from './meals';
+
+const all = { b: true, l: true, d: true };
+const members: MealMember[] = [
+  { id: 'A', joinedOn: '2026-01-01', leftOn: null, defaults: all },
+  { id: 'D', joinedOn: '2026-10-11', leftOn: null, defaults: { b: false, l: true, d: true } },
+];
+const W = { b: 50, l: 100, d: 100 };
+
+describe('meals', () => {
+  it('knows month lengths', () => {
+    expect(daysOfMonth('2026-10-01')).toHaveLength(31);
+    expect(daysOfMonth('2028-02-01')).toHaveLength(29);
+  });
+
+  it('weights defaults, changes and guests; respects join date', () => {
+    const changes: MealChange[] = [
+      { memberId: 'A', date: '2026-10-05', meal: 'l', count: 0 },   // lunch off: -100
+      { memberId: 'A', date: '2026-10-06', meal: 'd', count: 3 },   // 2 guests: +200
+    ];
+    const w = weightedMeals(members, changes, '2026-10-01', W);
+    expect(w.get('A')).toBe(31 * 250 - 100 + 200);   // 7850
+    expect(w.get('D')).toBe(21 * 200);                // joined day 11: 4200
+    expect(daysPresent(members, '2026-10-01').get('D')).toBe(21);
+  });
+
+  it('counts plates for the cook', () => {
+    const changes: MealChange[] = [{ memberId: 'A', date: '2026-10-12', meal: 'd', count: 2 }];
+    expect(headcount(members, changes, '2026-10-12')).toEqual({ b: 1, l: 2, d: 3 });
+    expect(headcount(members, [], '2026-10-10')).toEqual({ b: 1, l: 1, d: 1 });   // D not joined yet
+  });
+
+  it('locks tomorrow at the cutoff, across month and year ends', () => {
+    expect(isLocked('2026-10-10', '2026-10-09T21:59', '22:00')).toBe(false);
+    expect(isLocked('2026-10-10', '2026-10-09T22:00', '22:00')).toBe(true);
+    expect(isLocked('2026-10-10', '2026-10-09T22:00', '22:00:00')).toBe(true);   // Postgres time format
+    expect(isLocked('2026-10-09', '2026-10-09T08:00', '22:00')).toBe(true);
+    expect(isLocked('2026-10-11', '2026-10-09T23:00', '22:00')).toBe(false);
+    expect(isLocked('2027-01-01', '2026-12-31T22:00', '22:00')).toBe(true);
+  });
+});
