@@ -14,18 +14,18 @@ export function Khata({ t }: { t: Dict['khata'] }) {
           <div key={date} className="write grid h-11 grid-cols-[5.5rem_1fr_auto] items-end border-b border-line pb-2" style={step(i)}>
             <dt className="text-sm text-muted">{date}</dt>
             <dd className="border-l-2 border-chili/40 pl-3">{what}</dd>
-            <dd className="tabular-nums">৳{amount}</dd>
+            <dd className="font-semibold tabular-nums">৳{amount}</dd>
           </div>
         ))}
         <div className="write grid h-11 grid-cols-[1fr_auto] items-end pb-2 pl-[5.5rem]" style={step(n)}>
           <dt className="pl-3 text-muted">{t.totalBazar}</dt>
-          <dd className="tabular-nums">৳{t.figures.totalBazar}</dd>
+          <dd className="font-semibold tabular-nums">৳{t.figures.totalBazar}</dd>
         </div>
-        <div className="write grid h-11 grid-cols-[1fr_auto] items-end border-b border-line pb-2 pl-[5.5rem]" style={step(n + 1)}>
+        <div className="write grid h-11 grid-cols-[1fr_auto] items-end pb-2 pl-[5.5rem]" style={step(n + 1)}>
           <dt className="pl-3 text-muted">{t.totalMeals}</dt>
-          <dd className="tabular-nums">{t.figures.totalMeals}</dd>
+          <dd className="font-semibold tabular-nums">{t.figures.totalMeals}</dd>
         </div>
-        <div className="write mt-2 flex items-baseline justify-between gap-4 pt-3" style={step(n + 2)}>
+        <div className="write mt-3 flex items-baseline justify-between gap-4 border-t-2 border-ink pt-4" style={step(n + 2)}>
           <dt className="text-lg font-semibold">{t.mealRate}</dt>
           <dd className="border-b-[3px] border-double border-ink font-display text-3xl font-bold tabular-nums">৳{t.figures.rate}</dd>
         </div>
@@ -37,7 +37,7 @@ export function Khata({ t }: { t: Dict['khata'] }) {
         {[[t.you.food, t.figures.food], [t.you.bills, t.figures.bills], [t.you.paid, t.figures.paid]].map(([label, amount]) => (
           <div key={label} className="flex justify-between text-muted">
             <dt>{label}</dt>
-            <dd className="tabular-nums">৳{amount}</dd>
+            <dd className="font-semibold tabular-nums">৳{amount}</dd>
           </div>
         ))}
         <div className="flex justify-between border-t border-line pt-2 font-semibold text-leaf">
