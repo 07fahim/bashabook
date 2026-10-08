@@ -30,6 +30,7 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
   const line = (hc: typeof tom) => MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(' · ');
   const text = `${me.flatName} · ${m.tomorrow}, ${fmtDay(tomorrow, lang)}\n${line(tom)}`;
   const card = 'mt-8 rounded-2xl border border-line bg-surface p-5';
+  const own = new Set(meals.members.filter(x => !x.inMeals).map(x => x.id));
   const from = editFrom(today), to = addDays(today, 60);
   const h2 = 'text-xl font-bold';
   const small = `min-h-11 px-4 font-semibold ${focus}`;
@@ -131,7 +132,7 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
                 <div className="flex items-baseline justify-between gap-4">
                   <span className="text-lg font-semibold">{x.name}</span>
                   <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
-                    {!x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${a.failed}: ${x.failed}` : ''}
+                    {!x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${a.failed}: ${x.failed}` : own.has(x.id) ? m.ownBadge : ''}
                   </span>
                 </div>
                 {x.claimed && x.id !== me.memberId && (
@@ -162,6 +163,15 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
           <ActionForm action={settingsAction} className="mt-4">
             <input type="hidden" name="lang" value={lang} />
             <Field label={m.cutoff} name="cutoff" type="time" required defaultValue={meals.flat.cutoff.slice(0, 5)} />
+            <fieldset>
+              <legend className="font-semibold">{m.weights}</legend>
+              <p className="text-[15px] text-muted">{m.weightsHint}</p>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {MEALS.map(x => (
+                  <Field key={x} label={m.names[x]} name={`w_${x}`} type="number" inputMode="decimal" min={0} max={10} step={0.25} required defaultValue={meals.flat.weights[x] / 100} />
+                ))}
+              </div>
+            </fieldset>
             <fieldset>
               <legend className="font-semibold">{m.strictness}</legend>
               {(['relaxed', 'strict'] as const).map(s => (

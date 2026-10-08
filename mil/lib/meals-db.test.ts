@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { headcount, indexChanges, mealCount, type Meal } from './meals';
-import { changeMeal, decideRequest, loadHistory, loadMeals, noCooking, requestMeal, saveMeal, setAway, setDefaults, updateSettings } from './meals-db';
+import { changeMeal, decideRequest, loadHistory, loadMeals, noCooking, requestMeal, saveMeal, setAway, setDefaults, setInMeals, updateSettings } from './meals-db';
 
 async function flat() {
   await migrate();
@@ -36,7 +36,7 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await changeMeal(db, flatId, c('2026-10-11'), '2026-10-09T23:00')).toBe('open');
     expect(await changeMeal(db, flatId, c('2026-10-10'), '2026-10-09T23:00')).toBe('late');
     expect(await changeMeal(db, flatId, c('2026-10-08'), '2026-10-09T23:00')).toBe('closed');
-    await updateSettings(db, flatId, { cutoff: '22:00', strictness: 'strict' });
+    await updateSettings(db, flatId, { cutoff: '22:00', strictness: 'strict', weights: { b: 50, l: 100, d: 100 } });
     expect(await changeMeal(db, flatId, c('2026-10-09'), '2026-10-09T23:00')).toBe('closed');   // today
     expect(await changeMeal(db, flatId, c('2026-10-10'), '2026-10-09T23:00')).toBe('request');
     const { changes, requests } = await load();
@@ -116,5 +116,22 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(h.map(r => [r.actor, r.who, r.entityId.split('|').slice(1).join('|')])).toEqual([
       ['Nafis', null, 'nocook'], ['Tahsin', 'Tahsin', 'away'], ['Nafis', 'Tahsin', '2026-10-09|d'], ['Tahsin', 'Tahsin', '2026-10-10|l'],
     ]);
+  });
+
+  it('cooking for yourself keeps locked days and counts no meals after', async () => {
+    const { flatId, tahsin, load, count } = await flat();
+    await setInMeals(db, flatId, tahsin, false, '2026-10-09');
+    expect(await count('2026-10-09', 'l')).toBe(1);   // locked day keeps the old usual meal
+    expect(await count('2026-10-10', 'l')).toBe(0);
+    expect((await load()).members.find(m => m.id === tahsin)!.inMeals).toBe(false);
+    await setInMeals(db, flatId, tahsin, true, '2026-10-09');
+    expect(await count('2026-10-10', 'l')).toBe(1);
+  });
+
+  it('saves meal weights with the other rules', async () => {
+    const { flatId, load } = await flat();
+    await updateSettings(db, flatId, { cutoff: '21:30', strictness: 'relaxed', weights: { b: 75, l: 100, d: 125 } });
+    const { flat: f } = await load();
+    expect([f.cutoff, f.weights]).toEqual(['21:30:00', { b: 75, l: 100, d: 125 }]);
   });
 });

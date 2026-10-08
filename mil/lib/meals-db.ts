@@ -4,8 +4,8 @@ import type { Db } from './db';
 import { mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
 
 export type Strictness = 'relaxed' | 'strict';
-export type FlatInfo = { name: string; cutoff: string; strictness: Strictness; cookToken: string | null; lang: 'bn' | 'en' };
-export type Member = MealMember & { name: string; role: 'member' | 'manager' };
+export type FlatInfo = { name: string; cutoff: string; strictness: Strictness; cookToken: string | null; lang: 'bn' | 'en'; weights: Record<Meal, number> };
+export type Member = MealMember & { name: string; role: 'member' | 'manager'; inMeals: boolean };
 export type HistoryRow = {
   at: Date | string; actor: string | null; who: string | null; entityId: string;
   after: { count?: number; late?: boolean; away?: [string, string]; nocook?: [string, string]; meals?: string };
@@ -18,9 +18,11 @@ const cell = (c: MealChange) => `${c.memberId}|${c.date}|${c.meal}`;
 /** Everything the meal screens need for dates from..to. */
 export async function loadMeals(db: Db, flatId: string, from: string, to: string) {
   const [flat] = await db<FlatInfo>(
-    `select name, cutoff_time::text as cutoff, strictness, cook_link_token as "cookToken", language as lang from flats where id = $1`, [flatId]);
+    `select name, cutoff_time::text as cutoff, strictness, cook_link_token as "cookToken", language as lang,
+       json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights
+     from flats where id = $1`, [flatId]);
   const members = await db<Member>(
-    `select id, name, role, joined_on::text as "joinedOn", left_on::text as "leftOn",
+    `select id, name, role, in_meals as "inMeals", joined_on::text as "joinedOn", left_on::text as "leftOn",
        json_build_object('b', default_b, 'l', default_l, 'd', default_d) as defaults
      from members where flat_id = $1 order by name`, [flatId]);
   const changes = await db<SavedChange>(
@@ -107,8 +109,10 @@ export async function setDefaults(db: Db, flatId: string, memberId: string, d: R
     [flatId, memberId, freezeTo, `${memberId}|defaults`, d, d.b, d.l, d.d]);
 }
 
-export async function updateSettings(db: Db, flatId: string, s: { cutoff: string; strictness: Strictness }) {
-  await db(`update flats set cutoff_time = $2, strictness = $3 where id = $1`, [flatId, s.cutoff, s.strictness]);
+/** Weights are hundredths of a meal (breakfast 50 = 0.5). They apply to every day of the open month. */
+export async function updateSettings(db: Db, flatId: string, s: { cutoff: string; strictness: Strictness; weights: Record<Meal, number> }) {
+  await db(`update flats set cutoff_time = $2, strictness = $3, weight_b = $4, weight_l = $5, weight_d = $6 where id = $1`,
+    [flatId, s.cutoff, s.strictness, s.weights.b, s.weights.l, s.weights.d]);
 }
 
 export async function setCookLink(db: Db, flatId: string, on: boolean) {
@@ -148,3 +152,9 @@ export const loadHistory = (db: Db, flatId: string) => db<HistoryRow>(
      and (a.entity_id like '%|nocook' or a.entity_id like '%|away' or coalesce((a.after->>'late')::boolean, false)
           or split_part(a.entity_id, '|', 1) <> a.by_member::text)
    order by a.id desc limit 30`, [flatId]);
+
+/** Cooking for yourself: usual meals all off (locked days keep their old meals) and in_meals false. Back = all on. */
+export async function setInMeals(db: Db, flatId: string, memberId: string, on: boolean, freezeTo: string) {
+  await setDefaults(db, flatId, memberId, { b: on, l: on, d: on }, freezeTo);
+  await db(`update members set in_meals = $3 where flat_id = $1 and id = $2`, [flatId, memberId, on]);
+}

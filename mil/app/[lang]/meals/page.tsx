@@ -5,13 +5,13 @@ import { addDays, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
 import { loadHistory, loadMeals, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { awayAction, guestAction, usualAction } from '../actions';
+import { awayAction, guestAction, inMealsAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { fmtDay, fmtWhen } from '../format';
 import { Header } from '../header';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
-import { checkChip, field, Field, primary } from '../ui';
+import { checkChip, field, Field, primary, secondary } from '../ui';
 
 export default function Meals({ params }: PageProps<'/[lang]/meals'>) {
   return <Suspense><MealsBody params={params} /></Suspense>;
@@ -97,22 +97,35 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
           </ActionForm>
         </section>
 
+        {self.inMeals ? (
+          <section className={card}>
+            <h2 className={h2}>{m.usualTitle}</h2>
+            <p className="mt-1 text-muted">{m.usualLead}</p>
+            <ActionForm action={usualAction} className="mt-4">
+              <input type="hidden" name="lang" value={lang} />
+              <div className="grid grid-cols-3 gap-2">
+                {MEALS.map(x => (
+                  <label key={x} className={checkChip}>
+                    <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5 shrink-0 accent-ink" />
+                    {m.names[x]}
+                  </label>
+                ))}
+              </div>
+              <button className={primary}>{m.save}</button>
+            </ActionForm>
+          </section>
+        ) : null}
+
         <section className={card}>
-          <h2 className={h2}>{m.usualTitle}</h2>
-          <p className="mt-1 text-muted">{m.usualLead}</p>
-          <ActionForm action={usualAction} className="mt-4">
+          <h2 className={h2}>{self.inMeals ? m.ownTitle : m.ownActiveTitle}</h2>
+          <p className="mt-1 text-muted">{self.inMeals ? m.ownLead : m.ownActiveLead}</p>
+          <form action={inMealsAction} className="mt-4">
             <input type="hidden" name="lang" value={lang} />
-            <div className="grid grid-cols-3 gap-2">
-              {MEALS.map(x => (
-                <label key={x} className={checkChip}>
-                  <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5 shrink-0 accent-ink" />
-                  {m.names[x]}
-                </label>
-              ))}
-            </div>
-            <button className={primary}>{m.save}</button>
-          </ActionForm>
+            <input type="hidden" name="on" value={self.inMeals ? '0' : '1'} />
+            <button className={self.inMeals ? secondary : primary}>{self.inMeals ? m.ownOn : m.ownOff}</button>
+          </form>
         </section>
+
         <section className={card}>
           <h2 className={h2}>{m.historyTitle}</h2>
           <p className="mt-1 text-muted">{m.historyLead}</p>

@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, mealDecision, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
-import { changeMeal, decideRequest, loadMeals, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults, updateSettings } from '@/lib/meals-db';
+import { changeMeal, decideRequest, loadMeals, mealRules, noCooking, saveMeal, setInMeals, setAway, setCookLink, setDefaults, updateSettings } from '@/lib/meals-db';
 import { endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
@@ -108,9 +108,7 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
 export async function usualAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireMember(lang);
-  const now = nowDhaka(), today = now.slice(0, 10), r = await mealRules(db, me.flatId);
-  const lastLocked = isLocked(addDays(today, 1), now, r.cutoff) ? addDays(today, 1) : today;
-  await setDefaults(db, me.flatId, me.memberId, { b: d.has('b'), l: d.has('l'), d: d.has('d') }, lastLocked);
+  await setDefaults(db, me.flatId, me.memberId, { b: d.has('b'), l: d.has('l'), d: d.has('d') }, await lastLocked(me.flatId));
   refresh();
   return { done: m.saved };
 }
@@ -125,8 +123,10 @@ export async function settingsAction(_: FormState, d: FormData): Promise<FormSta
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireManager(lang);
   const cutoff = str(d, 'cutoff').slice(0, 5), strictness = str(d, 'strictness');
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff) || (strictness !== 'relaxed' && strictness !== 'strict')) return { error: m.errors.bad };
-  await updateSettings(db, me.flatId, { cutoff, strictness });
+  const [b, l, dd] = MEALS.map(x => (/^\d{1,2}(\.\d{1,2})?$/.test(str(d, `w_${x}`)) ? Math.round(Number(str(d, `w_${x}`)) * 100) : -1));
+  const weightsOk = [b, l, dd].every(w => w >= 0 && w <= 1000);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff) || (strictness !== 'relaxed' && strictness !== 'strict') || !weightsOk) return { error: m.errors.bad };
+  await updateSettings(db, me.flatId, { cutoff, strictness, weights: { b, l, d: dd } });
   refresh();
   return { done: m.saved };
 }
@@ -163,4 +163,16 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
   await noCooking(db, me.flatId, me.memberId, from, to, meals, todayDhaka());
   refresh();
   return { done: m.saved };
+}
+
+/** The last day members can no longer change: tomorrow once it's past the cutoff, else today. */
+async function lastLocked(flatId: string) {
+  const now = nowDhaka(), today = now.slice(0, 10), r = await mealRules(db, flatId);
+  return isLocked(addDays(today, 1), now, r.cutoff) ? addDays(today, 1) : today;
+}
+
+export async function inMealsAction(d: FormData) {
+  const me = await requireMember(langOf(d));
+  await setInMeals(db, me.flatId, me.memberId, str(d, 'on') === '1', await lastLocked(me.flatId));
+  refresh();
 }
