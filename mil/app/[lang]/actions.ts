@@ -4,10 +4,12 @@ import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { todayDhaka } from '@/lib/meals';
-import { endSession, requireManager, startSession } from '@/lib/session';
+import { addDays, isDate, isLocked, isMeal, mealDecision, nowDhaka, todayDhaka } from '@/lib/meals';
+import { changeMeal, decideRequest, mealRules, setAway, setCookLink, setDefaults, updateSettings } from '@/lib/meals-db';
+import { endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
+import { fmtDay } from './format';
 
 const str = (d: FormData, k: string) => String(d.get(k) ?? '');
 const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLocale(l) ? l : 'bn'; };
@@ -61,4 +63,74 @@ export async function resetPinAction(_: FormState, d: FormData): Promise<FormSta
   if (!(await resetPin(db, me.flatId, str(d, 'memberId'), str(d, 'pin')))) return { error: a.errors.notFound };
   refresh();
   return { done: a.resetDone };
+}
+
+const isPlates = (n: number) => Number.isInteger(n) && n >= 0 && n <= 10;
+
+/** A meal chip tap. The chip sends the count it wants; repeating the tap is harmless. */
+export async function setMealAction(d: FormData) {
+  const me = await requireMember(langOf(d));
+  const date = str(d, 'date'), meal = str(d, 'meal'), count = Number(str(d, 'count'));
+  if (!isDate(date) || !isMeal(meal) || !isPlates(count)) return;
+  await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka());
+  refresh();
+}
+
+export async function guestAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), m = getDictionary(lang).meals;
+  const me = await requireMember(lang);
+  const date = str(d, 'date'), meal = str(d, 'meal'), count = Number(str(d, 'plates'));
+  if (!isDate(date) || !isMeal(meal) || !isPlates(count)) return { error: m.errors.bad };
+  const r = await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka());
+  if (r === 'closed') return { error: m.errors.closed };
+  refresh();
+  return { done: r === 'request' ? m.sentForApproval : m.saved };
+}
+
+export async function awayAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), m = getDictionary(lang).meals;
+  const me = await requireMember(lang);
+  const from = str(d, 'from'), to = str(d, 'to');
+  if (!isDate(from) || !isDate(to) || to < from) return { error: m.errors.bad };
+  if (to > addDays(from, 59)) return { error: m.errors.range };
+  const now = nowDhaka(), r = await mealRules(db, me.flatId);
+  let first = now.slice(0, 10);
+  while (mealDecision(first, now, r.cutoff, r.strictness) !== 'open') first = addDays(first, 1);
+  if (from < first) return { error: m.errors.awayFrom.replace('{d}', fmtDay(first, lang)) };
+  await setAway(db, me.flatId, me.memberId, from, to);
+  refresh();
+  return { done: m.saved };
+}
+
+export async function usualAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), m = getDictionary(lang).meals;
+  const me = await requireMember(lang);
+  const now = nowDhaka(), today = now.slice(0, 10), r = await mealRules(db, me.flatId);
+  const lastLocked = isLocked(addDays(today, 1), now, r.cutoff) ? addDays(today, 1) : today;
+  const lastMonth = `${addDays(`${today.slice(0, 8)}01`, -1).slice(0, 8)}01`;
+  await setDefaults(db, me.flatId, me.memberId, { b: d.has('b'), l: d.has('l'), d: d.has('d') }, lastMonth, lastLocked);
+  refresh();
+  return { done: m.saved };
+}
+
+export async function decideAction(d: FormData) {
+  const me = await requireManager(langOf(d));
+  await decideRequest(db, me.flatId, me.memberId, str(d, 'id'), str(d, 'approve') === '1');
+  refresh();
+}
+
+export async function settingsAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), m = getDictionary(lang).meals;
+  const me = await requireManager(lang);
+  const cutoff = str(d, 'cutoff').slice(0, 5), strictness = str(d, 'strictness');
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff) || (strictness !== 'relaxed' && strictness !== 'strict')) return { error: m.errors.bad };
+  await updateSettings(db, me.flatId, { cutoff, strictness });
+  refresh();
+  return { done: m.saved };
+}
+
+export async function cookLinkAction(d: FormData) {
+  const me = await requireManager(langOf(d));
+  await setCookLink(db, me.flatId, str(d, 'on') === '1');
+  refresh();
 }
