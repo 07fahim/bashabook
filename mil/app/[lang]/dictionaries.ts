@@ -37,7 +37,7 @@ const bn = {
   modesTitle: 'বন্ধু হোক বা অচেনা',
   modes: [
     { name: 'বন্ধুদের ফ্ল্যাট', points: ['যে কেউ এন্ট্রি দিলে সাথে সাথে যোগ হয়', 'রাত দশটার পরের বদলে দেরির চিহ্ন পড়ে'] },
-    { name: 'অচেনাদের ফ্ল্যাট', points: ['বাজারের এন্ট্রি ম্যানেজার মিলিয়ে দেখেন', 'রাত দশটার পরের বদলে ম্যানেজারের অনুমতি লাগে'] },
+    { name: 'অচেনাদের ফ্ল্যাট', points: ['বাজারের এন্ট্রি যাচাই হওয়ার পরে যোগ হয়', 'রাত দশটার পরের বদলে অনুমোদন লাগে'] },
   ],
   priceTitle: 'দাম',
   priceLine: 'পুরো ফ্ল্যাটের জন্য মাসে ৳199',
@@ -45,7 +45,7 @@ const bn = {
   faqTitle: 'প্রশ্ন',
   faq: [
     ['সবাইকে কি অ্যাপ ডাউনলোড করতে হবে?', 'না। লিংকে ট্যাপ করলেই খুলে যায়। চাইলে হোম স্ক্রিনে রেখে অ্যাপের মতো ব্যবহার করা যায়।'],
-    ['বাসাবুক কি আমাদের টাকা রাখে?', 'না। টাকা যায় সরাসরি ম্যানেজারের বিকাশে। বাসাবুক শুধু TrxID দিয়ে হিসাবটা রাখে।'],
+    ['বাসাবুক কি আমাদের টাকা রাখে?', 'না। টাকা যায় সরাসরি আপনার ফ্ল্যাটের বিকাশ নম্বরে। বাসাবুক শুধু TrxID দিয়ে হিসাবটা রাখে।'],
     ['আইফোনে চলবে?', 'হ্যাঁ, অ্যান্ড্রয়েড আর আইফোন দুটোতেই চলে।'],
   ],
   footer: 'বাসাবুক · শেয়ার্ড ফ্ল্যাটের হিসাব',
@@ -88,7 +88,7 @@ const en: Dict = {
   modesTitle: 'Friends or strangers',
   modes: [
     { name: 'A flat of friends', points: ['Entries count straight away', 'Changes after the cutoff are marked late'] },
-    { name: 'A flat of strangers', points: ['The manager checks bazar entries', 'Changes after the cutoff need the manager’s approval'] },
+    { name: 'A flat of strangers', points: ['Bazar entries count once they’re checked', 'Changes after the cutoff need approval'] },
   ],
   priceTitle: 'Price',
   priceLine: '৳199 a month for the whole flat',
@@ -96,7 +96,7 @@ const en: Dict = {
   faqTitle: 'Questions',
   faq: [
     ['Do members need to install an app?', 'No. The link opens in the browser. They can add it to the home screen to open it like an app.'],
-    ['Does BashaBook hold our money?', 'No. Money goes to the manager’s bKash. BashaBook only records it by TrxID.'],
+    ['Does BashaBook hold our money?', 'No. Money goes straight to your flat’s bKash number. BashaBook only records it by TrxID.'],
     ['Does it work on iPhone?', 'Yes, on Android and iPhone.'],
   ],
   footer: 'BashaBook · accounts for shared flats',
