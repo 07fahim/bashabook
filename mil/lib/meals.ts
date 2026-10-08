@@ -8,7 +8,7 @@ export interface MealMember {
   defaults: Record<Meal, boolean>;
 }
 
-/** A saved change. Changes waiting for approval live in change_requests, not here. */
+/** A saved change. */
 export interface MealChange {
   memberId: string;
   date: string;
@@ -80,14 +80,14 @@ export const isMeal = (v: unknown): v is Meal => v === 'b' || v === 'l' || v ===
 export const isDate = (v: unknown): v is string =>
   typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && addDays(v, 0) === v;
 
-export type Decision = 'open' | 'late' | 'request' | 'closed';
+export type Decision = 'open' | 'late' | 'closed';
 
-/** What a change to `date` becomes: saved, saved as late, a change request, or refused (past days). */
+/** What a member's change to `date` becomes: saved, saved as late (tomorrow after the cutoff), or refused (today and before). */
 /** Members can't change today or earlier; only the person who runs the flat can (adminMealAction). */
-export function mealDecision(date: string, now: string, cutoff: string, strictness: 'relaxed' | 'strict'): Decision {
+export function mealDecision(date: string, now: string, cutoff: string): Decision {
   if (date <= now.slice(0, 10)) return 'closed';
   if (!isLocked(date, now, cutoff)) return 'open';
-  return strictness === 'strict' ? 'request' : 'late';
+  return 'late';
 }
 
 /** First day the person who runs the flat can still fix: the 1st of last month. Plan 6 moves this to the open month. */

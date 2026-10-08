@@ -6,13 +6,13 @@ import { addDays, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
 import { loadHistory, loadMeals, upcomingAway, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { awayAction, cancelAwayAction, guestAction, inMealsAction, usualAction } from '../actions';
+import { awayAction, cancelAwayAction, guestAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { fmtDay, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
-import { checkChip, field, Field, Fold, focus, link, primary, secondary } from '../ui';
+import { checkChip, field, Field, Fold, focus, link, primary } from '../ui';
 
 export default function Meals({ params, searchParams }: PageProps<'/[lang]/meals'>) {
   return <Suspense><MealsBody params={params} searchParams={searchParams} /></Suspense>;
@@ -33,7 +33,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   ]);
   const starter = meals.members.find(x => x.role === 'manager');
   const self = meals.members.find(x => x.id === me.memberId)!;
-  const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff, meals.flat.strictness);
+  const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
   const firstOpen = week.find(d => decide(d) === 'open')!;   // tomorrow or the day after
   const card = 'mt-8 rounded-2xl border border-line bg-surface p-5';
   const range = (r: [string, string]) => (r[0] === r[1] ? fmtDay(r[0], lang) : `${fmtDay(r[0], lang)} – ${fmtDay(r[1], lang)}`);
@@ -41,7 +41,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const describe = (h: HistoryRow) => {
     const actor = h.actor ?? '?', who = h.who ?? '?', a = h.after;
     const mealList = (x: string) => x.split(',').map(y => m.names[y as Meal]).join(', ');
-    if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${a.strictness === 'strict' ? m.strictShort : m.relaxedShort} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
+    if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
     if (h.entity === 'members') {
       if (a.inMeals === false) return `${who} ${m.ownStarted}`;
       if (a.inMeals === true) return `${who} ${m.ownStopped}`;
@@ -97,14 +97,14 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
             </label>
             <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={0} max={9} required defaultValue={1} />
             <label className={checkChip}>
-              <input type="checkbox" name="me" defaultChecked className="size-5 shrink-0 accent-ink" />
+              <input type="checkbox" name="me" defaultChecked={self.inMeals} className="size-5 shrink-0 accent-ink" />
               {m.meToo}
             </label>
             <button className={primary}>{m.save}</button>
           </ActionForm>
         </Fold>
 
-        <Fold title={m.awayTitle} lead={m.awayLead} open={aways.some(([, t]) => t >= firstOpen)}>
+        <Fold title={m.awayTitle} lead={m.awayLead}>
           {aways.some(([, t]) => t >= firstOpen) && (
             <div className="mt-4">
               <p className="font-semibold">{m.awayList}</p>
@@ -131,28 +131,19 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           </ActionForm>
         </Fold>
 
-        {self.inMeals && (
-          <Fold title={m.usualTitle} lead={m.usualLead}>
-            <ActionForm action={usualAction} className="mt-4">
-              <input type="hidden" name="lang" value={lang} />
-              <div className="grid grid-cols-3 gap-2">
-                {MEALS.map(x => (
-                  <label key={x} className={checkChip}>
-                    <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5 shrink-0 accent-ink" />
-                    {m.names[x]}
-                  </label>
-                ))}
-              </div>
-              <button className={primary}>{m.save}</button>
-            </ActionForm>
-          </Fold>
-        )}
-
-        <Fold title={self.inMeals ? m.ownTitle : m.ownActiveTitle} lead={self.inMeals ? m.ownLead : m.ownActiveLead} open={!self.inMeals}>
-          <ActionForm action={inMealsAction} className="mt-4">
+        <Fold title={m.usualTitle} lead={self.inMeals ? m.usualLead : m.ownNow}>
+          <ActionForm action={usualAction} className="mt-4">
             <input type="hidden" name="lang" value={lang} />
-            <input type="hidden" name="on" value={self.inMeals ? '0' : '1'} />
-            <button className={self.inMeals ? secondary : primary}>{self.inMeals ? m.ownOn : m.ownOff}</button>
+            <div className="grid grid-cols-3 gap-2">
+              {MEALS.map(x => (
+                <label key={x} className={checkChip}>
+                  <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5 shrink-0 accent-ink" />
+                  {m.names[x]}
+                </label>
+              ))}
+            </div>
+            <p className="text-[15px] text-muted">{m.usualOff}</p>
+            <button className={primary}>{m.save}</button>
           </ActionForm>
         </Fold>
 

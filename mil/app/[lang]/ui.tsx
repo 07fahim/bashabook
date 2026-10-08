@@ -23,11 +23,12 @@ export const PinField = (p: { label: string; name: string; autoComplete: string 
 );
 
 /** A card that folds away: the title is the button, the content shows when opened. */
-export function Fold({ title, lead, open, children }: { title: string; lead?: string; open?: boolean; children: ReactNode }) {
+export function Fold({ title, lead, level = 2, children }: { title: string; lead?: string; level?: 2 | 3; children: ReactNode }) {
+  const H = level === 2 ? 'h2' : 'h3';
   return (
-    <details open={open} className="group mt-3 rounded-2xl border border-line bg-surface">
-      <summary className={`flex cursor-pointer list-none items-center justify-between gap-4 p-5 text-lg font-bold [&::-webkit-details-marker]:hidden ${focus}`}>
-        {title}
+    <details className="group mt-3 rounded-2xl border border-line bg-surface">
+      <summary className={`flex cursor-pointer list-none items-center justify-between gap-4 rounded-2xl p-5 [&::-webkit-details-marker]:hidden ${focus}`}>
+        <H className="text-lg font-bold">{title}</H>
         <span aria-hidden="true" className="text-2xl leading-none text-muted transition-transform group-open:rotate-45">+</span>
       </summary>
       <div className="px-5 pb-5">
