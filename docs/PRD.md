@@ -29,7 +29,7 @@ In a Bangladeshi bachelor flat (mess) of 8–10 people, one member, the manager,
 | Flats keep using it | Flats closing their 2nd month in the app without help | ≥ 3 of 5 pilot flats |
 | Members take part | Meal changes made by members themselves, not the manager | ≥ 70% |
 | Cook gets the count on time | Headcount sent by cutoff + 5 min | ≥ 95% of days |
-| Trusted numbers | Months closed with the invariant passing | 100% |
+| Trusted numbers | Months where the manager's cash count matched the app's fund on the first try | ≥ 80% |
 | Willing to pay | Pilot managers saying yes to ৳199/month | ≥ 2 of 5 |
 
 ## 5. V1 requirements
@@ -37,7 +37,7 @@ In a Bangladeshi bachelor flat (mess) of 8–10 people, one member, the manager,
 Priority: **P0** = V1 can't launch without it, **P1** = in V1 but can slip.
 
 ### Flat setup and access
-- **P0** Manager creates a flat: name, members, rooms with rent shares, meal weights (default B 0.5 / L 1 / D 1), cutoff time (default 22:00), mess fund on/off, bKash number, recurring bills.
+- **P0** Manager creates a flat: name, members, rooms with rent shares, meal weights (default B 0.5 / L 1 / D 1), cutoff time (default 22:00), bKash number, recurring bills. The fund (cash the manager holds) always exists; members can also pay out of pocket.
 - **P0** Join by link: tap your name, set a 4-digit PIN, stay logged in for 90 days.
 - **P0** Hand over the manager role to another member.
 - **P1** Bangla/English switch per member.
@@ -49,7 +49,7 @@ Priority: **P0** = V1 can't launch without it, **P1** = in V1 but can slip.
 - **P1** Read-only cook link with push notifications.
 
 ### Bazar
-- **P0** Bazar rotation generated from an order the manager sets; members can swap turns.
+- **P0** Bazar rotation generated from an order the manager sets; the manager can reassign a day.
 - **P0** Any member logs bazar: amount, note, paid by me or from the fund.
 - **P1** Push reminder to the person on duty the evening before.
 
@@ -60,8 +60,9 @@ Priority: **P0** = V1 can't launch without it, **P1** = in V1 but can slip.
 - **P0** Live meal rate, every member's balance, and the full ledger, visible to everyone.
 
 ### Month-end
-- **P0** Close month: balance check → settlement text → lock → open the next month.
-- **P0** Move-out: prorated costs and a final balance.
+- **P0** Close month: checklist (no pending items, no problems, cash count matches) → settlement text → lock → open the next month with balances carried forward.
+- **P0** Closed months are frozen: shown from a saved snapshot, never recalculated.
+- **P0** Move-out: prorated costs; the leaver's balance becomes final at month close and is settled then.
 - **P0** Change log; edits to a closed month need manager approval.
 
 ### Trust and automation
@@ -70,7 +71,7 @@ Priority: **P0** = V1 can't launch without it, **P1** = in V1 but can slip.
 
 ## 6. Out of scope (V1)
 
-Personal accounts that move between flats, phone or SMS login, SMS, native apps, chores, inventory, receipt photo scanning, analytics, a menu or feedback system, a marketplace, payment-gateway integration (the app never holds money).
+Personal accounts that move between flats, phone or SMS login, SMS, native apps, duty swap requests, a fund on/off switch, chores, inventory, receipt photo scanning, analytics, a menu or feedback system, a marketplace, payment-gateway integration (the app never holds money).
 
 ## 7. Assumptions to test
 

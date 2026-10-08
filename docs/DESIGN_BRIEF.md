@@ -77,7 +77,7 @@ Huge numbers, nothing else. Readable from a metre away, works for a cook with li
 A "Today" card stack: Headcount text [Copy][Share] · 2 payments to confirm · 1 approval · Bazar duty: Rahim. Each card disappears once it's handled. **The aim is that the manager's day can be "nothing to do".**
 
 ### Close month
-A step list with checkmarks: ✓ All payments confirmed · ✓ No pending approvals · ✓ Totals balance (৳0 difference) → Preview the settlement as a Messenger-style bubble → **Close October**.
+A step list with checkmarks: ✓ All payments confirmed · ✓ No pending approvals · ✓ No problems · then a cash count field (Cash + bKash you hold) that must match the app's fund → Preview the settlement as a Messenger-style bubble → **Close October**.
 
 ## 5. Components (shadcn/ui based)
 
