@@ -1,7 +1,8 @@
 import type { ComponentProps, ReactNode } from 'react';
 
 export const focus = 'rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
-export const field = 'mt-1.5 block w-full rounded-lg border border-muted bg-surface px-4 py-3 text-lg font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
+// focus (not focus-visible): date and time fields only report focus on their inner parts
+export const field = 'mt-1.5 block w-full rounded-lg border border-muted bg-surface px-4 py-3 text-lg font-normal focus:outline-2 focus:outline-offset-2 focus:outline-ink';
 export const primary = `flex min-h-12 w-full items-center justify-center bg-turmeric px-6 font-semibold text-on-turmeric hover:brightness-95 disabled:opacity-60 ${focus}`;
 export const secondary = `flex min-h-12 w-full items-center justify-center border border-muted bg-surface px-6 font-semibold hover:bg-paper disabled:opacity-60 ${focus}`;
 /** A label wrapping a checkbox; turns turmeric when ticked. */
@@ -42,3 +43,15 @@ export function Fold({ title, lead, level = 2, open, children }: { title: string
 
 /** A small label above a group of cards. */
 export const groupLabel = 'mt-10 text-[15px] font-semibold text-muted';
+
+/** Shown for the moment a logged-in page waits for the database: the shape of the page, no words. */
+export function PageSkeleton() {
+  return (
+    <div aria-hidden="true" className="mx-auto max-w-md animate-pulse px-5 pt-5 motion-reduce:animate-none">
+      <div className="h-8 w-32 rounded-lg bg-line" />
+      <div className="mt-10 h-9 w-56 rounded-lg bg-line" />
+      <div className="mt-8 h-40 rounded-2xl bg-line" />
+      <div className="mt-4 h-24 rounded-2xl bg-line" />
+    </div>
+  );
+}

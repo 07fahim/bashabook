@@ -5,6 +5,7 @@ import { addDays, headcount, MEALS, todayDhaka } from '@/lib/meals';
 import { flatIdByCookToken, loadMeals } from '@/lib/meals-db';
 import { getDictionary, hasLocale } from '../../dictionaries';
 import { fmtDay } from '../../format';
+import { PageSkeleton } from '../../ui';
 import { Header } from '../../header';
 
 type Props = PageProps<'/[lang]/c/[token]'>;
@@ -13,7 +14,7 @@ type Props = PageProps<'/[lang]/c/[token]'>;
 export const metadata = { robots: { index: false }, referrer: 'no-referrer' as const };
 
 export default function Cook({ params }: Props) {
-  return <Suspense><CookBody params={params} /></Suspense>;
+  return <Suspense fallback={<PageSkeleton />}><CookBody params={params} /></Suspense>;
 }
 
 /** The cook's view: plates for tomorrow (big) and today. No login. */

@@ -12,10 +12,10 @@ import { fmtDay, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
-import { checkChip, field, Field, Fold, focus, link, primary } from '../ui';
+import { checkChip, field, Field, Fold, focus, link, primary, PageSkeleton } from '../ui';
 
 export default function Meals({ params, searchParams }: PageProps<'/[lang]/meals'>) {
-  return <Suspense><MealsBody params={params} searchParams={searchParams} /></Suspense>;
+  return <Suspense fallback={<PageSkeleton />}><MealsBody params={params} searchParams={searchParams} /></Suspense>;
 }
 
 async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals'>, 'params' | 'searchParams'>) {

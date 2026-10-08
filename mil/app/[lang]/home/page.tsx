@@ -12,10 +12,10 @@ import { Header } from '../header';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
 import { ShareButton } from '../share-button';
-import { focus, link } from '../ui';
+import { focus, link, PageSkeleton } from '../ui';
 
 export default function Home({ params }: PageProps<'/[lang]/home'>) {
-  return <Suspense><HomeBody params={params} /></Suspense>;
+  return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} /></Suspense>;
 }
 
 async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {

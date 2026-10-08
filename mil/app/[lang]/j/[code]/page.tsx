@@ -7,12 +7,12 @@ import { ActionForm } from '../../action-form';
 import { loginAction } from '../../actions';
 import { getDictionary, hasLocale } from '../../dictionaries';
 import { Header } from '../../header';
-import { focus, link, PinField, primary } from '../../ui';
+import { focus, link, PinField, primary, PageSkeleton } from '../../ui';
 
 type Props = PageProps<'/[lang]/j/[code]'>;
 
 export default function Join({ params, searchParams }: Props) {
-  return <Suspense><JoinBody params={params} searchParams={searchParams} /></Suspense>;
+  return <Suspense fallback={<PageSkeleton />}><JoinBody params={params} searchParams={searchParams} /></Suspense>;
 }
 
 async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'searchParams'>) {

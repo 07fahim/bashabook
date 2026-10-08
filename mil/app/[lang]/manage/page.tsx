@@ -12,12 +12,12 @@ import { fmtDay } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { ShareButton } from '../share-button';
-import { checkChip, field, Field, Fold, focus, groupLabel, link, PinField, primary, secondary } from '../ui';
+import { checkChip, field, Field, Fold, focus, groupLabel, link, PinField, primary, secondary, PageSkeleton } from '../ui';
 
 type Props = PageProps<'/[lang]/manage'>;
 
 export default function Manage({ params, searchParams }: Props) {
-  return <Suspense><ManageBody params={params} searchParams={searchParams} /></Suspense>;
+  return <Suspense fallback={<PageSkeleton />}><ManageBody params={params} searchParams={searchParams} /></Suspense>;
 }
 
 async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'searchParams'>) {
@@ -159,7 +159,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 </div>
                 {x.claimed && x.id !== me.memberId && (
                   <details className="mt-2">
-                    <summary className={`cursor-pointer text-[15px] ${link}`}>{a.resetPin}</summary>
+                    <summary className={`inline-block cursor-pointer py-2 text-[15px] ${link}`}>{a.resetPin}</summary>
                     <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
                     <ActionForm action={resetPinAction} className="mt-3">
                       <input type="hidden" name="lang" value={lang} />
