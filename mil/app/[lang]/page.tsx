@@ -92,19 +92,43 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           </div>
         </section>
 
-        <section className="border-t border-line py-14">
-          <h2 className={h2}>{t.priceTitle}</h2>
-          <p className="mt-3 text-2xl font-semibold">{t.priceLine}</p>
-          <p className="mt-1 text-muted">{t.priceNote}</p>
+        <section className="grid gap-8 border-t border-line py-14 md:grid-cols-2 md:items-center">
+          <div>
+            <h2 className={h2}>{t.price.title}</h2>
+            <p className="mt-3 text-lg text-muted">{t.price.lead}</p>
+          </div>
+          <div className="rounded-2xl border border-line bg-surface p-6 sm:p-8">
+            <p className="flex items-baseline gap-2">
+              <span className="text-5xl font-bold tabular-nums">{t.price.amount}</span>
+              <span className="text-lg text-muted">{t.price.period}</span>
+            </p>
+            <p className="mt-2 text-muted">{t.price.note}</p>
+            <ul className="mt-6 space-y-3">
+              {t.price.features.map(f => (
+                <li key={f} className="flex items-start gap-3">
+                  <svg className="mt-1 size-5 shrink-0 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="m5 12.5 4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 flex min-h-12 w-full items-center justify-center bg-turmeric px-6 font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
+              {t.price.cta}
+            </Link>
+          </div>
         </section>
 
-        <section className="border-t border-line py-14">
+        <section className="grid gap-6 border-t border-line py-14 md:grid-cols-[1fr_2fr] md:gap-12">
           <h2 className={h2}>{t.faqTitle}</h2>
-          <div className="mt-4 divide-y divide-line">
+          <div className="divide-y divide-line border-y border-line">
             {t.faq.map(([q, a]) => (
-              <details key={q} className="py-4">
-                <summary className={`cursor-pointer font-semibold ${focus}`}>{q}</summary>
-                <p className="mt-2 text-muted">{a}</p>
+              <details key={q} className="group">
+                <summary className={`flex cursor-pointer list-none items-center justify-between gap-4 py-5 font-semibold [&::-webkit-details-marker]:hidden ${focus}`}>
+                  {q}
+                  <span aria-hidden="true" className="text-2xl leading-none text-muted transition-transform group-open:rotate-45">+</span>
+                </summary>
+                <p className="pb-5 text-muted">{a}</p>
               </details>
             ))}
           </div>
