@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Mil · মেসের হিসাব',
-    short_name: 'Mil',
+    name: 'BashaBook · ফ্ল্যাটের হিসাব',
+    short_name: 'BashaBook',
     description: 'Meals, bazar, bills and month-end dues for shared flats.',
     start_url: '/bn',
     display: 'standalone',

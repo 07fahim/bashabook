@@ -4,8 +4,11 @@ import { notFound } from 'next/navigation';
 import { getDictionary, hasLocale, locales } from './dictionaries';
 import '../globals.css';
 
-const hind = Hind_Siliguri({ subsets: ['bengali', 'latin'], weight: ['400', '500', '600', '700'], display: 'swap', variable: '--font-hind' });
-const anek = Anek_Bangla({ subsets: ['bengali', 'latin'], axes: ['wdth'], display: 'swap', variable: '--font-anek' });
+// Runs before first paint: saved choice, else the phone's setting.
+const themeScript = `try{document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch(e){}`;
+
+const hind = Hind_Siliguri({ subsets: ['bengali', 'latin'], weight: ['400', '600'], display: 'swap', variable: '--font-hind' });
+const anek = Anek_Bangla({ subsets: ['bengali', 'latin'], weight: ['600', '700'], display: 'swap', preload: false, variable: '--font-anek' });
 
 export function generateStaticParams() {
   return locales.map(lang => ({ lang }));
@@ -34,7 +37,10 @@ export default async function RootLayout({ children, params }: LayoutProps<'/[la
   const { lang } = await params;
   if (!hasLocale(lang)) notFound();
   return (
-    <html lang={lang} className={`${hind.variable} ${anek.variable}`}>
+    <html lang={lang} className={`${hind.variable} ${anek.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-dvh bg-paper font-sans text-ink antialiased">{children}</body>
     </html>
   );

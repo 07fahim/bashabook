@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
   --paper: #FBF7F0;
   --surface: #FFFFFF;
@@ -13,17 +15,15 @@
   --chili: #C2412D;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #14130F;
-    --surface: #1E1C17;
-    --ink: #F2EEE6;
-    --muted: #A39C90;
-    --line: #34302A;
-    --turmeric-ink: #E8A93F;
-    --leaf: #5FBF85;
-    --chili: #F07A63;
-  }
+:root[data-theme="dark"] {
+  --paper: #14130F;
+  --surface: #1E1C17;
+  --ink: #F2EEE6;
+  --muted: #A39C90;
+  --line: #34302A;
+  --turmeric-ink: #E8A93F;
+  --leaf: #5FBF85;
+  --chili: #F07A63;
 }
 
 @theme inline {
@@ -42,16 +42,16 @@
 }
 
 html {
-  color-scheme: light dark;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 body {
   background: var(--paper);
   color: var(--ink);
-}
-
-.display-narrow {
-  font-variation-settings: "wdth" 85;
 }
 
 /* Khata: entries write themselves in, left to right */

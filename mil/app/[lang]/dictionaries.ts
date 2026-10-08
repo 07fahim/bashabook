@@ -3,12 +3,13 @@ export type Locale = (typeof locales)[number];
 export const hasLocale = (l: string): l is Locale => (locales as readonly string[]).includes(l);
 
 const bn = {
-  brand: 'মিল',
+  brand: 'BashaBook',
   switchLang: 'English',
-  metaTitle: 'মিল · মেসের হিসাব, নিজে নিজেই',
+  themeToggle: 'লাইট বা ডার্ক থিম',
+  metaTitle: 'BashaBook · ফ্ল্যাটের হিসাব, নিজে নিজেই',
   metaDesc: 'মিল গোনা, রাঁধুনির হেডকাউন্ট, বাজার, বিল আর মাসশেষের হিসাব, ফ্ল্যাটের সবার জন্য।',
-  heroTitle: 'মেসের হিসাব, এখন নিজে নিজেই।',
-  heroBody: 'কে কয় বেলা খেল, কে কত টাকার বাজার করল, কার কাছে কত পাওনা, মিল সব হিসাব রাখে। খাতা-কলম আর মাসশেষের ঝামেলা ছাড়াই।',
+  heroTitle: 'ফ্ল্যাটের হিসাব, এখন নিজে নিজেই।',
+  heroBody: 'কে কয় বেলা খেল, কে কত টাকার বাজার করল, কার কাছে কত পাওনা, BashaBook সব হিসাব রাখে। খাতা-কলম আর মাসশেষের ঝামেলা ছাড়াই।',
   create: 'ফ্ল্যাট খুলুন',
   joinHint: 'যোগ দিতে চান? ম্যানেজারের পাঠানো লিংকে ট্যাপ করুন।',
   khata: {
@@ -31,8 +32,8 @@ const bn = {
   settleMsg: ['অক্টোবরের হিসাব', 'মিল রেট ৳31.72', 'রহিম পাবেন ৳420', 'করিম দেবেন ৳310', 'ফাহিম দেবেন ৳110'],
   modesTitle: 'বন্ধু হোক বা অচেনা',
   modes: [
-    { name: 'বন্ধুদের মেস', points: ['সবার এন্ট্রি সাথে সাথে যোগ হয়', 'কাট-অফের পরের বদল দেরি হিসেবে চিহ্নিত থাকে'] },
-    { name: 'অচেনাদের মেস', points: ['বাজারের এন্ট্রি ম্যানেজার মিলিয়ে নেন', 'কাট-অফের পরের বদলে ম্যানেজারের অনুমতি লাগে'] },
+    { name: 'বন্ধুদের ফ্ল্যাট', points: ['সবার এন্ট্রি সাথে সাথে যোগ হয়', 'কাট-অফের পরের বদল দেরি হিসেবে চিহ্নিত থাকে'] },
+    { name: 'অচেনাদের ফ্ল্যাট', points: ['বাজারের এন্ট্রি ম্যানেজার মিলিয়ে নেন', 'কাট-অফের পরের বদলে ম্যানেজারের অনুমতি লাগে'] },
   ],
   priceTitle: 'দাম',
   priceLine: '৳199 প্রতি মাসে, পুরো ফ্ল্যাটের জন্য',
@@ -40,21 +41,22 @@ const bn = {
   faqTitle: 'প্রশ্ন',
   faq: [
     ['সদস্যদের কি অ্যাপ নামাতে হবে?', 'না। লিংক খুললেই চলে। চাইলে হোম স্ক্রিনে রেখে অ্যাপের মতো খোলা যায়।'],
-    ['মিল কি আমাদের টাকা রাখে?', 'না। টাকা যায় ম্যানেজারের বিকাশে। মিল শুধু TrxID দিয়ে হিসাব রাখে।'],
+    ['BashaBook কি আমাদের টাকা রাখে?', 'না। টাকা যায় ম্যানেজারের বিকাশে। BashaBook শুধু TrxID দিয়ে হিসাব রাখে।'],
     ['আইফোনে চলবে?', 'হ্যাঁ, অ্যান্ড্রয়েড আর আইফোন দুটোতেই চলে।'],
   ],
-  footer: 'মিল · শেয়ার্ড ফ্ল্যাটের হিসাব',
+  footer: 'BashaBook · শেয়ার্ড ফ্ল্যাটের হিসাব',
 };
 
 export type Dict = typeof bn;
 
 const en: Dict = {
-  brand: 'Mil',
+  brand: 'BashaBook',
   switchLang: 'বাংলা',
-  metaTitle: 'Mil · Your mess accounts, done for you',
+  themeToggle: 'Light or dark theme',
+  metaTitle: 'BashaBook · Your flat’s accounts, done for you',
   metaDesc: 'Meal counts, the cook’s headcount, bazar, bills and month-end dues, worked out for everyone in the flat.',
-  heroTitle: 'Your mess accounts, done for you.',
-  heroBody: 'Who ate how many meals, who spent what on bazar, who owes whom. Mil keeps the books, without the notebook or the month-end arguments.',
+  heroTitle: 'Your flat’s accounts, done for you.',
+  heroBody: 'Who ate how many meals, who spent what on bazar, who owes whom. BashaBook keeps the books, without the notebook or the month-end arguments.',
   create: 'Create a flat',
   joinHint: 'Joining one? Tap the link your manager sent.',
   khata: {
@@ -86,10 +88,10 @@ const en: Dict = {
   faqTitle: 'Questions',
   faq: [
     ['Do members need to install an app?', 'No. The link opens in the browser. They can add it to the home screen to open it like an app.'],
-    ['Does Mil hold our money?', 'No. Money goes to the manager’s bKash. Mil only records it by TrxID.'],
+    ['Does BashaBook hold our money?', 'No. Money goes to the manager’s bKash. BashaBook only records it by TrxID.'],
     ['Does it work on iPhone?', 'Yes, on Android and iPhone.'],
   ],
-  footer: 'Mil · accounts for shared flats',
+  footer: 'BashaBook · accounts for shared flats',
 };
 
 export const getDictionary = (l: Locale): Dict => (l === 'bn' ? bn : en);

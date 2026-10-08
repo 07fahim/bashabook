@@ -1,0 +1,107 @@
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { getDictionary, hasLocale } from './dictionaries';
+import { Khata } from './khata';
+import { ThemeToggle } from './theme-toggle';
+
+const focus = 'rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
+const h2 = 'font-display text-3xl font-bold';
+
+export default async function Landing({ params }: PageProps<'/[lang]'>) {
+  const { lang } = await params;
+  if (!hasLocale(lang)) notFound();
+  const t = getDictionary(lang);
+  const other = lang === 'bn' ? 'en' : 'bn';
+
+  return (
+    <>
+      <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
+        <span className="font-display text-2xl font-bold">{t.brand}</span>
+        <div className="flex items-center gap-1">
+          <ThemeToggle label={t.themeToggle} />
+          <Link href={`/${other}`} hrefLang={other} lang={other} className={`px-3 py-2 text-muted underline-offset-4 hover:underline ${focus}`}>
+            {t.switchLang}
+          </Link>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-5">
+        <section className="grid items-center gap-10 py-6 md:grid-cols-2 md:py-14">
+          <div>
+            <h1 className="font-display text-5xl leading-[1.05] font-bold md:text-6xl">{t.heroTitle}</h1>
+            <p className="mt-5 max-w-prose text-lg text-muted">{t.heroBody}</p>
+            <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 inline-flex min-h-12 items-center bg-turmeric px-6 text-lg font-semibold text-on-turmeric hover:brightness-95 ${focus} rounded-xl`}>
+              {t.create}
+            </Link>
+            <p className="mt-3 text-muted">{t.joinHint}</p>
+          </div>
+          <Khata t={t.khata} />
+        </section>
+
+        <section className="grid items-center gap-8 border-t border-line py-14 md:grid-cols-2">
+          <div>
+            <h2 className={h2}>{t.cookTitle}</h2>
+            <p className="mt-3 text-muted">{t.cookBody}</p>
+          </div>
+          <div className="rounded-2xl border border-line bg-surface p-6">
+            <p className="text-muted">{t.cookCard.when}</p>
+            <dl className="mt-2 grid grid-cols-3 text-center">
+              {(['b', 'l', 'd'] as const).map((m, i) => (
+                <div key={m}>
+                  <dt className="text-muted">{t.cookCard[m]}</dt>
+                  <dd className="font-display text-6xl font-bold tabular-nums">{[7, 8, 9][i]}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </section>
+
+        <section className="grid items-center gap-8 border-t border-line py-14 md:grid-cols-2">
+          <div>
+            <h2 className={h2}>{t.settleTitle}</h2>
+            <p className="mt-3 text-muted">{t.settleBody}</p>
+          </div>
+          <p className="max-w-xs justify-self-start rounded-2xl rounded-bl-sm bg-turmeric px-5 py-4 whitespace-pre-line text-on-turmeric md:justify-self-end">
+            {t.settleMsg.join('\n')}
+          </p>
+        </section>
+
+        <section className="border-t border-line py-14">
+          <h2 className={h2}>{t.modesTitle}</h2>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {t.modes.map(mode => (
+              <div key={mode.name} className="rounded-2xl border border-line bg-surface p-6">
+                <h3 className="text-xl font-semibold">{mode.name}</h3>
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-muted">
+                  {mode.points.map(p => <li key={p}>{p}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="border-t border-line py-14">
+          <h2 className={h2}>{t.priceTitle}</h2>
+          <p className="mt-3 text-2xl font-semibold">{t.priceLine}</p>
+          <p className="mt-1 text-muted">{t.priceNote}</p>
+        </section>
+
+        <section className="border-t border-line py-14">
+          <h2 className={h2}>{t.faqTitle}</h2>
+          <div className="mt-4 divide-y divide-line">
+            {t.faq.map(([q, a]) => (
+              <details key={q} className="py-4">
+                <summary className={`cursor-pointer font-semibold ${focus}`}>{q}</summary>
+                <p className="mt-2 text-muted">{a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <footer className="mx-auto max-w-5xl px-5">
+        <p className="border-t border-line py-8 text-sm text-muted">{t.footer}</p>
+      </footer>
+    </>
+  );
+}
