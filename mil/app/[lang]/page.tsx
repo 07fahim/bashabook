@@ -58,7 +58,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
               {(['b', 'l', 'd'] as const).map((m, i) => (
                 <div key={m}>
                   <dt className="text-muted">{t.cookCard[m]}</dt>
-                  <dd className="font-display text-6xl font-bold tabular-nums">{[7, 8, 9][i]}</dd>
+                  <dd className="font-display text-6xl font-bold tabular-nums">{t.cookCard.counts[i]}</dd>
                 </div>
               ))}
             </dl>

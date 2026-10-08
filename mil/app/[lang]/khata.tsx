@@ -19,22 +19,22 @@ export function Khata({ t }: { t: Dict['khata'] }) {
         ))}
         <div className="write grid h-11 grid-cols-[1fr_auto] items-end pb-2 pl-[4.5rem]" style={step(n)}>
           <dt className="pl-3 text-muted">{t.totalBazar}</dt>
-          <dd className="tabular-nums">৳6,550</dd>
+          <dd className="tabular-nums">৳{t.figures.totalBazar}</dd>
         </div>
         <div className="write grid h-11 grid-cols-[1fr_auto] items-end border-b border-line pb-2 pl-[4.5rem]" style={step(n + 1)}>
           <dt className="pl-3 text-muted">{t.totalMeals}</dt>
-          <dd className="tabular-nums">206.5</dd>
+          <dd className="tabular-nums">{t.figures.totalMeals}</dd>
         </div>
         <div className="write grid grid-cols-[1fr_auto] items-end pt-4 pl-[4.5rem]" style={step(n + 2)}>
           <dt className="pl-3 font-semibold">{t.mealRate}</dt>
-          <dd className="border-b-[3px] border-double border-ink font-display text-4xl font-bold tabular-nums">৳31.72</dd>
+          <dd className="border-b-[3px] border-double border-ink font-display text-4xl font-bold tabular-nums">৳{t.figures.rate}</dd>
         </div>
       </dl>
       <p className="mt-5 text-sm text-muted">{t.caption}</p>
       <div className="mt-5 rounded-xl bg-paper p-4">
         <p className="mb-2 font-semibold">{t.you.who}</p>
         <dl className="space-y-1">
-        {[[t.you.food, '714'], [t.you.bills, '316'], [t.you.paid, '2,120']].map(([label, amount]) => (
+        {[[t.you.food, t.figures.food], [t.you.bills, t.figures.bills], [t.you.paid, t.figures.paid]].map(([label, amount]) => (
           <div key={label} className="flex justify-between text-muted">
             <dt>{label}</dt>
             <dd className="tabular-nums">৳{amount}</dd>
@@ -42,7 +42,7 @@ export function Khata({ t }: { t: Dict['khata'] }) {
         ))}
         <div className="flex justify-between border-t border-line pt-2 font-semibold text-leaf">
           <dt>{t.you.result}</dt>
-          <dd className="tabular-nums">+৳1,090</dd>
+          <dd className="tabular-nums">+৳{t.figures.result}</dd>
         </div>
         </dl>
       </div>
