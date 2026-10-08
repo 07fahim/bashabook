@@ -7,7 +7,7 @@ export type Member = MealMember & { name: string; role: 'member' | 'manager'; in
 export type HistoryRow = {
   at: Date | string; actor: string | null; who: string | null; entity: 'meal_changes' | 'members' | 'flats'; entityId: string;
   after: {
-    count?: number; late?: boolean; rejected?: boolean;
+    count?: number; late?: boolean;
     away?: [string, string]; awayCancel?: [string, string];
     nocook?: [string, string]; cookAgain?: [string, string]; meals?: string;
     b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean;

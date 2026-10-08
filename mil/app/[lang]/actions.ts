@@ -6,7 +6,7 @@ import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/
 import { db } from '@/lib/db';
 import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
-  cancelAway, changeMeal, cookAgain, loadMeals, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults, updateSettings,
+  cancelAway, changeMeal, cookAgain, isInMeals, loadMeals, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults, updateSettings,
 } from '@/lib/meals-db';
 import { endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -53,7 +53,7 @@ export async function addMemberAction(_: FormState, d: FormData): Promise<FormSt
   const me = await requireManager(lang);
   const name = cleanName(d.get('name')), joinedOn = str(d, 'joinedOn');
   if (!name) return { error: a.errors.name };
-  if (!isDate(joinedOn) || joinedOn < addDays(await lastLocked(me.flatId), 1) || !editable(joinedOn)) return { error: getDictionary(lang).meals.errors.bad };
+  if (!isDate(joinedOn) || joinedOn < todayDhaka() || !editable(joinedOn)) return { error: getDictionary(lang).meals.errors.bad };
   if (!(await addMember(db, me.flatId, name, joinedOn))) return { error: a.errors.nameTaken };
   refresh();
   return { done: a.added };
@@ -113,7 +113,8 @@ export async function usualAction(_: FormState, d: FormData): Promise<FormState>
   const me = await requireMember(lang);
   // all three off = cooking for yourself; any on = back in shared meals
   const usual = { b: d.has('b'), l: d.has('l'), d: d.has('d') };
-  await setDefaults(db, me.flatId, me.memberId, usual, editFrom(todayDhaka()), await lastLocked(me.flatId), usual.b || usual.l || usual.d);
+  const inMeals = usual.b || usual.l || usual.d, was = await isInMeals(db, me.flatId, me.memberId);
+  await setDefaults(db, me.flatId, me.memberId, usual, editFrom(todayDhaka()), await lastLocked(me.flatId), inMeals === was ? null : inMeals);
   refresh();
   return { done: m.saved };
 }
@@ -183,6 +184,6 @@ export async function adminSetAction(d: FormData) {
 export async function noCookCancelAction(d: FormData) {
   const me = await requireManager(langOf(d));
   const date = str(d, 'date'), meals = str(d, 'meals').split(',').filter(isMeal);
-  if (editable(date) && meals.length) await cookAgain(db, me.flatId, me.memberId, date, date, meals, addDays(await lastLocked(me.flatId), 1));
+  if (editable(date) && meals.length) await cookAgain(db, me.flatId, me.memberId, date, date, meals, date);
   refresh();
 }

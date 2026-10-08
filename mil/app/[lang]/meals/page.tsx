@@ -53,7 +53,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     if (a.awayCancel) return `${who} · ${m.awayCancelled} · ${range(a.awayCancel)}`;
     const [, date, meal] = h.entityId.split('|');
     const value = a.count! > 1 ? `${a.count} ${m.platesShort}` : a.count ? m.on : m.off;
-    const tag = a.rejected ? ` · ${m.rejected}` : a.late ? ` · ${m.late}` : '';
+    const tag = a.late ? ` · ${m.late}` : '';
     return `${actor === who ? who : `${actor} → ${who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${tag}`;
   };
   const h2 = 'text-xl font-bold';

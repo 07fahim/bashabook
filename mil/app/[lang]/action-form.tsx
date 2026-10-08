@@ -13,8 +13,6 @@ export function ActionForm({ action, children, className }: { action: (prev: For
       onSubmit={e => {
         e.preventDefault();
         const data = new FormData(e.currentTarget);
-        const button = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-        if (button?.name) data.set(button.name, button.value);
         startTransition(() => run(data));
       }}
     >

@@ -83,7 +83,6 @@ export const isDate = (v: unknown): v is string =>
 export type Decision = 'open' | 'late' | 'closed';
 
 /** What a member's change to `date` becomes: saved, saved as late (tomorrow after the cutoff), or refused (today and before). */
-/** Members can't change today or earlier; only the person who runs the flat can (adminMealAction). */
 export function mealDecision(date: string, now: string, cutoff: string): Decision {
   if (date <= now.slice(0, 10)) return 'closed';
   if (!isLocked(date, now, cutoff)) return 'open';

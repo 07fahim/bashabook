@@ -177,7 +177,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           <ActionForm action={addMemberAction} className="mt-3">
             <input type="hidden" name="lang" value={lang} />
             <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
-            <Field label={m.joinedOn} name="joinedOn" type="date" required min={firstOpen} max={to} defaultValue={firstOpen} />
+            <Field label={m.joinedOn} name="joinedOn" type="date" required min={today} max={to} defaultValue={firstOpen} />
             <button className={primary}>{a.addBtn}</button>
           </ActionForm>
         </Fold>

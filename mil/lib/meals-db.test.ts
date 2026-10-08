@@ -180,4 +180,19 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await count('2026-10-16', 'l')).toBe(0);
     expect(await count('2026-10-13', 'l')).toBe(1);
   });
+
+  it('a plain usual-meals change stays a usual-meals change in history', async () => {
+    const { flatId, tahsin } = await flat();
+    await setDefaults(db, flatId, tahsin, { b: false, l: true, d: true }, '2026-09-01', '2026-10-09', null);
+    const [h] = await loadHistory(db, flatId);
+    expect([h.entity, h.after.inMeals]).toEqual(['members', undefined]);
+  });
+
+  it('cancelling no cooking for a locked day brings that day back', async () => {
+    const { flatId, memberId, tahsin, count } = await flat();
+    await noCooking(db, flatId, memberId, '2026-10-09', '2026-10-09', ['d'], '2026-10-09');
+    await cookAgain(db, flatId, memberId, '2026-10-09', '2026-10-09', ['d'], '2026-10-09');
+    expect(await count('2026-10-09', 'd')).toBe(1);
+    expect(tahsin).toBeTruthy();
+  });
 });
