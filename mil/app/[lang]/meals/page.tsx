@@ -29,7 +29,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const [meals, history, aways] = await Promise.all([
     loadMeals(db, me.flatId, today, week[6]),
     loadHistory(db, me.flatId, mine ? me.memberId : null),
-    upcomingAway(db, me.flatId, me.memberId, today),
+    upcomingAway(db, me.flatId, me.memberId, addDays(today, 1)),
   ]);
   const starter = meals.members.find(x => x.role === 'manager');
   const self = meals.members.find(x => x.id === me.memberId)!;
@@ -41,7 +41,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const describe = (h: HistoryRow) => {
     const actor = h.actor ?? '?', who = h.who ?? '?', a = h.after;
     const mealList = (x: string) => x.split(',').map(y => m.names[y as Meal]).join(', ');
-    if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
+    if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${a.strictness === 'strict' ? m.strictOpt : m.relaxedOpt} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
     if (h.entity === 'members') {
       if (a.inMeals === false) return `${who} ${m.ownStarted}`;
       if (a.inMeals === true) return `${who} ${m.ownStopped}`;
@@ -105,11 +105,11 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
         <section className={card}>
           <h2 className={h2}>{m.awayTitle}</h2>
           <p className="mt-1 text-muted">{m.awayLead}</p>
-          {aways.length > 0 && (
+          {aways.some(([, t]) => t >= firstOpen) && (
             <div className="mt-4">
               <p className="font-semibold">{m.awayList}</p>
               <ul className="mt-2 divide-y divide-line">
-                {aways.map(([f, t]) => (
+                {aways.filter(([, t]) => t >= firstOpen).map(([f, t]) => (
                   <li key={`${f}${t}`} className="flex items-center justify-between gap-3 py-2">
                     <span>{range([f, t])}</span>
                     <ActionForm action={cancelAwayAction}>

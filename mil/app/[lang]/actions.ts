@@ -54,7 +54,7 @@ export async function addMemberAction(_: FormState, d: FormData): Promise<FormSt
   const me = await requireManager(lang);
   const name = cleanName(d.get('name')), joinedOn = str(d, 'joinedOn');
   if (!name) return { error: a.errors.name };
-  if (!editable(joinedOn)) return { error: getDictionary(lang).meals.errors.bad };
+  if (!isDate(joinedOn) || joinedOn < addDays(await lastLocked(me.flatId), 1) || !editable(joinedOn)) return { error: getDictionary(lang).meals.errors.bad };
   if (!(await addMember(db, me.flatId, name, joinedOn))) return { error: a.errors.nameTaken };
   refresh();
   return { done: a.added };

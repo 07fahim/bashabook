@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { UUID } from './auth';
 import type { Db } from './db';
-import { mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
+import { addDays, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
 
 export type Strictness = 'relaxed' | 'strict';
 export type FlatInfo = { name: string; cutoff: string; strictness: Strictness; cookToken: string | null; lang: 'bn' | 'en'; weights: Record<Meal, number> };
@@ -13,7 +13,7 @@ export type HistoryRow = {
     away?: [string, string]; awayCancel?: [string, string];
     nocook?: [string, string]; cookAgain?: [string, string]; meals?: string;
     b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean;
-    cutoff?: string; weights?: Record<Meal, number>;
+    cutoff?: string; strictness?: Strictness; weights?: Record<Meal, number>;
   };
 };
 export type SavedChange = MealChange & { late: boolean };
@@ -41,6 +41,12 @@ export async function loadMeals(db: Db, flatId: string, from: string, to: string
      where r.flat_id = $1 and r.entity = 'meal_changes' and r.status = 'pending' and (r.payload->>'date')::date >= $2
      order by r.created_at`, [flatId, from]);
   const noCook = await db<NoCook>(`select date::text as date, meal from no_cook where flat_id = $1 and date between $2 and $3`, [flatId, from, to]);
+  // A no-cooking meal counts 0 for everyone without a saved row, whatever deleted or never wrote one (cancelled away,
+  // someone moving in later). Saved rows win, so the starter can still override. Money must load meals through here.
+  const saved = new Set(changes.map(c => `${c.memberId}|${c.date}|${c.meal}`));
+  for (const n of noCook) for (const m of members) {
+    if (!saved.has(`${m.id}|${n.date}|${n.meal}`)) changes.push({ memberId: m.id, date: n.date, meal: n.meal, count: 0, late: false });
+  }
   return { flat, members, changes, requests, noCook };
 }
 
@@ -129,19 +135,26 @@ export async function cancelAway(db: Db, flatId: string, memberId: string, from:
     [flatId, memberId, from, to, `${memberId}|away`, { awayCancel: [from, to] }]);
 }
 
-/** Away ranges that still reach today or later and were not cancelled after. */
+/** Away ranges still reaching `today` or later, minus cancelled days, overlapping ranges merged. */
 export async function upcomingAway(db: Db, flatId: string, memberId: string, today: string) {
   const rows = await db<{ after: HistoryRow['after'] }>(
     `select after from audit_log where flat_id = $1 and entity_id = $2 order by id`, [flatId, `${memberId}|away`]);
-  const out: [string, string][] = [];
+  let ranges: [string, string][] = [];
   for (const { after } of rows) {
-    if (after.away && after.away[1] >= today) out.push(after.away);
+    if (after.away) ranges.push(after.away);
     if (after.awayCancel) {
       const [f, t] = after.awayCancel;
-      for (let i = out.length - 1; i >= 0; i--) if (out[i][0] <= t && out[i][1] >= f) out.splice(i, 1);
+      ranges = ranges.flatMap(([a, b]): [string, string][] =>
+        b < f || a > t ? [[a, b]] : [...(a < f ? [[a, addDays(f, -1)] as [string, string]] : []), ...(b > t ? [[addDays(t, 1), b] as [string, string]] : [])]);
     }
   }
-  return out;
+  const merged: [string, string][] = [];
+  for (const [a, b] of ranges.filter(r => r[1] >= today).sort((x, y) => x[0].localeCompare(y[0]))) {
+    const last = merged.at(-1);
+    if (last && a <= addDays(last[1], 1)) last[1] = b > last[1] ? b : last[1];
+    else merged.push([a, b]);
+  }
+  return merged;
 }
 
 /** New usual meals. Days freezeFrom..freezeTo first keep the old usual meals as saved rows, so locked days don't move.
@@ -153,7 +166,7 @@ export async function setDefaults(db: Db, flatId: string, memberId: string, d: R
        from members m, generate_series(greatest(m.joined_on, $3::date)::timestamp, $4::timestamp, interval '1 day') day, unnest(array['b','l','d']) x(meal)
        where m.flat_id = $1 and m.id = $2
        on conflict (member_id, date, meal) do nothing),
-     cleared as (delete from meal_changes where flat_id = $1 and member_id = $2 and date > $4::date and count <= 1 and $10::boolean = false),
+     cleared as (delete from meal_changes where flat_id = $1 and member_id = $2 and date > $4::date and count = 1 and $10::boolean = false),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
        select flat_id, 'members', $5, jsonb_build_object('b', default_b, 'l', default_l, 'd', default_d, 'inMeals', in_meals), $6, id
        from members where flat_id = $1 and id = $2)
@@ -208,12 +221,24 @@ export async function noCooking(db: Db, flatId: string, by: string, from: string
     [flatId, from, to, meals.join(','), { nocook: [from, to], meals: meals.join(',') }, by, lastLocked]);
 }
 
-/** The cook is back early: unblock from..to, and from `firstOpen` on everyone's switched-off meals return to their usual meals. */
+/** The cook is back early: unblock from..to. From `firstOpen` on, each blocked meal still at the no-cooking 0 goes back to
+ *  what it was before no cooking (away, an Off, guest plates) or, if nothing was saved, to the usual meal.
+ *  ponytail: takes the newest no-cooking snapshot per meal; two overlapping no-cooking ranges without a cook-again between
+ *  would restore the first one's zeros. */
 export async function cookAgain(db: Db, flatId: string, by: string, from: string, to: string, meals: Meal[], firstOpen: string) {
   await db(
-    `with unblocked as (delete from no_cook where flat_id = $1 and date between $2::date and $3::date and meal = any(string_to_array($4::text, ','))),
-     restored as (delete from meal_changes where flat_id = $1 and date between greatest($2::date, $7::date) and $3::date
-       and meal = any(string_to_array($4::text, ',')) and count = 0)
+    `with unblocked as (delete from no_cook where flat_id = $1 and date between $2::date and $3::date
+       and meal = any(string_to_array($4::text, ',')) returning date, meal),
+     snap as (select distinct on (e->>'m', e->>'d', e->>'x') (e->>'m')::uuid as m, (e->>'d')::date as d, e->>'x' as x, (e->>'c')::int as c
+       from audit_log a, jsonb_array_elements(a.before) e
+       where a.flat_id = $1 and a.entity_id = 'flat|nocook' and jsonb_typeof(a.before) = 'array'
+       order by e->>'m', e->>'d', e->>'x', a.id desc),
+     back as (update meal_changes mc set count = s.c, updated_at = now() from unblocked u, snap s
+       where mc.flat_id = $1 and mc.date = u.date and mc.meal = u.meal and mc.date >= $7::date and mc.count = 0
+         and s.m = mc.member_id and s.d = mc.date and s.x = mc.meal),
+     plain as (delete from meal_changes mc using unblocked u
+       where mc.flat_id = $1 and mc.date = u.date and mc.meal = u.meal and mc.date >= $7::date and mc.count = 0
+         and not exists (select 1 from snap s where s.m = mc.member_id and s.d = mc.date and s.x = mc.meal))
      insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', 'flat|nocook', $5, $6)`,
     [flatId, from, to, meals.join(','), { cookAgain: [from, to], meals: meals.join(',') }, by, firstOpen]);
 }

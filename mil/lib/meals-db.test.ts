@@ -189,4 +189,39 @@ describe('meal storage', { timeout: 30000 }, () => {
     const mine = await loadHistory(db, flatId, tahsin);
     expect(mine.map(h => h.entity)).toEqual(['meal_changes', 'flats']);   // my meal + the flat-wide rule change
   });
+
+  it('a no-cooking meal stays 0 even after away is cancelled or someone moves in', async () => {
+    const { flatId, memberId, tahsin, load, count } = await flat();
+    await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');
+    await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-15', ['d'], '2026-10-09');
+    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');
+    expect(await count('2026-10-15', 'd')).toBe(0);
+    expect(await count('2026-10-15', 'l')).toBe(1);
+    await db(`insert into members (flat_id, name, joined_on) values ($1, 'Rafi', '2026-10-14')`, [flatId]);
+    const { members, changes } = await load();
+    expect(headcount(members, changes, '2026-10-15').d).toBe(0);
+  });
+
+  it('cooking again only touches blocked meals and restores what was there', async () => {
+    const { flatId, memberId, tahsin, count } = await flat();
+    await setAway(db, flatId, tahsin, '2026-10-20', '2026-10-21');
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-15', meal: 'd', count: 3 }, false);
+    await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-15', ['d'], '2026-10-09');
+    await cookAgain(db, flatId, memberId, '2026-10-15', '2026-10-21', ['d'], '2026-10-10');   // range wider than the block
+    expect(await count('2026-10-15', 'd')).toBe(3);   // guest plates back
+    expect(await count('2026-10-20', 'd')).toBe(0);   // away untouched
+  });
+
+  it('overlapping away ranges are listed as one; cooking for yourself and back keeps away', async () => {
+    const { flatId, tahsin, count } = await flat();
+    await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');
+    await setAway(db, flatId, tahsin, '2026-10-18', '2026-10-25');
+    expect(await upcomingAway(db, flatId, tahsin, '2026-10-10')).toEqual([['2026-10-12', '2026-10-25']]);
+    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-14');
+    expect(await upcomingAway(db, flatId, tahsin, '2026-10-10')).toEqual([['2026-10-15', '2026-10-25']]);
+    await setInMeals(db, flatId, tahsin, false, '2026-09-01', '2026-10-09');
+    await setInMeals(db, flatId, tahsin, true, '2026-09-01', '2026-10-09');
+    expect(await count('2026-10-16', 'l')).toBe(0);
+    expect(await count('2026-10-13', 'l')).toBe(1);
+  });
 });
