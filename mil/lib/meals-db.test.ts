@@ -41,6 +41,8 @@ describe('meal storage', { timeout: 30000 }, () => {
     const { changes, requests } = await load();
     expect(changes.map(x => [x.date, x.late]).sort()).toEqual([['2026-10-10', true], ['2026-10-11', false]]);
     expect(requests.map(r => r.date)).toEqual(['2026-10-09']);
+    expect(await changeMeal(db, flatId, c('2026-10-09'), '2026-10-09T23:00', true)).toBe('late');   // the approver doesn't wait on themselves
+    expect((await load()).requests).toEqual([]);   // a direct save drops the waiting request
   });
 
   it('keeps one pending request per meal and applies it as late once approved', async () => {
@@ -50,8 +52,9 @@ describe('meal storage', { timeout: 30000 }, () => {
     const { requests } = await load();
     expect(requests.map(r => [r.name, r.date, r.meal, r.count])).toEqual([['Tahsin', '2026-10-10', 'l', 0]]);
     expect(await count('2026-10-10', 'l')).toBe(1);   // not applied yet
-    expect(await decideRequest(db, flatId, memberId, requests[0].id, true)).toBe(true);
-    expect(await decideRequest(db, flatId, memberId, requests[0].id, true)).toBe(false);   // only once
+    expect(await decideRequest(db, flatId, memberId, requests[0].id, true, '2026-10-11')).toBe(false);   // day already gone
+    expect(await decideRequest(db, flatId, memberId, requests[0].id, true, '2026-10-09')).toBe(true);
+    expect(await decideRequest(db, flatId, memberId, requests[0].id, true, '2026-10-09')).toBe(false);   // only once
     const after = await load();
     expect(after.requests).toEqual([]);
     expect(after.changes).toEqual([{ memberId: tahsin, date: '2026-10-10', meal: 'l', count: 0, late: true }]);
@@ -62,7 +65,7 @@ describe('meal storage', { timeout: 30000 }, () => {
     const b = await flat();
     await requestMeal(db, a.flatId, { memberId: a.tahsin, date: '2026-10-10', meal: 'b', count: 0 });
     const [r] = (await a.load()).requests;
-    expect(await decideRequest(db, b.flatId, b.memberId, r.id, true)).toBe(false);
+    expect(await decideRequest(db, b.flatId, b.memberId, r.id, true, '2026-10-09')).toBe(false);
     expect((await a.load()).requests).toHaveLength(1);
   });
 
@@ -79,7 +82,7 @@ describe('meal storage', { timeout: 30000 }, () => {
   it('new usual meals leave locked days as they were', async () => {
     const { flatId, tahsin, load, count } = await flat();
     await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-05', meal: 'b', count: 2 }, false);
-    await setDefaults(db, flatId, tahsin, { b: false, l: true, d: true }, '2026-09-01', '2026-10-09');
+    await setDefaults(db, flatId, tahsin, { b: false, l: true, d: true }, '2026-10-09');
     expect(await count('2026-10-01', 'b')).toBe(1);   // joined 1 October, old usual kept
     expect(await count('2026-10-05', 'b')).toBe(2);   // saved change untouched
     expect(await count('2026-10-09', 'b')).toBe(1);

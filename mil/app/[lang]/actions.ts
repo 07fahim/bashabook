@@ -65,23 +65,26 @@ export async function resetPinAction(_: FormState, d: FormData): Promise<FormSta
   return { done: a.resetDone };
 }
 
-const isPlates = (n: number) => Number.isInteger(n) && n >= 0 && n <= 10;
+const plates = (v: string) => (/^\d{1,2}$/.test(v) && Number(v) <= 10 ? Number(v) : null);
+/** Today up to 60 days ahead. */
+const inRange = (date: string) => isDate(date) && date >= todayDhaka() && date <= addDays(todayDhaka(), 60);
 
 /** A meal chip tap. The chip sends the count it wants; repeating the tap is harmless. */
 export async function setMealAction(d: FormData) {
   const me = await requireMember(langOf(d));
-  const date = str(d, 'date'), meal = str(d, 'meal'), count = Number(str(d, 'count'));
-  if (!isDate(date) || !isMeal(meal) || !isPlates(count)) return;
-  await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka());
-  refresh();
+  const date = str(d, 'date'), meal = str(d, 'meal'), count = plates(str(d, 'count'));
+  if (inRange(date) && isMeal(meal) && count !== null) {
+    await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka(), me.role === 'manager');
+  }
+  refresh();   // also redraws a page left open past midnight
 }
 
 export async function guestAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireMember(lang);
-  const date = str(d, 'date'), meal = str(d, 'meal'), count = Number(str(d, 'plates'));
-  if (!isDate(date) || !isMeal(meal) || !isPlates(count)) return { error: m.errors.bad };
-  const r = await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka());
+  const date = str(d, 'date'), meal = str(d, 'meal'), count = plates(str(d, 'plates'));
+  if (!inRange(date) || !isMeal(meal) || count === null) return { error: m.errors.bad };
+  const r = await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka(), me.role === 'manager');
   if (r === 'closed') return { error: m.errors.closed };
   refresh();
   return { done: r === 'request' ? m.sentForApproval : m.saved };
@@ -91,7 +94,7 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireMember(lang);
   const from = str(d, 'from'), to = str(d, 'to');
-  if (!isDate(from) || !isDate(to) || to < from) return { error: m.errors.bad };
+  if (!inRange(from) || !isDate(to) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
   const now = nowDhaka(), r = await mealRules(db, me.flatId);
   let first = now.slice(0, 10);
@@ -107,15 +110,14 @@ export async function usualAction(_: FormState, d: FormData): Promise<FormState>
   const me = await requireMember(lang);
   const now = nowDhaka(), today = now.slice(0, 10), r = await mealRules(db, me.flatId);
   const lastLocked = isLocked(addDays(today, 1), now, r.cutoff) ? addDays(today, 1) : today;
-  const lastMonth = `${addDays(`${today.slice(0, 8)}01`, -1).slice(0, 8)}01`;
-  await setDefaults(db, me.flatId, me.memberId, { b: d.has('b'), l: d.has('l'), d: d.has('d') }, lastMonth, lastLocked);
+  await setDefaults(db, me.flatId, me.memberId, { b: d.has('b'), l: d.has('l'), d: d.has('d') }, lastLocked);
   refresh();
   return { done: m.saved };
 }
 
 export async function decideAction(d: FormData) {
   const me = await requireManager(langOf(d));
-  await decideRequest(db, me.flatId, me.memberId, str(d, 'id'), str(d, 'approve') === '1');
+  await decideRequest(db, me.flatId, me.memberId, str(d, 'id'), str(d, 'approve') === '1', todayDhaka());
   refresh();
 }
 

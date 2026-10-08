@@ -9,6 +9,9 @@ import { Header } from '../../header';
 
 type Props = PageProps<'/[lang]/c/[token]'>;
 
+// The token is the only key: keep it out of search results and Referer headers.
+export const metadata = { robots: { index: false }, referrer: 'no-referrer' as const };
+
 export default function Cook({ params }: Props) {
   return <Suspense><CookBody params={params} /></Suspense>;
 }

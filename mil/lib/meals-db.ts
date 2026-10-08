@@ -25,17 +25,19 @@ export async function loadMeals(db: Db, flatId: string, from: string, to: string
   const requests = await db<MealRequest>(
     `select r.id, r.requested_by as "memberId", m.name, r.payload->>'date' as date, r.payload->>'meal' as meal, (r.payload->>'count')::int as count
      from change_requests r join members m on m.id = r.requested_by
-     where r.flat_id = $1 and r.entity = 'meal_changes' and r.status = 'pending' order by r.created_at`, [flatId]);
+     where r.flat_id = $1 and r.entity = 'meal_changes' and r.status = 'pending' and (r.payload->>'date')::date >= $2
+     order by r.created_at`, [flatId, from]);
   return { flat, members, changes, requests };
 }
 
 export const mealRules = async (db: Db, flatId: string) =>
   (await db<{ cutoff: string; strictness: Strictness }>(`select cutoff_time::text as cutoff, strictness from flats where id = $1`, [flatId]))[0];
 
-/** Saves one meal change and its audit row in one statement. */
+/** Saves one meal change and its audit row in one statement. A direct save also drops any waiting request for that meal. */
 export async function saveMeal(db: Db, flatId: string, by: string, c: MealChange, late: boolean) {
   await db(
     `with old as (select count, late from meal_changes where member_id = $2 and date = $3 and meal = $4),
+     gone as (delete from change_requests where flat_id = $1 and entity = 'meal_changes' and entity_id = $7 and status = 'pending'),
      up as (insert into meal_changes (flat_id, member_id, date, meal, count, late) values ($1, $2, $3, $4, $5, $6)
        on conflict (member_id, date, meal) do update set count = excluded.count, late = excluded.late, updated_at = now()
        returning count, late)
@@ -52,22 +54,24 @@ export async function requestMeal(db: Db, flatId: string, c: MealChange) {
     [flatId, cell(c), { date: c.date, meal: c.meal, count: c.count }, c.memberId]);
 }
 
-/** Applies the flat's lock rule to one change. `now` = nowDhaka(). */
-export async function changeMeal(db: Db, flatId: string, c: MealChange, now: string): Promise<Decision> {
+/** Applies the flat's lock rule to one change. `now` = nowDhaka(). The person who approves never waits on themselves. */
+export async function changeMeal(db: Db, flatId: string, c: MealChange, now: string, selfApprove = false): Promise<Decision> {
   const r = await mealRules(db, flatId);
-  const decision = mealDecision(c.date, now, r.cutoff, r.strictness);
+  const rule = mealDecision(c.date, now, r.cutoff, r.strictness);
+  const decision = rule === 'request' && selfApprove ? 'late' : rule;
   if (decision === 'request') await requestMeal(db, flatId, c);
   else if (decision !== 'closed') await saveMeal(db, flatId, c.memberId, c, decision === 'late');
   return decision;
 }
 
-export async function decideRequest(db: Db, flatId: string, by: string, id: string, approve: boolean) {
+/** Past days can't change, so a request for a day before `today` can no longer be decided. */
+export async function decideRequest(db: Db, flatId: string, by: string, id: string, approve: boolean, today: string) {
   if (!UUID.test(id)) return false;
   const [r] = await db<MealChange>(
     `update change_requests set status = $4, decided_by = $3
-     where flat_id = $1 and id = $2 and entity = 'meal_changes' and status = 'pending'
+     where flat_id = $1 and id = $2 and entity = 'meal_changes' and status = 'pending' and (payload->>'date')::date >= $5
      returning requested_by as "memberId", payload->>'date' as date, payload->>'meal' as meal, (payload->>'count')::int as count`,
-    [flatId, id, by, approve ? 'approved' : 'rejected']);
+    [flatId, id, by, approve ? 'approved' : 'rejected', today]);
   // ponytail: two statements, not one transaction; a crash between them leaves an approved request unapplied
   if (r && approve) await saveMeal(db, flatId, by, r, true);
   return !!r;
@@ -84,19 +88,19 @@ export async function setAway(db: Db, flatId: string, memberId: string, from: st
     [flatId, memberId, from, to, `${memberId}|away`, { away: [from, to] }]);
 }
 
-/** New usual meals. Days freezeFrom..freezeTo first keep the old usual meals as saved rows. */
-export async function setDefaults(db: Db, flatId: string, memberId: string, d: Record<Meal, boolean>, freezeFrom: string, freezeTo: string) {
+/** New usual meals. Every day from joining to freezeTo first keeps the old usual meals as saved rows. */
+export async function setDefaults(db: Db, flatId: string, memberId: string, d: Record<Meal, boolean>, freezeTo: string) {
   await db(
     `with frozen as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select m.flat_id, m.id, day::date, x.meal, (case x.meal when 'b' then m.default_b when 'l' then m.default_l else m.default_d end)::int
-       from members m, generate_series(greatest($3::date, m.joined_on), $4::date, interval '1 day') day, unnest(array['b','l','d']) x(meal)
+       from members m, generate_series(m.joined_on, $3::date, interval '1 day') day, unnest(array['b','l','d']) x(meal)
        where m.flat_id = $1 and m.id = $2
        on conflict (member_id, date, meal) do nothing),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
-       select flat_id, 'members', $5, jsonb_build_object('b', default_b, 'l', default_l, 'd', default_d), $6, id
+       select flat_id, 'members', $4, jsonb_build_object('b', default_b, 'l', default_l, 'd', default_d), $5, id
        from members where flat_id = $1 and id = $2)
-     update members set default_b = $7, default_l = $8, default_d = $9 where flat_id = $1 and id = $2`,
-    [flatId, memberId, freezeFrom, freezeTo, `${memberId}|defaults`, d, d.b, d.l, d.d]);
+     update members set default_b = $6, default_l = $7, default_d = $8 where flat_id = $1 and id = $2`,
+    [flatId, memberId, freezeTo, `${memberId}|defaults`, d, d.b, d.l, d.d]);
 }
 
 export async function updateSettings(db: Db, flatId: string, s: { cutoff: string; strictness: Strictness }) {
