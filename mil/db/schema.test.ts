@@ -1,14 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
-
-const dir = join(__dirname, 'migrations');
-const db = new PGlite();   // booted once: startup takes seconds
-let ready: Promise<void> | undefined;
-const migrate = () => ready ??= (async () => {
-  for (const f of readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) await db.exec(readFileSync(join(dir, f), 'utf8'));
-})();
+import { pg as db, migrate } from './test-db';
 
 /** Two new flats per test, so tests never share rows. */
 async function freshDb() {

@@ -67,3 +67,6 @@ export function isLocked(date: string, nowDhaka: string, cutoff: string): boolea
   t.setUTCDate(t.getUTCDate() + 1);
   return date === t.toISOString().slice(0, 10) && time.slice(0, 5) >= cutoff.slice(0, 5);
 }
+
+/** Today's date in Dhaka as 'YYYY-MM-DD'. */
+export const todayDhaka = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
