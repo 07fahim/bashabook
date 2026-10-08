@@ -1,0 +1,143 @@
+export const locales = ['bn', 'en'] as const;
+export type Locale = (typeof locales)[number];
+export const hasLocale = (l: string): l is Locale => (locales as readonly string[]).includes(l);
+
+const bn = {
+  brand: 'বাসা',
+  brandAccent: 'বুক',
+  switchLang: 'English',
+  themeToggle: 'লাইট বা ডার্ক থিম',
+  metaTitle: 'বাসাবুক · বাসার হিসাব, ঝামেলা ছাড়া',
+  metaDesc: 'কে কয় বেলা খেল, কে কত বাজার করল, কে কত পাবে। ফ্ল্যাটের সব হিসাব এক জায়গায়।',
+  heroTitle: 'ফ্ল্যাটের হিসাব নিয়ে আর ঝামেলা নেই।',
+  heroBody: 'কে কত মিল খেল, বাজারে কে কত দিল, আর কার কত টাকা পাওনা, সব হিসাব এক জায়গায়।',
+  create: 'ফ্ল্যাট তৈরি করুন',
+  joinLead: 'ফ্ল্যাটে যোগ দিচ্ছেন?',
+  joinCta: 'লিংক দিয়ে সরাসরি যোগ দিন →',
+  khata: {
+    title: 'অক্টোবরের হিসাব',
+    rows: [
+      ['2 October', 'বাজার · নাফিস', '2,450'],
+      ['5 October', 'বাজার · তাহসিন', '1,980'],
+      ['9 October', 'বাজার · জারিফ', '2,120'],
+    ],
+    totalBazar: 'মোট বাজার',
+    totalMeals: 'মোট মিল',
+    mealRate: 'মিল রেট',
+    caption: 'মিল রেট = মোট বাজার ÷ মোট মিল',
+    figures: { totalBazar: '6,550', totalMeals: '206.5', rate: '31.72', food: '714', bills: '316', paid: '2,120', result: '1,090' },
+    you: { who: 'জারিফের হিসাব, 9 October পর্যন্ত', food: 'খাবার (22.5 মিল)', bills: 'বিলের ভাগ', paid: 'জমা দিয়েছে', result: 'ফেরত পাবে' },
+  },
+  stepsTitle: 'যেভাবে চলে',
+  steps: [
+    { title: 'সবাই মিল মার্ক করে', body: 'রাত দশটার আগে এক ট্যাপে জানিয়ে দেয় কাল কে খাবে না।', stat: 'এ পর্যন্ত 206.5 মিল' },
+    { title: 'রাঁধুনি সংখ্যা পেয়ে যান', body: 'কালকের সংখ্যা নিজে থেকেই রাঁধুনির ফোনে পৌঁছে যায়।', stat: 'সকাল 7 · দুপুর 8 · রাত 9' },
+    { title: 'মাস শেষে হিসাব তৈরি', body: 'বাজার আর বিল মিল আর দিন অনুযায়ী ভাগ হয়। কে কত দেবে, সবাই দেখে।', stat: 'মিল রেট ৳31.72' },
+  ],
+  chat: { group: 'ফ্ল্যাট 4B · গ্রুপ', sender: 'বাসাবুক', time: '31 October, 9:15 pm' },
+  settleTitle: 'মাস শেষে সোজা মেসেঞ্জার গ্রুপে',
+  settleBody: 'মাস ক্লোজ করলেই কে কত দেবে আর কে কত পাবে, সেই মেসেজ রেডি। এক ট্যাপে গ্রুপে পাঠিয়ে দিন।',
+  settleMsg: ['অক্টোবরের হিসাব', 'মিল রেট ৳31.72', 'জারিফ পাবে ৳420', 'নাফিস দেবে ৳310', 'তাহসিন দেবে ৳110'],
+  modesTitle: 'বন্ধু হোক বা অচেনা, নিয়ম আপনাদের',
+  modesLead: 'ফ্ল্যাট কতটা কড়া হবে, আপনারাই ঠিক করবেন। পরে যেকোনো সময় বদলানো যায়।',
+  modeRows: ['নতুন বাজারের এন্ট্রি', 'রাত দশটার পরে মিল বদল'],
+  modes: [
+    { name: 'সহজ', who: 'বন্ধুদের ফ্ল্যাটের জন্য', values: ['সাথে সাথে হিসাবে যোগ হয়', 'করা যায়, দেরি হিসেবে চিহ্ন থাকে'] },
+    { name: 'কড়া', who: 'নতুন বা অচেনা ফ্ল্যাটমেটদের জন্য', values: ['কেউ নিশ্চিত করলে তবেই যোগ হয়', 'আগে অনুমোদন লাগে'] },
+  ],
+  price: {
+    title: 'দাম',
+    lead: 'জনপ্রতি নয়, পুরো ফ্ল্যাটের জন্য একটাই দাম।',
+    amount: '৳199',
+    period: '/ মাস',
+    note: 'প্রথম মাস ফ্রি। ফ্ল্যাটের বাকিদের আলাদা করে কিছু দিতে হবে না।',
+    features: ['প্রতিদিনের মিল আর রাঁধুনির হেডকাউন্ট', 'বাজার, বিল আর জমার হিসাব', 'মাস শেষের হিসাব, এক ট্যাপে গ্রুপে', 'বাংলা আর ইংরেজি দুটোতেই'],
+    cta: 'ফ্রি মাস শুরু করুন',
+  },
+  faqTitle: 'সাধারণ প্রশ্ন',
+  faq: [
+    ['সবাইকে কি অ্যাপ ডাউনলোড করতে হবে?', 'না। ইনভাইট লিংকে ট্যাপ করলেই ব্রাউজারে খুলে যায়। চাইলে হোম স্ক্রিনে যোগ করে অ্যাপের মতো ব্যবহার করা যায়।'],
+    ['বাসাবুক কি আমাদের টাকা রাখে?', 'না। টাকা সরাসরি আপনার ফ্ল্যাটের বিকাশ নম্বরে যায়। বাসাবুক শুধু TrxID দিয়ে কে কত দিল তা লিখে রাখে।'],
+    ['মাসের মাঝখানে কেউ উঠলে বা চলে গেলে?', 'যে কয়দিন ছিল, সেই কয়দিনের হিসাবে বিলের ভাগ হয়। মাস শেষে তার হিসাবও বাকিদের মতোই মিটে যায়।'],
+    ['সবাই কি সবার এন্ট্রি দেখতে পারে?', 'হ্যাঁ। প্রতিটা বাজার, বিল আর জমা ফ্ল্যাটের সবাই দেখতে পারে, তাই হিসাব নিয়ে সন্দেহ থাকে না।'],
+    ['আইফোনে চলবে?', 'হ্যাঁ, অ্যান্ড্রয়েড আর আইফোন দুটোতেই চলে।'],
+  ],
+  footer: {
+    tagline: 'বাসাবুক · শেয়ার্ড ফ্ল্যাটের হিসাব',
+    whatsapp: 'হোয়াটসঅ্যাপে লিখুন',
+    email: 'ইমেইল করুন',
+    privacy: 'আমরা শুধু নাম, মিল আর টাকার অঙ্ক রাখি। টাকা সরাসরি আপনার ফ্ল্যাটের বিকাশ নম্বরে যায়।',
+  },
+};
+
+export type Dict = typeof bn;
+
+const en: Dict = {
+  brand: 'BashaBook',
+  brandAccent: '',
+  switchLang: 'বাংলা',
+  themeToggle: 'Light or dark theme',
+  metaTitle: 'BashaBook · Run your flat without the daily hassle',
+  metaDesc: 'Meal counts, the cook’s headcount, bazar, bills and month-end dues, worked out for everyone in the flat.',
+  heroTitle: 'Run your flat without the daily hassle.',
+  heroBody: 'Who ate how many meals, who spent what on bazar, who owes whom. BashaBook keeps the books, without the notebook or the month-end arguments.',
+  create: 'Create your flat',
+  joinLead: 'Already have an invite?',
+  joinCta: 'Join a flat →',
+  khata: {
+    title: 'October ledger',
+    rows: [
+      ['2 Oct', 'Bazar · Nafis', '2,450'],
+      ['5 Oct', 'Bazar · Tahsin', '1,980'],
+      ['9 Oct', 'Bazar · Zarif', '2,120'],
+    ],
+    totalBazar: 'Total bazar',
+    totalMeals: 'Total meals',
+    mealRate: 'Meal rate',
+    caption: 'Meal rate = total bazar ÷ total meals',
+    figures: { totalBazar: '6,550', totalMeals: '206.5', rate: '31.72', food: '714', bills: '316', paid: '2,120', result: '1,090' },
+    you: { who: 'Zarif · as of 9 Oct', food: 'Food (22.5 meals)', bills: 'Share of bills', paid: 'Paid', result: 'Gets back' },
+  },
+  stepsTitle: 'How it works',
+  steps: [
+    { title: 'Everyone marks meals', body: 'Before 10 pm, one tap says who’s skipping tomorrow.', stat: '206.5 meals so far' },
+    { title: 'The cook gets the count', body: 'Tomorrow’s numbers reach the cook’s phone on their own.', stat: 'Breakfast 7 · Lunch 8 · Dinner 9' },
+    { title: 'The month settles itself', body: 'Bazar and bills split by meals and days. Everyone sees what they owe.', stat: 'Meal rate ৳31.72' },
+  ],
+  chat: { group: 'Flat 4B · group', sender: 'BashaBook', time: '31 October, 9:15 pm' },
+  settleTitle: 'Month end, in your Messenger group',
+  settleBody: 'Close the month and the who-owes-what message is ready. Send it to the group in one tap.',
+  settleMsg: ['October accounts', 'Meal rate ৳31.72', 'Zarif gets ৳420', 'Nafis pays ৳310', 'Tahsin pays ৳110'],
+  modesTitle: 'Friends or strangers, you set the rules',
+  modesLead: 'Choose how strict your flat is. You can change it any time.',
+  modeRows: ['New bazar entry', 'Meal change after 10 pm'],
+  modes: [
+    { name: 'Relaxed', who: 'For flats of friends', values: ['Counts right away', 'Allowed, marked late'] },
+    { name: 'Strict', who: 'For flatmates who just met', values: ['Counts once someone confirms it', 'Needs approval first'] },
+  ],
+  price: {
+    title: 'Pricing',
+    lead: 'One price for the whole flat, not per person.',
+    amount: '৳199',
+    period: '/ month',
+    note: 'First month free. Nobody else in the flat pays anything.',
+    features: ['Daily meals and the cook’s headcount', 'Bazar, bills and deposits', 'Month-end settlement, sent in one tap', 'In Bangla and English'],
+    cta: 'Start your free month',
+  },
+  faqTitle: 'Common questions',
+  faq: [
+    ['Does everyone need to download an app?', 'No. The invite link opens in the browser. Anyone can add it to their home screen to use it like an app.'],
+    ['Does BashaBook hold our money?', 'No. Money goes straight to your flat’s bKash number. BashaBook only records who paid what, by TrxID.'],
+    ['What if someone moves in or out mid-month?', 'Bills are shared by the days each person stayed. Their balance settles at month end like everyone else’s.'],
+    ['Can everyone see every entry?', 'Yes. Every bazar, bill and deposit is visible to the whole flat, so nobody has to take the numbers on trust.'],
+    ['Does it work on iPhone?', 'Yes, on Android and iPhone.'],
+  ],
+  footer: {
+    tagline: 'BashaBook · accounts for shared flats',
+    whatsapp: 'Message us on WhatsApp',
+    email: 'Email us',
+    privacy: 'We only store names, meals and amounts. Money goes straight to your flat’s bKash number.',
+  },
+};
+
+export const getDictionary = (l: Locale): Dict => (l === 'bn' ? bn : en);

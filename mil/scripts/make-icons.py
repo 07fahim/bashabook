@@ -1,0 +1,24 @@
+"""Cuts the B symbol out of the BashaBook logo and writes the navbar mark and app icons.
+Run from mil/: python scripts/make-icons.py"""
+from PIL import Image
+
+PAPER = '#FBF7F0'
+logo = Image.open('asset/BashaBook Warm Minimalist Logo.png').convert('RGBA')
+mark = logo.crop((0, 0, 700, logo.height))   # the symbol sits left of x=700, the wordmark right of it
+mark = mark.crop(mark.getchannel('A').point(lambda a: 255 if a > 16 else 0).getbbox())  # ignore faint stray pixels
+
+# navbar mark: 64 px tall (2x for a 32 px slot), transparent
+w = round(mark.width * 64 / mark.height)
+mark.resize((w, 64), Image.LANCZOS).save('public/logo-mark.png', optimize=True)
+print('wrote public/logo-mark.png')
+
+# app icons: symbol at 60% on paper, inside the maskable safe zone
+S = 1024
+icon = Image.new('RGBA', (S, S), PAPER)
+side = int(S * 0.6)
+scaled = mark.resize((round(mark.width * side / max(mark.size)), round(mark.height * side / max(mark.size))), Image.LANCZOS)
+icon.alpha_composite(scaled, ((S - scaled.width) // 2, (S - scaled.height) // 2))
+icon = icon.convert('RGB')
+for size, path in ((512, 'public/icon-512.png'), (192, 'public/icon-192.png'), (180, 'public/apple-icon.png')):
+    icon.resize((size, size), Image.LANCZOS).save(path, optimize=True)
+    print('wrote', path)
