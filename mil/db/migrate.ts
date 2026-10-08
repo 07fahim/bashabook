@@ -2,7 +2,8 @@ import postgres from 'postgres';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const sql = postgres(process.env.DATABASE_URL!, { max: 1 });
+if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL missing in .env.local');
+const sql = postgres(process.env.DATABASE_URL, { max: 1 });
 const dir = join(__dirname, 'migrations');
 
 async function main() {
