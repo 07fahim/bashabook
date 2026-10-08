@@ -38,7 +38,7 @@
   --color-leaf: var(--leaf);
   --color-chili: var(--chili);
   --font-sans: var(--font-hind);
-  --font-display: var(--font-anek);
+  --font-display: var(--font-hind);
 }
 
 html {

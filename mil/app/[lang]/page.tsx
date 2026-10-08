@@ -19,7 +19,10 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
       <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
         <span className="flex items-center gap-2 font-display text-2xl font-bold">
           <Image src="/logo-mark.png" alt="" width={31} height={32} priority />
-          {t.brand}
+          <span>
+            {t.brand}
+            <span className="text-turmeric-ink">{t.brandAccent}</span>
+          </span>
         </span>
         <div className="flex items-center gap-1">
           <ThemeToggle label={t.themeToggle} />
@@ -32,7 +35,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
       <main className="mx-auto max-w-5xl px-5">
         <section className="grid items-center gap-10 py-6 md:grid-cols-2 md:py-14">
           <div>
-            <h1 className="font-display text-5xl leading-[1.05] font-bold md:text-6xl">{t.heroTitle}</h1>
+            <h1 className="font-display text-4xl leading-tight font-bold text-balance sm:text-5xl md:text-6xl">{t.heroTitle}</h1>
             <p className="mt-5 max-w-prose text-lg text-muted">{t.heroBody}</p>
             <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 inline-flex min-h-12 items-center bg-turmeric px-6 text-lg font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
               {t.create}
