@@ -11,6 +11,7 @@
     "migrate": "tsx --env-file=.env.local db/migrate.ts"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "next": "16.4.0",
     "postgres": "^3.4.9",
     "react": "19.3.0",
