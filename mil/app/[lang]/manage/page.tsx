@@ -71,7 +71,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
         </section>
 
         <h2 className={groupLabel}>{m.groupChange}</h2>
-        <Fold title={m.editTitle} lead={m.editLead} level={3}>
+        <Fold title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
           <form className="mt-4 space-y-4">
             <label className="block font-semibold">
               {m.who}
