@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { allocate } from './money';
+import { allocate, monthBalances, type LedgerRow, type MonthInput } from './money';
 
 describe('allocate', () => {
   it('splits exactly with largest remainder, ties to lowest index', () => {
@@ -14,5 +14,122 @@ describe('allocate', () => {
   it('refuses non-integers (e.g. amounts that arrived as strings or decimals)', () => {
     expect(() => allocate(10.5, [1, 1])).toThrow(TypeError);
     expect(() => allocate('100' as unknown as number, [1])).toThrow(TypeError);
+  });
+});
+
+const row = (p: Partial<LedgerRow> & Pick<LedgerRow, 'id' | 'type' | 'amount'>): LedgerRow =>
+  ({ paidBy: null, memberId: null, split: null, selected: [], status: 'ok', ...p });
+
+const base = (over: Partial<MonthInput> = {}): MonthInput => ({
+  memberIds: ['A', 'B', 'C'],
+  opening: new Map(),
+  openingFund: 0,
+  weightedMeals: new Map([['A', 6000], ['B', 3000], ['C', 1000]]),
+  daysPresent: new Map([['A', 31], ['B', 31], ['C', 31]]),
+  roomOf: new Map([['A', 'R1'], ['B', 'R1'], ['C', 'R2']]),
+  rooms: [{ id: 'R1', rentShare: 600000 }, { id: 'R2', rentShare: 400000 }],
+  ledger: [],
+  ...over,
+});
+
+const bal = (r: ReturnType<typeof monthBalances>) => Object.fromEntries(r.perMember.map(m => [m.id, m.balance]));
+
+describe('monthBalances', () => {
+  it('worked month: out-of-pocket bazar, fund-paid bills, selected laundry', () => {
+    // Bazar 1,000 tk paid by A; weighted meals 60/30/10 -> food 600/300/100
+    // Internet 300 tk equal, from fund -> 100 each; laundry 200 tk for B,C, from fund -> 100 each
+    // Deposits B 500, C 300. Fund = 800 - 300 - 200 = 300 tk, which is owed to A.
+    const r = monthBalances(base({ ledger: [
+      row({ id: 'z1', type: 'bazar', amount: 100000, paidBy: 'A' }),
+      row({ id: 'i1', type: 'bill', amount: 30000, split: 'equal' }),
+      row({ id: 'w1', type: 'bill', amount: 20000, split: 'selected', selected: ['B', 'C'] }),
+      row({ id: 'd1', type: 'deposit', amount: 50000, memberId: 'B' }),
+      row({ id: 'd2', type: 'deposit', amount: 30000, memberId: 'C' }),
+    ] }));
+    expect(bal(r)).toEqual({ A: 30000, B: 0, C: 0 });
+    expect(r.fund).toBe(30000);
+    expect(r.mealRate).toBe(1000);   // 10.00 tk per weighted meal
+    expect(r.invariantOk).toBe(true);
+  });
+
+  it('carries balances into the next month, where dues get settled', () => {
+    // Month 1: A paid 1,000 tk bazar; meals 60/30/10 -> A +400, B -300, C -100, fund 0
+    const m1 = monthBalances(base({ ledger: [row({ id: 'z1', type: 'bazar', amount: 100000, paidBy: 'A' })] }));
+    expect(bal(m1)).toEqual({ A: 40000, B: -30000, C: -10000 });
+    // Month 2: no meals or bills yet; B and C pay their dues, A is paid out
+    const m2 = monthBalances(base({
+      opening: new Map(m1.perMember.map(m => [m.id, m.balance])),
+      openingFund: m1.fund,
+      ledger: [
+        row({ id: 'd1', type: 'deposit', amount: 30000, memberId: 'B' }),
+        row({ id: 'd2', type: 'deposit', amount: 10000, memberId: 'C' }),
+        row({ id: 'p1', type: 'payout', amount: 40000, memberId: 'A' }),
+      ],
+    }));
+    expect(bal(m2)).toEqual({ A: 0, B: 0, C: 0 });
+    expect(m2.fund).toBe(0);
+    expect(m2.invariantOk).toBe(true);
+  });
+
+  it('rent by room: room shares first, then split inside each room', () => {
+    const r = monthBalances(base({ ledger: [row({ id: 'r1', type: 'bill', amount: 1000000, split: 'room', paidBy: 'A' })] }));
+    expect(r.perMember.map(m => m.billShare)).toEqual([300000, 300000, 400000]);
+    expect(r.invariantOk).toBe(true);
+  });
+
+  it('ignores pending rows; payouts settle a balance', () => {
+    const r = monthBalances(base({ ledger: [
+      row({ id: 'z1', type: 'bazar', amount: 100000, paidBy: 'A' }),
+      row({ id: 'd1', type: 'deposit', amount: 70000, memberId: 'B' }),
+      row({ id: 'd2', type: 'deposit', amount: 30000, memberId: 'C' }),
+      row({ id: 'p1', type: 'payout', amount: 40000, memberId: 'A' }),
+      row({ id: 'x', type: 'bazar', amount: 99999, paidBy: 'C', status: 'pending' }),
+    ] }));
+    expect(bal(r)).toEqual({ A: 0, B: 40000, C: 20000 });
+    expect(r.fund).toBe(60000);
+    expect(r.invariantOk).toBe(true);
+  });
+
+  it('blocks closing when bazar has no meals to split over', () => {
+    const r = monthBalances(base({ weightedMeals: new Map(), ledger: [row({ id: 'z1', type: 'bazar', amount: 5000, paidBy: 'A' })] }));
+    expect(r.invariantOk).toBe(false);
+    expect(r.problems[0]).toMatch(/nobody to split/);
+  });
+
+  it('flags an empty room but ignores empty rooms with no rent share', () => {
+    const allInR1 = new Map([['A', 'R1'], ['B', 'R1'], ['C', 'R1']]);
+    const r = monthBalances(base({ roomOf: allInR1, ledger: [row({ id: 'r1', type: 'bill', amount: 1000000, split: 'room' })] }));
+    expect(r.invariantOk).toBe(false);
+    expect(r.problems[0]).toMatch(/empty room/);
+    const ok = monthBalances(base({ roomOf: allInR1, rooms: [{ id: 'R1', rentShare: 600000 }, { id: 'R2', rentShare: 0 }], ledger: [row({ id: 'r1', type: 'bill', amount: 900000, split: 'room' })] }));
+    expect(ok.problems).toEqual([]);
+    expect(ok.perMember.map(m => m.billShare)).toEqual([300000, 300000, 300000]);
+  });
+
+  it('flags a present member with no room when rent is split by room', () => {
+    const r = monthBalances(base({ roomOf: new Map([['A', 'R1'], ['B', null], ['C', 'R2']]), ledger: [row({ id: 'r1', type: 'bill', amount: 1000000, split: 'room' })] }));
+    expect(r.invariantOk).toBe(false);
+    expect(r.problems[0]).toMatch(/no room set for B/);
+  });
+
+  it('lets a tenant of a zero-share room pay no rent without a problem', () => {
+    const r = monthBalances(base({ rooms: [{ id: 'R1', rentShare: 600000 }, { id: 'R2', rentShare: 0 }], ledger: [row({ id: 'r1', type: 'bill', amount: 600000, split: 'room' })] }));
+    expect(r.problems).toEqual([]);
+    expect(r.perMember.map(m => m.billShare)).toEqual([300000, 300000, 0]);
+  });
+
+  it('flags an opening balance that does not reach the fund', () => {
+    const r = monthBalances(base({ opening: new Map([['X', -5000]]), openingFund: -5000 }));
+    expect(r.invariantOk).toBe(false);
+    expect(r.problems).toEqual(['balances differ from fund by 5000']);
+  });
+
+  it('reports unknown members instead of crashing', () => {
+    const r = monthBalances(base({ ledger: [
+      row({ id: 'd9', type: 'deposit', amount: 5000, memberId: 'X' }),
+      row({ id: 'w1', type: 'bill', amount: 20000, split: 'selected', selected: ['B', 'X'] }),
+    ] }));
+    expect(r.invariantOk).toBe(false);
+    expect(r.problems).toEqual(['d9: unknown member X', 'w1: unknown member X', 'balances differ from fund by 20000']);   // the unsplit laundry bill left the fund
   });
 });
