@@ -1,47 +1,54 @@
 import { randomBytes } from 'node:crypto';
-import { UUID } from './auth';
 import type { Db } from './db';
-import { mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
+import { addDays, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
 
-export type Strictness = 'relaxed' | 'strict';
-export type FlatInfo = { name: string; cutoff: string; strictness: Strictness; cookToken: string | null; lang: 'bn' | 'en' };
-export type Member = MealMember & { name: string; role: 'member' | 'manager' };
+export type FlatInfo = { name: string; cutoff: string; cookToken: string | null; lang: 'bn' | 'en'; weights: Record<Meal, number> };
+export type Member = MealMember & { name: string; role: 'member' | 'manager'; inMeals: boolean };
 export type HistoryRow = {
-  at: Date | string; actor: string | null; who: string | null; entityId: string;
-  after: { count?: number; late?: boolean; away?: [string, string]; nocook?: [string, string]; meals?: string };
+  at: Date | string; actor: string | null; who: string | null; entity: 'meal_changes' | 'members' | 'flats'; entityId: string;
+  after: {
+    count?: number; late?: boolean;
+    away?: [string, string]; awayCancel?: [string, string];
+    nocook?: [string, string]; cookAgain?: [string, string]; meals?: string;
+    b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean;
+    cutoff?: string; weights?: Record<Meal, number>;
+  };
 };
 export type SavedChange = MealChange & { late: boolean };
-export type MealRequest = { id: string; memberId: string; name: string; date: string; meal: Meal; count: number };
+export type NoCook = { date: string; meal: Meal };
 
 const cell = (c: MealChange) => `${c.memberId}|${c.date}|${c.meal}`;
 
 /** Everything the meal screens need for dates from..to. */
 export async function loadMeals(db: Db, flatId: string, from: string, to: string) {
   const [flat] = await db<FlatInfo>(
-    `select name, cutoff_time::text as cutoff, strictness, cook_link_token as "cookToken", language as lang from flats where id = $1`, [flatId]);
+    `select name, cutoff_time::text as cutoff, cook_link_token as "cookToken", language as lang,
+       json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights
+     from flats where id = $1`, [flatId]);
   const members = await db<Member>(
-    `select id, name, role, joined_on::text as "joinedOn", left_on::text as "leftOn",
+    `select id, name, role, in_meals as "inMeals", joined_on::text as "joinedOn", left_on::text as "leftOn",
        json_build_object('b', default_b, 'l', default_l, 'd', default_d) as defaults
      from members where flat_id = $1 order by name`, [flatId]);
   const changes = await db<SavedChange>(
     `select member_id as "memberId", date::text as date, meal, count, late
      from meal_changes where flat_id = $1 and date between $2 and $3`, [flatId, from, to]);
-  const requests = await db<MealRequest>(
-    `select r.id, r.requested_by as "memberId", m.name, r.payload->>'date' as date, r.payload->>'meal' as meal, (r.payload->>'count')::int as count
-     from change_requests r join members m on m.id = r.requested_by
-     where r.flat_id = $1 and r.entity = 'meal_changes' and r.status = 'pending' and (r.payload->>'date')::date >= $2
-     order by r.created_at`, [flatId, from]);
-  return { flat, members, changes, requests };
+  const noCook = await db<NoCook>(`select date::text as date, meal from no_cook where flat_id = $1 and date between $2 and $3`, [flatId, from, to]);
+  // A no-cooking meal counts 0 for everyone without a saved row, whatever deleted or never wrote one (cancelled away,
+  // someone moving in later). Saved rows win, so the starter can still override. Money must load meals through here.
+  const saved = new Set(changes.map(c => `${c.memberId}|${c.date}|${c.meal}`));
+  for (const n of noCook) for (const m of members) {
+    if (!saved.has(`${m.id}|${n.date}|${n.meal}`)) changes.push({ memberId: m.id, date: n.date, meal: n.meal, count: 0, late: false });
+  }
+  return { flat, members, changes, noCook };
 }
 
 export const mealRules = async (db: Db, flatId: string) =>
-  (await db<{ cutoff: string; strictness: Strictness }>(`select cutoff_time::text as cutoff, strictness from flats where id = $1`, [flatId]))[0];
+  (await db<{ cutoff: string }>(`select cutoff_time::text as cutoff from flats where id = $1`, [flatId]))[0];
 
-/** Saves one meal change and its audit row in one statement. A direct save also drops any waiting request for that meal. */
+/** Saves one meal change and its audit row in one statement. */
 export async function saveMeal(db: Db, flatId: string, by: string, c: MealChange, late: boolean) {
   await db(
     `with old as (select count, late from meal_changes where member_id = $2 and date = $3 and meal = $4),
-     gone as (delete from change_requests where flat_id = $1 and entity = 'meal_changes' and entity_id = $7 and status = 'pending'),
      up as (insert into meal_changes (flat_id, member_id, date, meal, count, late) values ($1, $2, $3, $4, $5, $6)
        on conflict (member_id, date, meal) do update set count = excluded.count, late = excluded.late, updated_at = now()
        returning count, late)
@@ -50,35 +57,13 @@ export async function saveMeal(db: Db, flatId: string, by: string, c: MealChange
     [flatId, c.memberId, c.date, c.meal, c.count, late, cell(c), by]);
 }
 
-/** Strict mode after the lock: one pending request per meal, the newest wins. */
-export async function requestMeal(db: Db, flatId: string, c: MealChange) {
-  await db(
-    `with gone as (delete from change_requests where flat_id = $1 and entity = 'meal_changes' and entity_id = $2 and status = 'pending')
-     insert into change_requests (flat_id, entity, entity_id, payload, requested_by) values ($1, 'meal_changes', $2, $3, $4)`,
-    [flatId, cell(c), { date: c.date, meal: c.meal, count: c.count }, c.memberId]);
-}
-
-/** Applies the flat's lock rule to one change. `now` = nowDhaka(). The person who approves never waits on themselves. */
-export async function changeMeal(db: Db, flatId: string, c: MealChange, now: string, selfApprove = false): Promise<Decision> {
+/** Applies the lock rule to one of my changes. `now` = nowDhaka(). No-cooking meals are closed to members. */
+export async function changeMeal(db: Db, flatId: string, c: MealChange, now: string): Promise<Decision> {
   const r = await mealRules(db, flatId);
-  const rule = mealDecision(c.date, now, r.cutoff, r.strictness);
-  const decision = rule === 'request' && selfApprove ? 'late' : rule;
-  if (decision === 'request') await requestMeal(db, flatId, c);
-  else if (decision !== 'closed') await saveMeal(db, flatId, c.memberId, c, decision === 'late');
+  const blocked = (await db(`select 1 from no_cook where flat_id = $1 and date = $2 and meal = $3`, [flatId, c.date, c.meal])).length > 0;
+  const decision = blocked ? 'closed' : mealDecision(c.date, now, r.cutoff);
+  if (decision !== 'closed') await saveMeal(db, flatId, c.memberId, c, decision === 'late');
   return decision;
-}
-
-/** Past days can't change, so a request for a day before `today` can no longer be decided. */
-export async function decideRequest(db: Db, flatId: string, by: string, id: string, approve: boolean, today: string) {
-  if (!UUID.test(id)) return false;
-  const [r] = await db<MealChange>(
-    `update change_requests set status = $4, decided_by = $3
-     where flat_id = $1 and id = $2 and entity = 'meal_changes' and status = 'pending' and (payload->>'date')::date >= $5
-     returning requested_by as "memberId", payload->>'date' as date, payload->>'meal' as meal, (payload->>'count')::int as count`,
-    [flatId, id, by, approve ? 'approved' : 'rejected', today]);
-  // ponytail: two statements, not one transaction; a crash between them leaves an approved request unapplied
-  if (r && approve) await saveMeal(db, flatId, by, r, true);
-  return !!r;
 }
 
 /** Away: every meal off from..to, one audit row for the range. */
@@ -92,23 +77,64 @@ export async function setAway(db: Db, flatId: string, memberId: string, from: st
     [flatId, memberId, from, to, `${memberId}|away`, { away: [from, to] }]);
 }
 
-/** New usual meals. Every day from joining to freezeTo first keeps the old usual meals as saved rows. */
-export async function setDefaults(db: Db, flatId: string, memberId: string, d: Record<Meal, boolean>, freezeTo: string) {
+/** Cancels away from..to: the zeroed meals go back to the usual meals. `from` must already be an open day. */
+export async function cancelAway(db: Db, flatId: string, memberId: string, from: string, to: string) {
+  await db(
+    `with gone as (delete from meal_changes where flat_id = $1 and member_id = $2 and date between $3::date and $4::date and count = 0)
+     insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', $5, $6, $2)`,
+    [flatId, memberId, from, to, `${memberId}|away`, { awayCancel: [from, to] }]);
+}
+
+/** Away ranges still reaching `today` or later, minus cancelled days, overlapping ranges merged. */
+export async function upcomingAway(db: Db, flatId: string, memberId: string, today: string) {
+  const rows = await db<{ after: HistoryRow['after'] }>(
+    `select after from audit_log where flat_id = $1 and entity_id = $2 order by id`, [flatId, `${memberId}|away`]);
+  let ranges: [string, string][] = [];
+  for (const { after } of rows) {
+    if (after.away) ranges.push(after.away);
+    if (after.awayCancel) {
+      const [f, t] = after.awayCancel;
+      ranges = ranges.flatMap(([a, b]): [string, string][] =>
+        b < f || a > t ? [[a, b]] : [...(a < f ? [[a, addDays(f, -1)] as [string, string]] : []), ...(b > t ? [[addDays(t, 1), b] as [string, string]] : [])]);
+    }
+  }
+  const merged: [string, string][] = [];
+  for (const [a, b] of ranges.filter(r => r[1] >= today).sort((x, y) => x[0].localeCompare(y[0]))) {
+    const last = merged.at(-1);
+    if (last && a <= addDays(last[1], 1)) last[1] = b > last[1] ? b : last[1];
+    else merged.push([a, b]);
+  }
+  return merged;
+}
+
+/** New usual meals. Days freezeFrom..freezeTo first keep the old usual meals as saved rows, so locked days don't move.
+ *  `inMeals = false` (cooking for yourself) also clears plain future rows, so booked meals don't keep counting. */
+export async function setDefaults(db: Db, flatId: string, memberId: string, d: Record<Meal, boolean>, freezeFrom: string, freezeTo: string, inMeals: boolean | null = null) {
   await db(
     `with frozen as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select m.flat_id, m.id, day::date, x.meal, (case x.meal when 'b' then m.default_b when 'l' then m.default_l else m.default_d end)::int
-       from members m, generate_series(m.joined_on::timestamp, $3::timestamp, interval '1 day') day, unnest(array['b','l','d']) x(meal)
+       from members m, generate_series(greatest(m.joined_on, $3::date)::timestamp, $4::timestamp, interval '1 day') day, unnest(array['b','l','d']) x(meal)
        where m.flat_id = $1 and m.id = $2
        on conflict (member_id, date, meal) do nothing),
+     cleared as (delete from meal_changes where flat_id = $1 and member_id = $2 and date > $4::date and count = 1 and $10::boolean = false),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
-       select flat_id, 'members', $4, jsonb_build_object('b', default_b, 'l', default_l, 'd', default_d), $5, id
+       select flat_id, 'members', $5, jsonb_build_object('b', default_b, 'l', default_l, 'd', default_d, 'inMeals', in_meals), $6, id
        from members where flat_id = $1 and id = $2)
-     update members set default_b = $6, default_l = $7, default_d = $8 where flat_id = $1 and id = $2`,
-    [flatId, memberId, freezeTo, `${memberId}|defaults`, d, d.b, d.l, d.d]);
+     update members set default_b = $7, default_l = $8, default_d = $9, in_meals = coalesce($10::boolean, in_meals)
+     where flat_id = $1 and id = $2`,
+    [flatId, memberId, freezeFrom, freezeTo, `${memberId}|defaults`, inMeals === null ? d : { ...d, inMeals }, d.b, d.l, d.d, inMeals]);
 }
 
-export async function updateSettings(db: Db, flatId: string, s: { cutoff: string; strictness: Strictness }) {
-  await db(`update flats set cutoff_time = $2, strictness = $3 where id = $1`, [flatId, s.cutoff, s.strictness]);
+export const isInMeals = async (db: Db, flatId: string, memberId: string) =>
+  (await db<{ v: boolean }>(`select in_meals as v from members where flat_id = $1 and id = $2`, [flatId, memberId]))[0]?.v ?? false;
+
+/** Weights are hundredths of a meal (breakfast 50 = 0.5) and apply to every day of the open month. Audited with the old values. */
+export async function updateSettings(db: Db, flatId: string, by: string, s: { cutoff: string; weights: Record<Meal, number> }) {
+  await db(
+    `with old as (select cutoff_time::text as cutoff, json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights from flats where id = $1),
+     log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member) select $1, 'flats', 'flat|settings', to_jsonb(old), $6, $7 from old)
+     update flats set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5 where id = $1`,
+    [flatId, s.cutoff, s.weights.b, s.weights.l, s.weights.d, s, by]);
 }
 
 export async function setCookLink(db: Db, flatId: string, on: boolean) {
@@ -120,9 +146,9 @@ export async function flatIdByCookToken(db: Db, token: string) {
   return f?.id ?? null;
 }
 
-/** No cooking: the chosen meals are off for everyone living in the flat from..to; waiting requests for them are dropped.
- *  One audit row keeps the old saved values. Days up to `today` are marked late, like other edits of locked days. */
-export async function noCooking(db: Db, flatId: string, by: string, from: string, to: string, meals: Meal[], today: string) {
+/** No cooking: the chosen meals are off for everyone living in the flat from..to, and members can't switch them on.
+ *  One audit row keeps the old saved values. Days up to `lastLocked` are marked late. */
+export async function noCooking(db: Db, flatId: string, by: string, from: string, to: string, meals: Meal[], lastLocked: string) {
   await db(
     `with old as (select member_id as m, date::text as d, meal as x, count as c from meal_changes
        where flat_id = $1 and date between $2::date and $3::date and meal = any(string_to_array($4::text, ','))),
@@ -131,20 +157,51 @@ export async function noCooking(db: Db, flatId: string, by: string, from: string
        from members m, generate_series($2::timestamp, $3::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
        where m.flat_id = $1 and m.joined_on <= d::date and (m.left_on is null or d::date <= m.left_on)
        on conflict (member_id, date, meal) do update set count = 0, late = excluded.late, updated_at = now()),
-     gone as (delete from change_requests where flat_id = $1 and entity = 'meal_changes' and status = 'pending'
-       and (payload->>'date')::date between $2::date and $3::date and payload->>'meal' = any(string_to_array($4::text, ',')))
+     blocked as (insert into no_cook (flat_id, date, meal)
+       select $1, d::date, x from generate_series($2::timestamp, $3::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
+       on conflict do nothing)
      insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
      values ($1, 'meal_changes', 'flat|nocook', (select coalesce(jsonb_agg(old), '[]') from old), $5, $6)`,
-    [flatId, from, to, meals.join(','), { nocook: [from, to], meals: meals.join(',') }, by, today]);
+    [flatId, from, to, meals.join(','), { nocook: [from, to], meals: meals.join(',') }, by, lastLocked]);
 }
 
-/** Meal changes worth seeing: late, made for someone else, time away, no cooking. Newest 30. */
-export const loadHistory = (db: Db, flatId: string) => db<HistoryRow>(
-  `select a.at, actor.name as actor, who.name as who, a.entity_id as "entityId", a.after
+/** The cook is back early: unblock from..to. From `firstOpen` on, each blocked meal still at the no-cooking 0 goes back to
+ *  what it was before no cooking (away, an Off, guest plates) or, if nothing was saved, to the usual meal.
+ *  ponytail: takes the newest no-cooking snapshot per meal; two overlapping no-cooking ranges without a cook-again between
+ *  would restore the first one's zeros. */
+export async function cookAgain(db: Db, flatId: string, by: string, from: string, to: string, meals: Meal[], firstOpen: string) {
+  await db(
+    `with unblocked as (delete from no_cook where flat_id = $1 and date between $2::date and $3::date
+       and meal = any(string_to_array($4::text, ',')) returning date, meal),
+     snap as (select distinct on (e->>'m', e->>'d', e->>'x') (e->>'m')::uuid as m, (e->>'d')::date as d, e->>'x' as x, (e->>'c')::int as c
+       from audit_log a, jsonb_array_elements(a.before) e
+       where a.flat_id = $1 and a.entity_id = 'flat|nocook' and jsonb_typeof(a.before) = 'array'
+       order by e->>'m', e->>'d', e->>'x', a.id desc),
+     back as (update meal_changes mc set count = s.c, updated_at = now() from unblocked u, snap s
+       where mc.flat_id = $1 and mc.date = u.date and mc.meal = u.meal and mc.date >= $7::date and mc.count = 0
+         and s.m = mc.member_id and s.d = mc.date and s.x = mc.meal),
+     plain as (delete from meal_changes mc using unblocked u
+       where mc.flat_id = $1 and mc.date = u.date and mc.meal = u.meal and mc.date >= $7::date and mc.count = 0
+         and not exists (select 1 from snap s where s.m = mc.member_id and s.d = mc.date and s.x = mc.meal))
+     insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', 'flat|nocook', $5, $6)`,
+    [flatId, from, to, meals.join(','), { cookAgain: [from, to], meals: meals.join(',') }, by, firstOpen]);
+}
+
+/** Changes worth seeing: late, made for someone else, away, no cooking, usual meals and meal rules. Newest 50.
+ *  `mine` keeps my own meals plus flat-wide rows. */
+export const loadHistory = (db: Db, flatId: string, mine: string | null = null) => db<HistoryRow>(
+  `select a.at, actor.name as actor, who.name as who, a.entity, a.entity_id as "entityId", a.after
    from audit_log a
    left join members actor on actor.id = a.by_member
    left join members who on who.flat_id = a.flat_id and who.id::text = split_part(a.entity_id, '|', 1)
-   where a.flat_id = $1 and a.entity = 'meal_changes'
-     and (a.entity_id like '%|nocook' or a.entity_id like '%|away' or coalesce((a.after->>'late')::boolean, false)
-          or split_part(a.entity_id, '|', 1) <> a.by_member::text)
-   order by a.id desc limit 30`, [flatId]);
+   where a.flat_id = $1
+     and (a.entity in ('members', 'flats')
+          or (a.entity = 'meal_changes' and (a.entity_id like 'flat|%' or a.entity_id like '%|away'
+              or coalesce((a.after->>'late')::boolean, false) or split_part(a.entity_id, '|', 1) <> a.by_member::text)))
+     and ($2::text is null or a.entity_id like 'flat|%' or split_part(a.entity_id, '|', 1) = $2::text)
+   order by a.id desc limit 50`, [flatId, mine]);
+
+/** Days from `from` on with no cooking, and which meals. */
+export const loadNoCookDays = (db: Db, flatId: string, from: string) => db<{ date: string; meals: string }>(
+  `select date::text as date, string_agg(meal, ',' order by position(meal in 'bld')) as meals
+   from no_cook where flat_id = $1 and date >= $2 group by date order by date`, [flatId, from]);

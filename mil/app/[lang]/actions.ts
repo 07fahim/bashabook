@@ -4,8 +4,10 @@ import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, mealDecision, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
-import { changeMeal, decideRequest, loadMeals, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults, updateSettings } from '@/lib/meals-db';
+import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import {
+  cancelAway, changeMeal, cookAgain, isInMeals, loadMeals, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults, updateSettings,
+} from '@/lib/meals-db';
 import { endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
@@ -49,9 +51,10 @@ export async function logoutAction(d: FormData) {
 export async function addMemberAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireManager(lang);
-  const name = cleanName(d.get('name'));
+  const name = cleanName(d.get('name')), joinedOn = str(d, 'joinedOn');
   if (!name) return { error: a.errors.name };
-  if (!(await addMember(db, me.flatId, name, todayDhaka()))) return { error: a.errors.nameTaken };
+  if (!isDate(joinedOn) || joinedOn < todayDhaka() || !editable(joinedOn)) return { error: getDictionary(lang).meals.errors.bad };
+  if (!(await addMember(db, me.flatId, name, joinedOn))) return { error: a.errors.nameTaken };
   refresh();
   return { done: a.added };
 }
@@ -74,7 +77,7 @@ export async function setMealAction(d: FormData) {
   const me = await requireMember(langOf(d));
   const date = str(d, 'date'), meal = str(d, 'meal'), count = plates(str(d, 'count'));
   if (inRange(date) && isMeal(meal) && count !== null) {
-    await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka(), me.role === 'manager');
+    await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka());
   }
   refresh();   // also redraws a page left open past midnight
 }
@@ -82,12 +85,14 @@ export async function setMealAction(d: FormData) {
 export async function guestAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireMember(lang);
-  const date = str(d, 'date'), meal = str(d, 'meal'), count = plates(str(d, 'plates'));
+  // guests plus my own plate when I'm eating too
+  const guests = /^\d$/.test(str(d, 'guests')) ? Number(str(d, 'guests')) : null;
+  const date = str(d, 'date'), meal = str(d, 'meal'), count = guests === null ? null : guests + (d.has('me') ? 1 : 0);
   if (!inRange(date) || !isMeal(meal) || count === null) return { error: m.errors.bad };
-  const r = await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka(), me.role === 'manager');
+  const r = await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka());
   if (r === 'closed') return { error: m.errors.closed };
   refresh();
-  return { done: r === 'request' ? m.sentForApproval : m.saved };
+  return { done: m.saved };
 }
 
 export async function awayAction(_: FormState, d: FormData): Promise<FormState> {
@@ -96,9 +101,7 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
   const from = str(d, 'from'), to = str(d, 'to');
   if (!inRange(from) || !isDate(to) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
-  const now = nowDhaka(), r = await mealRules(db, me.flatId);
-  let first = now.slice(0, 10);
-  while (mealDecision(first, now, r.cutoff, r.strictness) !== 'open') first = addDays(first, 1);
+  const first = addDays(await lastLocked(me.flatId), 1);
   if (from < first) return { error: m.errors.awayFrom.replace('{d}', fmtDay(first, lang)) };
   await setAway(db, me.flatId, me.memberId, from, to);
   refresh();
@@ -108,25 +111,22 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
 export async function usualAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireMember(lang);
-  const now = nowDhaka(), today = now.slice(0, 10), r = await mealRules(db, me.flatId);
-  const lastLocked = isLocked(addDays(today, 1), now, r.cutoff) ? addDays(today, 1) : today;
-  await setDefaults(db, me.flatId, me.memberId, { b: d.has('b'), l: d.has('l'), d: d.has('d') }, lastLocked);
+  // all three off = cooking for yourself; any on = back in shared meals
+  const usual = { b: d.has('b'), l: d.has('l'), d: d.has('d') };
+  const inMeals = usual.b || usual.l || usual.d, was = await isInMeals(db, me.flatId, me.memberId);
+  await setDefaults(db, me.flatId, me.memberId, usual, editFrom(todayDhaka()), await lastLocked(me.flatId), inMeals === was ? null : inMeals);
   refresh();
   return { done: m.saved };
-}
-
-export async function decideAction(d: FormData) {
-  const me = await requireManager(langOf(d));
-  await decideRequest(db, me.flatId, me.memberId, str(d, 'id'), str(d, 'approve') === '1', todayDhaka());
-  refresh();
 }
 
 export async function settingsAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireManager(lang);
-  const cutoff = str(d, 'cutoff').slice(0, 5), strictness = str(d, 'strictness');
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff) || (strictness !== 'relaxed' && strictness !== 'strict')) return { error: m.errors.bad };
-  await updateSettings(db, me.flatId, { cutoff, strictness });
+  const cutoff = str(d, 'cutoff').slice(0, 5);
+  const [b, l, dd] = MEALS.map(x => (/^(\d{1,2}(\.\d{1,2})?|\.\d{1,2})$/.test(str(d, `w_${x}`)) ? Math.round(Number(str(d, `w_${x}`)) * 100) : -1));
+  const weightsOk = [b, l, dd].every(w => w >= 0 && w <= 1000) && b + l + dd > 0;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff) || !weightsOk) return { error: m.errors.bad };
+  await updateSettings(db, me.flatId, me.memberId, { cutoff, weights: { b, l, d: dd } });
   refresh();
   return { done: m.saved };
 }
@@ -139,20 +139,6 @@ export async function cookLinkAction(d: FormData) {
 
 const editable = (date: string) => isDate(date) && date >= editFrom(todayDhaka()) && date <= addDays(todayDhaka(), 60);
 
-/** The starter changes anyone's meal, today and past days included. Saved as late once the day is locked. */
-export async function adminMealAction(_: FormState, d: FormData): Promise<FormState> {
-  const lang = langOf(d), m = getDictionary(lang).meals;
-  const me = await requireManager(lang);
-  const memberId = str(d, 'memberId'), date = str(d, 'date'), meal = str(d, 'meal'), count = plates(str(d, 'plates'));
-  const { members } = await loadMeals(db, me.flatId, date, date);
-  const member = members.find(x => x.id === memberId);
-  if (!member || !editable(date) || !isPresent(member, date) || !isMeal(meal) || count === null) return { error: m.errors.bad };
-  const r = await mealRules(db, me.flatId);
-  await saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count }, isLocked(date, nowDhaka(), r.cutoff));
-  refresh();
-  return { done: m.saved };
-}
-
 export async function noCookAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireManager(lang);
@@ -160,7 +146,44 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
   if (!editable(from) || !editable(to) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
   if (!meals.length) return { error: m.errors.pickMeal };
-  await noCooking(db, me.flatId, me.memberId, from, to, meals, todayDhaka());
+  await noCooking(db, me.flatId, me.memberId, from, to, meals, await lastLocked(me.flatId));
   refresh();
   return { done: m.saved };
+}
+
+/** The last day members can no longer change: tomorrow once it's past the cutoff, else today. */
+async function lastLocked(flatId: string) {
+  const now = nowDhaka(), today = now.slice(0, 10), r = await mealRules(db, flatId);
+  return isLocked(addDays(today, 1), now, r.cutoff) ? addDays(today, 1) : today;
+}
+
+/** Cancels my away from the first open day on; locked days stay as they were. */
+export async function cancelAwayAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), m = getDictionary(lang).meals;
+  const me = await requireMember(lang);
+  const from = str(d, 'from'), to = str(d, 'to'), first = addDays(await lastLocked(me.flatId), 1);
+  if (!isDate(from) || !isDate(to) || to < first) return { error: m.errors.bad };
+  await cancelAway(db, me.flatId, me.memberId, from < first ? first : from, to);
+  refresh();
+  return { done: m.saved };
+}
+
+/** The flat's starter sets anyone's plates for a meal (− / +), today and past days included. Late once the day is locked. */
+export async function adminSetAction(d: FormData) {
+  const me = await requireManager(langOf(d));
+  const memberId = str(d, 'memberId'), date = str(d, 'date'), meal = str(d, 'meal'), count = plates(str(d, 'count'));
+  const member = (await loadMeals(db, me.flatId, date, date)).members.find(x => x.id === memberId);
+  if (member && editable(date) && isPresent(member, date) && isMeal(meal) && count !== null) {
+    const r = await mealRules(db, me.flatId);
+    await saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count }, isLocked(date, nowDhaka(), r.cutoff));
+  }
+  refresh();
+}
+
+/** The cook is back for one listed no-cooking day. */
+export async function noCookCancelAction(d: FormData) {
+  const me = await requireManager(langOf(d));
+  const date = str(d, 'date'), meals = str(d, 'meals').split(',').filter(isMeal);
+  if (editable(date) && meals.length) await cookAgain(db, me.flatId, me.memberId, date, date, meals, date);
+  refresh();
 }

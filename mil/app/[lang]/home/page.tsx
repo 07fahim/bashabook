@@ -25,7 +25,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const t = getDictionary(lang), a = t.app, m = t.meals;
   const now = nowDhaka(), tomorrow = addDays(now.slice(0, 10), 1);
   const meals = await loadMeals(db, me.flatId, tomorrow, tomorrow);
-  const decision = mealDecision(tomorrow, now, meals.flat.cutoff, meals.flat.strictness);
+  const decision = mealDecision(tomorrow, now, meals.flat.cutoff);
   return (
     <>
       <Header t={t} lang={lang} path="/home" />
@@ -35,7 +35,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
         <section className="mt-8 rounded-2xl border border-line bg-surface p-5">
           <h2 className="text-xl font-bold">{m.tomorrow} · {fmtDay(tomorrow, lang)}</h2>
           <p className="mt-1 text-[15px] text-muted">
-            {decision === 'open' ? m.locksAt.replace('{t}', fmtTime(meals.flat.cutoff)) : decision === 'late' ? m.lockedLate : m.lockedRequest}
+            {decision === 'open' ? m.locksAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.lockedLate}
           </p>
           <MealRow lang={lang} m={m} meId={me.memberId} date={tomorrow} decision={decision} {...meals} />
           <Link href={`/${lang}/meals`} className={`mt-5 inline-block ${link}`}>{m.seeWeek}</Link>

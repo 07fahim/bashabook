@@ -70,25 +70,19 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           </figure>
         </section>
 
-        <section className="border-t border-line py-14">
-          <h2 className={h2}>{t.modesTitle}</h2>
-          <p className="mt-3 text-lg text-muted">{t.modesLead}</p>
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {t.modes.map(mode => (
-              <div key={mode.name} className="rounded-2xl border border-line bg-surface p-6">
-                <h3 className="text-xl font-bold">{mode.name}</h3>
-                <p className="text-muted">{mode.who}</p>
-                <dl className="mt-5 divide-y divide-line border-t border-line">
-                  {t.modeRows.map((row, i) => (
-                    <div key={row} className="py-3">
-                      <dt className="text-[15px] text-muted">{row}</dt>
-                      <dd className="font-semibold">{mode.values[i]}</dd>
-                    </div>
-                  ))}
-                </dl>
+        <section className="grid gap-8 border-t border-line py-14 md:grid-cols-2">
+          <div>
+            <h2 className={h2}>{t.trust.title}</h2>
+            <p className="mt-3 text-lg text-muted">{t.trust.lead}</p>
+          </div>
+          <dl className="divide-y divide-line border-y border-line">
+            {t.trust.points.map(([what, how]) => (
+              <div key={what} className="py-4">
+                <dt className="font-semibold">{what}</dt>
+                <dd className="mt-1 text-muted">{how}</dd>
               </div>
             ))}
-          </div>
+          </dl>
         </section>
 
         <section className="grid gap-8 border-t border-line py-14 md:grid-cols-2 md:items-center">

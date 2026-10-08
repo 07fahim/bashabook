@@ -42,13 +42,13 @@ describe('meals', () => {
 });
 
 describe('meal rules', () => {
-  it('opens before the cutoff, then late or request; past days are closed', () => {
-    expect(mealDecision('2026-10-10', '2026-10-09T21:59', '22:00', 'strict')).toBe('open');
-    expect(mealDecision('2026-10-10', '2026-10-09T22:00', '22:00', 'relaxed')).toBe('late');
-    expect(mealDecision('2026-10-10', '2026-10-09T22:00', '22:00:00', 'strict')).toBe('request');
-    expect(mealDecision('2026-10-09', '2026-10-09T08:00', '22:00', 'relaxed')).toBe('closed');   // today is locked for members
-    expect(mealDecision('2026-10-08', '2026-10-09T08:00', '22:00', 'relaxed')).toBe('closed');
-    expect(mealDecision('2026-10-11', '2026-10-09T23:00', '22:00', 'strict')).toBe('open');
+  it('opens before the cutoff, then late; today and past days are closed', () => {
+    expect(mealDecision('2026-10-10', '2026-10-09T21:59', '22:00')).toBe('open');
+    expect(mealDecision('2026-10-10', '2026-10-09T22:00', '22:00')).toBe('late');
+    expect(mealDecision('2026-10-10', '2026-10-09T22:00', '22:00:00')).toBe('late');
+    expect(mealDecision('2026-10-09', '2026-10-09T08:00', '22:00')).toBe('closed');   // today is locked for members
+    expect(mealDecision('2026-10-08', '2026-10-09T08:00', '22:00')).toBe('closed');
+    expect(mealDecision('2026-10-11', '2026-10-09T23:00', '22:00')).toBe('open');
   });
 
   it('adds days across month and year ends and checks dates', () => {
