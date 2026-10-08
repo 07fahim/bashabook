@@ -12,7 +12,7 @@ import { fmtDay } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { ShareButton } from '../share-button';
-import { checkChip, field, Field, focus, link, PinField, primary, secondary } from '../ui';
+import { checkChip, field, Field, Fold, focus, groupLabel, link, PinField, primary, secondary } from '../ui';
 
 export default function Manage({ params }: PageProps<'/[lang]/manage'>) {
   return <Suspense><ManageBody params={params} /></Suspense>;
@@ -29,7 +29,7 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
   const tod = headcount(meals.members, meals.changes, today);
   const line = (hc: typeof tom) => MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(' · ');
   const text = `${me.flatName} · ${m.tomorrow}, ${fmtDay(tomorrow, lang)}\n${line(tom)}`;
-  const card = 'mt-8 rounded-2xl border border-line bg-surface p-5';
+  const card = 'mt-3 rounded-2xl border border-line bg-surface p-5';
   const own = new Set(meals.members.filter(x => !x.inMeals).map(x => x.id));
   const from = editFrom(today), to = addDays(today, 60);
   const firstOpen = isLocked(tomorrow, nowDhaka(), meals.flat.cutoff) ? addDays(tomorrow, 1) : tomorrow;
@@ -42,8 +42,9 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
       <main className="mx-auto max-w-md px-5 pb-28">
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>
 
+        <h2 className={groupLabel}>{m.groupToday}</h2>
         <section className={card}>
-          <h2 className={h2}>{m.headcountTitle}</h2>
+          <h3 className={h2}>{m.headcountTitle}</h3>
           <p className="mt-1 text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)}</p>
           <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
             {MEALS.map(x => (
@@ -57,32 +58,29 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
           <ShareButton text={text} label={m.share} copied={m.copied} />
         </section>
 
-        <section className={card}>
-          <h2 className={h2}>{m.requestsTitle}</h2>
-          {meals.requests.length === 0 ? (
-            <p className="mt-2 text-muted">{m.noRequests}</p>
-          ) : (
-            <ul className="mt-2 divide-y divide-line">
-              {meals.requests.map(r => (
-                <li key={r.id} className="py-3">
-                  <p>
-                    <span className="font-semibold">{r.name}</span> · {fmtDay(r.date, lang)} · {m.names[r.meal]}: {r.count > 0 ? `${r.count} ${m.platesShort}` : m.off}
-                  </p>
-                  <form action={decideAction} className="mt-2 flex gap-2">
-                    <input type="hidden" name="lang" value={lang} />
-                    <input type="hidden" name="id" value={r.id} />
-                    <button name="approve" value="1" className={`${small} bg-turmeric text-on-turmeric`}>{m.approve}</button>
-                    <button name="approve" value="0" className={`${small} border border-muted bg-surface`}>{m.reject}</button>
-                  </form>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        {meals.requests.length > 0 && (
+          <section className={card}>
+            <h3 className={h2}>{m.requestsTitle}</h3>
+              <ul className="mt-2 divide-y divide-line">
+                {meals.requests.map(r => (
+                  <li key={r.id} className="py-3">
+                    <p>
+                      <span className="font-semibold">{r.name}</span> · {fmtDay(r.date, lang)} · {m.names[r.meal]}: {r.count > 0 ? `${r.count} ${m.platesShort}` : m.off}
+                    </p>
+                    <form action={decideAction} className="mt-2 flex gap-2">
+                      <input type="hidden" name="lang" value={lang} />
+                      <input type="hidden" name="id" value={r.id} />
+                      <button name="approve" value="1" className={`${small} bg-turmeric text-on-turmeric`}>{m.approve}</button>
+                      <button name="approve" value="0" className={`${small} border border-muted bg-surface`}>{m.reject}</button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+          </section>
+        )}
 
-        <section className={card}>
-          <h2 className={h2}>{m.editTitle}</h2>
-          <p className="mt-1 text-muted">{m.editLead}</p>
+        <h2 className={groupLabel}>{m.groupChange}</h2>
+        <Fold title={m.editTitle} lead={m.editLead}>
           <ActionForm action={adminMealAction} className="mt-4">
             <input type="hidden" name="lang" value={lang} />
             <label className="block font-semibold">
@@ -98,14 +96,12 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
                 {MEALS.map(x => <option key={x} value={x}>{m.names[x]}</option>)}
               </select>
             </label>
-            <Field label={m.plates} name="plates" type="number" inputMode="numeric" min={0} max={10} required defaultValue={0} />
+            <Field label={m.plates} name="plates" hint={m.plateHint} type="number" inputMode="numeric" min={0} max={10} required defaultValue={0} />
             <button className={primary}>{m.save}</button>
           </ActionForm>
-        </section>
+        </Fold>
 
-        <section className={card}>
-          <h2 className={h2}>{m.noCookTitle}</h2>
-          <p className="mt-1 text-muted">{m.noCookLead}</p>
+        <Fold title={m.noCookTitle} lead={m.noCookLead}>
           <ActionForm action={noCookAction} className="mt-4">
             <input type="hidden" name="lang" value={lang} />
             <Field label={m.from} name="from" type="date" required min={from} max={to} defaultValue={today} />
@@ -125,11 +121,11 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
             <p className="text-[15px] text-muted">{m.noCookAgainLead}</p>
             <button name="again" value="1" className={secondary}>{m.noCookAgain}</button>
           </ActionForm>
-        </section>
+        </Fold>
 
+        <h2 className={groupLabel}>{a.members}</h2>
         <section className={card}>
-          <h2 className={h2}>{a.members}</h2>
-          <ul className="mt-2 divide-y divide-line">
+          <ul className="divide-y divide-line">
             {members.map(x => (
               <li key={x.id} className="py-4">
                 <div className="flex items-baseline justify-between gap-4">
@@ -162,8 +158,8 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
           </ActionForm>
         </section>
 
-        <section className={card}>
-          <h2 className={h2}>{m.rulesTitle}</h2>
+        <h2 className={groupLabel}>{m.groupSettings}</h2>
+        <Fold title={m.rulesTitle}>
           <ActionForm action={settingsAction} className="mt-4">
             <input type="hidden" name="lang" value={lang} />
             <Field label={m.cutoff} name="cutoff" type="time" required defaultValue={meals.flat.cutoff.slice(0, 5)} />
@@ -187,18 +183,16 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
             </fieldset>
             <button className={primary}>{m.save}</button>
           </ActionForm>
-        </section>
+        </Fold>
 
-        <section className={card}>
-          <h2 className={h2}>{m.cookTitle}</h2>
-          <p className="mt-1 text-muted">{m.cookLead}</p>
+        <Fold title={m.cookTitle} lead={m.cookLead}>
           {meals.flat.cookToken && <ShareButton path={`/${meals.flat.lang}/c/${meals.flat.cookToken}`} label={m.share} copied={m.copied} />}
           <form action={cookLinkAction} className="mt-3">
             <input type="hidden" name="lang" value={lang} />
             <input type="hidden" name="on" value={meals.flat.cookToken ? '0' : '1'} />
             <button className={meals.flat.cookToken ? secondary : primary}>{meals.flat.cookToken ? m.cookOff : m.cookOn}</button>
           </form>
-        </section>
+        </Fold>
       </main>
       <Nav t={t} lang={lang} current="manage" showFlat />
     </>

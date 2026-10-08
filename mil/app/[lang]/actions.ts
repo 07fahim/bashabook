@@ -86,7 +86,9 @@ export async function setMealAction(d: FormData) {
 export async function guestAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireMember(lang);
-  const date = str(d, 'date'), meal = str(d, 'meal'), count = plates(str(d, 'plates'));
+  // guests plus my own plate when I'm eating too
+  const guests = /^\d$/.test(str(d, 'guests')) ? Number(str(d, 'guests')) : null;
+  const date = str(d, 'date'), meal = str(d, 'meal'), count = guests === null ? null : guests + (d.has('me') ? 1 : 0);
   if (!inRange(date) || !isMeal(meal) || count === null) return { error: m.errors.bad };
   const r = await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka(), me.role === 'manager');
   if (r === 'closed') return { error: m.errors.closed };

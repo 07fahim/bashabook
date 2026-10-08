@@ -12,7 +12,7 @@ import { fmtDay, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
-import { checkChip, field, Field, focus, link, primary, secondary } from '../ui';
+import { checkChip, field, Field, Fold, focus, link, primary, secondary } from '../ui';
 
 export default function Meals({ params, searchParams }: PageProps<'/[lang]/meals'>) {
   return <Suspense><MealsBody params={params} searchParams={searchParams} /></Suspense>;
@@ -41,7 +41,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const describe = (h: HistoryRow) => {
     const actor = h.actor ?? '?', who = h.who ?? '?', a = h.after;
     const mealList = (x: string) => x.split(',').map(y => m.names[y as Meal]).join(', ');
-    if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${a.strictness === 'strict' ? m.strictOpt : m.relaxedOpt} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
+    if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${a.strictness === 'strict' ? m.strictShort : m.relaxedShort} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
     if (h.entity === 'members') {
       if (a.inMeals === false) return `${who} ${m.ownStarted}`;
       if (a.inMeals === true) return `${who} ${m.ownStopped}`;
@@ -64,7 +64,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
       <main className="mx-auto max-w-md px-5 pb-28">
         <h1 className="font-display text-3xl font-bold">{m.weekTitle}</h1>
         <p className="mt-2 text-muted">{m.weekLead}</p>
-        <ul className="mt-6 space-y-6">
+        <ul className="mt-6 mb-8 space-y-6">
           {week.map((date, i) => (
             <li key={date}>
               <p className="font-semibold">
@@ -80,9 +80,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           ))}
         </ul>
 
-        <section className={card}>
-          <h2 className={h2}>{m.guestTitle}</h2>
-          <p className="mt-1 text-muted">{m.guestLead}</p>
+        <Fold title={m.guestTitle} lead={m.guestLead}>
           <ActionForm action={guestAction} className="mt-4">
             <input type="hidden" name="lang" value={lang} />
             <label className="block font-semibold">
@@ -97,14 +95,16 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                 {MEALS.map(x => <option key={x} value={x}>{m.names[x]}</option>)}
               </select>
             </label>
-            <Field label={m.plates} name="plates" type="number" inputMode="numeric" min={0} max={10} required defaultValue={2} />
+            <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={0} max={9} required defaultValue={1} />
+            <label className={checkChip}>
+              <input type="checkbox" name="me" defaultChecked className="size-5 shrink-0 accent-ink" />
+              {m.meToo}
+            </label>
             <button className={primary}>{m.save}</button>
           </ActionForm>
-        </section>
+        </Fold>
 
-        <section className={card}>
-          <h2 className={h2}>{m.awayTitle}</h2>
-          <p className="mt-1 text-muted">{m.awayLead}</p>
+        <Fold title={m.awayTitle} lead={m.awayLead} open={aways.some(([, t]) => t >= firstOpen)}>
           {aways.some(([, t]) => t >= firstOpen) && (
             <div className="mt-4">
               <p className="font-semibold">{m.awayList}</p>
@@ -129,12 +129,10 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
             <Field label={m.to} name="to" type="date" required min={firstOpen} defaultValue={firstOpen} />
             <button className={primary}>{m.awayBtn}</button>
           </ActionForm>
-        </section>
+        </Fold>
 
-        {self.inMeals ? (
-          <section className={card}>
-            <h2 className={h2}>{m.usualTitle}</h2>
-            <p className="mt-1 text-muted">{m.usualLead}</p>
+        {self.inMeals && (
+          <Fold title={m.usualTitle} lead={m.usualLead}>
             <ActionForm action={usualAction} className="mt-4">
               <input type="hidden" name="lang" value={lang} />
               <div className="grid grid-cols-3 gap-2">
@@ -147,18 +145,16 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
               </div>
               <button className={primary}>{m.save}</button>
             </ActionForm>
-          </section>
-        ) : null}
+          </Fold>
+        )}
 
-        <section className={card}>
-          <h2 className={h2}>{self.inMeals ? m.ownTitle : m.ownActiveTitle}</h2>
-          <p className="mt-1 text-muted">{self.inMeals ? m.ownLead : m.ownActiveLead}</p>
+        <Fold title={self.inMeals ? m.ownTitle : m.ownActiveTitle} lead={self.inMeals ? m.ownLead : m.ownActiveLead} open={!self.inMeals}>
           <ActionForm action={inMealsAction} className="mt-4">
             <input type="hidden" name="lang" value={lang} />
             <input type="hidden" name="on" value={self.inMeals ? '0' : '1'} />
             <button className={self.inMeals ? secondary : primary}>{self.inMeals ? m.ownOn : m.ownOff}</button>
           </ActionForm>
-        </section>
+        </Fold>
 
         <section className={card}>
           <h2 className={h2}>{m.historyTitle}</h2>
