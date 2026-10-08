@@ -6,7 +6,7 @@ const today = '2026-10-09';
 
 async function flat(others = ['Tahsin', 'Zarif']) {
   await migrate();
-  const { flatId, memberId } = await createFlat(db, { flatName: 'Flat 4B', name: 'Nafis', pin: '1234', others, today });
+  const { flatId, memberId } = await createFlat(db, { flatName: 'Flat 4B', name: 'Nafis', pin: '1234', others, today, lang: 'bn' });
   const [{ join_code: code }] = await db<{ join_code: string }>(`select join_code from flats where id = $1`, [flatId]);
   const f = (await flatByCode(db, code))!;
   const id = (name: string) => f.members.find(m => m.name === name)!.id;
@@ -17,6 +17,7 @@ describe('auth', { timeout: 30000 }, () => {
   it('creates a flat with its starter and unclaimed names', async () => {
     const { f, code } = await flat(['Tahsin', 'Zarif', 'Tahsin', 'Nafis']);
     expect(code).toMatch(/^[A-HJKMNP-Z2-9]{6}$/);
+    expect((await flatByCode(db, code.toLowerCase()))?.name).toBe('Flat 4B');
     expect(f.members.map(m => [m.name, m.claimed])).toEqual([['Nafis', true], ['Tahsin', false], ['Zarif', false]]);
   });
 
@@ -41,6 +42,9 @@ describe('auth', { timeout: 30000 }, () => {
     expect(await login(db, code, memberId, '1234', null)).toEqual({ memberId });
     const [{ failed_pin_count }] = await db<{ failed_pin_count: number }>(`select failed_pin_count from members where id = $1`, [memberId]);
     expect(failed_pin_count).toBe(0);
+    await db(`update members set failed_pin_count = 24 where id = $1`, [memberId]);
+    await login(db, code, memberId, '0000', null);
+    expect(await wait()).toBe(240);   // capped at 4 hours
   });
 
   it('reset sets a one-time PIN, ends sessions and forces a new PIN', async () => {

@@ -16,10 +16,10 @@ export async function createFlatAction(_: FormState, d: FormData): Promise<FormS
   const lang = langOf(d), e = getDictionary(lang).app.errors;
   const flatName = cleanName(d.get('flatName')), name = cleanName(d.get('name'));
   const others = str(d, 'others').split('\n').map(s => s.trim()).filter(Boolean).map(cleanName);
-  if (!flatName || !name || others.includes(null)) return { error: e.name };
+  if (!flatName || !name || others.includes(null) || others.length > 30) return { error: e.name };
   if (!isPin(d.get('pin'))) return { error: e.pin };
   if (str(d, 'pin') !== str(d, 'pin2')) return { error: e.pinMatch };
-  const { memberId } = await createFlat(db, { flatName, name, pin: str(d, 'pin'), others: others as string[], today: todayDhaka() });
+  const { memberId } = await createFlat(db, { flatName, name, pin: str(d, 'pin'), others: others as string[], today: todayDhaka(), lang });
   await startSession(memberId);
   redirect(`/${lang}/home`);
 }

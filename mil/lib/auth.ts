@@ -13,20 +13,20 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
 const newJoinCode = () => Array.from({ length: 6 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join('');
 
 /** Flat, its starter (role manager, already claimed) and unclaimed names, in one statement. */
-export async function createFlat(db: Db, f: { flatName: string; name: string; pin: string; others: string[]; today: string }) {
+export async function createFlat(db: Db, f: { flatName: string; name: string; pin: string; others: string[]; today: string; lang: 'bn' | 'en' }) {
   const others = [...new Set(f.others)].filter(n => n !== f.name);
   // ponytail: a join code clash (31^6 codes) fails the insert; add a retry if flats reach the hundreds of thousands
   const [row] = await db<{ flat_id: string; member_id: string }>(
-    `with f as (insert into flats (name, join_code) values ($1, $2) returning id),
+    `with f as (insert into flats (name, join_code, language) values ($1, $2, $7) returning id),
      m as (insert into members (flat_id, name, pin_hash, role, joined_on) select id, $3::text, $4::text, 'manager', $5::date from f returning id),
      o as (insert into members (flat_id, name, joined_on) select f.id, n, $5::date from f, json_array_elements_text($6::json) n)
      select f.id as flat_id, m.id as member_id from f, m`,
-    [f.flatName, newJoinCode(), f.name, await hashPin(f.pin), f.today, others]);
+    [f.flatName, newJoinCode(), f.name, await hashPin(f.pin), f.today, others, f.lang]);
   return { flatId: row.flat_id, memberId: row.member_id };
 }
 
 export async function flatByCode(db: Db, code: string) {
-  const [flat] = await db<{ id: string; name: string }>(`select id, name from flats where join_code = $1`, [code]);
+  const [flat] = await db<{ id: string; name: string }>(`select id, name from flats where join_code = $1`, [code.toUpperCase()]);
   if (!flat) return null;
   const members = await db<{ id: string; name: string; claimed: boolean; must_change_pin: boolean }>(
     `select id, name, pin_hash is not null as claimed, must_change_pin from members where flat_id = $1 order by name`, [flat.id]);
@@ -39,7 +39,7 @@ export type LoginError = 'notFound' | 'taken' | 'locked' | 'wrongPin' | 'newPinN
 export async function login(db: Db, code: string, memberId: string, pin: string, newPin: string | null): Promise<{ memberId: string } | { error: LoginError }> {
   if (!UUID.test(memberId)) return { error: 'notFound' };
   const [m] = await db<{ pin_hash: string | null; must_change_pin: boolean }>(
-    `select m.pin_hash, m.must_change_pin from members m join flats f on f.id = m.flat_id where f.join_code = $1 and m.id = $2`, [code, memberId]);
+    `select m.pin_hash, m.must_change_pin from members m join flats f on f.id = m.flat_id where f.join_code = $1 and m.id = $2`, [code.toUpperCase(), memberId]);
   if (!m) return { error: 'notFound' };
   if (m.pin_hash === null) {
     const claimed = await db(`update members set pin_hash = $2 where id = $1 and pin_hash is null returning id`, [memberId, await hashPin(pin)]);
@@ -49,19 +49,25 @@ export async function login(db: Db, code: string, memberId: string, pin: string,
   const tried = await db(
     `update members set failed_pin_count = failed_pin_count + 1,
        locked_until = case when (failed_pin_count + 1) % 5 = 0
-         then now() + interval '15 minutes' * power(2, least((failed_pin_count + 1) / 5 - 1, 10)) else locked_until end
+         then now() + interval '15 minutes' * power(2, least((failed_pin_count + 1) / 5 - 1, 4)) else locked_until end
      where id = $1 and (locked_until is null or locked_until <= now()) returning id`, [memberId]);
   if (!tried.length) return { error: 'locked' };
   if (!(await bcrypt.compare(pin, m.pin_hash))) return { error: 'wrongPin' };
-  if (m.must_change_pin && !newPin) return { error: 'newPinNeeded' };
-  await db(
-    `update members set failed_pin_count = 0, locked_until = null, pin_hash = coalesce($2, pin_hash), must_change_pin = false where id = $1`,
-    [memberId, m.must_change_pin ? await hashPin(newPin!) : null]);
-  return { memberId };
+  if (m.must_change_pin && !newPin) {
+    await db(`update members set failed_pin_count = 0, locked_until = null where id = $1`, [memberId]);
+    return { error: 'newPinNeeded' };
+  }
+  // pin_hash = the one we checked, so a reset that lands mid-login wins
+  const done = await db(
+    `update members set failed_pin_count = 0, locked_until = null, pin_hash = coalesce($2, pin_hash), must_change_pin = false
+     where id = $1 and pin_hash = $3 returning id`,
+    [memberId, m.must_change_pin ? await hashPin(newPin!) : null, m.pin_hash]);
+  return done.length ? { memberId } : { error: 'notFound' };
 }
 
 export async function createSession(db: Db, memberId: string) {
   const token = randomBytes(32).toString('base64url');
+  await db(`delete from sessions where expires_at < now()`);
   await db(`insert into sessions (token_hash, member_id, expires_at) values ($1, $2, now() + interval '${SESSION_DAYS} days')`, [hashToken(token), memberId]);
   return token;
 }
@@ -78,8 +84,8 @@ export async function memberBySession(db: Db, token: string): Promise<Me | null>
 
 export const deleteSession = (db: Db, token: string) => db(`delete from sessions where token_hash = $1`, [hashToken(token)]);
 
-export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; role: string; claimed: boolean; failed: number; locked: boolean }>(
-  `select id, name, role, pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked
+export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean }>(
+  `select id, name, pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked
    from members where flat_id = $1 order by role = 'manager' desc, name`, [flatId]);
 
 export async function addMember(db: Db, flatId: string, name: string, today: string) {

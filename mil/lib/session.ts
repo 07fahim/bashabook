@@ -6,6 +6,7 @@ import { db } from './db';
 const COOKIE = 'session';
 
 export async function startSession(memberId: string) {
+  await endSession();
   const token = await createSession(db, memberId);
   (await cookies()).set(COOKIE, token, { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: SESSION_DAYS * 24 * 60 * 60 });
 }

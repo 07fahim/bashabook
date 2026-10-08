@@ -7,8 +7,8 @@ const today = '2026-10-09';
 describe('flat isolation', { timeout: 30000 }, () => {
   it('a session from flat A cannot read or change flat B', async () => {
     await migrate();
-    const a = await createFlat(db, { flatName: 'A', name: 'Nafis', pin: '1234', others: ['Tahsin'], today });
-    const b = await createFlat(db, { flatName: 'B', name: 'Zarif', pin: '1234', others: ['Rafi'], today });
+    const a = await createFlat(db, { flatName: 'A', name: 'Nafis', pin: '1234', others: ['Tahsin'], today, lang: 'bn' });
+    const b = await createFlat(db, { flatName: 'B', name: 'Zarif', pin: '1234', others: ['Rafi'], today, lang: 'bn' });
 
     const me = (await memberBySession(db, await createSession(db, a.memberId)))!;
     expect(me.flatId).toBe(a.flatId);
