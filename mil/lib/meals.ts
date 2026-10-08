@@ -63,10 +63,28 @@ export function headcount(members: MealMember[], changes: MealChange[], date: st
 export function isLocked(date: string, nowDhaka: string, cutoff: string): boolean {
   const [today, time] = nowDhaka.split('T');
   if (date <= today) return true;
-  const t = new Date(`${today}T00:00:00Z`);
-  t.setUTCDate(t.getUTCDate() + 1);
-  return date === t.toISOString().slice(0, 10) && time.slice(0, 5) >= cutoff.slice(0, 5);
+  return date === addDays(today, 1) && time.slice(0, 5) >= cutoff.slice(0, 5);
 }
 
-/** Today's date in Dhaka as 'YYYY-MM-DD'. */
-export const todayDhaka = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+export const addDays = (date: string, n: number) => {
+  const t = new Date(`${date}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() + n);
+  return t.toISOString().slice(0, 10);
+};
+
+/** Dhaka clock as 'YYYY-MM-DDTHH:MM'. Dhaka is UTC+6 all year. */
+export const nowDhaka = () => new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 16);
+export const todayDhaka = () => nowDhaka().slice(0, 10);
+
+export const isMeal = (v: unknown): v is Meal => v === 'b' || v === 'l' || v === 'd';
+export const isDate = (v: unknown): v is string =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && addDays(v, 0) === v;
+
+export type Decision = 'open' | 'late' | 'request' | 'closed';
+
+/** What a change to `date` becomes: saved, saved as late, a change request, or refused (past days). */
+export function mealDecision(date: string, now: string, cutoff: string, strictness: 'relaxed' | 'strict'): Decision {
+  if (date < now.slice(0, 10)) return 'closed';
+  if (!isLocked(date, now, cutoff)) return 'open';
+  return strictness === 'strict' ? 'request' : 'late';
+}

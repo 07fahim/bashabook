@@ -3,6 +3,7 @@ import type { ComponentProps } from 'react';
 export const focus = 'rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
 export const field = 'mt-1.5 block w-full rounded-lg border border-muted bg-surface px-4 py-3 text-lg font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
 export const primary = `flex min-h-12 w-full items-center justify-center bg-turmeric px-6 font-semibold text-on-turmeric hover:brightness-95 disabled:opacity-60 ${focus}`;
+export const secondary = `flex min-h-12 w-full items-center justify-center border border-muted bg-surface px-6 font-semibold hover:bg-paper disabled:opacity-60 ${focus}`;
 export const link = `font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`;
 
 export function Field({ label, hint, className = '', ...input }: { label: string; hint?: string; name: string } & ComponentProps<'input'>) {
