@@ -126,7 +126,7 @@ create table bill_templates (
   name                text not null,
   amount_poisha       bigint not null check (amount_poisha > 0),
   split               text not null check (split in ('equal','meals','room','selected')),
-  selected_member_ids uuid[] not null default '{}',
+  selected_member_ids uuid[] not null default '{}',  -- checked against the flat's members when copied into a month
   paid_from_fund      boolean not null default true
 );
 
@@ -144,8 +144,8 @@ create table month_balances (
   payouts        bigint not null,
   balance        bigint not null,
   primary key (flat_id, month, member_id),
-  foreign key (flat_id, month) references months,
-  foreign key (flat_id, member_id) references members (flat_id, id)
+  foreign key (flat_id, month) references months on delete cascade,
+  foreign key (flat_id, member_id) references members (flat_id, id) on delete cascade
 );
 
 -- edits to existing rows that need manager approval (closed months, strict mode)

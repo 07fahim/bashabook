@@ -71,11 +71,13 @@ All amounts are whole numbers of **poisha**. No floating point anywhere in the m
 - **Paid in (member)** = deposits + bazar and bills they paid themselves.
 - **Balance (member)** = opening + paid in − (food cost + bill shares) − payouts they received. Positive means the flat owes them; negative means they owe.
 - **Fund** = opening fund + deposits − bazar and bills paid from the fund − payouts.
-- **Engine self-check:** Σ balances = fund. This is true by construction, so it only catches engine bugs and splits that couldn't be made (listed as problems). It is not a trust feature.
+- **Engine self-check:** Σ balances = fund. If they differ (an engine bug, or an opening balance for someone missing from the month), the difference is added to problems, so the close gate catches it. It is not a trust feature.
 - **Cash count:** at close, the manager enters the cash + bKash they actually hold. It must match the computed fund. This is the check that catches a wrong or missing entry.
 - **Close gate:** a month can close only when there are no problems, no pending ledger rows, no pending change requests, and the cash count matches the fund.
 - **At close:** each member's result is written to `month_balances`, and the month's closing fund and meal rate are written to `months`. A closed month is always shown from this snapshot, never recalculated.
-- **Changes inside the open month:** changing a member's default meals, the flat's meal weights, a member's room or a room's rent share applies to the whole open month, back to its first day. The settings screen says so before saving, and the change is audited. Closed months are unaffected because they read the snapshot.
+- **New months open on their own:** a month row is created on the first write dated in it, or by cron on the 1st (`on conflict do nothing`), so entries are never blocked waiting for the previous close. While the previous month is still open, the new month's opening balances are that month's live results, marked provisional.
+- **Corrections to a closed month:** an approved change request never edits the closed month. It becomes a new ledger row in the open month, with a note pointing to the original entry.
+- **Changes inside an open month:** changing a member's default meals, the flat's meal weights, a member's room or a room's rent share applies back to the first day of the oldest open month. The settings screen says so before saving, and the change is audited. Closed months are unaffected because they read the snapshot.
 - **Move-out:** a leaver's balance becomes final when the month closes, because bazar bought later in the month is still shared over the whole month. Their balance carries into the next month like anyone else's, and the manager settles it with a deposit or payout.
 - Pending entries are left out of every calculation until confirmed.
 
@@ -85,7 +87,7 @@ All amounts are whole numbers of **poisha**. No floating point anywhere in the m
 - Landing page: Create a flat / Join a flat
 - Create a flat (manager): flat name → your name and PIN → member names → rooms and rent shares → meal weights, cutoff, bKash number → recurring bills → share the join link (Web Share API, with copy as a fallback)
 - Join: `/j/<join code>` → tap an unclaimed name → set a 4-digit PIN. Claimed name → enter PIN. The session cookie lasts 90 days.
-- **PIN safety:** after 5 wrong tries the member is locked for 15 minutes, and each further lockout doubles the wait. The manager sees failed-attempt counts. A manager reset sets a one-time PIN that the member must change at next login (the name never becomes unclaimed). Resetting a PIN or recording a move-out deletes that member's sessions.
+- **PIN safety:** after 5 wrong tries the member is locked for 15 minutes, and each further lockout doubles the wait. The manager sees failed-attempt counts. A manager reset sets a one-time PIN that the member must change at next login (the name never becomes unclaimed), and clears the failed count and any lockout. Resetting a PIN or recording a move-out deletes that member's sessions. A leaver can still log in, read only, to see their final balance and submit a dues TrxID.
 
 **Member tabs** (URLs have no flat id; the session decides the flat)
 - **Home:** toggles for tomorrow's B/L/D with "locks at HH:MM", balance, today's meal rate, next bazar duty, the Turn on reminders button, an iPhone add-to-home-screen guide (shown once)

@@ -67,7 +67,7 @@ Rules (spec §4):
 3. Bill share by split rule: `equal` (weights = days present), `meals` (weights = weighted meals), `room` (split across occupied rooms with a share > 0 using rent_share as weights, then within each room by days present), `selected` (equal weights over the ticked members).
 4. Balance = opening + paid in (deposits + bazar/bills they paid themselves) − (food cost + bill shares) − payouts received.
 5. Fund = opening fund + deposits − bazar/bills paid from the fund − payouts.
-6. `invariantOk` = no problems and Σ balances = fund. True by construction, so it is an engine self-check only. The real-world check is the cash count at close.
+6. If Σ balances ≠ fund, the difference is pushed into `problems`. `invariantOk` = no problems. It is an engine self-check; the real-world check is the cash count at close.
 7. `status = 'pending'` rows are excluded.
 8. Bad data never throws: unknown members, empty rooms with a share, present members without a room, and splits with nobody to split between are returned in `problems`, which blocks closing.
 
@@ -82,8 +82,8 @@ Rules (spec §4):
 - **Join:** `/j/<join_code>` → list of names. Unclaimed → set PIN (4 digits, bcrypt). Claimed → enter PIN.
 - **Session:** random 32-byte token in an `httpOnly; Secure; SameSite=Lax` cookie, stored as its SHA-256 hash in `sessions`, lasts 90 days.
 - **Lockout:** every 5 failed PINs lock the member for 15 min × 2^(lockouts so far − 1): 15 min, 30, 60 and so on. `failed_pin_count` resets on a successful login. The manager sees failed counts.
-- **Reset:** the manager sets a one-time PIN (`must_change_pin = true`); the member must choose a new PIN at next login. The name never becomes unclaimed. Reset deletes that member's sessions.
-- **Move-out** deletes the member's sessions.
+- **Reset:** the manager sets a one-time PIN (`must_change_pin = true`); the member must choose a new PIN at next login. The name never becomes unclaimed. Reset clears `failed_pin_count` and `locked_until`, and deletes that member's sessions.
+- **Move-out** deletes the member's sessions. A leaver can log in again read-only, to see their final balance and submit a dues TrxID.
 - **Scoping:** `requireMember()` returns `{memberId, flatId, role}` from the session. Every query takes `flatId` **from the session, never from the URL or form**. Composite foreign keys in the schema reject cross-flat references as a second line of defence.
 - **Manager actions:** `requireManager()`.
 - **Cook link:** a random 24-byte token; the manager can revoke or regenerate it. Read-only headcount, nothing else.
@@ -119,7 +119,12 @@ Close gate (all must pass):
 3. no `pending` change requests
 4. the manager's cash count equals the computed fund
 
-Then, in one transaction: write `month_balances` rows, set `months.status = 'closed'`, `closing_fund`, `cash_counted`, `meal_rate`, `closed_at`, create the next month, copy `bill_templates` into it.
+Then, in one transaction: write `month_balances` rows, set `months.status = 'closed'`, `closing_fund`, `cash_counted`, `meal_rate`, `closed_at`.
+
+- **Month rows** are created on the first write dated in a new month or by cron on the 1st (`insert ... on conflict do nothing`), which also copies `bill_templates` into it. `selected_member_ids` are checked against the flat's members during the copy.
+- **Provisional opening:** while the previous month is open, the new month's opening = the previous month's live `monthBalances` result, shown as provisional.
+- **Closed-month corrections:** approving a change request on a closed month inserts a correcting ledger row in the open month, noting the original id. Closed months are never edited.
+- **Open-month settings changes** apply from the first day of the oldest open month.
 
 ## 9. Scheduled jobs (`/api/cron`, every 5 min)
 
