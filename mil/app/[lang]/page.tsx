@@ -80,13 +80,20 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
 
         <section className="border-t border-line py-14">
           <h2 className={h2}>{t.modesTitle}</h2>
+          <p className="mt-3 text-lg text-muted">{t.modesLead}</p>
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {t.modes.map(mode => (
               <div key={mode.name} className="rounded-2xl border border-line bg-surface p-6">
-                <h3 className="text-xl font-semibold">{mode.name}</h3>
-                <ul className="mt-3 list-disc space-y-1 pl-5 text-muted">
-                  {mode.points.map(p => <li key={p}>{p}</li>)}
-                </ul>
+                <h3 className="text-xl font-bold">{mode.name}</h3>
+                <p className="text-muted">{mode.who}</p>
+                <dl className="mt-5 divide-y divide-line border-t border-line">
+                  {t.modeRows.map((row, i) => (
+                    <div key={row} className="py-3">
+                      <dt className="text-sm text-muted">{row}</dt>
+                      <dd className="font-semibold">{mode.values[i]}</dd>
+                    </div>
+                  ))}
+                </dl>
               </div>
             ))}
           </div>
