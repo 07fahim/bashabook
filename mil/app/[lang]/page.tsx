@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getDictionary, hasLocale } from './dictionaries';
 import { Khata } from './khata';
-import { ThemeToggle } from './theme-toggle';
+import { Header } from './header';
+import { focus } from './ui';
 
-const focus = 'rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
 const h2 = 'font-display text-3xl font-bold';
 // ponytail: placeholder contacts, replace with the real WhatsApp number and email before launch
 const WHATSAPP = 'https://wa.me/8801700000000';
@@ -15,25 +15,10 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const { lang } = await params;
   if (!hasLocale(lang)) notFound();
   const t = getDictionary(lang);
-  const other = lang === 'bn' ? 'en' : 'bn';
 
   return (
     <>
-      <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
-        <span className="flex items-center gap-2 font-display text-2xl font-bold">
-          <Image src="/logo-mark.png" alt="" width={31} height={32} priority />
-          <span>
-            {t.brand}
-            <span className="text-turmeric-ink">{t.brandAccent}</span>
-          </span>
-        </span>
-        <div className="flex items-center gap-1">
-          <ThemeToggle label={t.themeToggle} />
-          <Link href={`/${other}`} hrefLang={other} lang={other} className={`px-3 py-2 text-muted underline-offset-4 hover:underline ${focus}`}>
-            {t.switchLang}
-          </Link>
-        </div>
-      </header>
+      <Header t={t} lang={lang} path="" />
 
       <main className="mx-auto max-w-5xl px-5">
         <section className="grid items-center gap-10 py-6 md:grid-cols-2 md:py-14">
