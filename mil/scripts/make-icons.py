@@ -1,17 +1,24 @@
-"""Draws the Mil app icon: a cooking pot (hari) with steam on turmeric.
-Content stays inside the maskable safe zone. Run from mil/: python scripts/make-icons.py"""
-from PIL import Image, ImageDraw
+"""Cuts the B symbol out of the BashaBook logo and writes the navbar mark and app icons.
+Run from mil/: python scripts/make-icons.py"""
+from PIL import Image
 
-S = 1024  # draw large, then downscale for smooth edges
-TURMERIC, INK, PAPER = '#D9901A', '#1C1A16', '#FBF7F0'
+PAPER = '#FBF7F0'
+logo = Image.open('asset/BashaBook Warm Minimalist Logo.png').convert('RGBA')
+mark = logo.crop((0, 0, 700, logo.height))   # the symbol sits left of x=700, the wordmark right of it
+mark = mark.crop(mark.getchannel('A').point(lambda a: 255 if a > 16 else 0).getbbox())  # ignore faint stray pixels
 
-img = Image.new('RGB', (S, S), TURMERIC)
-d = ImageDraw.Draw(img)
-d.pieslice((302, 340, 722, 760), 0, 180, fill=INK)                  # bowl
-d.rounded_rectangle((272, 520, 752, 575), radius=27, fill=INK)     # rim
-for x in (422, 512, 602):                                           # steam
-    d.rounded_rectangle((x - 17, 300, x + 17, 450), radius=17, fill=PAPER)
+# navbar mark: 64 px tall (2x for a 32 px slot), transparent
+w = round(mark.width * 64 / mark.height)
+mark.resize((w, 64), Image.LANCZOS).save('public/logo-mark.png', optimize=True)
+print('wrote public/logo-mark.png')
 
+# app icons: symbol at 60% on paper, inside the maskable safe zone
+S = 1024
+icon = Image.new('RGBA', (S, S), PAPER)
+side = int(S * 0.6)
+scaled = mark.resize((round(mark.width * side / max(mark.size)), round(mark.height * side / max(mark.size))), Image.LANCZOS)
+icon.alpha_composite(scaled, ((S - scaled.width) // 2, (S - scaled.height) // 2))
+icon = icon.convert('RGB')
 for size, path in ((512, 'public/icon-512.png'), (192, 'public/icon-192.png'), (180, 'public/apple-icon.png')):
-    img.resize((size, size), Image.LANCZOS).save(path, optimize=True)
+    icon.resize((size, size), Image.LANCZOS).save(path, optimize=True)
     print('wrote', path)

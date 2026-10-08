@@ -31,6 +31,21 @@ export function Khata({ t }: { t: Dict['khata'] }) {
         </div>
       </dl>
       <p className="mt-5 text-sm text-muted">{t.caption}</p>
+      <div className="mt-5 rounded-xl bg-paper p-4">
+        <p className="mb-2 font-semibold">{t.you.who}</p>
+        <dl className="space-y-1">
+        {[[t.you.food, '714'], [t.you.bills, '316'], [t.you.paid, '2,120']].map(([label, amount]) => (
+          <div key={label} className="flex justify-between text-muted">
+            <dt>{label}</dt>
+            <dd className="tabular-nums">৳{amount}</dd>
+          </div>
+        ))}
+        <div className="flex justify-between border-t border-line pt-2 font-semibold text-leaf">
+          <dt>{t.you.result}</dt>
+          <dd className="tabular-nums">+৳1,090</dd>
+        </div>
+        </dl>
+      </div>
     </figure>
   );
 }

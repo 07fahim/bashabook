@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getDictionary, hasLocale } from './dictionaries';
@@ -16,7 +17,10 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
   return (
     <>
       <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
-        <span className="font-display text-2xl font-bold">{t.brand}</span>
+        <span className="flex items-center gap-2 font-display text-2xl font-bold">
+          <Image src="/logo-mark.png" alt="" width={31} height={32} priority />
+          {t.brand}
+        </span>
         <div className="flex items-center gap-1">
           <ThemeToggle label={t.themeToggle} />
           <Link href={`/${other}`} hrefLang={other} lang={other} className={`px-3 py-2 text-muted underline-offset-4 hover:underline ${focus}`}>
@@ -33,7 +37,12 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 inline-flex min-h-12 items-center bg-turmeric px-6 text-lg font-semibold text-on-turmeric hover:brightness-95 ${focus} rounded-xl`}>
               {t.create}
             </Link>
-            <p className="mt-3 text-muted">{t.joinHint}</p>
+            <p className="mt-4 text-muted">
+              {t.joinLead}{' '}
+              <Link href={`/${lang}/join`} prefetch={false} className={`font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`}>
+                {t.joinCta}
+              </Link>
+            </p>
           </div>
           <Khata t={t.khata} />
         </section>

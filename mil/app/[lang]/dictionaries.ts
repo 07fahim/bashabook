@@ -10,8 +10,9 @@ const bn = {
   metaDesc: 'মিল গোনা, রাঁধুনির হেডকাউন্ট, বাজার, বিল আর মাসশেষের হিসাব, ফ্ল্যাটের সবার জন্য।',
   heroTitle: 'ফ্ল্যাটের হিসাব, এখন নিজে নিজেই।',
   heroBody: 'কে কয় বেলা খেল, কে কত টাকার বাজার করল, কার কাছে কত পাওনা, BashaBook সব হিসাব রাখে। খাতা-কলম আর মাসশেষের ঝামেলা ছাড়াই।',
-  create: 'ফ্ল্যাট খুলুন',
-  joinHint: 'যোগ দিতে চান? ম্যানেজারের পাঠানো লিংকে ট্যাপ করুন।',
+  create: 'আপনার ফ্ল্যাট খুলুন',
+  joinLead: 'ইনভাইট পেয়েছেন?',
+  joinCta: 'ফ্ল্যাটে যোগ দিন →',
   khata: {
     title: 'অক্টোবরের খাতা',
     rows: [
@@ -23,12 +24,13 @@ const bn = {
     totalMeals: 'মোট মিল',
     mealRate: 'মিল রেট',
     caption: 'মিল রেট = মোট বাজার ÷ মোট মিল। অ্যাপে প্রতিটা সংখ্যার হিসাব খুলে দেখা যায়।',
+    you: { who: 'ফাহিম · 9 অক্টো পর্যন্ত', food: 'খাবার (22.5 মিল)', bills: 'বিলের ভাগ', paid: 'দিয়েছেন', result: 'পাবেন' },
   },
   cookTitle: 'রাঁধুনি যা দেখেন',
   cookBody: 'রাত দশটায় কাল কয়জনের রান্না, সেটা রাঁধুনির ফোনে পৌঁছে যায়। তাঁর কোনো অ্যাপ লাগে না।',
   cookCard: { when: 'আগামীকাল', b: 'সকাল', l: 'দুপুর', d: 'রাত' },
   settleTitle: 'মাস শেষে, মেসেঞ্জার গ্রুপে',
-  settleBody: 'মাস বন্ধ করলেই কার কত দিতে বা পেতে হবে, সেই লেখা তৈরি থাকে। ম্যানেজার শুধু গ্রুপে পাঠিয়ে দেন।',
+  settleBody: 'মাস বন্ধ করলেই কার কত দিতে বা পেতে হবে, সেই লেখা তৈরি থাকে। এক ট্যাপে গ্রুপে পাঠানো যায়।',
   settleMsg: ['অক্টোবরের হিসাব', 'মিল রেট ৳31.72', 'রহিম পাবেন ৳420', 'করিম দেবেন ৳310', 'ফাহিম দেবেন ৳110'],
   modesTitle: 'বন্ধু হোক বা অচেনা',
   modes: [
@@ -57,8 +59,9 @@ const en: Dict = {
   metaDesc: 'Meal counts, the cook’s headcount, bazar, bills and month-end dues, worked out for everyone in the flat.',
   heroTitle: 'Your flat’s accounts, done for you.',
   heroBody: 'Who ate how many meals, who spent what on bazar, who owes whom. BashaBook keeps the books, without the notebook or the month-end arguments.',
-  create: 'Create a flat',
-  joinHint: 'Joining one? Tap the link your manager sent.',
+  create: 'Create your flat',
+  joinLead: 'Already have an invite?',
+  joinCta: 'Join a flat →',
   khata: {
     title: 'October ledger',
     rows: [
@@ -70,12 +73,13 @@ const en: Dict = {
     totalMeals: 'Total meals',
     mealRate: 'Meal rate',
     caption: 'Meal rate = total bazar ÷ total meals. In the app, every number opens to show its sum.',
+    you: { who: 'Fahim · as of 9 Oct', food: 'Food (22.5 meals)', bills: 'Share of bills', paid: 'Paid', result: 'Gets back' },
   },
   cookTitle: 'What your cook sees',
   cookBody: 'At 10 pm, tomorrow’s count reaches the cook’s phone. No app needed on their side.',
   cookCard: { when: 'Tomorrow', b: 'Breakfast', l: 'Lunch', d: 'Dinner' },
   settleTitle: 'Month end, in your Messenger group',
-  settleBody: 'Close the month and the who-owes-what message is ready. The manager just sends it to the group.',
+  settleBody: 'Close the month and the who-owes-what message is ready. Send it to the group in one tap.',
   settleMsg: ['October accounts', 'Meal rate ৳31.72', 'Rahim gets ৳420', 'Karim pays ৳310', 'Fahim pays ৳110'],
   modesTitle: 'Friends or strangers',
   modes: [
