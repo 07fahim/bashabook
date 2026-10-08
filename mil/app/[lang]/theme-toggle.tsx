@@ -1,7 +1,13 @@
 'use client';
 
+import { useLayoutEffect } from 'react';
+
 /** Flips light/dark and remembers it. Icons swap with CSS, so no React state is needed. */
 export function ThemeToggle({ label }: { label: string }) {
+  // Dev Strict Mode remounts can clear data-theme on <html>; put it back.
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme ??= localStorage.getItem('theme') ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  }, []);
   const toggle = () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
@@ -13,7 +19,7 @@ export function ThemeToggle({ label }: { label: string }) {
       onClick={toggle}
       aria-label={label}
       title={label}
-      className="grid size-11 place-items-center rounded-lg text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+      className="hidden size-11 place-items-center [[data-theme]_&]:grid rounded-lg text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
     >
       {/* moon, shown in light mode */}
       <svg className="size-5 dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
