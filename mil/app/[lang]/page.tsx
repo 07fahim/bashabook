@@ -37,7 +37,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           <div>
             <h1 className="font-display text-4xl leading-tight font-bold text-balance sm:text-5xl md:text-6xl">{t.heroTitle}</h1>
             <p className="mt-5 max-w-prose text-lg text-muted">{t.heroBody}</p>
-            <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 inline-flex min-h-12 items-center bg-turmeric px-6 text-lg font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
+            <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 inline-flex min-h-14 items-center bg-turmeric px-8 text-lg font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
               {t.create}
             </Link>
             <p className="mt-4 text-muted">
@@ -50,22 +50,18 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           <Khata t={t.khata} />
         </section>
 
-        <section className="grid items-center gap-8 border-t border-line py-14 md:grid-cols-2">
-          <div>
-            <h2 className={h2}>{t.cookTitle}</h2>
-            <p className="mt-3 text-muted">{t.cookBody}</p>
-          </div>
-          <div className="rounded-2xl border border-line bg-surface p-6">
-            <p className="text-muted">{t.cookCard.when}</p>
-            <dl className="mt-2 grid grid-cols-3 text-center">
-              {(['b', 'l', 'd'] as const).map((m, i) => (
-                <div key={m}>
-                  <dt className="text-muted">{t.cookCard[m]}</dt>
-                  <dd className="font-display text-6xl font-bold tabular-nums">{t.cookCard.counts[i]}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
+        <section className="border-t border-line py-14" aria-labelledby="steps">
+          <h2 id="steps" className={h2}>{t.stepsTitle}</h2>
+          <ol className="mt-8 grid gap-8 md:grid-cols-3">
+            {t.steps.map((step, i) => (
+              <li key={step.title} className="flex flex-col">
+                <span className="grid size-10 place-items-center rounded-full bg-turmeric font-bold text-on-turmeric" aria-hidden="true">{i + 1}</span>
+                <h3 className="mt-4 text-xl font-bold">{step.title}</h3>
+                <p className="mt-2 text-muted">{step.body}</p>
+                <p className="mt-4 self-start rounded-lg border border-line bg-surface px-3 py-1.5 font-semibold tabular-nums">{step.stat}</p>
+              </li>
+            ))}
+          </ol>
         </section>
 
         <section className="grid items-center gap-8 border-t border-line py-14 md:grid-cols-2">
@@ -73,9 +69,17 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             <h2 className={h2}>{t.settleTitle}</h2>
             <p className="mt-3 text-muted">{t.settleBody}</p>
           </div>
-          <p className="max-w-xs justify-self-start rounded-2xl rounded-bl-sm bg-turmeric px-5 py-4 whitespace-pre-line text-on-turmeric md:justify-self-end">
-            {t.settleMsg.join('\n')}
-          </p>
+          <figure className="rounded-2xl border border-line bg-surface">
+            <figcaption className="border-b border-line px-5 py-3 font-semibold">{t.chat.group}</figcaption>
+            <div className="flex items-end gap-2 p-5">
+              <Image src="/logo-mark.png" alt="" width={31} height={32} className="mb-7 shrink-0" />
+              <div>
+                <p className="mb-1 text-[15px] text-muted">{t.chat.sender}</p>
+                <p className="rounded-2xl rounded-bl-sm bg-turmeric px-4 py-3 whitespace-pre-line text-on-turmeric">{t.settleMsg.join('\n')}</p>
+                <p className="mt-1 text-[15px] text-muted">{t.chat.time}</p>
+              </div>
+            </div>
+          </figure>
         </section>
 
         <section className="border-t border-line py-14">
@@ -89,7 +93,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                 <dl className="mt-5 divide-y divide-line border-t border-line">
                   {t.modeRows.map((row, i) => (
                     <div key={row} className="py-3">
-                      <dt className="text-sm text-muted">{row}</dt>
+                      <dt className="text-[15px] text-muted">{row}</dt>
                       <dd className="font-semibold">{mode.values[i]}</dd>
                     </div>
                   ))}
@@ -143,7 +147,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
       </main>
 
       <footer className="mx-auto max-w-5xl px-5">
-        <p className="border-t border-line py-8 text-sm text-muted">{t.footer}</p>
+        <p className="border-t border-line py-8 text-[15px] text-muted">{t.footer}</p>
       </footer>
     </>
   );

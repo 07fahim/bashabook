@@ -12,7 +12,7 @@ export function Khata({ t }: { t: Dict['khata'] }) {
       <dl className="mt-4">
         {t.rows.map(([date, what, amount], i) => (
           <div key={date} className="write grid h-11 grid-cols-[5.5rem_1fr_auto] items-end border-b border-line pb-2" style={step(i)}>
-            <dt className="text-sm text-muted">{date}</dt>
+            <dt className="text-[15px] text-muted">{date}</dt>
             <dd className="border-l-2 border-chili/40 pl-3">{what}</dd>
             <dd className="font-semibold tabular-nums">৳{amount}</dd>
           </div>
@@ -30,7 +30,7 @@ export function Khata({ t }: { t: Dict['khata'] }) {
           <dd className="border-b-[3px] border-double border-ink font-display text-3xl font-bold tabular-nums">৳{t.figures.rate}</dd>
         </div>
       </dl>
-      <p className="mt-5 text-sm text-muted">{t.caption}</p>
+      <p className="mt-5 text-[15px] text-muted">{t.caption}</p>
       <div className="mt-5 rounded-xl bg-paper p-4">
         <p className="mb-2 font-semibold">{t.you.who}</p>
         <dl className="space-y-1">
