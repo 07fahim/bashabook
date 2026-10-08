@@ -83,8 +83,12 @@ export const isDate = (v: unknown): v is string =>
 export type Decision = 'open' | 'late' | 'request' | 'closed';
 
 /** What a change to `date` becomes: saved, saved as late, a change request, or refused (past days). */
+/** Members can't change today or earlier; only the person who runs the flat can (adminMealAction). */
 export function mealDecision(date: string, now: string, cutoff: string, strictness: 'relaxed' | 'strict'): Decision {
-  if (date < now.slice(0, 10)) return 'closed';
+  if (date <= now.slice(0, 10)) return 'closed';
   if (!isLocked(date, now, cutoff)) return 'open';
   return strictness === 'strict' ? 'request' : 'late';
 }
+
+/** First day the person who runs the flat can still fix: the 1st of last month. Plan 6 moves this to the open month. */
+export const editFrom = (today: string) => `${addDays(`${today.slice(0, 8)}01`, -1).slice(0, 8)}01`;

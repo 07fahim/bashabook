@@ -5,7 +5,11 @@ import { mealDecision, type Decision, type Meal, type MealChange, type MealMembe
 
 export type Strictness = 'relaxed' | 'strict';
 export type FlatInfo = { name: string; cutoff: string; strictness: Strictness; cookToken: string | null; lang: 'bn' | 'en' };
-export type Member = MealMember & { name: string };
+export type Member = MealMember & { name: string; role: 'member' | 'manager' };
+export type HistoryRow = {
+  at: Date | string; actor: string | null; who: string | null; entityId: string;
+  after: { count?: number; late?: boolean; away?: [string, string]; nocook?: [string, string]; meals?: string };
+};
 export type SavedChange = MealChange & { late: boolean };
 export type MealRequest = { id: string; memberId: string; name: string; date: string; meal: Meal; count: number };
 
@@ -16,7 +20,7 @@ export async function loadMeals(db: Db, flatId: string, from: string, to: string
   const [flat] = await db<FlatInfo>(
     `select name, cutoff_time::text as cutoff, strictness, cook_link_token as "cookToken", language as lang from flats where id = $1`, [flatId]);
   const members = await db<Member>(
-    `select id, name, joined_on::text as "joinedOn", left_on::text as "leftOn",
+    `select id, name, role, joined_on::text as "joinedOn", left_on::text as "leftOn",
        json_build_object('b', default_b, 'l', default_l, 'd', default_d) as defaults
      from members where flat_id = $1 order by name`, [flatId]);
   const changes = await db<SavedChange>(
@@ -82,7 +86,7 @@ export async function setAway(db: Db, flatId: string, memberId: string, from: st
   await db(
     `with up as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select $1::uuid, $2::uuid, d::date, m, 0
-       from generate_series($3::date, $4::date, interval '1 day') d, unnest(array['b','l','d']) m
+       from generate_series($3::timestamp, $4::timestamp, interval '1 day') d, unnest(array['b','l','d']) m
        on conflict (member_id, date, meal) do update set count = 0, late = false, updated_at = now())
      insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', $5, $6, $2)`,
     [flatId, memberId, from, to, `${memberId}|away`, { away: [from, to] }]);
@@ -93,7 +97,7 @@ export async function setDefaults(db: Db, flatId: string, memberId: string, d: R
   await db(
     `with frozen as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select m.flat_id, m.id, day::date, x.meal, (case x.meal when 'b' then m.default_b when 'l' then m.default_l else m.default_d end)::int
-       from members m, generate_series(m.joined_on, $3::date, interval '1 day') day, unnest(array['b','l','d']) x(meal)
+       from members m, generate_series(m.joined_on::timestamp, $3::timestamp, interval '1 day') day, unnest(array['b','l','d']) x(meal)
        where m.flat_id = $1 and m.id = $2
        on conflict (member_id, date, meal) do nothing),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
@@ -115,3 +119,32 @@ export async function flatIdByCookToken(db: Db, token: string) {
   const [f] = await db<{ id: string }>(`select id from flats where cook_link_token = $1`, [token]);
   return f?.id ?? null;
 }
+
+/** No cooking: the chosen meals are off for everyone living in the flat from..to; waiting requests for them are dropped.
+ *  One audit row keeps the old saved values. Days up to `today` are marked late, like other edits of locked days. */
+export async function noCooking(db: Db, flatId: string, by: string, from: string, to: string, meals: Meal[], today: string) {
+  await db(
+    `with old as (select member_id as m, date::text as d, meal as x, count as c from meal_changes
+       where flat_id = $1 and date between $2::date and $3::date and meal = any(string_to_array($4::text, ','))),
+     up as (insert into meal_changes (flat_id, member_id, date, meal, count, late)
+       select m.flat_id, m.id, d::date, x, 0, d::date <= $7::date
+       from members m, generate_series($2::timestamp, $3::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
+       where m.flat_id = $1 and m.joined_on <= d::date and (m.left_on is null or d::date <= m.left_on)
+       on conflict (member_id, date, meal) do update set count = 0, late = excluded.late, updated_at = now()),
+     gone as (delete from change_requests where flat_id = $1 and entity = 'meal_changes' and status = 'pending'
+       and (payload->>'date')::date between $2::date and $3::date and payload->>'meal' = any(string_to_array($4::text, ',')))
+     insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
+     values ($1, 'meal_changes', 'flat|nocook', (select coalesce(jsonb_agg(old), '[]') from old), $5, $6)`,
+    [flatId, from, to, meals.join(','), { nocook: [from, to], meals: meals.join(',') }, by, today]);
+}
+
+/** Meal changes worth seeing: late, made for someone else, time away, no cooking. Newest 30. */
+export const loadHistory = (db: Db, flatId: string) => db<HistoryRow>(
+  `select a.at, actor.name as actor, who.name as who, a.entity_id as "entityId", a.after
+   from audit_log a
+   left join members actor on actor.id = a.by_member
+   left join members who on who.flat_id = a.flat_id and who.id::text = split_part(a.entity_id, '|', 1)
+   where a.flat_id = $1 and a.entity = 'meal_changes'
+     and (a.entity_id like '%|nocook' or a.entity_id like '%|away' or coalesce((a.after->>'late')::boolean, false)
+          or split_part(a.entity_id, '|', 1) <> a.by_member::text)
+   order by a.id desc limit 30`, [flatId]);

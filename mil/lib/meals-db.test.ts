@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { headcount, indexChanges, mealCount, type Meal } from './meals';
-import { changeMeal, decideRequest, loadMeals, requestMeal, saveMeal, setAway, setDefaults, updateSettings } from './meals-db';
+import { changeMeal, decideRequest, loadHistory, loadMeals, noCooking, requestMeal, saveMeal, setAway, setDefaults, updateSettings } from './meals-db';
 
 async function flat() {
   await migrate();
@@ -37,11 +37,12 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await changeMeal(db, flatId, c('2026-10-10'), '2026-10-09T23:00')).toBe('late');
     expect(await changeMeal(db, flatId, c('2026-10-08'), '2026-10-09T23:00')).toBe('closed');
     await updateSettings(db, flatId, { cutoff: '22:00', strictness: 'strict' });
-    expect(await changeMeal(db, flatId, c('2026-10-09'), '2026-10-09T23:00')).toBe('request');
+    expect(await changeMeal(db, flatId, c('2026-10-09'), '2026-10-09T23:00')).toBe('closed');   // today
+    expect(await changeMeal(db, flatId, c('2026-10-10'), '2026-10-09T23:00')).toBe('request');
     const { changes, requests } = await load();
     expect(changes.map(x => [x.date, x.late]).sort()).toEqual([['2026-10-10', true], ['2026-10-11', false]]);
-    expect(requests.map(r => r.date)).toEqual(['2026-10-09']);
-    expect(await changeMeal(db, flatId, c('2026-10-09'), '2026-10-09T23:00', true)).toBe('late');   // the approver doesn't wait on themselves
+    expect(requests.map(r => r.date)).toEqual(['2026-10-10']);
+    expect(await changeMeal(db, flatId, c('2026-10-10'), '2026-10-09T23:00', true)).toBe('late');   // the approver doesn't wait on themselves
     expect((await load()).requests).toEqual([]);   // a direct save drops the waiting request
   });
 
@@ -88,5 +89,32 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await count('2026-10-09', 'b')).toBe(1);
     expect(await count('2026-10-10', 'b')).toBe(0);   // new usual from here
     expect((await load()).members.find(m => m.id === tahsin)!.defaults).toEqual({ b: false, l: true, d: true });
+  });
+
+  it('no cooking switches the chosen meals off for everyone and drops waiting requests', async () => {
+    const { flatId, memberId, tahsin, load } = await flat();
+    await requestMeal(db, flatId, { memberId: tahsin, date: '2026-10-12', meal: 'd', count: 2 });
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-12', meal: 'l', count: 3 }, false);
+    await noCooking(db, flatId, memberId, '2026-10-12', '2026-10-13', ['l', 'd'], '2026-10-09');
+    const { members, changes, requests } = await load();
+    expect(headcount(members, changes, '2026-10-12')).toEqual({ b: 2, l: 0, d: 0 });
+    expect(headcount(members, changes, '2026-10-13')).toEqual({ b: 2, l: 0, d: 0 });
+    expect(headcount(members, changes, '2026-10-14')).toEqual({ b: 2, l: 2, d: 2 });
+    expect(requests).toEqual([]);
+    const [log] = await db<{ before: { c: number }[] }>(`select before from audit_log where entity_id = 'flat|nocook' and flat_id = $1`, [flatId]);
+    expect(log.before.map(x => x.c)).toEqual([3]);   // old guest plates kept for the record
+  });
+
+  it('history shows late, for-someone-else, away and no-cooking changes, not ordinary ones', async () => {
+    const { flatId, memberId, tahsin } = await flat();
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-12', meal: 'b', count: 0 }, false);   // ordinary: hidden
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-10', meal: 'l', count: 0 }, true);    // late
+    await saveMeal(db, flatId, memberId, { memberId: tahsin, date: '2026-10-09', meal: 'd', count: 3 }, true);  // Nafis for Tahsin
+    await setAway(db, flatId, tahsin, '2026-10-20', '2026-10-21');
+    await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-15', ['b'], '2026-10-09');
+    const h = await loadHistory(db, flatId);
+    expect(h.map(r => [r.actor, r.who, r.entityId.split('|').slice(1).join('|')])).toEqual([
+      ['Nafis', null, 'nocook'], ['Tahsin', 'Tahsin', 'away'], ['Nafis', 'Tahsin', '2026-10-09|d'], ['Tahsin', 'Tahsin', '2026-10-10|l'],
+    ]);
   });
 });

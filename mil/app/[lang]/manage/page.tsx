@@ -2,17 +2,17 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { listMembers } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { addDays, headcount, MEALS, todayDhaka } from '@/lib/meals';
+import { addDays, editFrom, headcount, MEALS, todayDhaka } from '@/lib/meals';
 import { loadMeals } from '@/lib/meals-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { addMemberAction, cookLinkAction, decideAction, resetPinAction, settingsAction } from '../actions';
+import { addMemberAction, adminMealAction, cookLinkAction, decideAction, noCookAction, resetPinAction, settingsAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { fmtDay } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { ShareButton } from '../share-button';
-import { Field, focus, link, PinField, primary, secondary } from '../ui';
+import { checkChip, field, Field, focus, link, PinField, primary, secondary } from '../ui';
 
 export default function Manage({ params }: PageProps<'/[lang]/manage'>) {
   return <Suspense><ManageBody params={params} /></Suspense>;
@@ -30,6 +30,7 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
   const line = (hc: typeof tom) => MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(' · ');
   const text = `${me.flatName} · ${m.tomorrow}, ${fmtDay(tomorrow, lang)}\n${line(tom)}`;
   const card = 'mt-8 rounded-2xl border border-line bg-surface p-5';
+  const from = editFrom(today), to = addDays(today, 60);
   const h2 = 'text-xl font-bold';
   const small = `min-h-11 px-4 font-semibold ${focus}`;
 
@@ -75,6 +76,51 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
               ))}
             </ul>
           )}
+        </section>
+
+        <section className={card}>
+          <h2 className={h2}>{m.editTitle}</h2>
+          <p className="mt-1 text-muted">{m.editLead}</p>
+          <ActionForm action={adminMealAction} className="mt-4">
+            <input type="hidden" name="lang" value={lang} />
+            <label className="block font-semibold">
+              {m.who}
+              <select name="memberId" className={field}>
+                {members.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </label>
+            <Field label={m.day} name="date" type="date" required min={from} max={to} defaultValue={today} />
+            <label className="block font-semibold">
+              {m.meal}
+              <select name="meal" defaultValue="l" className={field}>
+                {MEALS.map(x => <option key={x} value={x}>{m.names[x]}</option>)}
+              </select>
+            </label>
+            <Field label={m.plates} name="plates" type="number" inputMode="numeric" min={0} max={10} required defaultValue={0} />
+            <button className={primary}>{m.save}</button>
+          </ActionForm>
+        </section>
+
+        <section className={card}>
+          <h2 className={h2}>{m.noCookTitle}</h2>
+          <p className="mt-1 text-muted">{m.noCookLead}</p>
+          <ActionForm action={noCookAction} className="mt-4">
+            <input type="hidden" name="lang" value={lang} />
+            <Field label={m.from} name="from" type="date" required min={from} max={to} defaultValue={today} />
+            <Field label={m.to} name="to" type="date" required min={from} max={to} defaultValue={today} />
+            <fieldset>
+              <legend className="font-semibold">{m.whichMeals}</legend>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {MEALS.map(x => (
+                  <label key={x} className={checkChip}>
+                    <input type="checkbox" name={x} defaultChecked className="size-5 shrink-0 accent-ink" />
+                    {m.names[x]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <button className={primary}>{m.noCookBtn}</button>
+          </ActionForm>
         </section>
 
         <section className={card}>
