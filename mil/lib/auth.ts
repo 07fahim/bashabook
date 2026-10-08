@@ -4,7 +4,7 @@ import type { Db } from './db';
 
 export const SESSION_DAYS = 90;
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // no 0/O or 1/I/L
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const cleanName = (v: unknown) => { const s = String(v ?? '').trim(); return s.length >= 1 && s.length <= 40 ? s : null; };
 export const isPin = (v: unknown) => /^\d{4}$/.test(String(v ?? ''));
