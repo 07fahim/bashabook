@@ -1,30 +1,36 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
 import { addDays, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
-import { loadHistory, loadMeals, type HistoryRow } from '@/lib/meals-db';
+import { loadHistory, loadMeals, upcomingAway, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { awayAction, guestAction, inMealsAction, usualAction } from '../actions';
+import { awayAction, cancelAwayAction, guestAction, inMealsAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtDay, fmtWhen } from '../format';
+import { fmtDay, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
-import { checkChip, field, Field, primary, secondary } from '../ui';
+import { checkChip, field, Field, focus, link, primary, secondary } from '../ui';
 
-export default function Meals({ params }: PageProps<'/[lang]/meals'>) {
-  return <Suspense><MealsBody params={params} /></Suspense>;
+export default function Meals({ params, searchParams }: PageProps<'/[lang]/meals'>) {
+  return <Suspense><MealsBody params={params} searchParams={searchParams} /></Suspense>;
 }
 
-async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>) {
+async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
+  const mine = (await searchParams).mine === '1';
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const [meals, history] = await Promise.all([loadMeals(db, me.flatId, today, week[6]), loadHistory(db, me.flatId)]);
+  const [meals, history, aways] = await Promise.all([
+    loadMeals(db, me.flatId, today, week[6]),
+    loadHistory(db, me.flatId, mine ? me.memberId : null),
+    upcomingAway(db, me.flatId, me.memberId, today),
+  ]);
   const starter = meals.members.find(x => x.role === 'manager');
   const self = meals.members.find(x => x.id === me.memberId)!;
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff, meals.flat.strictness);
@@ -33,12 +39,22 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
   const range = (r: [string, string]) => (r[0] === r[1] ? fmtDay(r[0], lang) : `${fmtDay(r[0], lang)} – ${fmtDay(r[1], lang)}`);
   /** One history line, e.g. 'Nafis → Tahsin · Sat, 10 October · Lunch: Off · Late'. */
   const describe = (h: HistoryRow) => {
-    const actor = h.actor ?? '?', who = h.who ?? '?';
-    if (h.after.nocook) return `${actor} · ${m.noCook} · ${range(h.after.nocook)} · ${h.after.meals!.split(',').map(x => m.names[x as Meal]).join(', ')}`;
-    if (h.after.away) return `${who} · ${m.away} · ${range(h.after.away)}`;
+    const actor = h.actor ?? '?', who = h.who ?? '?', a = h.after;
+    const mealList = (x: string) => x.split(',').map(y => m.names[y as Meal]).join(', ');
+    if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
+    if (h.entity === 'members') {
+      if (a.inMeals === false) return `${who} ${m.ownStarted}`;
+      if (a.inMeals === true) return `${who} ${m.ownStopped}`;
+      return `${who} · ${m.usualChanged}: ${MEALS.filter(x => a[x]).map(x => m.names[x]).join(', ') || m.none}`;
+    }
+    if (a.nocook) return `${actor} · ${m.noCook} · ${range(a.nocook)} · ${mealList(a.meals!)}`;
+    if (a.cookAgain) return `${actor} · ${m.noCookAgain} · ${range(a.cookAgain)} · ${mealList(a.meals!)}`;
+    if (a.away) return `${who} · ${m.away} · ${range(a.away)}`;
+    if (a.awayCancel) return `${who} · ${m.awayCancelled} · ${range(a.awayCancel)}`;
     const [, date, meal] = h.entityId.split('|');
-    const value = h.after.count! > 1 ? `${h.after.count} ${m.platesShort}` : h.after.count ? m.on : m.off;
-    return `${actor === who ? who : `${actor} → ${who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${h.after.late ? ` · ${m.late}` : ''}`;
+    const value = a.count! > 1 ? `${a.count} ${m.platesShort}` : a.count ? m.on : m.off;
+    const tag = a.rejected ? ` · ${m.rejected}` : a.late ? ` · ${m.late}` : '';
+    return `${actor === who ? who : `${actor} → ${who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${tag}`;
   };
   const h2 = 'text-xl font-bold';
 
@@ -89,6 +105,24 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
         <section className={card}>
           <h2 className={h2}>{m.awayTitle}</h2>
           <p className="mt-1 text-muted">{m.awayLead}</p>
+          {aways.length > 0 && (
+            <div className="mt-4">
+              <p className="font-semibold">{m.awayList}</p>
+              <ul className="mt-2 divide-y divide-line">
+                {aways.map(([f, t]) => (
+                  <li key={`${f}${t}`} className="flex items-center justify-between gap-3 py-2">
+                    <span>{range([f, t])}</span>
+                    <ActionForm action={cancelAwayAction}>
+                      <input type="hidden" name="lang" value={lang} />
+                      <input type="hidden" name="from" value={f} />
+                      <input type="hidden" name="to" value={t} />
+                      <button className={`min-h-11 px-4 font-semibold ${link}`}>{m.cancel}</button>
+                    </ActionForm>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ActionForm action={awayAction} className="mt-4">
             <input type="hidden" name="lang" value={lang} />
             <Field label={m.from} name="from" type="date" required min={firstOpen} defaultValue={firstOpen} />
@@ -119,16 +153,24 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
         <section className={card}>
           <h2 className={h2}>{self.inMeals ? m.ownTitle : m.ownActiveTitle}</h2>
           <p className="mt-1 text-muted">{self.inMeals ? m.ownLead : m.ownActiveLead}</p>
-          <form action={inMealsAction} className="mt-4">
+          <ActionForm action={inMealsAction} className="mt-4">
             <input type="hidden" name="lang" value={lang} />
             <input type="hidden" name="on" value={self.inMeals ? '0' : '1'} />
             <button className={self.inMeals ? secondary : primary}>{self.inMeals ? m.ownOn : m.ownOff}</button>
-          </form>
+          </ActionForm>
         </section>
 
         <section className={card}>
           <h2 className={h2}>{m.historyTitle}</h2>
           <p className="mt-1 text-muted">{m.historyLead}</p>
+          <div className="mt-3 flex gap-2">
+            {[[false, m.everyoneTab], [true, m.mineOnly]].map(([on, label]) => (
+              <Link key={String(on)} href={on ? `/${lang}/meals?mine=1` : `/${lang}/meals`} scroll={false} aria-current={mine === on ? 'true' : undefined}
+                className={`px-4 py-2 font-semibold ${mine === on ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
+                {label}
+              </Link>
+            ))}
+          </div>
           {history.length === 0 ? (
             <p className="mt-3 text-muted">{m.noHistory}</p>
           ) : (

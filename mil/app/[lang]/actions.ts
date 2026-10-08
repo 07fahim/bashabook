@@ -4,8 +4,11 @@ import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, mealDecision, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
-import { changeMeal, decideRequest, loadMeals, mealRules, noCooking, saveMeal, setInMeals, setAway, setCookLink, setDefaults, updateSettings } from '@/lib/meals-db';
+import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import {
+  cancelAway, changeMeal, cookAgain, decideRequest, isInMeals, loadMeals, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults,
+  setInMeals, updateSettings,
+} from '@/lib/meals-db';
 import { endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
@@ -49,9 +52,10 @@ export async function logoutAction(d: FormData) {
 export async function addMemberAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireManager(lang);
-  const name = cleanName(d.get('name'));
+  const name = cleanName(d.get('name')), joinedOn = str(d, 'joinedOn');
   if (!name) return { error: a.errors.name };
-  if (!(await addMember(db, me.flatId, name, todayDhaka()))) return { error: a.errors.nameTaken };
+  if (!editable(joinedOn)) return { error: getDictionary(lang).meals.errors.bad };
+  if (!(await addMember(db, me.flatId, name, joinedOn))) return { error: a.errors.nameTaken };
   refresh();
   return { done: a.added };
 }
@@ -96,9 +100,7 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
   const from = str(d, 'from'), to = str(d, 'to');
   if (!inRange(from) || !isDate(to) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
-  const now = nowDhaka(), r = await mealRules(db, me.flatId);
-  let first = now.slice(0, 10);
-  while (mealDecision(first, now, r.cutoff, r.strictness) !== 'open') first = addDays(first, 1);
+  const first = addDays(await lastLocked(me.flatId), 1);
   if (from < first) return { error: m.errors.awayFrom.replace('{d}', fmtDay(first, lang)) };
   await setAway(db, me.flatId, me.memberId, from, to);
   refresh();
@@ -108,7 +110,8 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
 export async function usualAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireMember(lang);
-  await setDefaults(db, me.flatId, me.memberId, { b: d.has('b'), l: d.has('l'), d: d.has('d') }, await lastLocked(me.flatId));
+  if (!(await isInMeals(db, me.flatId, me.memberId))) return { error: m.errors.bad };
+  await setDefaults(db, me.flatId, me.memberId, { b: d.has('b'), l: d.has('l'), d: d.has('d') }, editFrom(todayDhaka()), await lastLocked(me.flatId));
   refresh();
   return { done: m.saved };
 }
@@ -123,10 +126,10 @@ export async function settingsAction(_: FormState, d: FormData): Promise<FormSta
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireManager(lang);
   const cutoff = str(d, 'cutoff').slice(0, 5), strictness = str(d, 'strictness');
-  const [b, l, dd] = MEALS.map(x => (/^\d{1,2}(\.\d{1,2})?$/.test(str(d, `w_${x}`)) ? Math.round(Number(str(d, `w_${x}`)) * 100) : -1));
-  const weightsOk = [b, l, dd].every(w => w >= 0 && w <= 1000);
+  const [b, l, dd] = MEALS.map(x => (/^(\d{1,2}(\.\d{1,2})?|\.\d{1,2})$/.test(str(d, `w_${x}`)) ? Math.round(Number(str(d, `w_${x}`)) * 100) : -1));
+  const weightsOk = [b, l, dd].every(w => w >= 0 && w <= 1000) && b + l + dd > 0;
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff) || (strictness !== 'relaxed' && strictness !== 'strict') || !weightsOk) return { error: m.errors.bad };
-  await updateSettings(db, me.flatId, { cutoff, strictness, weights: { b, l, d: dd } });
+  await updateSettings(db, me.flatId, me.memberId, { cutoff, strictness, weights: { b, l, d: dd } });
   refresh();
   return { done: m.saved };
 }
@@ -160,7 +163,9 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
   if (!editable(from) || !editable(to) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
   if (!meals.length) return { error: m.errors.pickMeal };
-  await noCooking(db, me.flatId, me.memberId, from, to, meals, todayDhaka());
+  const locked = await lastLocked(me.flatId);
+  if (str(d, 'again') === '1') await cookAgain(db, me.flatId, me.memberId, from, to, meals, addDays(locked, 1));
+  else await noCooking(db, me.flatId, me.memberId, from, to, meals, locked);
   refresh();
   return { done: m.saved };
 }
@@ -171,8 +176,21 @@ async function lastLocked(flatId: string) {
   return isLocked(addDays(today, 1), now, r.cutoff) ? addDays(today, 1) : today;
 }
 
-export async function inMealsAction(d: FormData) {
-  const me = await requireMember(langOf(d));
-  await setInMeals(db, me.flatId, me.memberId, str(d, 'on') === '1', await lastLocked(me.flatId));
+export async function inMealsAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), m = getDictionary(lang).meals;
+  const me = await requireMember(lang);
+  await setInMeals(db, me.flatId, me.memberId, str(d, 'on') === '1', editFrom(todayDhaka()), await lastLocked(me.flatId));
   refresh();
+  return { done: m.saved };
+}
+
+/** Cancels my away from the first open day on; locked days stay as they were. */
+export async function cancelAwayAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), m = getDictionary(lang).meals;
+  const me = await requireMember(lang);
+  const from = str(d, 'from'), to = str(d, 'to'), first = addDays(await lastLocked(me.flatId), 1);
+  if (!isDate(from) || !isDate(to) || to < first) return { error: m.errors.bad };
+  await cancelAway(db, me.flatId, me.memberId, from < first ? first : from, to);
+  refresh();
+  return { done: m.saved };
 }

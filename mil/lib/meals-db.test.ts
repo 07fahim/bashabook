@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { headcount, indexChanges, mealCount, type Meal } from './meals';
-import { changeMeal, decideRequest, loadHistory, loadMeals, noCooking, requestMeal, saveMeal, setAway, setDefaults, setInMeals, updateSettings } from './meals-db';
+import {
+  cancelAway, changeMeal, cookAgain, decideRequest, loadHistory, loadMeals, noCooking, requestMeal, saveMeal, setAway, setDefaults, setInMeals,
+  upcomingAway, updateSettings,
+} from './meals-db';
 
 async function flat() {
   await migrate();
@@ -36,9 +39,9 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await changeMeal(db, flatId, c('2026-10-11'), '2026-10-09T23:00')).toBe('open');
     expect(await changeMeal(db, flatId, c('2026-10-10'), '2026-10-09T23:00')).toBe('late');
     expect(await changeMeal(db, flatId, c('2026-10-08'), '2026-10-09T23:00')).toBe('closed');
-    await updateSettings(db, flatId, { cutoff: '22:00', strictness: 'strict', weights: { b: 50, l: 100, d: 100 } });
+    await updateSettings(db, flatId, tahsin, { cutoff: '22:00', strictness: 'strict', weights: { b: 50, l: 100, d: 100 } });
     expect(await changeMeal(db, flatId, c('2026-10-09'), '2026-10-09T23:00')).toBe('closed');   // today
-    expect(await changeMeal(db, flatId, c('2026-10-10'), '2026-10-09T23:00')).toBe('request');
+    expect(await changeMeal(db, flatId, { ...c('2026-10-10'), count: 2 }, '2026-10-09T23:00')).toBe('request');
     const { changes, requests } = await load();
     expect(changes.map(x => [x.date, x.late]).sort()).toEqual([['2026-10-10', true], ['2026-10-11', false]]);
     expect(requests.map(r => r.date)).toEqual(['2026-10-10']);
@@ -83,7 +86,7 @@ describe('meal storage', { timeout: 30000 }, () => {
   it('new usual meals leave locked days as they were', async () => {
     const { flatId, tahsin, load, count } = await flat();
     await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-05', meal: 'b', count: 2 }, false);
-    await setDefaults(db, flatId, tahsin, { b: false, l: true, d: true }, '2026-10-09');
+    await setDefaults(db, flatId, tahsin, { b: false, l: true, d: true }, '2026-09-01', '2026-10-09');
     expect(await count('2026-10-01', 'b')).toBe(1);   // joined 1 October, old usual kept
     expect(await count('2026-10-05', 'b')).toBe(2);   // saved change untouched
     expect(await count('2026-10-09', 'b')).toBe(1);
@@ -120,18 +123,70 @@ describe('meal storage', { timeout: 30000 }, () => {
 
   it('cooking for yourself keeps locked days and counts no meals after', async () => {
     const { flatId, tahsin, load, count } = await flat();
-    await setInMeals(db, flatId, tahsin, false, '2026-10-09');
+    await setInMeals(db, flatId, tahsin, false, '2026-09-01', '2026-10-09');
     expect(await count('2026-10-09', 'l')).toBe(1);   // locked day keeps the old usual meal
     expect(await count('2026-10-10', 'l')).toBe(0);
     expect((await load()).members.find(m => m.id === tahsin)!.inMeals).toBe(false);
-    await setInMeals(db, flatId, tahsin, true, '2026-10-09');
+    await setInMeals(db, flatId, tahsin, true, '2026-09-01', '2026-10-09');
     expect(await count('2026-10-10', 'l')).toBe(1);
   });
 
   it('saves meal weights with the other rules', async () => {
-    const { flatId, load } = await flat();
-    await updateSettings(db, flatId, { cutoff: '21:30', strictness: 'relaxed', weights: { b: 75, l: 100, d: 125 } });
+    const { flatId, memberId, load } = await flat();
+    await updateSettings(db, flatId, memberId, { cutoff: '21:30', strictness: 'relaxed', weights: { b: 75, l: 100, d: 125 } });
     const { flat: f } = await load();
     expect([f.cutoff, f.weights]).toEqual(['21:30:00', { b: 75, l: 100, d: 125 }]);
+  });
+
+  it('no-cooking days are closed to members, and cooking again brings usual meals back', async () => {
+    const { flatId, memberId, tahsin, load, count } = await flat();
+    await noCooking(db, flatId, memberId, '2026-10-12', '2026-10-13', ['d'], '2026-10-09');
+    expect(await changeMeal(db, flatId, { memberId: tahsin, date: '2026-10-12', meal: 'd', count: 1 }, '2026-10-09T10:00')).toBe('closed');
+    expect((await load()).noCook).toHaveLength(2);
+    await cookAgain(db, flatId, memberId, '2026-10-12', '2026-10-13', ['d'], '2026-10-10');
+    expect((await load()).noCook).toEqual([]);
+    expect(await count('2026-10-12', 'd')).toBe(1);   // usual meal back
+  });
+
+  it('a request that matches what is saved only drops the waiting one; rejections are in history', async () => {
+    const { flatId, memberId, tahsin, load } = await flat();
+    await updateSettings(db, flatId, memberId, { cutoff: '22:00', strictness: 'strict', weights: { b: 50, l: 100, d: 100 } });
+    const c = (count: number) => ({ memberId: tahsin, date: '2026-10-10', meal: 'l' as const, count });
+    expect(await changeMeal(db, flatId, c(0), '2026-10-09T23:00')).toBe('request');
+    expect(await changeMeal(db, flatId, c(1), '2026-10-09T23:00')).toBe('open');   // back to usual: nothing to approve
+    expect((await load()).requests).toEqual([]);
+    await changeMeal(db, flatId, c(0), '2026-10-09T23:00');
+    const [r] = (await load()).requests;
+    await decideRequest(db, flatId, memberId, r.id, false, '2026-10-09');
+    const [h] = await loadHistory(db, flatId);
+    expect([h.actor, h.who, h.after.rejected]).toEqual(['Nafis', 'Tahsin', true]);
+  });
+
+  it('cooking for yourself clears plain booked meals but keeps guests', async () => {
+    const { flatId, tahsin, count } = await flat();
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-12', meal: 'd', count: 1 }, false);
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-13', meal: 'd', count: 3 }, false);
+    await setInMeals(db, flatId, tahsin, false, '2026-09-01', '2026-10-09');
+    expect(await count('2026-10-12', 'd')).toBe(0);
+    expect(await count('2026-10-13', 'd')).toBe(3);
+  });
+
+  it('away can be listed and cancelled', async () => {
+    const { flatId, tahsin, count } = await flat();
+    await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');
+    expect(await upcomingAway(db, flatId, tahsin, '2026-10-10')).toEqual([['2026-10-12', '2026-10-20']]);
+    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');
+    expect(await upcomingAway(db, flatId, tahsin, '2026-10-10')).toEqual([]);
+    expect(await count('2026-10-15', 'l')).toBe(1);
+  });
+
+  it('history shows rule changes and can be limited to my meals', async () => {
+    const { flatId, memberId, tahsin } = await flat();
+    await updateSettings(db, flatId, memberId, { cutoff: '21:00', strictness: 'relaxed', weights: { b: 50, l: 100, d: 100 } });
+    await saveMeal(db, flatId, memberId, { memberId, date: '2026-10-09', meal: 'l', count: 0 }, true);   // Nafis, own, late
+    await saveMeal(db, flatId, memberId, { memberId: tahsin, date: '2026-10-09', meal: 'd', count: 0 }, true);
+    expect((await loadHistory(db, flatId))[2].entity).toBe('flats');
+    const mine = await loadHistory(db, flatId, tahsin);
+    expect(mine.map(h => h.entity)).toEqual(['meal_changes', 'flats']);   // my meal + the flat-wide rule change
   });
 });

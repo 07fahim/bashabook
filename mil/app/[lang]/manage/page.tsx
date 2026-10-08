@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { listMembers } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { addDays, editFrom, headcount, MEALS, todayDhaka } from '@/lib/meals';
+import { addDays, editFrom, headcount, isLocked, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import { loadMeals } from '@/lib/meals-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
@@ -32,6 +32,7 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
   const card = 'mt-8 rounded-2xl border border-line bg-surface p-5';
   const own = new Set(meals.members.filter(x => !x.inMeals).map(x => x.id));
   const from = editFrom(today), to = addDays(today, 60);
+  const firstOpen = isLocked(tomorrow, nowDhaka(), meals.flat.cutoff) ? addDays(tomorrow, 1) : tomorrow;
   const h2 = 'text-xl font-bold';
   const small = `min-h-11 px-4 font-semibold ${focus}`;
 
@@ -121,6 +122,8 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
               </div>
             </fieldset>
             <button className={primary}>{m.noCookBtn}</button>
+            <p className="text-[15px] text-muted">{m.noCookAgainLead}</p>
+            <button name="again" value="1" className={secondary}>{m.noCookAgain}</button>
           </ActionForm>
         </section>
 
@@ -154,6 +157,7 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
           <ActionForm action={addMemberAction} className="mt-3">
             <input type="hidden" name="lang" value={lang} />
             <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
+            <Field label={m.joinedOn} name="joinedOn" type="date" required min={from} max={to} defaultValue={firstOpen} />
             <button className={primary}>{a.addBtn}</button>
           </ActionForm>
         </section>
@@ -168,7 +172,7 @@ async function ManageBody({ params }: Pick<PageProps<'/[lang]/manage'>, 'params'
               <p className="text-[15px] text-muted">{m.weightsHint}</p>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 {MEALS.map(x => (
-                  <Field key={x} label={m.names[x]} name={`w_${x}`} type="number" inputMode="decimal" min={0} max={10} step={0.25} required defaultValue={meals.flat.weights[x] / 100} />
+                  <Field key={x} label={m.names[x]} name={`w_${x}`} type="number" inputMode="decimal" min={0} max={10} step={0.01} required defaultValue={meals.flat.weights[x] / 100} />
                 ))}
               </div>
             </fieldset>

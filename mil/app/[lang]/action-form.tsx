@@ -12,7 +12,7 @@ export function ActionForm({ action, children, className }: { action: (prev: For
       className={className}
       onSubmit={e => {
         e.preventDefault();
-        const data = new FormData(e.currentTarget);
+        const data = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
         startTransition(() => run(data));
       }}
     >
