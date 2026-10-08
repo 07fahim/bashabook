@@ -89,7 +89,7 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
             <div className="grid grid-cols-3 gap-2">
               {MEALS.map(x => (
                 <label key={x} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-muted bg-surface font-semibold has-[:checked]:border-turmeric has-[:checked]:bg-turmeric has-[:checked]:text-on-turmeric">
-                  <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5" />
+                  <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5 shrink-0 accent-ink" />
                   {m.names[x]}
                 </label>
               ))}
