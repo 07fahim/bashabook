@@ -33,11 +33,12 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
   const range = (r: [string, string]) => (r[0] === r[1] ? fmtDay(r[0], lang) : `${fmtDay(r[0], lang)} – ${fmtDay(r[1], lang)}`);
   /** One history line, e.g. 'Nafis → Tahsin · Sat, 10 October · Lunch: Off · Late'. */
   const describe = (h: HistoryRow) => {
-    if (h.after.nocook) return `${h.actor} · ${m.noCook} · ${range(h.after.nocook)} · ${h.after.meals!.split(',').map(x => m.names[x as Meal]).join(', ')}`;
-    if (h.after.away) return `${h.who} · ${m.away} · ${range(h.after.away)}`;
+    const actor = h.actor ?? '?', who = h.who ?? '?';
+    if (h.after.nocook) return `${actor} · ${m.noCook} · ${range(h.after.nocook)} · ${h.after.meals!.split(',').map(x => m.names[x as Meal]).join(', ')}`;
+    if (h.after.away) return `${who} · ${m.away} · ${range(h.after.away)}`;
     const [, date, meal] = h.entityId.split('|');
     const value = h.after.count! > 1 ? `${h.after.count} ${m.platesShort}` : h.after.count ? m.on : m.off;
-    return `${h.actor === h.who ? h.who : `${h.actor} → ${h.who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${h.after.late ? ` · ${m.late}` : ''}`;
+    return `${actor === who ? who : `${actor} → ${who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${h.after.late ? ` · ${m.late}` : ''}`;
   };
   const h2 = 'text-xl font-bold';
 
@@ -71,7 +72,7 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
             <label className="block font-semibold">
               {m.day}
               <select name="date" defaultValue={week[1]} className={field}>
-                {week.map(d => <option key={d} value={d}>{fmtDay(d, lang)}</option>)}
+                {week.slice(1).map(d => <option key={d} value={d}>{fmtDay(d, lang)}</option>)}
               </select>
             </label>
             <label className="block font-semibold">

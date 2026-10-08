@@ -86,7 +86,7 @@ export async function setAway(db: Db, flatId: string, memberId: string, from: st
   await db(
     `with up as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select $1::uuid, $2::uuid, d::date, m, 0
-       from generate_series($3::date, $4::date, interval '1 day') d, unnest(array['b','l','d']) m
+       from generate_series($3::timestamp, $4::timestamp, interval '1 day') d, unnest(array['b','l','d']) m
        on conflict (member_id, date, meal) do update set count = 0, late = false, updated_at = now())
      insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', $5, $6, $2)`,
     [flatId, memberId, from, to, `${memberId}|away`, { away: [from, to] }]);
@@ -97,7 +97,7 @@ export async function setDefaults(db: Db, flatId: string, memberId: string, d: R
   await db(
     `with frozen as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select m.flat_id, m.id, day::date, x.meal, (case x.meal when 'b' then m.default_b when 'l' then m.default_l else m.default_d end)::int
-       from members m, generate_series(m.joined_on, $3::date, interval '1 day') day, unnest(array['b','l','d']) x(meal)
+       from members m, generate_series(m.joined_on::timestamp, $3::timestamp, interval '1 day') day, unnest(array['b','l','d']) x(meal)
        where m.flat_id = $1 and m.id = $2
        on conflict (member_id, date, meal) do nothing),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
@@ -120,18 +120,22 @@ export async function flatIdByCookToken(db: Db, token: string) {
   return f?.id ?? null;
 }
 
-/** No cooking: the chosen meals are off for everyone from..to, waiting requests for them are dropped. One audit row. */
-export async function noCooking(db: Db, flatId: string, by: string, from: string, to: string, meals: Meal[]) {
+/** No cooking: the chosen meals are off for everyone living in the flat from..to; waiting requests for them are dropped.
+ *  One audit row keeps the old saved values. Days up to `today` are marked late, like other edits of locked days. */
+export async function noCooking(db: Db, flatId: string, by: string, from: string, to: string, meals: Meal[], today: string) {
   await db(
-    `with up as (insert into meal_changes (flat_id, member_id, date, meal, count)
-       select m.flat_id, m.id, d::date, x, 0
-       from members m, generate_series($2::date, $3::date, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
-       where m.flat_id = $1
-       on conflict (member_id, date, meal) do update set count = 0, late = false, updated_at = now()),
+    `with old as (select member_id as m, date::text as d, meal as x, count as c from meal_changes
+       where flat_id = $1 and date between $2::date and $3::date and meal = any(string_to_array($4::text, ','))),
+     up as (insert into meal_changes (flat_id, member_id, date, meal, count, late)
+       select m.flat_id, m.id, d::date, x, 0, d::date <= $7::date
+       from members m, generate_series($2::timestamp, $3::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
+       where m.flat_id = $1 and m.joined_on <= d::date and (m.left_on is null or d::date <= m.left_on)
+       on conflict (member_id, date, meal) do update set count = 0, late = excluded.late, updated_at = now()),
      gone as (delete from change_requests where flat_id = $1 and entity = 'meal_changes' and status = 'pending'
        and (payload->>'date')::date between $2::date and $3::date and payload->>'meal' = any(string_to_array($4::text, ',')))
-     insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', 'flat|nocook', $5, $6)`,
-    [flatId, from, to, meals.join(','), { nocook: [from, to], meals: meals.join(',') }, by]);
+     insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
+     values ($1, 'meal_changes', 'flat|nocook', (select coalesce(jsonb_agg(old), '[]') from old), $5, $6)`,
+    [flatId, from, to, meals.join(','), { nocook: [from, to], meals: meals.join(',') }, by, today]);
 }
 
 /** Meal changes worth seeing: late, made for someone else, time away, no cooking. Newest 30. */

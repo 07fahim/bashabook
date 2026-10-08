@@ -94,12 +94,15 @@ describe('meal storage', { timeout: 30000 }, () => {
   it('no cooking switches the chosen meals off for everyone and drops waiting requests', async () => {
     const { flatId, memberId, tahsin, load } = await flat();
     await requestMeal(db, flatId, { memberId: tahsin, date: '2026-10-12', meal: 'd', count: 2 });
-    await noCooking(db, flatId, memberId, '2026-10-12', '2026-10-13', ['l', 'd']);
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-12', meal: 'l', count: 3 }, false);
+    await noCooking(db, flatId, memberId, '2026-10-12', '2026-10-13', ['l', 'd'], '2026-10-09');
     const { members, changes, requests } = await load();
     expect(headcount(members, changes, '2026-10-12')).toEqual({ b: 2, l: 0, d: 0 });
     expect(headcount(members, changes, '2026-10-13')).toEqual({ b: 2, l: 0, d: 0 });
     expect(headcount(members, changes, '2026-10-14')).toEqual({ b: 2, l: 2, d: 2 });
     expect(requests).toEqual([]);
+    const [log] = await db<{ before: { c: number }[] }>(`select before from audit_log where entity_id = 'flat|nocook' and flat_id = $1`, [flatId]);
+    expect(log.before.map(x => x.c)).toEqual([3]);   // old guest plates kept for the record
   });
 
   it('history shows late, for-someone-else, away and no-cooking changes, not ordinary ones', async () => {
@@ -108,7 +111,7 @@ describe('meal storage', { timeout: 30000 }, () => {
     await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-10', meal: 'l', count: 0 }, true);    // late
     await saveMeal(db, flatId, memberId, { memberId: tahsin, date: '2026-10-09', meal: 'd', count: 3 }, true);  // Nafis for Tahsin
     await setAway(db, flatId, tahsin, '2026-10-20', '2026-10-21');
-    await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-15', ['b']);
+    await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-15', ['b'], '2026-10-09');
     const h = await loadHistory(db, flatId);
     expect(h.map(r => [r.actor, r.who, r.entityId.split('|').slice(1).join('|')])).toEqual([
       ['Nafis', null, 'nocook'], ['Tahsin', 'Tahsin', 'away'], ['Nafis', 'Tahsin', '2026-10-09|d'], ['Tahsin', 'Tahsin', '2026-10-10|l'],

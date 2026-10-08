@@ -2,10 +2,10 @@
 
 import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { addMember, cleanName, createFlat, isPin, listMembers, login, resetPin } from '@/lib/auth';
+import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { addDays, editFrom, isDate, isLocked, isMeal, mealDecision, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
-import { changeMeal, decideRequest, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults, updateSettings } from '@/lib/meals-db';
+import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, mealDecision, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { changeMeal, decideRequest, loadMeals, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults, updateSettings } from '@/lib/meals-db';
 import { endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
@@ -144,8 +144,9 @@ export async function adminMealAction(_: FormState, d: FormData): Promise<FormSt
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireManager(lang);
   const memberId = str(d, 'memberId'), date = str(d, 'date'), meal = str(d, 'meal'), count = plates(str(d, 'plates'));
-  const members = await listMembers(db, me.flatId);
-  if (!members.some(x => x.id === memberId) || !editable(date) || !isMeal(meal) || count === null) return { error: m.errors.bad };
+  const { members } = await loadMeals(db, me.flatId, date, date);
+  const member = members.find(x => x.id === memberId);
+  if (!member || !editable(date) || !isPresent(member, date) || !isMeal(meal) || count === null) return { error: m.errors.bad };
   const r = await mealRules(db, me.flatId);
   await saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count }, isLocked(date, nowDhaka(), r.cutoff));
   refresh();
@@ -159,7 +160,7 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
   if (!editable(from) || !editable(to) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
   if (!meals.length) return { error: m.errors.pickMeal };
-  await noCooking(db, me.flatId, me.memberId, from, to, meals);
+  await noCooking(db, me.flatId, me.memberId, from, to, meals, todayDhaka());
   refresh();
   return { done: m.saved };
 }
