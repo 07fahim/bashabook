@@ -21,7 +21,7 @@ export async function createFlat(db: Db, f: { flatName: string; name: string; pi
      m as (insert into members (flat_id, name, pin_hash, role, joined_on) select id, $3::text, $4::text, 'manager', $5::date from f returning id),
      o as (insert into members (flat_id, name, joined_on) select f.id, n, $5::date from f, json_array_elements_text($6::json) n)
      select f.id as flat_id, m.id as member_id from f, m`,
-    [f.flatName, newJoinCode(), f.name, await hashPin(f.pin), f.today, JSON.stringify(others)]);
+    [f.flatName, newJoinCode(), f.name, await hashPin(f.pin), f.today, others]);
   return { flatId: row.flat_id, memberId: row.member_id };
 }
 
