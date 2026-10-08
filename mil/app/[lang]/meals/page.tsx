@@ -1,17 +1,17 @@
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { addDays, mealDecision, MEALS, nowDhaka } from '@/lib/meals';
-import { loadMeals } from '@/lib/meals-db';
+import { addDays, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
+import { loadHistory, loadMeals, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
 import { awayAction, guestAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtDay } from '../format';
+import { fmtDay, fmtWhen } from '../format';
 import { Header } from '../header';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
-import { field, Field, primary } from '../ui';
+import { checkChip, field, Field, primary } from '../ui';
 
 export default function Meals({ params }: PageProps<'/[lang]/meals'>) {
   return <Suspense><MealsBody params={params} /></Suspense>;
@@ -24,11 +24,21 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
   const t = getDictionary(lang), m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const meals = await loadMeals(db, me.flatId, today, week[6]);
+  const [meals, history] = await Promise.all([loadMeals(db, me.flatId, today, week[6]), loadHistory(db, me.flatId)]);
+  const starter = meals.members.find(x => x.role === 'manager');
   const self = meals.members.find(x => x.id === me.memberId)!;
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff, meals.flat.strictness);
   const firstOpen = week.find(d => decide(d) === 'open')!;   // tomorrow or the day after
   const card = 'mt-8 rounded-2xl border border-line bg-surface p-5';
+  const range = (r: [string, string]) => (r[0] === r[1] ? fmtDay(r[0], lang) : `${fmtDay(r[0], lang)} – ${fmtDay(r[1], lang)}`);
+  /** One history line, e.g. 'Nafis → Tahsin · Sat, 10 October · Lunch: Off · Late'. */
+  const describe = (h: HistoryRow) => {
+    if (h.after.nocook) return `${h.actor} · ${m.noCook} · ${range(h.after.nocook)} · ${h.after.meals!.split(',').map(x => m.names[x as Meal]).join(', ')}`;
+    if (h.after.away) return `${h.who} · ${m.away} · ${range(h.after.away)}`;
+    const [, date, meal] = h.entityId.split('|');
+    const value = h.after.count! > 1 ? `${h.after.count} ${m.platesShort}` : h.after.count ? m.on : m.off;
+    return `${h.actor === h.who ? h.who : `${h.actor} → ${h.who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${h.after.late ? ` · ${m.late}` : ''}`;
+  };
   const h2 = 'text-xl font-bold';
 
   return (
@@ -44,6 +54,11 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
                 {i === 0 ? `${m.today} · ` : i === 1 ? `${m.tomorrow} · ` : ''}{fmtDay(date, lang)}
               </p>
               <MealRow lang={lang} m={m} meId={me.memberId} date={date} decision={decide(date)} {...meals} />
+              {i === 0 && (
+                <p className="mt-2 text-[15px] text-muted">
+                  {starter?.id === me.memberId ? m.todayLockedSelf : m.todayLocked.replace('{name}', starter?.name ?? '')}
+                </p>
+              )}
             </li>
           ))}
         </ul>
@@ -88,7 +103,7 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
             <input type="hidden" name="lang" value={lang} />
             <div className="grid grid-cols-3 gap-2">
               {MEALS.map(x => (
-                <label key={x} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-muted bg-surface font-semibold has-[:checked]:border-turmeric has-[:checked]:bg-turmeric has-[:checked]:text-on-turmeric">
+                <label key={x} className={checkChip}>
                   <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5 shrink-0 accent-ink" />
                   {m.names[x]}
                 </label>
@@ -96,6 +111,22 @@ async function MealsBody({ params }: Pick<PageProps<'/[lang]/meals'>, 'params'>)
             </div>
             <button className={primary}>{m.save}</button>
           </ActionForm>
+        </section>
+        <section className={card}>
+          <h2 className={h2}>{m.historyTitle}</h2>
+          <p className="mt-1 text-muted">{m.historyLead}</p>
+          {history.length === 0 ? (
+            <p className="mt-3 text-muted">{m.noHistory}</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-line">
+              {history.map((h, i) => (
+                <li key={i} className="py-3">
+                  <p>{describe(h)}</p>
+                  <p className="text-[15px] text-muted">{fmtWhen(h.at, lang)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </main>
       <Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} />
