@@ -62,7 +62,12 @@ const bn = {
     ['সবাই কি সবার এন্ট্রি দেখতে পারে?', 'হ্যাঁ। প্রতিটা বাজার, বিল আর জমা ফ্ল্যাটের সবাই দেখতে পারে, তাই হিসাব নিয়ে সন্দেহ থাকে না।'],
     ['আইফোনে চলবে?', 'হ্যাঁ, অ্যান্ড্রয়েড আর আইফোন দুটোতেই চলে।'],
   ],
-  footer: 'বাসাবুক · শেয়ার্ড ফ্ল্যাটের হিসাব',
+  footer: {
+    tagline: 'বাসাবুক · শেয়ার্ড ফ্ল্যাটের হিসাব',
+    whatsapp: 'হোয়াটসঅ্যাপে লিখুন',
+    email: 'ইমেইল করুন',
+    privacy: 'আমরা শুধু নাম, মিল আর টাকার অঙ্ক রাখি। টাকা সরাসরি আপনার ফ্ল্যাটের বিকাশ নম্বরে যায়।',
+  },
 };
 
 export type Dict = typeof bn;
@@ -127,7 +132,12 @@ const en: Dict = {
     ['Can everyone see every entry?', 'Yes. Every bazar, bill and deposit is visible to the whole flat, so nobody has to take the numbers on trust.'],
     ['Does it work on iPhone?', 'Yes, on Android and iPhone.'],
   ],
-  footer: 'BashaBook · accounts for shared flats',
+  footer: {
+    tagline: 'BashaBook · accounts for shared flats',
+    whatsapp: 'Message us on WhatsApp',
+    email: 'Email us',
+    privacy: 'We only store names, meals and amounts. Money goes straight to your flat’s bKash number.',
+  },
 };
 
 export const getDictionary = (l: Locale): Dict => (l === 'bn' ? bn : en);

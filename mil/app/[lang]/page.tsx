@@ -7,6 +7,9 @@ import { ThemeToggle } from './theme-toggle';
 
 const focus = 'rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
 const h2 = 'font-display text-3xl font-bold';
+// ponytail: placeholder contacts, replace with the real WhatsApp number and email before launch
+const WHATSAPP = 'https://wa.me/8801700000000';
+const EMAIL = 'mailto:hello@bashabook.example';
 
 export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const { lang } = await params;
@@ -147,7 +150,20 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
       </main>
 
       <footer className="mx-auto max-w-5xl px-5">
-        <p className="border-t border-line py-8 text-[15px] text-muted">{t.footer}</p>
+        <div className="space-y-4 border-t border-line py-8 text-[15px] text-muted">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <p className="font-semibold text-ink">{t.footer.tagline}</p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              <a href={WHATSAPP} target="_blank" rel="noopener noreferrer" className={`font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`}>
+                {t.footer.whatsapp}
+              </a>
+              <a href={EMAIL} className={`font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`}>
+                {t.footer.email}
+              </a>
+            </div>
+          </div>
+          <p>{t.footer.privacy}</p>
+        </div>
       </footer>
     </>
   );
