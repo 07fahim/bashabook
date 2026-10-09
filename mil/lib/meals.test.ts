@@ -82,6 +82,12 @@ describe('fmtRange', () => {
     expect(fmtTaka(150)).toBe('৳2');
     expect(fmtMonth('2026-10-01')).toBe('October 2026');
   });
+
+  it('meal counts without trailing zeros, the meal rate to the poisha, and no rate before anyone ate', async () => {
+    const { fmtMeals, fmtRate } = await import('../app/[lang]/format');
+    expect([fmtMeals(2250), fmtMeals(2200), fmtMeals(2225), fmtMeals(0)]).toEqual(['22.5', '22', '22.25', '0']);
+    expect([fmtRate(3172, 100), fmtRate(3170, 100), fmtRate(123456, 1), fmtRate(0, 0)]).toEqual(['৳31.72', '৳31.70', '৳1,234.56', '—']);
+  });
 });
 
 

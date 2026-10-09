@@ -353,7 +353,7 @@ export async function confirmAction(d: FormData) {
 
 export async function removeAction(d: FormData) {
   const me = await requireMember(langOf(d)), id = str(d, 'id');
-  if (UUID.test(id)) await removeEntry(db, me.flatId, me, id);
+  if (UUID.test(id)) await removeEntry(db, me.flatId, me, id, todayDhaka());
   refresh();
 }
 
