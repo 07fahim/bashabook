@@ -140,7 +140,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     {MEALS.map(x => (
                       <label key={x} className={checkChip}>
-                        <input type="checkbox" name={x} defaultChecked className="size-5 shrink-0 accent-ink" />
+                        <input type="checkbox" name={x} defaultChecked className="size-5 shrink-0 accent-on-turmeric" />
                         {m.names[x]}
                       </label>
                     ))}

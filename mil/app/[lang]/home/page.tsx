@@ -44,8 +44,11 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             <p className="mt-1 text-[15px] text-muted">
               {decision === 'open' ? m.locksAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.lockedLate}
             </p>
-            <MealRow lang={lang} m={m} meId={me.memberId} date={tomorrow} decision={decision} {...meals} />
-            <Link href={`/${lang}/meals`} className={`mt-5 inline-block ${link}`}>{m.seeWeek}</Link>
+            {/* wider screens change meals in the week chart below */}
+            <div className="md:hidden">
+              <MealRow lang={lang} m={m} meId={me.memberId} date={tomorrow} decision={decision} {...meals} />
+              <Link href={`/${lang}/meals`} className={`mt-3 inline-flex min-h-11 items-center ${link}`}>{m.seeWeek}</Link>
+            </div>
           </section>
           <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{m.headcountTitle}</h2>
@@ -75,7 +78,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
         </div>
         <form action={logoutAction} className="mt-8">
           <input type="hidden" name="lang" value={lang} />
-          <button className={`text-muted underline-offset-4 hover:underline ${focus}`}>{a.logout}</button>
+          <button className={`inline-flex min-h-11 items-center text-muted underline-offset-4 hover:underline ${focus}`}>{a.logout}</button>
         </form>
       </main>
     </>

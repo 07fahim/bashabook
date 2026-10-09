@@ -87,7 +87,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
               </label>
               <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={0} max={9} required defaultValue={1} />
               <label className={checkChip}>
-                <input type="checkbox" name="me" defaultChecked={self.inMeals} className="size-5 shrink-0 accent-ink" />
+                <input type="checkbox" name="me" defaultChecked={self.inMeals} className="size-5 shrink-0 accent-on-turmeric" />
                 {m.meToo}
               </label>
               <button className={primary}>{m.save}</button>
@@ -127,7 +127,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
               <div className="grid grid-cols-3 gap-2">
                 {MEALS.map(x => (
                   <label key={x} className={checkChip}>
-                    <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5 shrink-0 accent-ink" />
+                    <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5 shrink-0 accent-on-turmeric" />
                     {m.names[x]}
                   </label>
                 ))}

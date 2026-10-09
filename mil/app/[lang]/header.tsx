@@ -12,7 +12,7 @@ export function Header({ t, lang, path, children }: { t: Dict; lang: Locale; pat
     <header className="border-b border-line md:sticky md:top-0 md:z-20 md:bg-paper">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
       <div className="flex items-center gap-8">
-        <Link href={`/${lang}`} className={`flex items-center gap-2 font-display text-2xl font-bold ${focus}`}>
+        <Link href={`/${lang}`} className={`flex min-h-11 items-center gap-2 font-display text-2xl font-bold ${focus}`}>
           <Image src="/logo-mark.png" alt="" width={31} height={32} priority />
           <span>
             {t.brand}

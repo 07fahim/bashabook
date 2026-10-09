@@ -30,12 +30,12 @@ async function CookBody({ params }: Pick<Props, 'params'>) {
   return (
     <>
       <Header t={t} lang={lang} path={`/c/${token}`} />
-      <main className="mx-auto max-w-md px-5 pb-16">
+      <main className="mx-auto max-w-md px-5 pt-6 pb-16">
         {!data ? (
           <p role="alert" className="font-semibold text-chili">{m.cookGone}</p>
         ) : (
           <>
-            <p className="text-lg text-muted">{data.flat.name}</p>
+            <h1 className="text-2xl font-bold">{data.flat.name}</h1>
             {days.map(({ date, label, big }) => {
               const hc = headcount(data.members, data.changes, date);
               return (
