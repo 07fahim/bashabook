@@ -17,8 +17,7 @@ export function ActionForm({ action, children, className, clearOnDone }: { actio
       onSubmit={e => {
         e.preventDefault();
         if (pending) return;
-        // with the pressed button, so a form can have two (save, or take it back)
-        const data = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+        const data = new FormData(e.currentTarget);
         startTransition(() => run(data));
       }}
     >

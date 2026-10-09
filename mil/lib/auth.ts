@@ -12,6 +12,8 @@ const hashPin = (pin: string) => bcrypt.hash(pin, 10);
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 /** Still living here: no last day, or it hasn't passed yet (in Dhaka). Someone who moved out can't sign in or be picked. */
 const STAYING = "(left_on is null or left_on >= (now() at time zone 'Asia/Dhaka')::date)";
+/** A name clash: unique, or the same name for two overlapping stays (one_name_per_stay). */
+const nameClash = (e: unknown) => ['23505', '23P01'].includes((e as { code?: string }).code ?? '');
 const newJoinCode = () => Array.from({ length: 6 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join('');
 
 /** Flat, its starter (role manager, already claimed) and unclaimed names, in one statement. */
@@ -91,12 +93,12 @@ export async function memberBySession(db: Db, token: string): Promise<Me | null>
 
 export const deleteSession = (db: Db, token: string) => db(`delete from sessions where token_hash = $1`, [hashToken(token)]);
 
-export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean; phone: string | null; photoV: number | null; leftOn: string | null }>(
-  `select id, name, phone, left_on::text as "leftOn", case when photo is null then null else photo_v end as "photoV", pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked
+export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean; phone: string | null; photoV: number | null; joinedOn: string; leftOn: string | null }>(
+  `select id, name, phone, joined_on::text as "joinedOn", left_on::text as "leftOn", case when photo is null then null else photo_v end as "photoV", pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked
    from members where flat_id = $1 and ${STAYING} order by role = 'manager' desc, name`, [flatId]);
 
 export async function addMember(db: Db, flatId: string, name: string, today: string) {
-  const rows = await db(`insert into members (flat_id, name, joined_on) values ($1, $2, $3) on conflict (flat_id, name) do nothing returning id`, [flatId, name, today]);
+  const rows = await db(`insert into members (flat_id, name, joined_on) values ($1, $2, $3) on conflict do nothing returning id`, [flatId, name, today]);
   return rows.length > 0;
 }
 
@@ -135,24 +137,55 @@ export async function renameMember(db: Db, flatId: string, by: string, memberId:
        select exists (select 1 from old) as found`, [flatId, memberId, name, by]);
     return r.found ? 'ok' : 'notFound';   // the same name again changes nothing and writes no history
   } catch (e) {
-    // unique (flat_id, name): the database decides, so two renames at the same moment can't both take a name
-    if ((e as { code?: string }).code === '23505') return 'taken';
+    // one name per stay: the database decides, so two renames at the same moment can't both take a name
+    if (nameClash(e)) return 'taken';
     throw e;
   }
 }
 
 /** The person who runs the flat sets someone's last day here, or takes it back (null). Never their own: they hand the flat over first.
  *  Only today or later, so a day already cooked never changes, and only while that person still lives here. */
-export async function setLeaving(db: Db, flatId: string, by: string, memberId: string, lastDay: string | null, today: string) {
-  if (!UUID.test(memberId)) return false;
-  const [r] = await db<{ done: boolean }>(
-    `with up as (update members set left_on = $3::date
-       where flat_id = $1 and id = $2 and id <> $4 and (left_on is null or left_on >= $5::date)
-         and ($3::date is null or $3::date >= greatest($5::date, joined_on)) returning id),
-     log as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
-       select $1, 'members', $2::text, jsonb_build_object('left', $3::date), $4 from up)
-     select exists (select 1 from up) as done`, [flatId, memberId, lastDay, by, today]);
-  return r.done;
+export async function setLeaving(db: Db, flatId: string, by: string, memberId: string, lastDay: string | null, today: string): Promise<'ok' | 'no' | 'taken'> {
+  if (!UUID.test(memberId)) return 'no';
+  try {
+    const [r] = await db<{ ok: boolean }>(
+      `with m as (select id from members where flat_id = $1 and id = $2 and id <> $4 and (left_on is null or left_on >= $5::date)
+         and ($3::date is null or $3::date >= greatest($5::date, joined_on))),
+       up as (update members set left_on = $3::date where id in (select id from m) and left_on is distinct from $3::date returning id),
+       log as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
+         select $1, 'members', $2::text, jsonb_build_object('left', $3::date), $4 from up)
+       select exists (select 1 from m) as ok`, [flatId, memberId, lastDay, by, today]);
+    return r.ok ? 'ok' : 'no';   // the same day again (or a stale "not leaving") changes nothing and writes no history
+  } catch (e) {
+    if (nameClash(e)) return 'taken';   // taking it back while a newcomer has the same name
+    throw e;
+  }
+}
+
+/** People whose last day has passed, newest first: only here can a departure marked by mistake be undone. */
+export const listGone = (db: Db, flatId: string) => db<{ id: string; name: string; leftOn: string }>(
+  `select id, name, left_on::text as "leftOn" from members where flat_id = $1 and not ${STAYING} order by left_on desc, name`, [flatId]);
+
+/** Brings back someone marked as moved out by mistake, without changing a day already cooked: every day from the day after
+ *  the old last day through today is saved as no meals for them, so they count again only from tomorrow. History says so. */
+export async function bringBack(db: Db, flatId: string, by: string, memberId: string, today: string): Promise<'ok' | 'no' | 'taken'> {
+  if (!UUID.test(memberId)) return 'no';
+  try {
+    const [r] = await db<{ ok: boolean }>(
+      `with m as (select id, left_on from members where flat_id = $1 and id = $2 and left_on < $3::date),
+       up as (update members set left_on = null where id in (select id from m) returning id),
+       fill as (insert into meal_changes (flat_id, member_id, date, meal, count)
+         select $1::uuid, m.id, d::date, x, 0
+         from m, generate_series((m.left_on + 1)::timestamp, $3::timestamp, interval '1 day') d, unnest(array['b','l','d']) x
+         on conflict (member_id, date, meal) do update set count = 0, guests = 0, late = false, updated_at = now()),
+       log as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
+         select $1, 'members', $2::text, jsonb_build_object('back', jsonb_build_array((m.left_on + 1)::text, $3::text)), $4 from m)
+       select exists (select 1 from up) as ok`, [flatId, memberId, today, by]);
+    return r.ok ? 'ok' : 'no';
+  } catch (e) {
+    if (nameClash(e)) return 'taken';   // someone living here now has the same name
+    throw e;
+  }
 }
 
 export async function resetPin(db: Db, flatId: string, memberId: string, pin: string) {

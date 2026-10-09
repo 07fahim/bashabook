@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { listMembers } from '@/lib/auth';
+import { listGone, listMembers } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { addDays, countChanges, editFrom, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, leavingAction, removePhotoAction, renameAction, resetPinAction, settingsAction } from '../actions';
+import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, bringBackAction, leavingAction, removePhotoAction, renameAction, resetPinAction, settingsAction } from '../actions';
 import { Avatar } from '../avatar';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtTime } from '../format';
@@ -35,8 +35,9 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   // the person and day picked in "Change someone's meals"
   const who = typeof sp.who === 'string' ? sp.who : me.memberId;
   const day = typeof sp.day === 'string' && isDate(sp.day) && sp.day >= from && sp.day <= to ? sp.day : today;
-  const [members, meals, picked, noCookDays] = await Promise.all([
+  const [members, gone, meals, picked, noCookDays] = await Promise.all([
     listMembers(db, me.flatId),
+    listGone(db, me.flatId),
     loadMeals(db, me.flatId, today, tomorrow),
     loadMeals(db, me.flatId, day, day),
     loadNoCookDays(db, me.flatId, today),
@@ -94,7 +95,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <label className="block font-semibold">
                   {m.who}
                   <select name="who" defaultValue={person.id} className={field}>
-                    {members.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    {/* someone who moved out recently is here too: their last days can still need fixing */}
+                    {picked.members.filter(x => !x.leftOn || x.leftOn >= from).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
                   </select>
                 </label>
                 <DateField lang={lang} label={m.day} name="day" required min={from} max={to} defaultValue={day} />
@@ -261,12 +263,18 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                           <ActionForm action={leavingAction} className="mt-3">
                             <input type="hidden" name="lang" value={lang} />
                             <input type="hidden" name="memberId" value={x.id} />
-                            <DateField lang={lang} label={a.lastDay} name="lastDay" required min={today} max={to} defaultValue={x.leftOn ?? today} />
-                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                              <button className={`${secondary} sm:w-auto`}>{a.movingOutBtn}</button>
-                              {x.leftOn && <button name="stay" value="1" formNoValidate className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.staying}</button>}
-                            </div>
+                            {/* no default day, so one slip of a tap can't mark someone as leaving */}
+                            <DateField lang={lang} label={a.lastDay} name="lastDay" required min={x.joinedOn > today ? x.joinedOn : today} max={to} defaultValue={x.leftOn ?? undefined} />
+                            <button className={`${secondary} sm:w-auto`}>{a.movingOutBtn}</button>
                           </ActionForm>
+                          {x.leftOn && (
+                            <ActionForm action={leavingAction} className="mt-2">
+                              <input type="hidden" name="lang" value={lang} />
+                              <input type="hidden" name="memberId" value={x.id} />
+                              <input type="hidden" name="stay" value="1" />
+                              <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.staying}</button>
+                            </ActionForm>
+                          )}
                         </details>
                       )}
                     </div>
@@ -274,6 +282,29 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 ))}
               </ul>
             </section>
+            {gone.length > 0 && (
+              <Fold title={a.movedOut} level={3}>
+                <ul className="mt-2 divide-y divide-line">
+                  {gone.map(x => (
+                    <li key={x.id} className="py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                        <span className="font-semibold">{x.name}</span>
+                        <span className="text-[15px] text-muted">{a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}</span>
+                      </div>
+                      <details>
+                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.byMistake}</summary>
+                        <p className="mt-2 text-[15px] text-muted">{a.bringBackLead.replace('{d}', fmtDay(addDays(x.leftOn, 1), lang))}</p>
+                        <ActionForm action={bringBackAction} className="mt-3">
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="memberId" value={x.id} />
+                          <button className={`${secondary} sm:w-auto`}>{a.bringBackBtn}</button>
+                        </ActionForm>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+              </Fold>
+            )}
             <Fold title={a.addMember} level={3}>
               <ActionForm action={addMemberAction} className="mt-3">
                 <input type="hidden" name="lang" value={lang} />

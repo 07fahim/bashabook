@@ -2,7 +2,7 @@
 
 import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone } from '@/lib/auth';
+import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { addDays, editFrom, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
@@ -292,7 +292,19 @@ export async function leavingAction(_: FormState, d: FormData): Promise<FormStat
   await seedLock(db, me.flatId, nowDhaka());
   const day = d.has('stay') ? null : str(d, 'lastDay');
   if (day !== null && !isDate(day)) return { error: a.errors.lastDay };
-  if (!(await setLeaving(db, me.flatId, me.memberId, str(d, 'memberId'), day, todayDhaka()))) return { error: a.errors.lastDay };
+  const r = await setLeaving(db, me.flatId, me.memberId, str(d, 'memberId'), day, todayDhaka());
+  if (r !== 'ok') return { error: r === 'taken' ? a.errors.sameNameNow : a.errors.lastDay };
   refresh();
   return { done: day ? a.lastDaySaved : a.stayingSaved };
+}
+
+/** Undoes a departure marked by mistake; the days in between stay as they were cooked. */
+export async function bringBackAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), a = getDictionary(lang).app;
+  const me = await requireManager(lang);
+  await seedLock(db, me.flatId, nowDhaka());
+  const r = await bringBack(db, me.flatId, me.memberId, str(d, 'memberId'), todayDhaka());
+  if (r !== 'ok') return { error: r === 'taken' ? a.errors.sameNameNow : a.errors.notFound };
+  refresh();
+  return { done: a.broughtBack };
 }
