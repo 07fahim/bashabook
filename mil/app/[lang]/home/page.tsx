@@ -42,7 +42,9 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{m.tomorrow} · {fmtDay(tomorrow, lang)}</h2>
             <p className="mt-1 text-[15px] text-muted">
-              {decision === 'open' ? m.locksAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.lockedLate}
+              {(decision === 'open' ? m.locksAt : m.lockedLate).replace('{t}', fmtTime(meals.flat.cutoff))}
+              {/* the person who runs the flat can find the lock time setting from here */}
+              {me.role === 'manager' && <> · <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link></>}
             </p>
             {/* wider screens change meals in the week chart below */}
             <div className="md:hidden">

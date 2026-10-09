@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { listMembers } from '@/lib/auth';
@@ -8,7 +9,8 @@ import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
 import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, resetPinAction, settingsAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtDay } from '../format';
+import { fmtDay, fmtTime } from '../format';
+import { FocusHere } from '../focus-here';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { ShareButton } from '../share-button';
@@ -53,6 +55,9 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
       <Header t={t} lang={lang} path="/manage"><Nav t={t} lang={lang} current="manage" showFlat /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>
+        <p className="mt-1 text-muted">
+          {m.lockTime.replace('{t}', fmtTime(meals.flat.cutoff))} · <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link>
+        </p>
 
         <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
           <div>
@@ -188,7 +193,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
             </Fold>
 
             <h2 className={groupLabel}>{m.groupSettings}</h2>
-            <Fold title={m.rulesTitle} level={3}>
+            <Fold id="rules" title={m.rulesTitle} level={3} open={'rules' in sp}>
+              {'rules' in sp && <FocusHere />}
               <ActionForm action={settingsAction} className="mt-4">
                 <input type="hidden" name="lang" value={lang} />
                 <Field label={m.cutoff} name="cutoff" type="time" required defaultValue={meals.flat.cutoff.slice(0, 5)} />
