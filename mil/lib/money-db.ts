@@ -97,7 +97,7 @@ export type NewEntry = {
 };
 
 /** Adds an entry if the rules allow it. 'rooms' = rent by room asked before rooms and rents are set. */
-export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): Promise<'ok' | 'bad' | 'rooms'> {
+export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): Promise<'ok' | 'bad' | 'rooms' | 'gone'> {
   const boss = by.role === 'manager', moving = e.type === 'deposit' || e.type === 'payout';
   if (!Number.isInteger(e.amount) || e.amount <= 0) return 'bad';
   if ((e.type === 'bill') !== (e.split !== null)) return 'bad';
@@ -118,6 +118,8 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): 
   if (split === 'selected' && !selected.length) return 'bad';
   const ids = new Set(here.map(m => m.id));
   if (![e.paidBy, e.memberId, ...selected].every(id => id === null || ids.has(id))) return 'bad';
+  // whoever paid the shop or the bill was living here that day; money to or from someone who left is settling up, so it stays allowed
+  if (e.paidBy && !here.some(m => m.id === e.paidBy && m.joinedOn <= e.date && (m.leftOn === null || m.leftOn >= e.date))) return 'gone';
   if (split === 'room') {
     const rooms = await db<{ id: string }>(`select id from rooms where flat_id = $1 and rent_share_poisha > 0`, [flatId]);
     if (!rooms.length || here.some(m => !m.roomId) || rooms.some(r => !here.some(m => m.roomId === r.id))) return 'rooms';

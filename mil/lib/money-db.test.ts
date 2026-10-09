@@ -250,4 +250,16 @@ describe('money storage', { timeout: 30000 }, () => {
     const [h] = await db<{ name: string }>(`select before->>'name' as name from audit_log where entity = 'bill_templates' and entity_id = $1`, [t.id]);
     expect(h.name).toBe('Wi-Fi');
   });
+  it('who paid the shop must live here that day; money to and from someone who left still works', async () => {
+    const { flatId, ids, nafis } = await flat();
+    await db(`update members set left_on = '2026-10-08' where id = $1`, [ids.Zarif]);
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000, paidBy: ids.Zarif, date: '2026-10-09' }))).toBe('gone');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 50000, note: 'Gas', split: 'equal', paidBy: ids.Zarif, date: '2026-10-09' }))).toBe('gone');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000, paidBy: ids.Zarif, date: '2026-10-08' }))).toBe('ok');   // his last day
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 120000, memberId: ids.Zarif, date: '2026-10-12' }))).toBe('ok');   // he pays what he owes
+    expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 10000, memberId: ids.Zarif, date: '2026-10-12' }))).toBe('ok');    // paid back
+    await addMember(db, flatId, 'Rafi', '2026-10-15');
+    const rafi = (await db<{ id: string }>(`select id from members where flat_id = $1 and name = 'Rafi'`, [flatId]))[0].id;
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000, paidBy: rafi, date: '2026-10-05' }))).toBe('gone');   // not here yet
+  });
 });
