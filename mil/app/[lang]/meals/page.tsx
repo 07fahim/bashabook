@@ -12,6 +12,7 @@ import { dhakaDate, fmtDay, fmtRange, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { checkChip, field, Field, Fold, focus, link, primary, PageSkeleton } from '../ui';
+import { DateField } from '../date-field';
 import { WeekChart } from '../week-chart';
 
 export default function Meals({ params, searchParams }: PageProps<'/[lang]/meals'>) {
@@ -85,12 +86,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           <Fold title={m.guestTitle} lead={m.guestLead}>
             <ActionForm action={guestAction} className="mt-4">
               <input type="hidden" name="lang" value={lang} />
-              <label className="block font-semibold">
-                {m.day}
-                <select name="date" defaultValue={guestDays[0]} className={field}>
-                  {guestDays.map(d => <option key={d} value={d}>{fmtDay(d, lang)}</option>)}
-                </select>
-              </label>
+              <DateField lang={lang} label={m.day} name="date" required min={today} max={addDays(today, 60)} defaultValue={guestDays[0]} />
               <label className="block font-semibold">
                 {m.meal}
                 <select name="meal" defaultValue="d" className={field}>
@@ -123,8 +119,8 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
             )}
             <ActionForm action={awayAction} className="mt-4">
               <input type="hidden" name="lang" value={lang} />
-              <Field label={m.from} name="from" type="date" required min={firstOpen} defaultValue={firstOpen} />
-              <Field label={m.to} name="to" type="date" required min={firstOpen} defaultValue={firstOpen} />
+              <DateField lang={lang} label={m.from} name="from" required min={firstOpen} max={addDays(today, 60)} defaultValue={firstOpen} />
+              <DateField lang={lang} label={m.to} name="to" required min={firstOpen} max={addDays(today, 60)} defaultValue={firstOpen} />
               <button className={primary}>{m.awayBtn}</button>
             </ActionForm>
           </Fold>

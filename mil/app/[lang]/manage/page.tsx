@@ -10,6 +10,7 @@ import { ActionForm } from '../action-form';
 import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, resetPinAction, settingsAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { fmtDay, fmtTime } from '../format';
+import { DateField } from '../date-field';
 import { FocusHere } from '../focus-here';
 import { Header } from '../header';
 import { Nav } from '../nav';
@@ -91,7 +92,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     {members.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
                   </select>
                 </label>
-                <Field label={m.day} name="day" type="date" required min={from} max={to} defaultValue={day} />
+                <DateField lang={lang} label={m.day} name="day" required min={from} max={to} defaultValue={day} />
                 <button className={secondary}>{m.show}</button>
               </form>
               <p className="mt-5 font-semibold">{person.name} · {fmtDay(day, lang)}</p>
@@ -141,8 +142,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               )}
               <ActionForm action={noCookAction} className="mt-4">
                 <input type="hidden" name="lang" value={lang} />
-                <Field label={m.from} name="from" type="date" required min={from} max={to} defaultValue={tomorrow} hint={m.noCookPast} />
-                <Field label={m.to} name="to" type="date" required min={from} max={to} defaultValue={tomorrow} />
+                <DateField lang={lang} label={m.from} name="from" required min={from} max={to} defaultValue={tomorrow} hint={m.noCookPast} />
+                <DateField lang={lang} label={m.to} name="to" required min={from} max={to} defaultValue={tomorrow} />
                 <fieldset>
                   <legend className="font-semibold">{m.whichMeals}</legend>
                   <div className="mt-2 grid grid-cols-3 gap-2">
@@ -190,7 +191,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               <ActionForm action={addMemberAction} className="mt-3">
                 <input type="hidden" name="lang" value={lang} />
                 <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
-                <Field label={m.joinedOn} name="joinedOn" type="date" required min={today} max={to} defaultValue={firstOpen} />
+                <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={firstOpen} />
                 <button className={primary}>{a.addBtn}</button>
               </ActionForm>
             </Fold>

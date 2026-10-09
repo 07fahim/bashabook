@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
 import { addDays, headcount, mealDecision, MEALS, nowDhaka } from '@/lib/meals';
+import { listMembers } from '@/lib/auth';
 import { loadMeals } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { logoutAction } from '../actions';
@@ -26,7 +27,8 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const t = getDictionary(lang), a = t.app, m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const meals = await loadMeals(db, me.flatId, today, week[6]);
+  const [meals, people] = await Promise.all([loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId)]);
+  const someoneMissing = people.some(p => !p.claimed);   // the invite card only matters while someone hasn't joined
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
   const decision = decide(tomorrow);
   const starter = meals.members.find(x => x.role === 'manager');
@@ -65,14 +67,14 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
               ))}
             </dl>
           </section>
-          <section className="rounded-3xl border border-line bg-surface p-5">
+          {someoneMissing && <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{a.shareTitle}</h2>
             <p className="mt-2 text-muted">{a.shareLead}</p>
             <p className="mt-4">
               {a.code}: <span className="font-bold tracking-widest">{me.joinCode}</span>
             </p>
             <ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} />
-          </section>
+          </section>}
         </div>
         {/* wider screens: the whole week at a glance, phones use the Meals tab */}
         <div className="mt-10 hidden md:block">
