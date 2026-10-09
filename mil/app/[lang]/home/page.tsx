@@ -70,7 +70,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
                 </div>
               ))}
             </dl>
-            <LockChange m={m} changes={changes} />
+            <LockChange m={m} lang={lang} date={tomorrow} hc={hc} changes={changes} />
             <ShareButton text={countText(me.flatName, m, tomorrow, hc, status, lang)} label={m.share} copied={m.copied} />
           </section>
           {someoneMissing && <section className="rounded-3xl border border-line bg-surface p-5">

@@ -81,7 +81,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 ))}
               </dl>
               <p className="mt-3 text-[15px] text-muted">{m.today}: {line(tod)}</p>
-              <LockChange m={m} changes={changes} />
+              <LockChange m={m} lang={lang} date={tomorrow} hc={tom} changes={changes} />
               <ShareButton text={text} label={m.share} copied={m.copied} />
             </section>
 

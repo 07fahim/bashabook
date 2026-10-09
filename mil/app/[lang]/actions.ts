@@ -6,7 +6,7 @@ import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/
 import { db } from '@/lib/db';
 import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
-  addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, updateSettings,
+  addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
 import { endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -212,5 +212,15 @@ export async function noCookCancelAction(d: FormData) {
   await seedLock(db, me.flatId, nowDhaka());
   const date = str(d, 'date'), meals = str(d, 'meals').split(',').filter(isMeal);
   if (editable(date) && meals.length) await cookAgain(db, me.flatId, me.memberId, date, date, meals, date);
+  refresh();
+}
+
+/** I told the cook the count on my screen: it becomes tomorrow's baseline, so the after-the-lock warning goes for everyone. */
+export async function toldCookAction(d: FormData) {
+  const me = await requireMember(langOf(d));
+  const date = str(d, 'date');
+  if (isDate(date) && MEALS.every(x => /^\d{1,3}$/.test(str(d, x)))) {
+    await toldCook(db, me.flatId, date, { b: Number(str(d, 'b')), l: Number(str(d, 'l')), d: Number(str(d, 'd')) });
+  }
   refresh();
 }

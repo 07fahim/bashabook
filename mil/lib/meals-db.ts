@@ -186,7 +186,10 @@ export async function updateSettings(db: Db, flatId: string, by: string, s: { cu
   await db(
     `with old as (select cutoff_time::text as cutoff, json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights from flats where id = $1),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member) select $1, 'flats', 'flat|settings', to_jsonb(old), $6, $7 from old)
-     update flats set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5 where id = $1`,
+     update flats set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5,
+       -- a new lock time starts tomorrow's after-the-lock tracking over (the CASE reads the old lock time)
+       lock_date = case when cutoff_time = $2::time then lock_date end, lock_count = case when cutoff_time = $2::time then lock_count end
+     where id = $1`,
     [flatId, s.cutoff, s.weights.b, s.weights.l, s.weights.d, s, by]);
 }
 
@@ -281,3 +284,9 @@ export async function seedLock(db: Db, flatId: string, now: string) {
   const { members, changes } = await loadMeals(db, flatId, tomorrow, tomorrow);
   await countAtLock(db, flatId, tomorrow, headcount(members, changes, tomorrow));
 }
+
+/** Someone told the cook the count their card showed: that count becomes the baseline, so the warning goes for everyone.
+ *  It saves the count they saw, not the live one, so a change made after they looked still shows.
+ *  Only for the day the baseline belongs to: a page left open since yesterday changes nothing. */
+export const toldCook = (db: Db, flatId: string, date: string, seen: Record<Meal, number>) =>
+  db(`update flats set lock_count = $3::text::jsonb where id = $1 and lock_date = $2::date`, [flatId, date, JSON.stringify(seen)]);
