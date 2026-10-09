@@ -2,13 +2,13 @@
 
 import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/auth';
+import { addMember, changePin, cleanName, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setPhone } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { addDays, editFrom, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
-import { endSession, requireManager, requireMember, startSession } from '@/lib/session';
+import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
 import { fmtDay } from './format';
@@ -231,4 +231,38 @@ export async function toldCookAction(d: FormData) {
     await toldCook(db, me.flatId, me.memberId, date, { b: Number(str(d, 'b')), l: Number(str(d, 'l')), d: Number(str(d, 'd')) });
   }
   refresh();
+}
+
+/** I change my own PIN: current one, then the new one twice. My other phones are signed out. */
+export async function changePinAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), a = getDictionary(lang).app;
+  const me = await requireMember(lang);
+  if (!isPin(d.get('pin')) || !isPin(d.get('newPin'))) return { error: a.errors.pin };
+  if (str(d, 'newPin') !== str(d, 'pin2')) return { error: a.errors.pinMatch };
+  const r = await changePin(db, me.memberId, str(d, 'pin'), str(d, 'newPin'), await currentToken());
+  if (r !== 'ok') return { error: a.errors[r] };
+  return { done: a.pinChanged };
+}
+
+/** My own mobile number; empty removes it. */
+export async function phoneAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), a = getDictionary(lang).app;
+  const me = await requireMember(lang);
+  const raw = str(d, 'phone').trim(), phone = raw ? normalizePhone(raw) : null;
+  if (raw && !phone) return { error: a.errors.phone };
+  await setPhone(db, me.memberId, phone);
+  refresh();
+  return { done: a.saved };
+}
+
+/** The person who runs the flat fixes someone's name. */
+export async function renameAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), a = getDictionary(lang).app;
+  const me = await requireManager(lang);
+  const name = cleanName(d.get('name'));
+  if (!name) return { error: a.errors.name };
+  const r = await renameMember(db, me.flatId, me.memberId, str(d, 'memberId'), name);
+  if (r !== 'ok') return { error: r === 'taken' ? a.errors.nameTaken : a.errors.notFound };
+  refresh();
+  return { done: a.renamed };
 }

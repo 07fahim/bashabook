@@ -12,7 +12,8 @@ export default async function NewFlat({ params }: PageProps<'/[lang]/new'>) {
   return (
     <>
       <Header t={t} lang={lang} path="/new" />
-      <main className="mx-auto max-w-md px-5 pb-16 pt-6 md:grid md:max-w-7xl md:grid-cols-2 md:items-start md:gap-16 md:px-8 md:pt-12">
+      {/* one step of signing in: one centred column on wide screens, not two columns with empty space */}
+      <main className="mx-auto max-w-md px-5 pb-16 pt-6 md:max-w-lg md:pt-16">
         <div>
           <h1 className="font-display text-3xl font-bold md:text-4xl">{a.newTitle}</h1>
           <p className="mt-2 text-lg text-muted">{a.newLead}</p>
@@ -29,7 +30,7 @@ export default async function NewFlat({ params }: PageProps<'/[lang]/new'>) {
             </dl>
           </div>
         </div>
-        <ActionForm action={createFlatAction} className="mt-8 md:mt-0 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
+        <ActionForm action={createFlatAction} className="mt-8 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
           <input type="hidden" name="lang" value={lang} />
           <Field label={a.flatName} name="flatName" hint={a.flatNameHint} required maxLength={40} />
           <Field label={a.yourName} name="name" required maxLength={40} autoComplete="given-name" />

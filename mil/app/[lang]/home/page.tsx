@@ -6,7 +6,8 @@ import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka } from 
 import { listMembers } from '@/lib/auth';
 import { countAtLock, loadMeals } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
-import { logoutAction } from '../actions';
+import { ActionForm } from '../action-form';
+import { changePinAction, logoutAction, phoneAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtTime } from '../format';
 import { Header } from '../header';
@@ -15,7 +16,7 @@ import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
 import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
-import { focus, link, PageSkeleton } from '../ui';
+import { Field, Fold, focus, link, PageSkeleton, PinField, secondary } from '../ui';
 
 export default function Home({ params }: PageProps<'/[lang]/home'>) {
   return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} /></Suspense>;
@@ -29,7 +30,8 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const [meals, people] = await Promise.all([loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId)]);
-  const someoneMissing = people.some(p => !p.claimed);   // the invite card only matters while someone hasn't joined
+  const someoneMissing = people.some(p => !p.claimed);
+  const myPhone = people.find(p => p.id === me.memberId)?.phone ?? '';   // the invite card only matters while someone hasn't joined
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
   const decision = decide(tomorrow);
   const starter = meals.members.find(x => x.role === 'manager');
@@ -86,6 +88,41 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
         <div className="mt-10 hidden md:block">
           <h2 className="mb-4 text-2xl font-bold">{m.weekTitle}</h2>
           <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={note} {...meals} />
+        </div>
+        <div className="mt-10 grid gap-x-6 md:grid-cols-2 md:items-start">
+          <Fold title={a.flatmates}>
+            <ul className="mt-2 divide-y divide-line">
+              {people.map(p => (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-2">
+                  <span>{p.name}{p.id === me.memberId && <span className="text-muted"> · {a.you}</span>}</span>
+                  {p.phone ? <a href={`tel:${p.phone}`} aria-label={`${a.call} ${p.name}`} className={`inline-flex min-h-11 items-center tabular-nums ${link}`}>{p.phone}</a>
+                    : <span className="text-[15px] text-muted">{a.noPhone}</span>}
+                </li>
+              ))}
+            </ul>
+          </Fold>
+          <Fold title={a.myAccount}>
+            <ActionForm action={phoneAction} className="mt-4">
+              <input type="hidden" name="lang" value={lang} />
+              {/* keyed on the saved number, so after a save the field shows it as stored (01712345678) */}
+              <Field key={myPhone} label={a.phone} hint={a.phoneHint} name="phone" type="tel" inputMode="tel" autoComplete="tel" defaultValue={myPhone} className="sm:max-w-xs" />
+              {/* settings are quiet (outlined): the bright buttons stay for the page's main actions */}
+              <button className={`${secondary} sm:w-auto`}>{a.savePhone}</button>
+            </ActionForm>
+            <div className="mt-8 border-t border-line pt-6">
+              <h3 className="text-lg font-bold">{a.changePin}</h3>
+              <ActionForm action={changePinAction} className="mt-4" clearOnDone>
+                <input type="hidden" name="lang" value={lang} />
+                {/* a 4-digit PIN needs a short box: three side by side on wider screens */}
+                <div className="grid gap-5 sm:grid-cols-3">
+                  <PinField label={a.currentPin} name="pin" autoComplete="current-password" />
+                  <PinField label={a.newPin} name="newPin" autoComplete="new-password" />
+                  <PinField label={a.newPinAgain} name="pin2" autoComplete="new-password" />
+                </div>
+                <button className={`${secondary} sm:w-auto`}>{a.changePin}</button>
+              </ActionForm>
+            </div>
+          </Fold>
         </div>
         <form action={logoutAction} className="mt-8">
           <input type="hidden" name="lang" value={lang} />

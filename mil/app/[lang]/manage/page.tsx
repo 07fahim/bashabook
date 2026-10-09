@@ -7,7 +7,7 @@ import { addDays, countChanges, editFrom, headcount, indexChanges, isDate, isLoc
 import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, resetPinAction, settingsAction } from '../actions';
+import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, renameAction, resetPinAction, settingsAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtTime } from '../format';
 import { DateField } from '../date-field';
@@ -177,43 +177,6 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <button className={primary}>{m.noCookBtn}</button>
               </ActionForm>
             </Fold>
-          </div>
-          <div>
-            <h2 className={groupLabel}>{a.members}</h2>
-            <section className={card}>
-              <ul className="divide-y divide-line">
-                {members.map(x => (
-                  <li key={x.id} className="py-4 first:pt-0 last:pb-0">
-                    <div className="flex items-baseline justify-between gap-4">
-                      <span className="text-lg font-semibold">{x.name}</span>
-                      <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
-                        {!x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
-                      </span>
-                    </div>
-                    {x.claimed && x.id !== me.memberId && (
-                      <details className="mt-2">
-                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
-                        <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
-                        <ActionForm action={resetPinAction} className="mt-3">
-                          <input type="hidden" name="lang" value={lang} />
-                          <input type="hidden" name="memberId" value={x.id} />
-                          <PinField label={a.oneTimePin} name="pin" autoComplete="off" />
-                          <button className={primary}>{a.resetBtn}</button>
-                        </ActionForm>
-                      </details>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <Fold title={a.addMember} level={3}>
-              <ActionForm action={addMemberAction} className="mt-3">
-                <input type="hidden" name="lang" value={lang} />
-                <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
-                <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={firstOpen} />
-                <button className={primary}>{a.addBtn}</button>
-              </ActionForm>
-            </Fold>
 
             <h2 className={groupLabel}>{m.groupSettings}</h2>
             <Fold id="rules" title={m.rulesTitle} level={3} open={'rules' in sp}>
@@ -241,6 +204,59 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <button className={meals.flat.cookToken ? secondary : primary}>{meals.flat.cookToken ? m.cookOff : m.cookOn}</button>
                 {meals.flat.cookToken && <p className="mt-2 text-[15px] text-muted">{m.cookOffLead}</p>}
               </form>
+            </Fold>
+          </div>
+          <div>
+            <h2 className={groupLabel}>{a.members}</h2>
+            <section className={card}>
+              <ul className="divide-y divide-line">
+                {members.map(x => (
+                  <li key={x.id} className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex items-baseline justify-between gap-4">
+                      <span className="text-lg font-semibold">{x.name}</span>
+                      <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
+                        {!x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
+                      </span>
+                    </div>
+                    {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
+                    {/* the member's actions sit on one line; an opened one takes the full width below */}
+                    <div className="flex flex-wrap items-start gap-x-6">
+                      <details className="open:basis-full">
+                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.rename}</summary>
+                        <ActionForm action={renameAction} className="mt-2">
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="memberId" value={x.id} />
+                          <div className="flex gap-2">
+                            <input name="name" required maxLength={40} autoComplete="off" defaultValue={x.name} aria-label={`${a.memberName}: ${x.name}`} className={`${field} mt-0 min-w-0 flex-1`} />
+                            {/* its own classes: the shared button style is full width */}
+                            <button className={`inline-flex min-h-12 shrink-0 items-center rounded-full border border-muted bg-surface px-5 font-semibold hover:bg-paper ${focus}`}>{a.save}</button>
+                          </div>
+                        </ActionForm>
+                      </details>
+                      {x.claimed && x.id !== me.memberId && (
+                        <details className="open:basis-full">
+                          <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
+                          <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
+                          <ActionForm action={resetPinAction} className="mt-3">
+                            <input type="hidden" name="lang" value={lang} />
+                            <input type="hidden" name="memberId" value={x.id} />
+                            <PinField label={a.oneTimePin} name="pin" autoComplete="off" />
+                            <button className={`${secondary} sm:w-auto`}>{a.resetBtn}</button>
+                          </ActionForm>
+                        </details>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <Fold title={a.addMember} level={3}>
+              <ActionForm action={addMemberAction} className="mt-3">
+                <input type="hidden" name="lang" value={lang} />
+                <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
+                <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={firstOpen} />
+                <button className={primary}>{a.addBtn}</button>
+              </ActionForm>
             </Fold>
           </div>
         </div>

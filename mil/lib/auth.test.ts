@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { createFlat, createSession, flatByCode, login, memberBySession, resetPin } from './auth';
+import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, normalizePhone, renameMember, resetPin, setPhone } from './auth';
 
 const today = '2026-10-09';
 
@@ -59,5 +59,55 @@ describe('auth', { timeout: 30000 }, () => {
     expect(await login(db, code, tahsin, '9999', null)).toEqual({ error: 'newPinNeeded' });
     expect(await login(db, code, tahsin, '9999', '4321')).toEqual({ memberId: tahsin });
     expect(await login(db, code, tahsin, '4321', null)).toEqual({ memberId: tahsin });
+  });
+
+  it('changes my own PIN with the current one, and signs out my other phones', async () => {
+    const { code, memberId } = await flat();
+    const here = await createSession(db, memberId), other = await createSession(db, memberId);
+    expect(await changePin(db, memberId, '0000', '4321', here)).toBe('wrongPin');
+    expect(await changePin(db, memberId, '1234', '4321', here)).toBe('ok');
+    expect(await memberBySession(db, here)).not.toBeNull();     // this phone stays signed in
+    expect(await memberBySession(db, other)).toBeNull();        // the others are signed out
+    expect(await login(db, code, memberId, '1234', null)).toEqual({ error: 'wrongPin' });
+    expect(await login(db, code, memberId, '4321', null)).toEqual({ memberId });
+  });
+
+  it('wrong current PINs count toward the same lockout as logging in', async () => {
+    const { memberId } = await flat();
+    const here = await createSession(db, memberId);
+    for (let i = 0; i < 5; i++) expect(await changePin(db, memberId, '0000', '4321', here)).toBe('wrongPin');
+    expect(await changePin(db, memberId, '1234', '4321', here)).toBe('locked');   // even the right PIN waits now
+  });
+
+  it('the person who runs the flat fixes a name; a name already in the flat is refused', async () => {
+    const { flatId, memberId, id } = await flat();
+    expect(await renameMember(db, flatId, memberId, id('Tahsin'), 'Tahsin Ahmed')).toBe('ok');
+    expect(await renameMember(db, flatId, memberId, id('Zarif'), 'Tahsin Ahmed')).toBe('taken');
+    expect(await renameMember(db, flatId, memberId, 'not-a-uuid', 'X')).toBe('notFound');
+    const [log] = await db<{ after: { rename: [string, string] } }>(`select after from audit_log where flat_id = $1 and entity = 'members'`, [flatId]);
+    expect(log.after.rename).toEqual(['Tahsin', 'Tahsin Ahmed']);
+  });
+
+  it('renaming someone to the name they already have changes nothing and writes no history', async () => {
+    const { flatId, memberId, id } = await flat();
+    expect(await renameMember(db, flatId, memberId, id('Zarif'), 'Zarif')).toBe('ok');
+    expect(await db(`select 1 from audit_log where flat_id = $1 and entity = 'members'`, [flatId])).toEqual([]);
+  });
+
+  it('reads a Bangladeshi mobile number however it is typed', () => {
+    expect(normalizePhone('01712345678')).toBe('01712345678');
+    expect(normalizePhone('+880 1712-345678')).toBe('01712345678');
+    expect(normalizePhone('৮৮০১৭১২৩৪৫৬৭৮')).toBe('01712345678');   // Bangla keyboard digits
+    expect(normalizePhone('0171234567')).toBeNull();                 // one digit short
+    expect(normalizePhone('01212345678')).toBeNull();                // no operator starts 012
+  });
+
+  it('saves my phone number for the flat to see; the database refuses a bad one', async () => {
+    const { flatId, memberId } = await flat();
+    await setPhone(db, memberId, '01712345678');
+    expect((await listMembers(db, flatId)).find(m => m.id === memberId)!.phone).toBe('01712345678');
+    await setPhone(db, memberId, null);
+    expect((await listMembers(db, flatId)).find(m => m.id === memberId)!.phone).toBeNull();
+    await expect(setPhone(db, memberId, '123')).rejects.toThrow();
   });
 });

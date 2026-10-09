@@ -13,7 +13,7 @@ export type HistoryRow = {
     count?: number; guests?: number; late?: boolean;
     away?: [string, string]; awayCancel?: [string, string];
     nocook?: [string, string]; cookAgain?: [string, string]; meals?: string;
-    b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean;
+    b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean; rename?: [string, string];
     cutoff?: string; weights?: Record<Meal, number>;
     told?: string; plates?: Record<Meal, number>;
   };

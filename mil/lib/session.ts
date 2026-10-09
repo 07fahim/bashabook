@@ -18,6 +18,9 @@ export async function endSession() {
   jar.delete(COOKIE);
 }
 
+/** This phone's session token (for keeping it signed in when my PIN changes). */
+export const currentToken = async () => (await cookies()).get(COOKIE)?.value ?? '';
+
 /** The logged-in member. flatId comes only from here, never from the URL or a form. */
 export async function requireMember(lang: string) {
   const token = (await cookies()).get(COOKIE)?.value;

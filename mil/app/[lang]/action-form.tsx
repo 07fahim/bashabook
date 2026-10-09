@@ -1,14 +1,18 @@
 'use client';
 
-import { startTransition, useActionState, type ReactNode } from 'react';
+import { startTransition, useActionState, useEffect, useRef, type ReactNode } from 'react';
 
 export type FormState = { error?: string; done?: string } | null;
 
 /** Runs a Server Action and shows its error or success line. Submits by hand so React doesn't clear the fields on an error. */
-export function ActionForm({ action, children, className }: { action: (prev: FormState, data: FormData) => Promise<FormState>; children: ReactNode; className?: string }) {
+/** `clearOnDone` empties the fields after a success (PINs on a shared phone). */
+export function ActionForm({ action, children, className, clearOnDone }: { action: (prev: FormState, data: FormData) => Promise<FormState>; children: ReactNode; className?: string; clearOnDone?: boolean }) {
   const [state, run, pending] = useActionState(action, null);
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => { if (clearOnDone && state?.done) form.current?.reset(); }, [state, clearOnDone]);
   return (
     <form
+      ref={form}
       className={className}
       onSubmit={e => {
         e.preventDefault();
