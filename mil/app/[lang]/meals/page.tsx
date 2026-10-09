@@ -60,8 +60,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
 
   return (
     <>
-      <Header t={t} lang={lang} path="/meals" />
-      <Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} />
+      <Header t={t} lang={lang} path="/meals"><Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pb-28 md:max-w-5xl md:pb-16">
         <h1 className="font-display text-3xl font-bold">{m.weekTitle}</h1>
         <p className="mt-2 text-muted">{m.weekLead}</p>
@@ -69,9 +68,9 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           <div>
             <ul className="mb-8 space-y-6 md:space-y-0 md:divide-y md:divide-line md:rounded-2xl md:border md:border-line md:bg-surface md:px-5">
               {week.map((date, i) => (
-                <li key={date} className="md:grid md:grid-cols-[11rem_1fr] md:items-center md:gap-x-4 md:py-3">
+                <li key={date} className="md:[&>div]:mt-0 md:grid md:grid-cols-[11rem_1fr] md:items-center md:gap-x-4 md:py-3">
                   <p className="font-semibold">
-                    {i === 0 ? `${m.today} · ` : i === 1 ? `${m.tomorrow} · ` : ''}{fmtDay(date, lang)}
+                    {i < 2 && <span className="md:block">{i === 0 ? m.today : m.tomorrow}<span className="md:hidden"> · </span></span>}{fmtDay(date, lang)}
                   </p>
                   <MealRow lang={lang} m={m} meId={me.memberId} date={date} decision={decide(date)} {...meals} />
                   {i === 0 && (

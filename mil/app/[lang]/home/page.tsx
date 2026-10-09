@@ -28,8 +28,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const decision = mealDecision(tomorrow, now, meals.flat.cutoff);
   return (
     <>
-      <Header t={t} lang={lang} path="/home" />
-      <Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} />
+      <Header t={t} lang={lang} path="/home"><Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pb-28 md:max-w-5xl md:pb-16">
         <p className="text-muted">{me.flatName}</p>
         <h1 className="font-display text-3xl font-bold">{a.hi}, {me.name}</h1>

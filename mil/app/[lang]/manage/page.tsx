@@ -50,8 +50,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
 
   return (
     <>
-      <Header t={t} lang={lang} path="/manage" />
-      <Nav t={t} lang={lang} current="manage" showFlat />
+      <Header t={t} lang={lang} path="/manage"><Nav t={t} lang={lang} current="manage" showFlat /></Header>
       <main className="mx-auto max-w-md px-5 pb-28 md:max-w-5xl md:pb-16">
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>
 
@@ -154,7 +153,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
             <section className={card}>
               <ul className="divide-y divide-line">
                 {members.map(x => (
-                  <li key={x.id} className="py-4">
+                  <li key={x.id} className="py-4 first:pt-0 last:pb-0">
                     <div className="flex items-baseline justify-between gap-4">
                       <span className="text-lg font-semibold">{x.name}</span>
                       <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>

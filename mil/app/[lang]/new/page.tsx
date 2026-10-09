@@ -29,7 +29,7 @@ export default async function NewFlat({ params }: PageProps<'/[lang]/new'>) {
             </dl>
           </div>
         </div>
-        <ActionForm action={createFlatAction} className="mt-8 md:mt-0 md:rounded-2xl md:border md:border-line md:bg-surface md:p-8">
+        <ActionForm action={createFlatAction} className="mt-8 md:mt-0 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6">
           <input type="hidden" name="lang" value={lang} />
           <Field label={a.flatName} name="flatName" hint={a.flatNameHint} required maxLength={40} />
           <Field label={a.yourName} name="name" required maxLength={40} autoComplete="given-name" />
@@ -37,7 +37,7 @@ export default async function NewFlat({ params }: PageProps<'/[lang]/new'>) {
           <PinField label={a.pinAgain} name="pin2" autoComplete="new-password" />
           <label className="block font-semibold">
             {a.others}
-            <textarea name="others" rows={5} className={field} aria-describedby="others-hint" />
+            <textarea name="others" rows={5} className={`${field} md:h-28`} aria-describedby="others-hint" />
             <span id="others-hint" className="mt-1 block text-[15px] font-normal text-muted">{a.othersHint}</span>
           </label>
           <button className={primary}>{a.createBtn}</button>

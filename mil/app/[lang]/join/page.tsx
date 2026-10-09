@@ -16,7 +16,7 @@ export default async function JoinByCode({ params }: PageProps<'/[lang]/join'>) 
           <h1 className="font-display text-3xl font-bold md:text-4xl">{a.joinTitle}</h1>
           <p className="mt-2 text-lg text-muted">{a.joinLead}</p>
         </div>
-        <form action={joinByCodeAction} className="mt-8 space-y-5 md:mt-0 md:rounded-2xl md:border md:border-line md:bg-surface md:p-8">
+        <form action={joinByCodeAction} className="mt-8 space-y-5 md:mt-0 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6">
           <input type="hidden" name="lang" value={lang} />
           <Field label={a.code} name="code" required maxLength={12} autoComplete="off" autoCapitalize="characters" className="uppercase tracking-widest" />
           <button className={primary}>{a.joinBtn}</button>

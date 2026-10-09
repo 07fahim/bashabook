@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from 'react';
 
 export const focus = 'rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
 // focus (not focus-visible): date and time fields only report focus on their inner parts
-export const field = 'mt-1.5 block w-full rounded-lg border border-muted bg-surface px-4 py-3 text-lg font-normal focus:outline-2 focus:outline-offset-2 focus:outline-ink';
+export const field = 'mt-1.5 block w-full rounded-lg border border-muted bg-surface px-4 py-3 text-lg md:py-2 font-normal focus:outline-2 focus:outline-offset-2 focus:outline-ink';
 export const primary = `flex min-h-12 w-full items-center justify-center bg-turmeric px-6 font-semibold text-on-turmeric hover:brightness-95 disabled:opacity-60 ${focus}`;
 export const secondary = `flex min-h-12 w-full items-center justify-center border border-muted bg-surface px-6 font-semibold hover:bg-paper disabled:opacity-60 ${focus}`;
 /** A label wrapping a checkbox; turns turmeric when ticked. */
