@@ -94,7 +94,89 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               <LockChange m={m} lang={lang} date={tomorrow} hc={tom} changes={changes} />
               <ShareButton text={text} label={m.share} copied={m.copied} />
             </section>
-
+            {/* the money jobs are daily too: they sit under today's plates, so the three columns stay balanced */}
+            <h2 className={groupLabel}>{mn.groupMoney}</h2>
+            <div className="mt-3">
+              {waiting.length ? <ConfirmList lang={lang} x={mn} items={waiting} collector={me.name} /> : <p className="text-muted">{mn.noPending}</p>}
+            </div>
+            {([['payout', mn.giveTitle, mn.giveLead, mn.to], ['deposit', mn.gotTitle, mn.gotLead, mn.from]] as const).map(([type, title, lead, label]) => (
+              <Fold key={type} title={title} lead={lead} level={3}>
+                <ActionForm action={entryAction} className="mt-4">
+                  <input type="hidden" name="lang" value={lang} />
+                  <input type="hidden" name="type" value={type} />
+                  <label className="block font-semibold">
+                    {label}
+                    <select name="who" className={field} required defaultValue="">
+                      <option value="" disabled>—</option>
+                      {mo.members.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </label>
+                  <Field label={mn.amount} name="amount" inputMode="decimal" required placeholder="3000" />
+                  <DateField lang={lang} label={mn.date} name="date" required min={monthOf(today)} max={today} defaultValue={today} />
+                  <Field label={mn.note} name="note" maxLength={100} />
+                  <button className={primary}>{mn.save}</button>
+                </ActionForm>
+              </Fold>
+            ))}
+            <Fold title={mn.roomsTitle} lead={mn.roomsLead} level={3}>
+              {mo.rooms.length > 0 && (
+                <ul className="mt-4 divide-y divide-line">
+                  {mo.rooms.map(room => (
+                    <li key={room.id} className="py-3">
+                      <form action={rentAction} className="flex flex-wrap items-end gap-3">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="roomId" value={room.id} />
+                        <span className="min-w-24 flex-1 self-center font-semibold">{room.name}</span>
+                        <label className="text-[15px] font-semibold">{mn.rent}
+                          <input name="rent" inputMode="decimal" defaultValue={room.rentShare / 100} className={`${field} w-32`} />
+                        </label>
+                        <button className={`${secondary} w-auto`}>{mn.save}</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <ActionForm action={addRoomAction} className="mt-4">
+                <input type="hidden" name="lang" value={lang} />
+                <Field label={mn.roomName} name="name" required maxLength={40} />
+                <Field label={mn.rent} name="rent" inputMode="decimal" required placeholder="12000" />
+                <button className={secondary}>{mn.addRoom}</button>
+              </ActionForm>
+              {mo.rooms.length > 0 && (
+                <ul className="mt-6 divide-y divide-line">
+                  {mo.members.map(p => (
+                    <li key={p.id} className="py-2">
+                      <form action={setRoomAction} className="flex flex-wrap items-center gap-3">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="memberId" value={p.id} />
+                        <span className="min-w-24 flex-1">{p.name}</span>
+                        <select name="roomId" defaultValue={p.roomId ?? ''} aria-label={`${p.name}: ${mn.roomName}`} className={`${field} mt-0 w-40`}>
+                          <option value="">{mn.noRoom}</option>
+                          {mo.rooms.map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
+                        </select>
+                        <button className={`${secondary} w-auto`}>{mn.save}</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Fold>
+            <Fold title={mn.repeatsTitle} lead={mn.repeatsLead} level={3}>
+              {!repeats.length ? <p className="mt-4 text-muted">{mn.noRepeats}</p> : (
+                <ul className="mt-4 divide-y divide-line">
+                  {repeats.map(rp => (
+                    <li key={rp.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <span>{rp.name} · {fmtTaka(rp.amount)} · {mn.splits[rp.split]}</span>
+                      <form action={stopRepeatAction}>
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="id" value={rp.id} />
+                        <button className={`min-h-11 px-2 ${link}`}>{mn.stopRepeat}</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Fold>
           </div>
           <div>
             <h2 className={groupLabel}>{m.groupChange}</h2>
@@ -321,90 +403,6 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={firstOpen} />
                 <button className={primary}>{a.addBtn}</button>
               </ActionForm>
-            </Fold>
-          </div>
-          <div>
-            <h2 className={groupLabel}>{mn.groupMoney}</h2>
-            <div className="mt-3">
-              {waiting.length ? <ConfirmList lang={lang} x={mn} items={waiting} collector={me.name} /> : <p className="text-muted">{mn.noPending}</p>}
-            </div>
-            {([['payout', mn.giveTitle, mn.giveLead, mn.to], ['deposit', mn.gotTitle, mn.gotLead, mn.from]] as const).map(([type, title, lead, label]) => (
-              <Fold key={type} title={title} lead={lead} level={3}>
-                <ActionForm action={entryAction} className="mt-4">
-                  <input type="hidden" name="lang" value={lang} />
-                  <input type="hidden" name="type" value={type} />
-                  <label className="block font-semibold">
-                    {label}
-                    <select name="who" className={field} required defaultValue="">
-                      <option value="" disabled>—</option>
-                      {mo.members.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </label>
-                  <Field label={mn.amount} name="amount" inputMode="decimal" required placeholder="3000" />
-                  <DateField lang={lang} label={mn.date} name="date" required min={monthOf(today)} max={today} defaultValue={today} />
-                  <Field label={mn.note} name="note" maxLength={100} />
-                  <button className={primary}>{mn.save}</button>
-                </ActionForm>
-              </Fold>
-            ))}
-            <Fold title={mn.roomsTitle} lead={mn.roomsLead} level={3}>
-              {mo.rooms.length > 0 && (
-                <ul className="mt-4 divide-y divide-line">
-                  {mo.rooms.map(room => (
-                    <li key={room.id} className="py-3">
-                      <form action={rentAction} className="flex flex-wrap items-end gap-3">
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="roomId" value={room.id} />
-                        <span className="min-w-24 flex-1 self-center font-semibold">{room.name}</span>
-                        <label className="text-[15px] font-semibold">{mn.rent}
-                          <input name="rent" inputMode="decimal" defaultValue={room.rentShare / 100} className={`${field} w-32`} />
-                        </label>
-                        <button className={`${secondary} w-auto`}>{mn.save}</button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <ActionForm action={addRoomAction} className="mt-4">
-                <input type="hidden" name="lang" value={lang} />
-                <Field label={mn.roomName} name="name" required maxLength={40} />
-                <Field label={mn.rent} name="rent" inputMode="decimal" required placeholder="12000" />
-                <button className={secondary}>{mn.addRoom}</button>
-              </ActionForm>
-              {mo.rooms.length > 0 && (
-                <ul className="mt-6 divide-y divide-line">
-                  {mo.members.map(p => (
-                    <li key={p.id} className="py-2">
-                      <form action={setRoomAction} className="flex flex-wrap items-center gap-3">
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="memberId" value={p.id} />
-                        <span className="min-w-24 flex-1">{p.name}</span>
-                        <select name="roomId" defaultValue={p.roomId ?? ''} aria-label={`${p.name}: ${mn.roomName}`} className={`${field} mt-0 w-40`}>
-                          <option value="">{mn.noRoom}</option>
-                          {mo.rooms.map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
-                        </select>
-                        <button className={`${secondary} w-auto`}>{mn.save}</button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Fold>
-            <Fold title={mn.repeatsTitle} lead={mn.repeatsLead} level={3}>
-              {!repeats.length ? <p className="mt-4 text-muted">{mn.noRepeats}</p> : (
-                <ul className="mt-4 divide-y divide-line">
-                  {repeats.map(rp => (
-                    <li key={rp.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                      <span>{rp.name} · {fmtTaka(rp.amount)} · {mn.splits[rp.split]}</span>
-                      <form action={stopRepeatAction}>
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="id" value={rp.id} />
-                        <button className={`min-h-11 px-2 ${link}`}>{mn.stopRepeat}</button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </Fold>
           </div>
         </div>

@@ -99,6 +99,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
 
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} x={x} items={waiting} collector={collector.name} /></div>}
 
+        {/* desktop: my balance and the three forms on the left; the flat summary over the entries on the right, two thirds wide,
+            so both sides grow downward together and no column leaves a hole */}
         <div className="mt-6 grid gap-6 md:grid-cols-2 md:items-start lg:grid-cols-3">
           <div>
             <section className={card}>
@@ -173,11 +175,12 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             </>)}
           </div>
 
+          <div className="space-y-6 lg:col-span-2">
           <section className={card}>
             <h2 className="text-xl font-bold">{x.summary}</h2>
-            <dl className="mt-3 grid grid-cols-2 gap-2">
+            <dl className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
               {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar')))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
-                [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), x.mealsSoFar.replace('{n}', fmtMeals(totalMeals))],
+                [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? x.mealsSoFar : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
                 [x.withName.replace('{name}', collector.name), fmtTaka(Math.max(mo.result.fund, 0))]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
@@ -188,6 +191,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             </dl>
             {mo.result.fund < 0 && <p className="mt-3 font-semibold">{x.flatOwes.replace('{name}', collector.name).replace('{t}', fmtTaka(mo.result.fund))}</p>}
             {!mo.result.invariantOk && <p className="mt-3 font-semibold text-chili">{x.problem}</p>}
+            <div className="lg:grid lg:grid-cols-2 lg:gap-x-10">
+            <div>
             <h3 className="mt-5 font-semibold">{x.everyone}</h3>
             <ul className="mt-1 divide-y divide-line">
               {mo.result.perMember.map(p => (
@@ -197,11 +202,15 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 </li>
               ))}
             </ul>
+            </div>
+            <div>
             <h3 className="mt-5 font-semibold">{x.settleTitle}</h3>
             {settle.length ? <ul className="mt-1 list-disc space-y-1 pl-5">{settle.map(s => <li key={s}>{s}</li>)}</ul> : <p className="mt-1 text-muted">{x.nobodyOwes}</p>}
+            </div>
+            </div>
           </section>
 
-          <section className={`${card} md:col-span-2 lg:col-span-1`}>
+          <section className={card}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xl font-bold">{x.entries}</h2>
               <Link href={href(month, !mine)} aria-pressed={mine} className={`inline-flex min-h-11 items-center rounded-full border border-muted px-4 font-semibold ${mine ? 'bg-turmeric text-on-turmeric border-turmeric' : ''} ${focus}`}>{x.onlyMine}</Link>
@@ -225,7 +234,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="font-bold tabular-nums">{fmtTaka(e.amount)}</span>
-                          {month === thisMonth && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
+                          {(month === thisMonth || e.status === 'pending') && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
                             <details>
                               <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtTaka(e.amount)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
                             </details>
@@ -265,6 +274,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               </ul>
             )}
           </section>
+          </div>
         </div>
       </main>
     </>

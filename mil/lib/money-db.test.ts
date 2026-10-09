@@ -367,7 +367,6 @@ describe('money storage', { timeout: 30000 }, () => {
     for (const [id, m] of meals) {
       const g = guestMeals.get(id) ?? 0;
       expect(m - g).toBeGreaterThanOrEqual(0);
-      expect(m - g + g).toBe(m);
     }
     expect([...guestMeals.values()].reduce((a, b) => a + b, 0)).toBe(200);   // two guest dinners, weight 1
     expect(total).toBe(3 * 9 * 250 + 200);
@@ -383,6 +382,9 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(await db(`select 1 from audit_log where entity_id = $1 and after->>'removed' = 'true'`, [sep])).toEqual([]);
     const oct = (await month()).entries[0].id;
     expect(await removeEntry(db, flatId, nafis, oct, '2026-11-01')).toBe(false);   // the first of next month, Dhaka date
+    // a wrong pending deposit from last month can still go: it counts nowhere and would otherwise wait forever
+    await db(`update ledger set status = 'pending', type = 'deposit', member_id = created_by where id = $1`, [sep]);
+    expect(await removeEntry(db, flatId, nafis, sep, TODAY)).toBe(true);
     expect(await removeEntry(db, flatId, nafis, oct, '2026-10-31')).toBe(true);    // the last day of this month
   });
 });

@@ -151,10 +151,11 @@ export async function confirmEntry(db: Db, flatId: string, by: Actor, id: string
 
 /** Whoever added it, or the collector, removes an entry. A confirmed deposit only the collector: the cash is with them.
  *  Only this month's entries (`today` is the Dhaka date): a past month is never changed, and its removal could not be put back.
+ *  A pending entry can go from any month: it counts nowhere, and a wrong one must not wait forever for a tap.
  *  The removed row is kept in the history, so the entries list can show it. */
 export async function removeEntry(db: Db, flatId: string, by: Actor, id: string, today: string) {
   const r = await db(
-    `with l as (delete from ledger where flat_id = $1 and id = $2 and month = $5::date
+    `with l as (delete from ledger where flat_id = $1 and id = $2 and (month = $5::date or status = 'pending')
        and ($4::boolean or (created_by = $3 and (type <> 'deposit' or status = 'pending'))) returning *)
      insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
      select $1, 'ledger', l.id::text,

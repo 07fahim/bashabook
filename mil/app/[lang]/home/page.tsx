@@ -12,7 +12,7 @@ import { changePinAction, logoutAction, phoneAction, photoAction, removePhotoAct
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { countText, fmtDay, fmtRate, fmtTime } from '../format';
+import { countText, fmtDay, fmtMeals, fmtRate, fmtTaka, fmtTime } from '../format';
 import { Header } from '../header';
 import { LockChange } from '../lock-change';
 import { MealRow } from '../meal-row';
@@ -38,6 +38,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
     loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId, me.role === 'manager'),
   ]);
   const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
+  const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
   const someoneMissing = people.some(p => !p.claimed);
   const self = people.find(p => p.id === me.memberId), myPhone = self?.phone ?? '';   // the invite card only matters while someone hasn't joined
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
@@ -94,10 +95,19 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           </section>
           {bal && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{x.title}</h2>
-            <p className={`mt-2 text-lg font-semibold ${bal.tone}`}>{bal.text}</p>
-            <p className="mt-1 text-[15px] text-muted">{x.mealRate}: {fmtRate(mo.result.mealRate, [...mo.meals.values()].reduce((a, b) => a + b, 0))}</p>
+            <p className={`mt-1 text-[15px] font-semibold ${bal.tone}`}>{bal.text}</p>
+            {/* the same shape as the plates card beside it: three numbers in tiles, the button at the bottom */}
+            <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+              {([[x.mealRate, fmtRate(mo.result.mealRate, totalMeals)], [x.myMeals, fmtMeals(mo.meals.get(me.memberId) ?? 0)],
+                [x.withName.replace('{name}', starter?.name ?? ''), fmtTaka(Math.max(mo.result.fund, 0))]] as const).map(([k, v]) => (
+                <div key={k} className="rounded-xl bg-paper px-1 py-3">
+                  <dt className="text-[15px] text-muted">{k}</dt>
+                  <dd className="text-2xl font-bold tabular-nums">{v}</dd>
+                </div>
+              ))}
+            </dl>
             <div className="grow" />
-            <Link href={`/${lang}/money`} className={`mt-3 inline-flex min-h-11 items-center ${link}`}>{x.seeMoney}</Link>
+            <Link href={`/${lang}/money`} className={`mt-5 ${secondary}`}>{x.seeMoney}</Link>
           </section>}
           {someoneMissing && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{a.shareTitle}</h2>
