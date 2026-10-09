@@ -7,7 +7,7 @@ export type FlatInfo = {
 };
 export type Member = MealMember & { name: string; role: 'member' | 'manager'; inMeals: boolean };
 export type HistoryRow = {
-  at: Date | string; actor: string | null; who: string | null; entity: 'meal_changes' | 'members' | 'flats'; entityId: string;
+  at: Date | string; actor: string | null; who: string | null; entity: 'meal_changes' | 'members' | 'flats' | 'cook'; entityId: string;
   before?: { guests?: number; count?: number } | null;
   after: {
     count?: number; guests?: number; late?: boolean;
@@ -15,6 +15,7 @@ export type HistoryRow = {
     nocook?: [string, string]; cookAgain?: [string, string]; meals?: string;
     b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean;
     cutoff?: string; weights?: Record<Meal, number>;
+    told?: string; plates?: Record<Meal, number>;
   };
 };
 export type SavedChange = MealChange & { guests: number; late: boolean };
@@ -182,15 +183,17 @@ export const isInMeals = async (db: Db, flatId: string, memberId: string) =>
   (await db<{ v: boolean }>(`select in_meals as v from members where flat_id = $1 and id = $2`, [flatId, memberId]))[0]?.v ?? false;
 
 /** Weights are hundredths of a meal (breakfast 50 = 0.5) and apply to every day of the open month. Audited with the old values. */
-export async function updateSettings(db: Db, flatId: string, by: string, s: { cutoff: string; weights: Record<Meal, number> }) {
+/** `now` = nowDhaka(). If the new lock time opens tomorrow again, tomorrow's after-the-lock tracking starts over;
+ *  if tomorrow stays locked, the baseline stays (the cook may already have been told). */
+export async function updateSettings(db: Db, flatId: string, by: string, s: { cutoff: string; weights: Record<Meal, number> }, now: string) {
+  const reopened = !isLocked(addDays(now.slice(0, 10), 1), now, s.cutoff);
   await db(
     `with old as (select cutoff_time::text as cutoff, json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights from flats where id = $1),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member) select $1, 'flats', 'flat|settings', to_jsonb(old), $6, $7 from old)
      update flats set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5,
-       -- a new lock time starts tomorrow's after-the-lock tracking over (the CASE reads the old lock time)
-       lock_date = case when cutoff_time = $2::time then lock_date end, lock_count = case when cutoff_time = $2::time then lock_count end
+       lock_date = case when $8::boolean then null else lock_date end, lock_count = case when $8::boolean then null else lock_count end
      where id = $1`,
-    [flatId, s.cutoff, s.weights.b, s.weights.l, s.weights.d, s, by]);
+    [flatId, s.cutoff, s.weights.b, s.weights.l, s.weights.d, s, by, reopened]);
 }
 
 export async function setCookLink(db: Db, flatId: string, on: boolean) {
@@ -252,7 +255,7 @@ export const loadHistory = (db: Db, flatId: string, mine: string | null = null) 
    left join members actor on actor.id = a.by_member
    left join members who on who.flat_id = a.flat_id and who.id::text = split_part(a.entity_id, '|', 1)
    where a.flat_id = $1
-     and (a.entity in ('members', 'flats')
+     and (a.entity in ('members', 'flats', 'cook')
           or (a.entity = 'meal_changes' and (a.entity_id like 'flat|%' or a.entity_id like '%|away'
               or coalesce((a.after->>'guests')::int, 0) <> coalesce((a.before->>'guests')::int, 0)   -- every guest change is worth seeing
               or coalesce((a.after->>'late')::boolean, false) or split_part(a.entity_id, '|', 1) <> a.by_member::text)))
@@ -288,5 +291,9 @@ export async function seedLock(db: Db, flatId: string, now: string) {
 /** Someone told the cook the count their card showed: that count becomes the baseline, so the warning goes for everyone.
  *  It saves the count they saw, not the live one, so a change made after they looked still shows.
  *  Only for the day the baseline belongs to: a page left open since yesterday changes nothing. */
-export const toldCook = (db: Db, flatId: string, date: string, seen: Record<Meal, number>) =>
-  db(`update flats set lock_count = $3::text::jsonb where id = $1 and lock_date = $2::date`, [flatId, date, JSON.stringify(seen)]);
+export const toldCook = (db: Db, flatId: string, by: string, date: string, seen: Record<Meal, number>) => db(
+  // the history line lets everyone see who said they told the cook, and which count; written only if the baseline changed
+  `with f as (update flats set lock_count = $4::text::jsonb where id = $1 and lock_date = $3::date returning id)
+   insert into audit_log (flat_id, entity, entity_id, after, by_member)
+   select $1, 'cook', 'flat|told', jsonb_build_object('told', $3::date, 'plates', $4::text::jsonb), $2 from f`,
+  [flatId, by, date, JSON.stringify(seen)]);

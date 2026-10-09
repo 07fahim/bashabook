@@ -4,7 +4,7 @@ import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { addDays, editFrom, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
@@ -148,8 +148,15 @@ export async function settingsAction(_: FormState, d: FormData): Promise<FormSta
   const [b, l, dd] = MEALS.map(x => (/^(\d{1,2}(\.\d{1,2})?|\.\d{1,2})$/.test(str(d, `w_${x}`)) ? Math.round(Number(str(d, `w_${x}`)) * 100) : -1));
   const weightsOk = [b, l, dd].every(w => w >= 0 && w <= 1000) && b + l + dd > 0;
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff) || !weightsOk) return { error: m.errors.bad };
-  await updateSettings(db, me.flatId, me.memberId, { cutoff, weights: { b, l, d: dd } });
+  const now = nowDhaka(), tomorrow = addDays(now.slice(0, 10), 1), was = await mealRules(db, me.flatId);
+  await updateSettings(db, me.flatId, me.memberId, { cutoff, weights: { b, l, d: dd } }, now);
   refresh();
+  // a lock time already past locks tomorrow from now: give the count to tell the cook (earlier changes were on time)
+  if (isLocked(tomorrow, now, cutoff) && !isLocked(tomorrow, now, was.cutoff)) {
+    const { members, changes } = await loadMeals(db, me.flatId, tomorrow, tomorrow);
+    const hc = headcount(members, changes, tomorrow);
+    return { done: m.lockedNow.replace('{list}', MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(', ')) };
+  }
   return { done: m.saved };
 }
 
@@ -220,7 +227,7 @@ export async function toldCookAction(d: FormData) {
   const me = await requireMember(langOf(d));
   const date = str(d, 'date');
   if (isDate(date) && MEALS.every(x => /^\d{1,3}$/.test(str(d, x)))) {
-    await toldCook(db, me.flatId, date, { b: Number(str(d, 'b')), l: Number(str(d, 'l')), d: Number(str(d, 'd')) });
+    await toldCook(db, me.flatId, me.memberId, date, { b: Number(str(d, 'b')), l: Number(str(d, 'l')), d: Number(str(d, 'd')) });
   }
   refresh();
 }
