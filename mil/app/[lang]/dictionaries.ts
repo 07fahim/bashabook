@@ -30,7 +30,7 @@ const bn = {
   },
   stepsTitle: 'যেভাবে চলে',
   steps: [
-    { title: 'সবাই মিল মার্ক করে', body: 'রাত দশটার আগে এক ট্যাপে জানিয়ে দেয় কাল কে খাবে না।', stat: 'এ পর্যন্ত 206.5 মিল' },
+    { title: 'সবাই মিল মার্ক করে', body: 'ফ্ল্যাটের ঠিক করা সময়ের আগে এক ট্যাপে জানিয়ে দেয় কাল কে খাবে না।', stat: 'এ পর্যন্ত 206.5 মিল' },
     { title: 'রাঁধুনি সংখ্যা পেয়ে যান', body: 'কালকের সংখ্যা নিজে থেকেই রাঁধুনির ফোনে পৌঁছে যায়।', stat: 'সকাল 7 · দুপুর 8 · রাত 9' },
     { title: 'মাস শেষে হিসাব তৈরি', body: 'বাজার আর বিল মিল আর দিন অনুযায়ী ভাগ হয়। কে কত দেবে, সবাই দেখে।', stat: 'মিল রেট ৳31.72' },
   ],
@@ -42,7 +42,7 @@ const bn = {
     title: 'এক অ্যাপে পুরো ফ্ল্যাটের হিসাব',
     lead: 'মিল থেকে মাস শেষের হিসাব পর্যন্ত, ফ্ল্যাটের প্রতিটা কাজের জন্য আলাদা জায়গা।',
     items: [
-      { icon: 'meal', title: 'মিল', body: 'সবাই নিজের মিল নিজেই চালু-বন্ধ করে। মাস শেষে কে কত মিল খেল, গুনতে হয় না।', points: ['রাত 10টার মধ্যে কালকের মিল', 'অতিথি আর ছুটির দিন', 'দেরিতে বদল সবাই দেখে'] },
+      { icon: 'meal', title: 'মিল', body: 'সবাই নিজের মিল নিজেই চালু-বন্ধ করে। মাস শেষে কে কত মিল খেল, গুনতে হয় না।', points: ['কালকের মিল ফ্ল্যাটের ঠিক করা সময় পর্যন্ত', 'অতিথি আর ছুটির দিন', 'দেরিতে বদল সবাই দেখে'] },
       { icon: 'cook', title: 'রাঁধুনির জন্য', body: 'রাঁধুনি নিজের ফোনেই দেখে কাল কতজন খাবে। কাউকে ফোন করে জিজ্ঞেস করতে হয় না।', points: ['একটা লিংকে কালকের সংখ্যা', 'রান্না বন্ধের দিন', 'লগইন লাগে না'] },
       { icon: 'bazar', title: 'বাজার', body: 'যে বাজার করে সে খরচ লিখে দেয়। মিল রেট নিজে থেকেই হিসাব হয়।', points: ['কে কবে কত টাকার বাজার করল', 'মিল রেট সবসময় হালনাগাদ', 'সবাই একই খাতা দেখে'] },
       { icon: 'bill', title: 'ভাড়া আর বিল', body: 'ভাড়া, বিদ্যুৎ, গ্যাস, ইন্টারনেট, বুয়ার বেতন। যার যতটুকু ভাগ, ততটুকুই।', points: ['রুম অনুযায়ী ভাড়া', 'বিল সবার মধ্যে ভাগ', 'নিজে রান্না করলেও বিলের ভাগে'] },
@@ -54,7 +54,7 @@ const bn = {
     title: 'কেউ চুপচাপ কিছু বদলাতে পারে না',
     lead: 'বন্ধুদের ফ্ল্যাট হোক বা অচেনা লোকের, নিয়ম সবার জন্য এক। কে কী বদলাল, নাম আর সময়সহ সবাই দেখে।',
     points: [
-      ['রাত 10টার পরে কালকের মিল বদল', 'করা যায়, পাশে লেখা থাকে “দেরিতে বদল”'],
+      ['সময় পার হওয়ার পরে কালকের মিল বদল', 'করা যায়, পাশে সময় লেখা থাকে, সবাই দেখে'],
       ['আজকের মিল', 'লক থাকে। ভুল হলে ঠিক করা যায়, সেটাও সবাই দেখে'],
       ['বাজার আর টাকা', 'প্রতিটা এন্ট্রিতে কে দিয়েছে লেখা থাকে। মাস শেষে ক্যাশ না মিললে মাস বন্ধ হয় না'],
     ] as [string, string][],
@@ -266,7 +266,7 @@ const en: Dict = {
   },
   stepsTitle: 'How it works',
   steps: [
-    { title: 'Everyone marks meals', body: 'Before 10 pm, one tap says who’s skipping tomorrow.', stat: '206.5 meals so far' },
+    { title: 'Everyone marks meals', body: 'Before your flat’s deadline, one tap says who’s skipping tomorrow.', stat: '206.5 meals so far' },
     { title: 'The cook gets the count', body: 'Tomorrow’s numbers reach the cook’s phone on their own.', stat: 'Breakfast 7 · Lunch 8 · Dinner 9' },
     { title: 'The month settles itself', body: 'Bazar and bills split by meals and days. Everyone sees what they owe.', stat: 'Meal rate ৳31.72' },
   ],
@@ -278,7 +278,7 @@ const en: Dict = {
     title: 'The whole flat’s accounts, in one app',
     lead: 'From daily meals to the month-end split, every part of running a flat has its place.',
     items: [
-      { icon: 'meal', title: 'Meals', body: 'Everyone switches their own meals on or off. Nobody counts meals at the end of the month.', points: ['Tomorrow’s meals until 10 pm', 'Guests and days away', 'Late changes are visible to all'] },
+      { icon: 'meal', title: 'Meals', body: 'Everyone switches their own meals on or off. Nobody counts meals at the end of the month.', points: ['Tomorrow’s meals until your flat’s deadline', 'Guests and days away', 'Late changes are visible to all'] },
       { icon: 'cook', title: 'For the cook', body: 'The cook sees tomorrow’s count on their own phone. No calls to ask how many.', points: ['Tomorrow’s count in one link', 'No-cooking days', 'No login needed'] },
       { icon: 'bazar', title: 'Bazar', body: 'Whoever shops adds the cost. The meal rate works itself out.', points: ['Who shopped, when and for how much', 'Meal rate always up to date', 'Everyone sees the same book'] },
       { icon: 'bill', title: 'Rent and bills', body: 'Rent, electricity, gas, internet, the helper’s pay. Everyone pays their own share.', points: ['Rent by room', 'Bills shared by everyone', 'Bill share even if you cook for yourself'] },
@@ -290,7 +290,7 @@ const en: Dict = {
     title: 'Nobody changes anything quietly',
     lead: 'Friends or strangers, the rules are the same for everyone. Every change shows who made it and when.',
     points: [
-      ["Changing tomorrow's meals after 10 pm", 'Allowed, marked “Changed late”'],
+      ["Changing tomorrow's meals after the deadline", 'Allowed, marked with the time for everyone to see'],
       ["Today's meals", 'Locked. Mistakes can be fixed, and everyone sees the fix'],
       ['Bazar and money', 'Every entry shows who added it. The month only closes when the cash matches'],
     ] as [string, string][],
