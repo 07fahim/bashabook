@@ -17,7 +17,8 @@ export function PhotoPicker({ label }: { label: string }) {
       const g = c.getContext('2d')!;
       g.fillStyle = '#fff';
       g.fillRect(0, 0, 192, 192); // a transparent PNG would turn black as JPEG
-      g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 192, 192);
+      // a tall photo keeps its top part, where the face is: from the middle, the circle cuts through the head
+      g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) * 0.2, side, side, 0, 0, 192, 192);
       URL.revokeObjectURL(url);
       send(c.toDataURL('image/jpeg', 0.82));
     };
