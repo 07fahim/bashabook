@@ -2,7 +2,7 @@
 
 import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setPhone } from '@/lib/auth';
+import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { addDays, editFrom, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
@@ -219,7 +219,8 @@ export async function noCookCancelAction(d: FormData) {
   const me = await requireManager(langOf(d));
   await seedLock(db, me.flatId, nowDhaka());
   const date = str(d, 'date'), meals = str(d, 'meals').split(',').filter(isMeal);
-  if (editable(date) && meals.length) await cookAgain(db, me.flatId, me.memberId, date, date, meals, date);
+  // today or later, as the screen offers: a past day was already cooked (or not), and un-blocking it would rewrite everyone's meals
+  if (editable(date) && date >= todayDhaka() && meals.length) await cookAgain(db, me.flatId, me.memberId, date, date, meals, date);
   refresh();
 }
 
@@ -283,4 +284,29 @@ export async function removePhotoAction(d: FormData) {
   const me = await requireMember(langOf(d)), id = str(d, 'memberId');
   if (UUID.test(id)) await removePhoto(db, me, id);
   refresh();
+}
+
+/** The person who runs the flat sets someone's last day here, or takes it back. */
+export async function leavingAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), a = getDictionary(lang).app;
+  const me = await requireManager(lang);
+  await seedLock(db, me.flatId, nowDhaka());
+  const day = d.has('stay') ? null : str(d, 'lastDay');
+  if (day !== null && !isDate(day)) return { error: a.errors.lastDay };
+  const r = await setLeaving(db, me.flatId, me.memberId, str(d, 'memberId'), day, todayDhaka());
+  if (r !== 'ok') return { error: r === 'taken' ? a.errors.sameNameNow : a.errors.lastDay };
+  refresh();
+  return { done: day ? a.lastDaySaved : a.stayingSaved };
+}
+
+/** Undoes a departure marked by mistake; the days in between stay as they were cooked. */
+export async function bringBackAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), a = getDictionary(lang).app;
+  const me = await requireManager(lang);
+  await seedLock(db, me.flatId, nowDhaka());
+  const today = todayDhaka();
+  const r = await bringBack(db, me.flatId, me.memberId, str(d, 'memberId'), today, editFrom(today));
+  if (r !== 'ok') return { error: r === 'taken' ? a.errors.nameUsedSince : a.errors.notFound };
+  refresh();
+  return { done: a.broughtBack };
 }

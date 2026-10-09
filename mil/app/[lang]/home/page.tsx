@@ -99,7 +99,13 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             <ul className="mt-2 divide-y divide-line">
               {people.map(p => (
                 <li key={p.id} className="flex items-center justify-between gap-3 py-2">
-                  <span className="flex items-center gap-3"><Avatar id={p.id} name={p.name} v={p.photoV} size={32} />{p.name}{p.id === me.memberId && <span className="text-muted"> · {a.you}</span>}</span>
+                  <span className="flex items-center gap-3"><Avatar id={p.id} name={p.name} v={p.photoV} size={32} />
+                    <span>
+                      {p.name}{p.id === me.memberId && <span className="text-muted"> · {a.you}</span>}
+                      {/* on its own line, so a phone still has room for the name and the number */}
+                      {(p.leftOn || p.joinedOn > today) && <span className="block text-[15px] text-muted">{p.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(p.leftOn, lang)) : a.movingInBadge.replace('{d}', fmtDay(p.joinedOn, lang))}</span>}
+                    </span>
+                  </span>
                   {p.phone ? <a href={`tel:${p.phone}`} aria-label={`${a.call} ${p.name}`} className={`inline-flex min-h-11 items-center tabular-nums ${link}`}>{p.phone}</a>
                     : <span className="text-[15px] text-muted">{a.noPhone}</span>}
                 </li>
