@@ -12,10 +12,12 @@ export default async function NewFlat({ params }: PageProps<'/[lang]/new'>) {
   return (
     <>
       <Header t={t} lang={lang} path="/new" />
-      <main className="mx-auto max-w-md px-5 pb-16">
-        <h1 className="font-display text-3xl font-bold">{a.newTitle}</h1>
-        <p className="mt-2 text-muted">{a.newLead}</p>
-        <ActionForm action={createFlatAction} className="mt-8">
+      <main className="mx-auto max-w-md px-5 pb-16 md:grid md:max-w-5xl md:grid-cols-2 md:items-start md:gap-16 md:pt-6">
+        <div>
+          <h1 className="font-display text-3xl font-bold md:text-4xl">{a.newTitle}</h1>
+          <p className="mt-2 text-lg text-muted">{a.newLead}</p>
+        </div>
+        <ActionForm action={createFlatAction} className="mt-8 md:mt-0">
           <input type="hidden" name="lang" value={lang} />
           <Field label={a.flatName} name="flatName" hint={a.flatNameHint} required maxLength={40} />
           <Field label={a.yourName} name="name" required maxLength={40} autoComplete="given-name" />

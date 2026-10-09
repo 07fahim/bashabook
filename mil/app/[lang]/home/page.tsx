@@ -12,10 +12,10 @@ import { Header } from '../header';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
 import { ShareButton } from '../share-button';
-import { focus, link } from '../ui';
+import { focus, link, PageSkeleton } from '../ui';
 
 export default function Home({ params }: PageProps<'/[lang]/home'>) {
-  return <Suspense><HomeBody params={params} /></Suspense>;
+  return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} /></Suspense>;
 }
 
 async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
@@ -29,31 +29,33 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   return (
     <>
       <Header t={t} lang={lang} path="/home" />
-      <main className="mx-auto max-w-md px-5 pb-28">
+      <Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} />
+      <main className="mx-auto max-w-md px-5 pb-28 md:max-w-5xl md:pb-16">
         <p className="text-muted">{me.flatName}</p>
         <h1 className="font-display text-3xl font-bold">{a.hi}, {me.name}</h1>
-        <section className="mt-8 rounded-2xl border border-line bg-surface p-5">
-          <h2 className="text-xl font-bold">{m.tomorrow} · {fmtDay(tomorrow, lang)}</h2>
-          <p className="mt-1 text-[15px] text-muted">
-            {decision === 'open' ? m.locksAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.lockedLate}
-          </p>
-          <MealRow lang={lang} m={m} meId={me.memberId} date={tomorrow} decision={decision} {...meals} />
-          <Link href={`/${lang}/meals`} className={`mt-5 inline-block ${link}`}>{m.seeWeek}</Link>
-        </section>
-        <section className="mt-6 rounded-2xl border border-line bg-surface p-5">
-          <h2 className="text-xl font-bold">{a.shareTitle}</h2>
-          <p className="mt-2 text-muted">{a.shareLead}</p>
-          <p className="mt-4">
-            {a.code}: <span className="font-bold tracking-widest">{me.joinCode}</span>
-          </p>
-          <ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} />
-        </section>
+        <div className="mt-8 md:grid md:grid-cols-2 md:items-start md:gap-6">
+          <section className="rounded-2xl border border-line bg-surface p-5">
+            <h2 className="text-xl font-bold">{m.tomorrow} · {fmtDay(tomorrow, lang)}</h2>
+            <p className="mt-1 text-[15px] text-muted">
+              {decision === 'open' ? m.locksAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.lockedLate}
+            </p>
+            <MealRow lang={lang} m={m} meId={me.memberId} date={tomorrow} decision={decision} {...meals} />
+            <Link href={`/${lang}/meals`} className={`mt-5 inline-block ${link}`}>{m.seeWeek}</Link>
+          </section>
+          <section className="mt-6 rounded-2xl md:mt-0 border border-line bg-surface p-5">
+            <h2 className="text-xl font-bold">{a.shareTitle}</h2>
+            <p className="mt-2 text-muted">{a.shareLead}</p>
+            <p className="mt-4">
+              {a.code}: <span className="font-bold tracking-widest">{me.joinCode}</span>
+            </p>
+            <ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} />
+          </section>
+        </div>
         <form action={logoutAction} className="mt-8">
           <input type="hidden" name="lang" value={lang} />
           <button className={`text-muted underline-offset-4 hover:underline ${focus}`}>{a.logout}</button>
         </form>
       </main>
-      <Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} />
     </>
   );
 }

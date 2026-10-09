@@ -12,10 +12,10 @@ import { fmtDay, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
-import { checkChip, field, Field, Fold, focus, link, primary } from '../ui';
+import { checkChip, field, Field, Fold, focus, link, primary, PageSkeleton } from '../ui';
 
 export default function Meals({ params, searchParams }: PageProps<'/[lang]/meals'>) {
-  return <Suspense><MealsBody params={params} searchParams={searchParams} /></Suspense>;
+  return <Suspense fallback={<PageSkeleton />}><MealsBody params={params} searchParams={searchParams} /></Suspense>;
 }
 
 async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals'>, 'params' | 'searchParams'>) {
@@ -61,118 +61,123 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   return (
     <>
       <Header t={t} lang={lang} path="/meals" />
-      <main className="mx-auto max-w-md px-5 pb-28">
-        <h1 className="font-display text-3xl font-bold">{m.weekTitle}</h1>
-        <p className="mt-2 text-muted">{m.weekLead}</p>
-        <ul className="mt-6 mb-8 space-y-6">
-          {week.map((date, i) => (
-            <li key={date}>
-              <p className="font-semibold">
-                {i === 0 ? `${m.today} · ` : i === 1 ? `${m.tomorrow} · ` : ''}{fmtDay(date, lang)}
-              </p>
-              <MealRow lang={lang} m={m} meId={me.memberId} date={date} decision={decide(date)} {...meals} />
-              {i === 0 && (
-                <p className="mt-2 text-[15px] text-muted">
-                  {starter?.id === me.memberId ? m.todayLockedSelf : m.todayLocked.replace('{name}', starter?.name ?? '')}
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
-
-        <Fold title={m.guestTitle} lead={m.guestLead}>
-          <ActionForm action={guestAction} className="mt-4">
-            <input type="hidden" name="lang" value={lang} />
-            <label className="block font-semibold">
-              {m.day}
-              <select name="date" defaultValue={week[1]} className={field}>
-                {week.slice(1).map(d => <option key={d} value={d}>{fmtDay(d, lang)}</option>)}
-              </select>
-            </label>
-            <label className="block font-semibold">
-              {m.meal}
-              <select name="meal" defaultValue="d" className={field}>
-                {MEALS.map(x => <option key={x} value={x}>{m.names[x]}</option>)}
-              </select>
-            </label>
-            <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={0} max={9} required defaultValue={1} />
-            <label className={checkChip}>
-              <input type="checkbox" name="me" defaultChecked={self.inMeals} className="size-5 shrink-0 accent-ink" />
-              {m.meToo}
-            </label>
-            <button className={primary}>{m.save}</button>
-          </ActionForm>
-        </Fold>
-
-        <Fold title={m.awayTitle} lead={m.awayLead}>
-          {aways.some(([, t]) => t >= firstOpen) && (
-            <div className="mt-4">
-              <p className="font-semibold">{m.awayList}</p>
-              <ul className="mt-2 divide-y divide-line">
-                {aways.filter(([, t]) => t >= firstOpen).map(([f, t]) => (
-                  <li key={`${f}${t}`} className="flex items-center justify-between gap-3 py-2">
-                    <span>{range([f, t])}</span>
-                    <ActionForm action={cancelAwayAction}>
-                      <input type="hidden" name="lang" value={lang} />
-                      <input type="hidden" name="from" value={f} />
-                      <input type="hidden" name="to" value={t} />
-                      <button className={`min-h-11 px-4 font-semibold ${link}`}>{m.cancel}</button>
-                    </ActionForm>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <ActionForm action={awayAction} className="mt-4">
-            <input type="hidden" name="lang" value={lang} />
-            <Field label={m.from} name="from" type="date" required min={firstOpen} defaultValue={firstOpen} />
-            <Field label={m.to} name="to" type="date" required min={firstOpen} defaultValue={firstOpen} />
-            <button className={primary}>{m.awayBtn}</button>
-          </ActionForm>
-        </Fold>
-
-        <Fold title={m.usualTitle} lead={self.inMeals ? m.usualLead : m.ownNow}>
-          <ActionForm action={usualAction} className="mt-4">
-            <input type="hidden" name="lang" value={lang} />
-            <div className="grid grid-cols-3 gap-2">
-              {MEALS.map(x => (
-                <label key={x} className={checkChip}>
-                  <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5 shrink-0 accent-ink" />
-                  {m.names[x]}
-                </label>
-              ))}
-            </div>
-            <p className="text-[15px] text-muted">{m.usualOff}</p>
-            <button className={primary}>{m.save}</button>
-          </ActionForm>
-        </Fold>
-
-        <section className={card}>
-          <h2 className={h2}>{m.historyTitle}</h2>
-          <p className="mt-1 text-muted">{m.historyLead}</p>
-          <div className="mt-3 flex gap-2">
-            {[[false, m.everyoneTab], [true, m.mineOnly]].map(([on, label]) => (
-              <Link key={String(on)} href={on ? `/${lang}/meals?mine=1` : `/${lang}/meals`} scroll={false} aria-current={mine === on ? 'true' : undefined}
-                className={`px-4 py-2 font-semibold ${mine === on ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
-                {label}
-              </Link>
-            ))}
-          </div>
-          {history.length === 0 ? (
-            <p className="mt-3 text-muted">{m.noHistory}</p>
-          ) : (
-            <ul className="mt-3 divide-y divide-line">
-              {history.map((h, i) => (
-                <li key={i} className="py-3">
-                  <p>{describe(h)}</p>
-                  <p className="text-[15px] text-muted">{fmtWhen(h.at, lang)}</p>
+      <Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} />
+      <main className="mx-auto max-w-md px-5 pb-28 md:max-w-5xl md:pb-16">
+        <div className="md:grid md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:items-start md:gap-10">
+          <div>
+            <h1 className="font-display text-3xl font-bold">{m.weekTitle}</h1>
+            <p className="mt-2 text-muted">{m.weekLead}</p>
+            <ul className="mt-6 mb-8 space-y-6">
+              {week.map((date, i) => (
+                <li key={date}>
+                  <p className="font-semibold">
+                    {i === 0 ? `${m.today} · ` : i === 1 ? `${m.tomorrow} · ` : ''}{fmtDay(date, lang)}
+                  </p>
+                  <MealRow lang={lang} m={m} meId={me.memberId} date={date} decision={decide(date)} {...meals} />
+                  {i === 0 && (
+                    <p className="mt-2 text-[15px] text-muted">
+                      {starter?.id === me.memberId ? m.todayLockedSelf : m.todayLocked.replace('{name}', starter?.name ?? '')}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
-          )}
-        </section>
+          </div>
+          <div className="md:pt-2">
+            <Fold title={m.guestTitle} lead={m.guestLead}>
+              <ActionForm action={guestAction} className="mt-4">
+                <input type="hidden" name="lang" value={lang} />
+                <label className="block font-semibold">
+                  {m.day}
+                  <select name="date" defaultValue={week[1]} className={field}>
+                    {week.slice(1).map(d => <option key={d} value={d}>{fmtDay(d, lang)}</option>)}
+                  </select>
+                </label>
+                <label className="block font-semibold">
+                  {m.meal}
+                  <select name="meal" defaultValue="d" className={field}>
+                    {MEALS.map(x => <option key={x} value={x}>{m.names[x]}</option>)}
+                  </select>
+                </label>
+                <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={0} max={9} required defaultValue={1} />
+                <label className={checkChip}>
+                  <input type="checkbox" name="me" defaultChecked={self.inMeals} className="size-5 shrink-0 accent-ink" />
+                  {m.meToo}
+                </label>
+                <button className={primary}>{m.save}</button>
+              </ActionForm>
+            </Fold>
+
+            <Fold title={m.awayTitle} lead={m.awayLead}>
+              {aways.some(([, t]) => t >= firstOpen) && (
+                <div className="mt-4">
+                  <p className="font-semibold">{m.awayList}</p>
+                  <ul className="mt-2 divide-y divide-line">
+                    {aways.filter(([, t]) => t >= firstOpen).map(([f, t]) => (
+                      <li key={`${f}${t}`} className="flex items-center justify-between gap-3 py-2">
+                        <span>{range([f, t])}</span>
+                        <ActionForm action={cancelAwayAction}>
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="from" value={f} />
+                          <input type="hidden" name="to" value={t} />
+                          <button className={`min-h-11 px-4 font-semibold ${link}`}>{m.cancel}</button>
+                        </ActionForm>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <ActionForm action={awayAction} className="mt-4">
+                <input type="hidden" name="lang" value={lang} />
+                <Field label={m.from} name="from" type="date" required min={firstOpen} defaultValue={firstOpen} />
+                <Field label={m.to} name="to" type="date" required min={firstOpen} defaultValue={firstOpen} />
+                <button className={primary}>{m.awayBtn}</button>
+              </ActionForm>
+            </Fold>
+
+            <Fold title={m.usualTitle} lead={self.inMeals ? m.usualLead : m.ownNow}>
+              <ActionForm action={usualAction} className="mt-4">
+                <input type="hidden" name="lang" value={lang} />
+                <div className="grid grid-cols-3 gap-2">
+                  {MEALS.map(x => (
+                    <label key={x} className={checkChip}>
+                      <input type="checkbox" name={x} defaultChecked={self.defaults[x]} className="size-5 shrink-0 accent-ink" />
+                      {m.names[x]}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[15px] text-muted">{m.usualOff}</p>
+                <button className={primary}>{m.save}</button>
+              </ActionForm>
+            </Fold>
+
+            <section className={`${card} md:mt-6`}>
+              <h2 className={h2}>{m.historyTitle}</h2>
+              <p className="mt-1 text-muted">{m.historyLead}</p>
+              <div className="mt-3 flex gap-2">
+                {[[false, m.everyoneTab], [true, m.mineOnly]].map(([on, label]) => (
+                  <Link key={String(on)} href={on ? `/${lang}/meals?mine=1` : `/${lang}/meals`} scroll={false} aria-current={mine === on ? 'true' : undefined}
+                    className={`px-4 py-2 font-semibold ${mine === on ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
+                    {label}
+                  </Link>
+                ))}
+              </div>
+              {history.length === 0 ? (
+                <p className="mt-3 text-muted">{m.noHistory}</p>
+              ) : (
+                <ul className="mt-3 divide-y divide-line">
+                  {history.map((h, i) => (
+                    <li key={i} className="py-3">
+                      <p>{describe(h)}</p>
+                      <p className="text-[15px] text-muted">{fmtWhen(h.at, lang)}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        </div>
       </main>
-      <Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} />
     </>
   );
 }

@@ -133,10 +133,10 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="font-semibold text-ink">{t.footer.tagline}</p>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
-              <a href={WHATSAPP} target="_blank" rel="noopener noreferrer" className={`font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`}>
+              <a href={WHATSAPP} target="_blank" rel="noopener noreferrer" className={`inline-block py-2 font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`}>
                 {t.footer.whatsapp}
               </a>
-              <a href={EMAIL} className={`font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`}>
+              <a href={EMAIL} className={`inline-block py-2 font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`}>
                 {t.footer.email}
               </a>
             </div>
