@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { createFlat } from './auth';
+import { addMember, createFlat } from './auth';
 import { headcount, indexChanges, mealCount, type Meal } from './meals';
 import {
-  addGuests, cancelAway, currentPlates, removeGuests, setOwn, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, setAway, setDefaults, upcomingAway, updateSettings,
+  addGuests, cancelAway, countAtLock, currentPlates, removeGuests, setOwn, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, setAway, setCookContact, setDefaults, upcomingAway, updateSettings,
 } from './meals-db';
 
 const ALL_OFF = { b: false, l: false, d: false }, ALL_ON = { b: true, l: true, d: true };
@@ -321,6 +321,27 @@ describe('meal storage', { timeout: 30000 }, () => {
     await addGuests(db, flatId, tahsin, '2026-10-14', 'l', 2, '2026-10-09T13:00');
     await setDefaults(db, flatId, tahsin, ALL_OFF, '2026-09-01', '2026-10-10', false);
     expect(await currentPlates(db, flatId, tahsin, '2026-10-14', 'l')).toEqual({ own: 0, guests: 2 });
+  });
+
+  it('saves the cook contact; the database refuses a bad number', async () => {
+    const { flatId, load } = await flat();
+    await setCookContact(db, flatId, '01712345678', true);
+    expect((await load()).flat).toMatchObject({ cookPhone: '01712345678', cookWhatsapp: true });
+    await setCookContact(db, flatId, null, false);
+    expect((await load()).flat).toMatchObject({ cookPhone: null, cookWhatsapp: false });
+    await expect(setCookContact(db, flatId, '123', false)).rejects.toThrow();
+  });
+
+  it('keeps the count first seen after the lock, so any later change shows, even a new member', async () => {
+    const { flatId, load } = await flat();
+    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
+    const first = await hc();
+    expect(await countAtLock(db, flatId, '2026-10-10', first)).toEqual(first);   // first view saves it
+    await addMember(db, flatId, 'Rafi', '2026-10-10');                             // no meal row is written for this
+    const now = await hc();
+    expect(now.l).toBe(first.l + 1);
+    expect(await countAtLock(db, flatId, '2026-10-10', now)).toEqual(first);      // still the first one
+    expect(await countAtLock(db, flatId, '2026-10-11', now)).toEqual(now);        // a new day starts over
   });
 });
 
