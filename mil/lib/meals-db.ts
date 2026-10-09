@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { Db } from './db';
-import { addDays, indexChanges, isPresent, mealCount, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
+import { addDays, headcount, indexChanges, isLocked, isPresent, mealCount, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
 
 export type FlatInfo = {
   name: string; cutoff: string; cookToken: string | null; lang: 'bn' | 'en'; weights: Record<Meal, number>;
@@ -262,10 +262,20 @@ export const loadNoCookDays = (db: Db, flatId: string, from: string) => db<{ dat
    from no_cook where flat_id = $1 and date >= $2 group by date order by date`, [flatId, from]);
 
 /** Tomorrow's count as first seen after the lock time. The first call for `date` saves `hc`; later calls return the saved one,
- *  so comparing it with the live count catches every change after the lock, whatever caused it (deleted rows, new members). */
+ *  so comparing it with the live count catches every change after the lock, whatever caused it (deleted rows, new members).
+ *  Called after the lock by the cards, and by every meal-changing action through `seedLock`. */
 export async function countAtLock(db: Db, flatId: string, date: string, hc: Record<Meal, number>) {
+  // one statement that always updates: under concurrency the CASE sees the row the other request just wrote
   const [r] = await db<{ c: Record<Meal, number> }>(
-    `with up as (update flats set lock_date = $2, lock_count = $3 where id = $1 and lock_date is distinct from $2::date returning lock_count)
-     select coalesce((select lock_count from up), (select lock_count from flats where id = $1)) as c`, [flatId, date, JSON.stringify(hc)]);
+    `update flats set lock_count = case when lock_date is distinct from $2::date then $3::jsonb else lock_count end, lock_date = $2::date
+     where id = $1 returning lock_count as c`, [flatId, date, JSON.stringify(hc)]);
   return r.c;
+}
+
+/** Every server action that changes meals or members calls this first: if tomorrow is already locked, it saves tomorrow's
+ *  count as the baseline before the change, so the change shows on the cards even if nobody looked after the lock. */
+export async function seedLock(db: Db, flatId: string, now: string) {
+  const tomorrow = addDays(now.slice(0, 10), 1);
+  const { flat, members, changes } = await loadMeals(db, flatId, tomorrow, tomorrow);
+  if (isLocked(tomorrow, now, flat.cutoff)) await countAtLock(db, flatId, tomorrow, headcount(members, changes, tomorrow));
 }

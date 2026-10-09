@@ -3,7 +3,7 @@ import { db, migrate } from '../db/test-db';
 import { addMember, createFlat } from './auth';
 import { countChanges, headcount, indexChanges, mealCount, type Meal } from './meals';
 import {
-  addGuests, cancelAway, countAtLock, currentPlates, removeGuests, setOwn, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, setAway, setDefaults, upcomingAway, updateSettings,
+  addGuests, cancelAway, countAtLock, currentPlates, removeGuests, setOwn, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, seedLock, setAway, setDefaults, upcomingAway, updateSettings,
 } from './meals-db';
 
 const ALL_OFF = { b: false, l: false, d: false }, ALL_ON = { b: true, l: true, d: true };
@@ -344,6 +344,22 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(countChanges(await countAtLock(db, flatId, '2026-10-12', await hc()), await hc())).toEqual([{ meal: 'b', from: 1, to: 2 }, { meal: 'l', from: 1, to: 2 }, { meal: 'd', from: 1, to: 2 }]);
     await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');               // back to what it was
     expect(countChanges(await countAtLock(db, flatId, '2026-10-12', await hc()), await hc())).toEqual([]);
+  });
+
+  it('a change after the lock is flagged even if nobody opened the card first', async () => {
+    const { flatId, tahsin, load } = await flat();
+    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
+    const before = await hc();
+    await seedLock(db, flatId, '2026-10-09T22:05');                                  // what every action runs first
+    await addGuests(db, flatId, tahsin, '2026-10-10', 'l', 1, '2026-10-09T22:05');
+    expect(countChanges(await countAtLock(db, flatId, '2026-10-10', await hc()), await hc())).toEqual([{ meal: 'l', from: before.l, to: before.l + 1 }]);
+  });
+
+  it('before the lock, seeding saves no baseline', async () => {
+    const { flatId } = await flat();
+    await seedLock(db, flatId, '2026-10-09T21:00');
+    const [f] = await db<{ d: string | null }>(`select lock_date::text as d from flats where id = $1`, [flatId]);
+    expect(f.d).toBeNull();
   });
 });
 
