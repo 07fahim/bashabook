@@ -37,7 +37,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   const day = typeof sp.day === 'string' && isDate(sp.day) && sp.day >= from && sp.day <= to ? sp.day : today;
   const [members, gone, meals, picked, noCookDays] = await Promise.all([
     listMembers(db, me.flatId),
-    listGone(db, me.flatId),
+    listGone(db, me.flatId, from),
     loadMeals(db, me.flatId, today, tomorrow),
     loadMeals(db, me.flatId, day, day),
     loadNoCookDays(db, me.flatId, today),
@@ -261,7 +261,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                       )}
                       {x.id !== me.memberId && (
                         <details className="open:basis-full">
-                          <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.movingOut}</summary>
+                          <summary aria-label={`${a.movingOut}: ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.movingOut}</summary>
                           <p className="mt-2 text-[15px] text-muted">{a.movingOutLead}</p>
                           <ActionForm action={leavingAction} className="mt-3">
                             <input type="hidden" name="lang" value={lang} />
@@ -295,12 +295,12 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                         <span className="text-[15px] text-muted">{a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}</span>
                       </div>
                       <details>
-                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.byMistake}</summary>
+                        <summary aria-label={`${a.byMistake} ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.byMistake}</summary>
                         <p className="mt-2 text-[15px] text-muted">{a.bringBackLead.replace('{d}', fmtDay(addDays(x.leftOn, 1), lang))}</p>
                         <ActionForm action={bringBackAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="memberId" value={x.id} />
-                          <button className={`${secondary} sm:w-auto`}>{a.bringBackBtn}</button>
+                          <button aria-label={`${a.bringBackBtn}: ${x.name}`} className={`${secondary} sm:w-auto`}>{a.bringBackBtn}</button>
                         </ActionForm>
                       </details>
                     </li>

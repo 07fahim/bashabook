@@ -303,8 +303,9 @@ export async function bringBackAction(_: FormState, d: FormData): Promise<FormSt
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireManager(lang);
   await seedLock(db, me.flatId, nowDhaka());
-  const r = await bringBack(db, me.flatId, me.memberId, str(d, 'memberId'), todayDhaka());
-  if (r !== 'ok') return { error: r === 'taken' ? a.errors.sameNameNow : a.errors.notFound };
+  const today = todayDhaka();
+  const r = await bringBack(db, me.flatId, me.memberId, str(d, 'memberId'), today, editFrom(today));
+  if (r !== 'ok') return { error: r === 'taken' ? a.errors.nameUsedSince : a.errors.notFound };
   refresh();
   return { done: a.broughtBack };
 }

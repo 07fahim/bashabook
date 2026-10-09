@@ -176,6 +176,7 @@ const bn = {
       photo: 'ছবিটা নেওয়া গেল না। অন্য একটা ছবি দিন।',
       lastDay: 'আজ বা তার পরের একটা দিন বেছে নিন, ফ্ল্যাটে আসার দিনের আগে নয়।',
       sameNameNow: 'এখন ফ্ল্যাটে একই নামে আরেকজন আছে। আগে একটা নাম ঠিক করুন।',
+      nameUsedSince: 'সে চলে যাওয়ার পর একই নামে আরেকজন এখানে থেকেছে। তাকে নতুন করে যোগ করুন, আলাদা করে চেনার মতো নাম দিয়ে।',
     },
   },
   meals: {
@@ -478,6 +479,7 @@ const en: Dict = {
       photo: 'That photo didn’t work. Try another one.',
       lastDay: 'Pick today or a later day, not before they moved in.',
       sameNameNow: 'Someone living here now has the same name. Fix one of the names first.',
+      nameUsedSince: 'Someone with the same name has lived here since they left. Add them as someone new, with a name that tells them apart.',
     },
   },
   meals: {

@@ -49,7 +49,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
                 <li key={x.id}>
                   <Link href={`/${lang}/j/${code}?m=${x.id}`} className={`flex min-h-14 items-center justify-between gap-4 rounded-xl border border-line bg-surface px-5 text-lg font-semibold ${focus}`}>
                     {x.name}
-                    {!x.claimed && <span className="text-[15px] font-normal text-muted">{x.joinedOn > todayDhaka() ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : a.newBadge}</span>}
+                    {!x.claimed && <span className="text-[15px] font-normal text-muted">{x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > todayDhaka() ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : a.newBadge}</span>}
                   </Link>
                 </li>
               ))}

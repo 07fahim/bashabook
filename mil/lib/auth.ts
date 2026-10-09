@@ -32,8 +32,8 @@ export async function createFlat(db: Db, f: { flatName: string; name: string; pi
 export async function flatByCode(db: Db, code: string) {
   const [flat] = await db<{ id: string; name: string }>(`select id, name from flats where join_code = $1`, [code.toUpperCase()]);
   if (!flat) return null;
-  const members = await db<{ id: string; name: string; claimed: boolean; must_change_pin: boolean; joinedOn: string }>(
-    `select id, name, pin_hash is not null as claimed, must_change_pin, joined_on::text as "joinedOn" from members where flat_id = $1 and ${STAYING} order by name`, [flat.id]);
+  const members = await db<{ id: string; name: string; claimed: boolean; must_change_pin: boolean; joinedOn: string; leftOn: string | null }>(
+    `select id, name, pin_hash is not null as claimed, must_change_pin, joined_on::text as "joinedOn", left_on::text as "leftOn" from members where flat_id = $1 and ${STAYING} order by name`, [flat.id]);
   return { ...flat, members };
 }
 
@@ -162,25 +162,29 @@ export async function setLeaving(db: Db, flatId: string, by: string, memberId: s
   }
 }
 
-/** People whose last day has passed, newest first: only here can a departure marked by mistake be undone. */
-export const listGone = (db: Db, flatId: string) => db<{ id: string; name: string; leftOn: string }>(
-  `select id, name, left_on::text as "leftOn" from members where flat_id = $1 and not ${STAYING} order by left_on desc, name`, [flatId]);
+/** People who moved out recently (last day on or after `from`, the first day meals can still be fixed), newest first:
+ *  only here can a departure marked by mistake be undone. Someone who left long ago and comes back is added as new. */
+export const listGone = (db: Db, flatId: string, from: string) => db<{ id: string; name: string; leftOn: string }>(
+  `select id, name, left_on::text as "leftOn" from members where flat_id = $1 and not ${STAYING} and left_on >= $2::date
+   order by left_on desc, name`, [flatId, from]);
 
 /** Brings back someone marked as moved out by mistake, without changing a day already cooked: every day from the day after
  *  the old last day through today is saved as no meals for them, so they count again only from tomorrow. History says so. */
-export async function bringBack(db: Db, flatId: string, by: string, memberId: string, today: string): Promise<'ok' | 'no' | 'taken'> {
+export async function bringBack(db: Db, flatId: string, by: string, memberId: string, today: string, from: string): Promise<'ok' | 'no' | 'taken'> {
   if (!UUID.test(memberId)) return 'no';
   try {
     const [r] = await db<{ ok: boolean }>(
-      `with m as (select id, left_on from members where flat_id = $1 and id = $2 and left_on < $3::date),
-       up as (update members set left_on = null where id in (select id from m) returning id),
+      `with m as (select id, left_on from members where flat_id = $1 and id = $2 and left_on < $3::date and left_on >= $5::date),
+       up as (update members set left_on = null where id in (select id from m) and left_on is not null returning id),
+       -- ponytail: cancelling no-cooking for one of these past days later gives them their usual meal back; that day was cooked
+       -- with them living here, so it stands. Skip no-cooking days here if pilot flats find it wrong.
        fill as (insert into meal_changes (flat_id, member_id, date, meal, count)
          select $1::uuid, m.id, d::date, x, 0
          from m, generate_series((m.left_on + 1)::timestamp, $3::timestamp, interval '1 day') d, unnest(array['b','l','d']) x
          on conflict (member_id, date, meal) do update set count = 0, guests = 0, late = false, updated_at = now()),
        log as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
-         select $1, 'members', $2::text, jsonb_build_object('back', jsonb_build_array((m.left_on + 1)::text, $3::text)), $4 from m)
-       select exists (select 1 from up) as ok`, [flatId, memberId, today, by]);
+         select $1, 'members', $2::text, jsonb_build_object('back', jsonb_build_array((m.left_on + 1)::text, $3::text)), $4 from m join up using (id))
+       select exists (select 1 from up) as ok`, [flatId, memberId, today, by, from]);
     return r.ok ? 'ok' : 'no';
   } catch (e) {
     if (nameClash(e)) return 'taken';   // someone living here now has the same name
