@@ -40,3 +40,10 @@ export const fmtTaka = (p: number) => `৳${Math.round(Math.abs(p) / 100).toLoca
 /** '2026-10-01' -> 'October 2026' (same in both languages). */
 export const fmtMonth = (month: string) =>
   new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+/** Hundredths of a meal -> '22.5' / '22' / '22.25', English digits. */
+export const fmtMeals = (h: number) => String(Math.round(h) / 100);
+
+/** Poisha per meal -> '৳31.72'; '—' before any meal or bazar (no rate yet, never ৳0.00). */
+export const fmtRate = (p: number, meals: number) =>
+  meals > 0 && p > 0 ? `৳${(p / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';

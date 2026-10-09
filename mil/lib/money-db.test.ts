@@ -134,10 +134,10 @@ describe('money storage', { timeout: 30000 }, () => {
     await addEntry(db, flatId, as('Zarif'), e({ type: 'deposit', amount: 30000, memberId: ids.Zarif }));
     const { entries } = await month();
     const bazar = entries.find(x => x.type === 'bazar')!.id, zarifDep = entries.find(x => x.memberId === ids.Zarif)!.id;
-    expect(await removeEntry(db, flatId, as('Zarif'), bazar)).toBe(false);
+    expect(await removeEntry(db, flatId, as('Zarif'), bazar, TODAY)).toBe(false);
     await confirmEntry(db, flatId, nafis, zarifDep);
-    expect(await removeEntry(db, flatId, as('Zarif'), zarifDep)).toBe(false);   // the cash is with the collector now
-    expect(await removeEntry(db, flatId, nafis, bazar)).toBe(true);
+    expect(await removeEntry(db, flatId, as('Zarif'), zarifDep, TODAY)).toBe(false);   // the cash is with the collector now
+    expect(await removeEntry(db, flatId, nafis, bazar, TODAY)).toBe(true);
     const after = await month();
     expect(after.entries.map(x => x.type)).toEqual(['deposit', 'deposit']);
     expect(after.removed.map(r => [r.by, r.type, r.amount])).toEqual([['Nafis', 'bazar', 50000]]);
@@ -161,7 +161,7 @@ describe('money storage', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, month } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 20000, note: 'Laundry', split: 'selected', selected: [ids.Tahsin, ids.Zarif] }));
     const id = (await month()).entries[0].id;
-    await removeEntry(db, flatId, nafis, id);
+    await removeEntry(db, flatId, nafis, id, TODAY);
     const [rec] = await db<{ b: Record<string, unknown> }>(`select before as b from audit_log where entity = 'ledger' and entity_id = $1 and after->>'removed' = 'true'`, [id]);
     expect(rec.b).toMatchObject({ amount_poisha: 20000, split: 'selected', note: 'Laundry', date: '2026-10-05', created_by: ids.Nafis, paid_by_member_id: null });
     expect([...(rec.b.selected as string[])].sort()).toEqual([ids.Tahsin, ids.Zarif].sort());
@@ -176,7 +176,7 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(nov.entries.map(x => [x.note, x.amount, x.paidBy, x.split])).toEqual([['Wi-Fi', 120000, null, 'equal']]);
     // added by the collector, whoever opens the page first, so no flatmate can remove the flat's bill
     expect(nov.entries[0].createdBy).toBe(ids.Nafis);
-    expect(await removeEntry(db, flatId, as('Tahsin'), nov.entries[0].id)).toBe(false);
+    expect(await removeEntry(db, flatId, as('Tahsin'), nov.entries[0].id, TODAY)).toBe(false);
   });
 
   it('a monthly bill for some people drops whoever left, and skips the bill if nobody is left', async () => {
@@ -269,7 +269,7 @@ describe('money storage', { timeout: 30000 }, () => {
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 20000, note: 'Laundry', split: 'selected', selected: [ids.Tahsin, ids.Zarif] }));
     const before = await month();
     const rows = await db<{ j: unknown }>(`select to_jsonb(l) as j from ledger l order by id`);
-    for (const x of before.entries) expect(await removeEntry(db, flatId, nafis, x.id)).toBe(true);
+    for (const x of before.entries) expect(await removeEntry(db, flatId, nafis, x.id, TODAY)).toBe(true);
     expect((await month()).removed.map(r => r.type).sort()).toEqual(['bill', 'deposit']);
     for (const x of before.entries) expect(await putBack(db, flatId, ids.Nafis, x.id, TODAY)).toBe(true);
     const after = await month();
@@ -283,7 +283,7 @@ describe('money storage', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, month } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 90000 }));
     const id = (await month()).entries[0].id;
-    await removeEntry(db, flatId, nafis, id);
+    await removeEntry(db, flatId, nafis, id, TODAY);
     const r = await Promise.all([putBack(db, flatId, ids.Nafis, id, TODAY), putBack(db, flatId, ids.Nafis, id, TODAY)]);
     expect(r.filter(Boolean)).toHaveLength(1);
     expect(await db(`select 1 from ledger where id = $1`, [id])).toHaveLength(1);
@@ -296,7 +296,7 @@ describe('money storage', { timeout: 30000 }, () => {
     const { flatId, nafis, month } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 90000 }));
     const id = (await month()).entries[0].id;
-    const r = await Promise.all([removeEntry(db, flatId, nafis, id), removeEntry(db, flatId, nafis, id)]);
+    const r = await Promise.all([removeEntry(db, flatId, nafis, id, TODAY), removeEntry(db, flatId, nafis, id, TODAY)]);
     expect(r.filter(Boolean)).toHaveLength(1);
     expect(await db(`select 1 from audit_log where entity_id = $1 and after->>'removed' = 'true'`, [id])).toHaveLength(1);
   });
@@ -305,15 +305,15 @@ describe('money storage', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, as, month } = await flat();
     await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 50000, paidBy: ids.Tahsin }));
     const id = (await month()).entries[0].id;
-    await removeEntry(db, flatId, as('Tahsin'), id);
+    await removeEntry(db, flatId, as('Tahsin'), id, TODAY);
     expect(await putBack(db, flatId, ids.Zarif, id, TODAY)).toBe(false);    // not his removal, not the collector
     expect(await putBack(db, flatId, ids.Tahsin, id, TODAY)).toBe(true);    // his own removal
-    await removeEntry(db, flatId, nafis, id);
+    await removeEntry(db, flatId, nafis, id, TODAY);
     expect(await putBack(db, flatId, ids.Tahsin, id, TODAY)).toBe(false);   // the latest removal is Nafis's
     // the collector role moves to Zarif while the entry is removed: the new collector may, Nafis (now a member, not the remover) may not
     await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 1000, paidBy: ids.Tahsin }));
     const id2 = (await month()).entries.find(x => x.amount === 1000)!.id;
-    await removeEntry(db, flatId, as('Tahsin'), id2);
+    await removeEntry(db, flatId, as('Tahsin'), id2, TODAY);
     await db(`update members set role = 'member' where id = $1`, [ids.Nafis]);
     await db(`update members set role = 'manager' where id = $1`, [ids.Zarif]);
     expect(await putBack(db, flatId, ids.Nafis, id2, TODAY)).toBe(false);
@@ -324,7 +324,7 @@ describe('money storage', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, month } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000 }));
     const id = (await month()).entries[0].id;
-    await removeEntry(db, flatId, nafis, id);
+    await removeEntry(db, flatId, nafis, id, TODAY);
     expect(await putBack(db, flatId, ids.Nafis, id, '2026-11-01')).toBe(false);   // next month: October is past
     await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-10-01'`, [flatId]);
     expect(await putBack(db, flatId, ids.Nafis, id, '2026-10-20')).toBe(false);   // closed before the month ended
@@ -336,7 +336,7 @@ describe('money storage', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, month } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 20000, note: 'Laundry', split: 'selected', selected: [ids.Tahsin] }));
     const id = (await month()).entries[0].id;
-    await removeEntry(db, flatId, nafis, id);
+    await removeEntry(db, flatId, nafis, id, TODAY);
     await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 70000 }));
     // a split insert that fails rolls back the entry and its history
     await db(`create or replace function boom3() returns trigger language plpgsql as $$ begin raise exception 'boom'; end $$`);
@@ -355,5 +355,43 @@ describe('money storage', { timeout: 30000 }, () => {
     await migrate();
     const cols = await db<{ c: string }>(`select column_name as c from information_schema.columns where table_name = 'ledger' order by ordinal_position`);
     expect(cols.map(r => r.c).join(',')).toBe(LEDGER_COLUMNS);
+  });
+
+  it('meal counts on screen are the engine numbers: they add up, guests inside, own never negative', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await saveMeal(db, flatId, ids.Tahsin, { memberId: ids.Tahsin, date: '2026-10-08', meal: 'd', count: 3, guests: 2 }, false);
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 300001 }));
+    const { meals, guestMeals, result } = await month();
+    const total = [...meals.values()].reduce((a, b) => a + b, 0);
+    expect(result.mealRate).toBe(Math.round((300001 * 100) / total));
+    for (const [id, m] of meals) {
+      const g = guestMeals.get(id) ?? 0;
+      expect(m - g).toBeGreaterThanOrEqual(0);
+    }
+    expect([...guestMeals.values()].reduce((a, b) => a + b, 0)).toBe(200);   // two guest dinners, weight 1
+    expect(total).toBe(3 * 9 * 250 + 200);
+  });
+
+  it('nothing settled in a past month can be removed, whatever the page sent; a pending one can', async () => {
+    const { flatId, ids, nafis, as, month } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 40000, date: '2026-09-20', note: 'September' }));
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000 }));
+    const sep = (await db<{ id: string }>(`select id from ledger where flat_id = $1 and note = 'September'`, [flatId]))[0].id;
+    expect(await removeEntry(db, flatId, nafis, sep, TODAY)).toBe(false);
+    expect(await db(`select 1 from ledger where id = $1`, [sep])).toHaveLength(1);
+    expect(await db(`select 1 from audit_log where entity_id = $1 and after->>'removed' = 'true'`, [sep])).toEqual([]);
+    const oct = (await month()).entries[0].id;
+    expect(await removeEntry(db, flatId, nafis, oct, '2026-11-01')).toBe(false);   // the first of next month, Dhaka date
+    // a wrong pending deposit from last month can still go: it counts nowhere and would otherwise wait forever
+    await db(`update ledger set status = 'pending', type = 'deposit', member_id = created_by where id = $1`, [sep]);
+    expect(await removeEntry(db, flatId, nafis, sep, TODAY)).toBe(true);
+    expect(await removeEntry(db, flatId, nafis, oct, '2026-10-31')).toBe(true);    // the last day of this month
+    // the person who sent it can take back their own pending deposit too, nobody else
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ type: 'deposit', amount: 10000, memberId: ids.Tahsin, note: 'Tahsin September' }))).toBe('ok');
+    await db(`update ledger set date = '2026-09-20', month = '2026-09-01' where flat_id = $1 and note = 'Tahsin September'`, [flatId]);   // as if sent last month
+    const mine = (await db<{ id: string; status: string }>(`select id, status from ledger where flat_id = $1 and note = 'Tahsin September'`, [flatId]))[0];
+    expect(mine.status).toBe('pending');
+    expect(await removeEntry(db, flatId, as('Zarif'), mine.id, TODAY)).toBe(false);
+    expect(await removeEntry(db, flatId, as('Tahsin'), mine.id, TODAY)).toBe(true);
   });
 });

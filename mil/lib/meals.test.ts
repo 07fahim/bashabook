@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addDays, countChanges, isDate, mealDecision, daysOfMonth, weightedMeals, daysPresent, headcount, isLocked, type MealMember, type MealChange } from './meals';
+import { addDays, countChanges, firstWeek, isDate, mealDecision, daysOfMonth, weightedMeals, daysPresent, headcount, isLocked, type MealMember, type MealChange } from './meals';
 
 const all = { b: true, l: true, d: true };
 const members: MealMember[] = [
@@ -61,6 +61,16 @@ describe('meal rules', () => {
   });
 });
 
+describe('first week', () => {
+  it('goes back only to the week that holds the first move-in day', () => {
+    expect(firstWeek('2026-10-10', '2026-10-10')).toBe(0);    // started today: no earlier week
+    expect(firstWeek('2026-10-10', '2026-10-04')).toBe(-1);   // 6 days ago: last week (3 to 9 October) holds it
+    expect(firstWeek('2026-10-10', '2026-10-03')).toBe(-1);   // the first day of last week
+    expect(firstWeek('2026-10-10', '2026-10-02')).toBe(-2);
+    expect(firstWeek('2026-10-10', '2026-12-01')).toBe(0);    // someone moving in later never pushes this week out
+  });
+});
+
 describe('count changes', () => {
   it('lists the meals whose count moved', () => {
     expect(countChanges({ b: 6, l: 8, d: 9 }, { b: 6, l: 8, d: 9 })).toEqual([]);
@@ -81,6 +91,12 @@ describe('fmtRange', () => {
     expect(fmtTaka(-38000)).toBe('৳380');
     expect(fmtTaka(150)).toBe('৳2');
     expect(fmtMonth('2026-10-01')).toBe('October 2026');
+  });
+
+  it('meal counts without trailing zeros, the meal rate to the poisha, and no rate before anyone ate', async () => {
+    const { fmtMeals, fmtRate } = await import('../app/[lang]/format');
+    expect([fmtMeals(2250), fmtMeals(2200), fmtMeals(2225), fmtMeals(0)]).toEqual(['22.5', '22', '22.25', '0']);
+    expect([fmtRate(3172, 100), fmtRate(3170, 100), fmtRate(123456, 1), fmtRate(0, 0), fmtRate(0, 2500)]).toEqual(['৳31.72', '৳31.70', '৳1,234.56', '—', '—']);
   });
 });
 

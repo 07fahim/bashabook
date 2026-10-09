@@ -54,6 +54,13 @@ body {
   color: var(--ink);
 }
 
+/* Phones, where the tabs are a bar fixed to the bottom: whatever the browser scrolls into view (a focused field, a Save
+   button) stops above the bar, and while the keyboard is open for typing the bar steps aside, as in native apps. */
+@media (max-width: 767px) {
+  html { scroll-padding-bottom: 6rem; }
+  body:has(:is(input:not([type="checkbox"], [type="radio"]), select, textarea):focus) nav.fixed { display: none; }
+}
+
 /* Khata: entries write themselves in, left to right */
 @keyframes write-in {
   from { clip-path: inset(0 100% 0 0); }

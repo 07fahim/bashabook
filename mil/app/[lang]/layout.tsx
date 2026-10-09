@@ -26,6 +26,8 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
 }
 
 export const viewport: Viewport = {
+  // Android shrinks the page above the keyboard, so a focused field and its Save button can be scrolled to
+  interactiveWidget: 'resizes-content',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#FBF7F0' },
     { media: '(prefers-color-scheme: dark)', color: '#0A0A0A' },

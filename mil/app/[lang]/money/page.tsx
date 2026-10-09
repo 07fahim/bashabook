@@ -10,11 +10,11 @@ import { ActionForm } from '../action-form';
 import { entryAction, putBackAction, removeAction } from '../actions';
 import { DateField } from '../date-field';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtDay, fmtMonth, fmtTaka } from '../format';
+import { fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { PayerSelect } from '../payer-select';
-import { checkChip, Field, Fold, focus, link, PageSkeleton, primary } from '../ui';
+import { checkChip, Field, Fold, focus, link, LongList, PageSkeleton, primary } from '../ui';
 import { balanceText, ConfirmList } from './bits';
 
 export default function Money({ params, searchParams }: PageProps<'/[lang]/money'>) {
@@ -47,8 +47,11 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const r = mo.result.perMember.find(p => p.id === me.memberId);
   const deposited = sum(ok.filter(e => e.type === 'deposit' && e.memberId === me.memberId));
   const spent = sum(ok.filter(e => e.type !== 'deposit' && e.type !== 'payout' && e.paidBy === me.memberId));
-  const myMeals = mo.meals.get(me.memberId) ?? 0;
-  const guestFood = r ? foodSplit(r.foodCost, myMeals, mo.guestMeals.get(me.memberId) ?? 0).guests : 0;   // own + guests = food cost, tested
+  const myMeals = mo.meals.get(me.memberId) ?? 0, myGuests = mo.guestMeals.get(me.memberId) ?? 0;
+  const guestFood = r ? foodSplit(r.foodCost, myMeals, myGuests).guests : 0;   // own + guests = food cost, tested
+  // meal counts are the engine's own numbers (hundredths, guests inside the host's count); the flat total is their sum
+  const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
+  const meals = (h: number) => (h === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(h));
   const billLines = mo.result.lines.filter(l => l.memberId === me.memberId && l.rowId !== 'bazar')
     .map(l => ({ id: l.rowId, amount: l.amount, note: mo.entries.find(e => e.id === l.rowId)?.note ?? x.types.bill }));
 
@@ -58,6 +61,11 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const picked = (e: Entry) => e.selected.length < mo.members.length && e.selected.includes(me.memberId);
   const shown = mine ? mo.entries.filter(e => [e.createdBy, e.paidBy, e.memberId].includes(me.memberId) || picked(e)) : mo.entries;
   const dates = [...new Set(shown.map(e => e.date))];
+  // phones show whole days up to 15 entries (more only if the first day alone is bigger), never splitting a day: its
+  // heading would show twice on wide screens, where both parts are visible
+  let keep = 0;
+  for (let n = 0; keep < dates.length && (n += shown.filter(e => e.date === dates[keep]).length) <= 15; keep++);
+  keep = Math.max(1, keep);
   const who = (e: Entry) =>
     e.type === 'deposit' ? (e.memberId === collector.id ? collector.name : `${name(e.memberId)} → ${collector.name}`)
     : e.type === 'payout' ? `${collector.name} → ${name(e.memberId)}`
@@ -94,9 +102,12 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           </span>
         </nav>
 
-        {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} x={x} items={waiting} collector={collector.name} /></div>}
+        {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={collector.name} /></div>}
 
-        <div className="mt-6 grid gap-6 md:grid-cols-2 md:items-start lg:grid-cols-3">
+        {/* desktop: my balance and the three forms on the left; the flat summary over the entries on the right, two thirds wide,
+            so both sides grow downward together and no column leaves a hole */}
+        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* balance, forms and everyone's balances (8 to 10 people): about as tall as the summary and entries beside them */}
           <div>
             <section className={card}>
               <h2 className="text-xl font-bold">{t.app.hi}, {me.name}</h2>
@@ -106,8 +117,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.breakdown}</summary>
                   <dl className="mt-2 space-y-1 [&>div]:flex [&>div]:justify-between [&>div]:gap-4 [&_dd]:tabular-nums">
                     <div className="font-semibold"><dt>{x.share}</dt><dd>{signed('−', r.foodCost + r.billShare)}</dd></div>
-                    <div className="pl-4"><dt>{x.myMeals}</dt><dd>{fmtTaka(r.foodCost - guestFood)}</dd></div>
-                    {guestFood > 0 && <div className="pl-4"><dt>{x.guestMeals}</dt><dd>{fmtTaka(guestFood)}</dd></div>}
+                    <div className="pl-4"><dt>{x.myMeals} · {meals(myMeals - myGuests)}</dt><dd>{fmtTaka(r.foodCost - guestFood)}</dd></div>
+                    {myGuests > 0 && <div className="pl-4"><dt>{x.guestMeals} · {meals(myGuests)}</dt><dd>{fmtTaka(guestFood)}</dd></div>}
                     {billLines.map(b => <div key={b.id} className="pl-4"><dt>{b.note}</dt><dd>{fmtTaka(b.amount)}</dd></div>)}
                     <div><dt>{x.deposited}</dt><dd>{signed('+', deposited)}</dd></div>
                     <div><dt>{x.spent}</dt><dd>{signed('+', spent)}</dd></div>
@@ -168,44 +179,48 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 </ActionForm>
               </Fold>
             </>)}
+            {/* everyone's balance grows with the flat (8 to 10 people): here it fills the side column beside the long list */}
+            <section className={`mt-3 ${card}`}>
+              <h2 className="text-xl font-bold">{x.everyone}</h2>
+              <ul className="mt-1 divide-y divide-line">
+                {mo.result.perMember.map(p => (
+                  <li key={p.id} className="flex justify-between gap-4 py-2">
+                    <span className="min-w-0">{name(p.id)}<span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span></span>
+                    <span className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{p.balance > 0 ? '+' : p.balance < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           </div>
 
+          <div className="flex flex-col gap-6 lg:col-span-2">
           <section className={card}>
             <h2 className="text-xl font-bold">{x.summary}</h2>
-            <dl className="mt-3 grid grid-cols-2 gap-2">
-              {([[x.totalBazar, sum(ok.filter(e => e.type === 'bazar'))], [x.totalBills, sum(ok.filter(e => e.type === 'bill'))],
-                [x.mealRate, mo.result.mealRate], [x.withName.replace('{name}', collector.name), Math.max(mo.result.fund, 0)]] as const).map(([k, v]) => (
+            <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 lg:grid-cols-4">
+              {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar')))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
+                [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? (totalMeals === 100 ? x.mealSoFar : x.mealsSoFar) : totalMeals === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
+                [x.withName.replace('{name}', collector.name), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
-                  <dd className="text-2xl font-bold tabular-nums">{fmtTaka(v)}</dd>
+                  <dd className="text-2xl font-bold tabular-nums [overflow-wrap:anywhere]">{v}</dd>
+                  {sub && <dd className="text-[15px] text-muted">{sub}</dd>}
                 </div>
               ))}
             </dl>
             {mo.result.fund < 0 && <p className="mt-3 font-semibold">{x.flatOwes.replace('{name}', collector.name).replace('{t}', fmtTaka(mo.result.fund))}</p>}
             {!mo.result.invariantOk && <p className="mt-3 font-semibold text-chili">{x.problem}</p>}
-            <h3 className="mt-5 font-semibold">{x.everyone}</h3>
-            <ul className="mt-1 divide-y divide-line">
-              {mo.result.perMember.map(p => (
-                <li key={p.id} className="flex justify-between gap-4 py-2">
-                  <span>{name(p.id)}</span>
-                  <span className={`font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{p.balance > 0 ? '+' : p.balance < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
-                </li>
-              ))}
-            </ul>
             <h3 className="mt-5 font-semibold">{x.settleTitle}</h3>
-            {settle.length ? <ul className="mt-1 list-disc space-y-1 pl-5">{settle.map(s => <li key={s}>{s}</li>)}</ul> : <p className="mt-1 text-muted">{x.nobodyOwes}</p>}
+            {settle.length ? <ul className="mt-1 list-disc space-y-1 pl-5 md:columns-2 md:gap-10">{settle.map(s => <li key={s}>{s}</li>)}</ul> : <p className="mt-1 text-muted">{x.nobodyOwes}</p>}
           </section>
 
-          <section className={`${card} md:col-span-2 lg:col-span-1`}>
+          <section className={`flex flex-1 flex-col ${card}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xl font-bold">{x.entries}</h2>
               <Link href={href(month, !mine)} aria-pressed={mine} className={`inline-flex min-h-11 items-center rounded-full border border-muted px-4 font-semibold ${mine ? 'bg-turmeric text-on-turmeric border-turmeric' : ''} ${focus}`}>{x.onlyMine}</Link>
             </div>
-            {!dates.length && <p className="mt-3 text-muted">{x.noEntries}</p>}
-            <ul>
-              {dates.map(d => (
+            {!dates.length ? <p className="mt-3 text-muted">{x.noEntries}</p> : <LongList fill label={x.entries} keep={keep} more={t.app.showAll.replace('{n}', String(shown.length))} less={t.app.showLess} items={dates.map(d => (
                 <li key={d}>
-                  <h3 className="mt-4 text-[15px] font-semibold text-muted">{fmtDay(d, lang)}</h3>
+                  <h3 className="pt-4 text-[15px] font-semibold text-muted">{fmtDay(d, lang)}</h3>
                   <ul className="divide-y divide-line">
                     {shown.filter(e => e.date === d).map(e => (
                       <li key={e.id} className="group py-3">
@@ -220,7 +235,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="font-bold tabular-nums">{fmtTaka(e.amount)}</span>
-                          {(boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
+                          {(month === thisMonth || e.status === 'pending') && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
                             <details>
                               <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtTaka(e.amount)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
                             </details>
@@ -238,11 +253,17 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                     ))}
                   </ul>
                 </li>
-              ))}
-            </ul>
+              ))} />}
+            {/* removed entries are rarely needed: folded behind their count, still one tap from Put back */}
             {!mine && mo.removed.length > 0 && (
-              <ul className="mt-4 divide-y divide-line border-t border-line text-[15px] text-muted">
-                {mo.removed.map(rm => (
+              <details className="group/rm mt-4 border-t border-line pt-2">
+              {/* the same + (turning to ×) as every other fold, so open and closed are visible */}
+              <summary className={`inline-flex min-h-11 cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden ${link}`}>
+                {x.removedTitle.replace('{n}', String(mo.removed.length))}
+                <span aria-hidden="true" className="text-xl leading-none transition-transform group-open/rm:rotate-45">+</span>
+              </summary>
+              <div className="text-[15px] text-muted">
+              <LongList label={x.removedTitle.replace('{n}', String(mo.removed.length))} keep={5} more={t.app.showAll.replace('{n}', String(mo.removed.length))} less={t.app.showLess} items={mo.removed.map(rm => (
                   <li key={rm.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
                     <span className="min-w-0 flex-1">{x.types[rm.type]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {x.removedBy.replace('{name}', rm.by)}</span>
                     <span className="flex items-center gap-2">
@@ -256,10 +277,12 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       )}
                     </span>
                   </li>
-                ))}
-              </ul>
+                ))} />
+              </div>
+              </details>
             )}
           </section>
+          </div>
         </div>
       </main>
     </>

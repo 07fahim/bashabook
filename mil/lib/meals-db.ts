@@ -247,9 +247,13 @@ export async function cookAgain(db: Db, flatId: string, by: string, from: string
     [flatId, from, to, meals.join(','), { cookAgain: [from, to], meals: meals.join(',') }, by, firstOpen]);
 }
 
-/** Changes worth seeing: late, made for someone else, away, no cooking, usual meals and meal rules. Newest 50.
- *  `mine` keeps my own meals plus flat-wide rows. */
-export const loadHistory = (db: Db, flatId: string, mine: string | null = null) => db<HistoryRow>(
+/** The flat's first move-in day: meals start there. */
+export const flatStart = async (db: Db, flatId: string) =>
+  (await db<{ start: string }>(`select min(joined_on)::text as start from members where flat_id = $1`, [flatId]))[0].start;
+
+/** Changes worth seeing: late, made for someone else, away, no cooking, usual meals and meal rules. The newest `limit`
+ *  (the page asks for one more to know whether older ones exist). `mine` keeps my own meals plus flat-wide rows. */
+export const loadHistory = (db: Db, flatId: string, mine: string | null = null, limit = 50) => db<HistoryRow>(
   `select a.at, actor.name as actor, who.name as who, a.entity, a.entity_id as "entityId", a.after, a.before
    from audit_log a
    left join members actor on actor.id = a.by_member
@@ -260,7 +264,7 @@ export const loadHistory = (db: Db, flatId: string, mine: string | null = null) 
               or coalesce((a.after->>'guests')::int, 0) <> coalesce((a.before->>'guests')::int, 0)   -- every guest change is worth seeing
               or coalesce((a.after->>'late')::boolean, false) or split_part(a.entity_id, '|', 1) <> a.by_member::text)))
      and ($2::text is null or a.entity_id like 'flat|%' or split_part(a.entity_id, '|', 1) = $2::text)
-   order by a.id desc limit 50`, [flatId, mine]);
+   order by a.id desc limit $3::int`, [flatId, mine, limit]);
 
 /** Days from `from` on with no cooking, and which meals. */
 export const loadNoCookDays = (db: Db, flatId: string, from: string) => db<{ date: string; meals: string }>(

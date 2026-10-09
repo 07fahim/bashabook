@@ -75,6 +75,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           <span>{m.lockTime.replace('{t}', fmtTime(meals.flat.cutoff))}</span> <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link>
         </p>
 
+        {/* three groups of about the same height side by side; everyone in the flat (8 to 10 people) gets the full width
+            below, so no column grows far past the others and leaves a hole */}
         <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
           <div>
             <h2 className={groupLabel}>{m.groupToday}</h2>
@@ -94,9 +96,94 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               <LockChange m={m} lang={lang} date={tomorrow} hc={tom} changes={changes} />
               <ShareButton text={text} label={m.share} copied={m.copied} />
             </section>
-
           </div>
           <div>
+            <h2 className={groupLabel}>{mn.groupMoney}</h2>
+            <div className="mt-3">
+              {waiting.length ? <ConfirmList lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /> : <p className="text-muted">{mn.noPending}</p>}
+            </div>
+            {([['payout', mn.giveTitle, mn.giveLead, mn.to], ['deposit', mn.gotTitle, mn.gotLead, mn.from]] as const).map(([type, title, lead, label]) => (
+              <Fold key={type} title={title} lead={lead} level={3}>
+                <ActionForm action={entryAction} className="mt-4">
+                  <input type="hidden" name="lang" value={lang} />
+                  <input type="hidden" name="type" value={type} />
+                  <label className="block font-semibold">
+                    {label}
+                    <select name="who" className={field} required defaultValue="">
+                      <option value="" disabled>—</option>
+                      {mo.members.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </label>
+                  <Field label={mn.amount} name="amount" inputMode="decimal" required placeholder="3000" />
+                  <DateField lang={lang} label={mn.date} name="date" required min={monthOf(today)} max={today} defaultValue={today} />
+                  <Field label={mn.note} name="note" maxLength={100} />
+                  <button className={primary}>{mn.save}</button>
+                </ActionForm>
+              </Fold>
+            ))}
+            <Fold title={mn.roomsTitle} lead={mn.roomsLead} level={3}>
+              {mo.rooms.length > 0 && (
+                <ul className="mt-4 divide-y divide-line">
+                  {mo.rooms.map(room => (
+                    <li key={room.id} className="py-3">
+                      <form action={rentAction} className="flex flex-wrap items-end gap-3">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="roomId" value={room.id} />
+                        <span className="min-w-24 flex-1 self-center font-semibold">{room.name}</span>
+                        <label className="text-[15px] font-semibold">{mn.rent}
+                          <input name="rent" inputMode="decimal" defaultValue={room.rentShare / 100} className={`${field} w-32`} />
+                        </label>
+                        <button className={`${secondary} w-auto`}>{mn.save}</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <ActionForm action={addRoomAction} className="mt-4">
+                <input type="hidden" name="lang" value={lang} />
+                <Field label={mn.roomName} name="name" required maxLength={40} />
+                <Field label={mn.rent} name="rent" inputMode="decimal" required placeholder="12000" />
+                <button className={secondary}>{mn.addRoom}</button>
+              </ActionForm>
+              {mo.rooms.length > 0 && (
+                <ul className="mt-6 divide-y divide-line">
+                  {mo.members.map(p => (
+                    <li key={p.id} className="py-2">
+                      <form action={setRoomAction} className="flex flex-wrap items-center gap-3">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="memberId" value={p.id} />
+                        <span className="min-w-24 flex-1">{p.name}</span>
+                        <select name="roomId" defaultValue={p.roomId ?? ''} aria-label={`${p.name}: ${mn.roomName}`} className={`${field} mt-0 w-40`}>
+                          <option value="">{mn.noRoom}</option>
+                          {mo.rooms.map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
+                        </select>
+                        <button className={`${secondary} w-auto`}>{mn.save}</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Fold>
+            <Fold title={mn.repeatsTitle} lead={mn.repeatsLead} level={3}>
+              {!repeats.length ? <p className="mt-4 text-muted">{mn.noRepeats}</p> : (
+                <ul className="mt-4 divide-y divide-line">
+                  {repeats.map(rp => (
+                    <li key={rp.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <span>{rp.name} · {fmtTaka(rp.amount)} · {mn.splits[rp.split]}</span>
+                      <form action={stopRepeatAction}>
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="id" value={rp.id} />
+                        <button className={`min-h-11 px-2 ${link}`}>{mn.stopRepeat}</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Fold>
+          </div>
+          {/* on a tablet this group takes the whole second row, its two halves side by side */}
+          <div className="md:col-span-2 md:grid md:grid-cols-2 md:gap-x-8 lg:col-span-1 lg:block">
+            <div>
             <h2 className={groupLabel}>{m.groupChange}</h2>
             <Fold title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
               <form className="mt-4 space-y-4">
@@ -189,6 +276,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               </ActionForm>
             </Fold>
 
+            </div>
+            <div>
             <h2 className={groupLabel}>{m.groupSettings}</h2>
             <Fold id="rules" title={m.rulesTitle} level={3} open={'rules' in sp}>
               {'rules' in sp && <FocusHere />}
@@ -216,198 +305,115 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 {meals.flat.cookToken && <p className="mt-2 text-[15px] text-muted">{m.cookOffLead}</p>}
               </form>
             </Fold>
+            </div>
           </div>
-          <div>
-            <h2 className={groupLabel}>{a.members}</h2>
-            <section className={card}>
-              <ul className="divide-y divide-line">
-                {members.map(x => (
-                  <li key={x.id} className="py-4 first:pt-0 last:pb-0">
-                    {/* a long badge (last day) drops below the name on a phone instead of squeezing it */}
-                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                      <span className="flex items-center gap-3 text-lg font-semibold"><Avatar id={x.id} name={x.name} v={x.photoV} size={36} />{x.name}</span>
-                      <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
-                        {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
-                      </span>
-                    </div>
-                    {sp.back === x.id && <p role="status" className="mt-1 font-semibold text-leaf">{a.broughtBack}</p>}
-                    {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
-                    {/* the member's actions sit on one line; an opened one takes the full width below */}
-                    <div className="flex flex-wrap items-start gap-x-6">
+        </div>
+        <div>
+          <h2 className={groupLabel}>{a.members}</h2>
+            <ul className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2 md:items-start lg:grid-cols-3">
+              {members.map(x => (
+                <li key={x.id} className="rounded-3xl border border-line bg-surface p-5">
+                  {/* a long badge (last day) drops below the name on a phone instead of squeezing it */}
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                    <span className="flex items-center gap-3 text-lg font-semibold"><Avatar id={x.id} name={x.name} v={x.photoV} size={36} />{x.name}</span>
+                    <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
+                      {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
+                    </span>
+                  </div>
+                  {sp.back === x.id && <p role="status" className="mt-1 font-semibold text-leaf">{a.broughtBack}</p>}
+                  {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
+                  {/* the member's actions sit on one line; an opened one takes the full width below */}
+                  <div className="flex flex-wrap items-start gap-x-6">
+                    <details className="open:basis-full">
+                      <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.rename}</summary>
+                      <ActionForm action={renameAction} className="mt-2">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="memberId" value={x.id} />
+                        <div className="flex gap-2">
+                          <input name="name" required maxLength={40} autoComplete="off" defaultValue={x.name} aria-label={`${a.memberName}: ${x.name}`} className={`${field} mt-0 min-w-0 flex-1`} />
+                          {/* its own classes: the shared button style is full width */}
+                          <button className={`inline-flex min-h-12 shrink-0 items-center rounded-full border border-muted bg-surface px-5 font-semibold hover:bg-paper ${focus}`}>{a.save}</button>
+                        </div>
+                      </ActionForm>
+                    </details>
+                    {x.photoV !== null && (
+                      <form action={removePhotoAction}>
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="memberId" value={x.id} />
+                        <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.removePhoto}</button>
+                      </form>
+                    )}
+                    {x.claimed && x.id !== me.memberId && (
                       <details className="open:basis-full">
-                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.rename}</summary>
-                        <ActionForm action={renameAction} className="mt-2">
+                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
+                        <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
+                        <ActionForm action={resetPinAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="memberId" value={x.id} />
-                          <div className="flex gap-2">
-                            <input name="name" required maxLength={40} autoComplete="off" defaultValue={x.name} aria-label={`${a.memberName}: ${x.name}`} className={`${field} mt-0 min-w-0 flex-1`} />
-                            {/* its own classes: the shared button style is full width */}
-                            <button className={`inline-flex min-h-12 shrink-0 items-center rounded-full border border-muted bg-surface px-5 font-semibold hover:bg-paper ${focus}`}>{a.save}</button>
-                          </div>
+                          <PinField label={a.oneTimePin} name="pin" autoComplete="off" />
+                          <button className={`${secondary} sm:w-auto`}>{a.resetBtn}</button>
                         </ActionForm>
                       </details>
-                      {x.photoV !== null && (
-                        <form action={removePhotoAction}>
+                    )}
+                    {x.id !== me.memberId && (
+                      <details className="open:basis-full">
+                        <summary aria-label={`${a.movingOut}: ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.movingOut}</summary>
+                        <p className="mt-2 text-[15px] text-muted">{a.movingOutLead}</p>
+                        <ActionForm action={leavingAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="memberId" value={x.id} />
-                          <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.removePhoto}</button>
-                        </form>
-                      )}
-                      {x.claimed && x.id !== me.memberId && (
-                        <details className="open:basis-full">
-                          <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
-                          <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
-                          <ActionForm action={resetPinAction} className="mt-3">
+                          {/* no default day, so one slip of a tap can't mark someone as leaving */}
+                          <DateField lang={lang} label={a.lastDay} name="lastDay" required min={x.joinedOn > today ? x.joinedOn : today} max={to} defaultValue={x.leftOn ?? undefined} />
+                          <button className={`${secondary} sm:w-auto`}>{a.movingOutBtn}</button>
+                        </ActionForm>
+                        {x.leftOn && (
+                          <ActionForm action={leavingAction} className="mt-2">
                             <input type="hidden" name="lang" value={lang} />
                             <input type="hidden" name="memberId" value={x.id} />
-                            <PinField label={a.oneTimePin} name="pin" autoComplete="off" />
-                            <button className={`${secondary} sm:w-auto`}>{a.resetBtn}</button>
+                            <input type="hidden" name="stay" value="1" />
+                            <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.staying}</button>
                           </ActionForm>
-                        </details>
-                      )}
-                      {x.id !== me.memberId && (
-                        <details className="open:basis-full">
-                          <summary aria-label={`${a.movingOut}: ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.movingOut}</summary>
-                          <p className="mt-2 text-[15px] text-muted">{a.movingOutLead}</p>
-                          <ActionForm action={leavingAction} className="mt-3">
-                            <input type="hidden" name="lang" value={lang} />
-                            <input type="hidden" name="memberId" value={x.id} />
-                            {/* no default day, so one slip of a tap can't mark someone as leaving */}
-                            <DateField lang={lang} label={a.lastDay} name="lastDay" required min={x.joinedOn > today ? x.joinedOn : today} max={to} defaultValue={x.leftOn ?? undefined} />
-                            <button className={`${secondary} sm:w-auto`}>{a.movingOutBtn}</button>
-                          </ActionForm>
-                          {x.leftOn && (
-                            <ActionForm action={leavingAction} className="mt-2">
-                              <input type="hidden" name="lang" value={lang} />
-                              <input type="hidden" name="memberId" value={x.id} />
-                              <input type="hidden" name="stay" value="1" />
-                              <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.staying}</button>
-                            </ActionForm>
-                          )}
-                        </details>
-                      )}
+                        )}
+                      </details>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
+          {gone.length > 0 && (
+            <Fold title={a.movedOut} level={3}>
+              <ul className="mt-2 divide-y divide-line">
+                {gone.map(x => (
+                  <li key={x.id} className="py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                      <span className="font-semibold">{x.name}</span>
+                      <span className="text-[15px] text-muted">{a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}</span>
                     </div>
+                    <details>
+                      <summary aria-label={`${a.byMistake} ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.byMistake}</summary>
+                      <p className="mt-2 text-[15px] text-muted">{a.bringBackLead.replace('{d}', fmtDay(addDays(x.leftOn, 1), lang))}</p>
+                      <ActionForm action={bringBackAction} className="mt-3">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="memberId" value={x.id} />
+                        <button aria-label={`${a.bringBackBtn}: ${x.name}`} className={`${secondary} sm:w-auto`}>{a.bringBackBtn}</button>
+                      </ActionForm>
+                    </details>
                   </li>
                 ))}
               </ul>
-            </section>
-            {gone.length > 0 && (
-              <Fold title={a.movedOut} level={3}>
-                <ul className="mt-2 divide-y divide-line">
-                  {gone.map(x => (
-                    <li key={x.id} className="py-3">
-                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                        <span className="font-semibold">{x.name}</span>
-                        <span className="text-[15px] text-muted">{a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}</span>
-                      </div>
-                      <details>
-                        <summary aria-label={`${a.byMistake} ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.byMistake}</summary>
-                        <p className="mt-2 text-[15px] text-muted">{a.bringBackLead.replace('{d}', fmtDay(addDays(x.leftOn, 1), lang))}</p>
-                        <ActionForm action={bringBackAction} className="mt-3">
-                          <input type="hidden" name="lang" value={lang} />
-                          <input type="hidden" name="memberId" value={x.id} />
-                          <button aria-label={`${a.bringBackBtn}: ${x.name}`} className={`${secondary} sm:w-auto`}>{a.bringBackBtn}</button>
-                        </ActionForm>
-                      </details>
-                    </li>
-                  ))}
-                </ul>
-              </Fold>
-            )}
-            <Fold title={a.addMember} level={3}>
-              <ActionForm action={addMemberAction} className="mt-3">
-                <input type="hidden" name="lang" value={lang} />
-                <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
-                <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={firstOpen} />
-                <button className={primary}>{a.addBtn}</button>
-              </ActionForm>
             </Fold>
+          )}
+          <Fold title={a.addMember} level={3}>
+            <ActionForm action={addMemberAction} className="mt-3">
+              <input type="hidden" name="lang" value={lang} />
+              <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
+              <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={firstOpen} />
+              <button className={primary}>{a.addBtn}</button>
+            </ActionForm>
+          </Fold>
           </div>
-          <div>
-            <h2 className={groupLabel}>{mn.groupMoney}</h2>
-            <div className="mt-3">
-              {waiting.length ? <ConfirmList lang={lang} x={mn} items={waiting} collector={me.name} /> : <p className="text-muted">{mn.noPending}</p>}
-            </div>
-            {([['payout', mn.giveTitle, mn.giveLead, mn.to], ['deposit', mn.gotTitle, mn.gotLead, mn.from]] as const).map(([type, title, lead, label]) => (
-              <Fold key={type} title={title} lead={lead} level={3}>
-                <ActionForm action={entryAction} className="mt-4">
-                  <input type="hidden" name="lang" value={lang} />
-                  <input type="hidden" name="type" value={type} />
-                  <label className="block font-semibold">
-                    {label}
-                    <select name="who" className={field} required defaultValue="">
-                      <option value="" disabled>—</option>
-                      {mo.members.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </label>
-                  <Field label={mn.amount} name="amount" inputMode="decimal" required placeholder="3000" />
-                  <DateField lang={lang} label={mn.date} name="date" required min={monthOf(today)} max={today} defaultValue={today} />
-                  <Field label={mn.note} name="note" maxLength={100} />
-                  <button className={primary}>{mn.save}</button>
-                </ActionForm>
-              </Fold>
-            ))}
-            <Fold title={mn.roomsTitle} lead={mn.roomsLead} level={3}>
-              {mo.rooms.length > 0 && (
-                <ul className="mt-4 divide-y divide-line">
-                  {mo.rooms.map(room => (
-                    <li key={room.id} className="py-3">
-                      <form action={rentAction} className="flex flex-wrap items-end gap-3">
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="roomId" value={room.id} />
-                        <span className="min-w-24 flex-1 self-center font-semibold">{room.name}</span>
-                        <label className="text-[15px] font-semibold">{mn.rent}
-                          <input name="rent" inputMode="decimal" defaultValue={room.rentShare / 100} className={`${field} w-32`} />
-                        </label>
-                        <button className={`${secondary} w-auto`}>{mn.save}</button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <ActionForm action={addRoomAction} className="mt-4">
-                <input type="hidden" name="lang" value={lang} />
-                <Field label={mn.roomName} name="name" required maxLength={40} />
-                <Field label={mn.rent} name="rent" inputMode="decimal" required placeholder="12000" />
-                <button className={secondary}>{mn.addRoom}</button>
-              </ActionForm>
-              {mo.rooms.length > 0 && (
-                <ul className="mt-6 divide-y divide-line">
-                  {mo.members.map(p => (
-                    <li key={p.id} className="py-2">
-                      <form action={setRoomAction} className="flex flex-wrap items-center gap-3">
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="memberId" value={p.id} />
-                        <span className="min-w-24 flex-1">{p.name}</span>
-                        <select name="roomId" defaultValue={p.roomId ?? ''} aria-label={`${p.name}: ${mn.roomName}`} className={`${field} mt-0 w-40`}>
-                          <option value="">{mn.noRoom}</option>
-                          {mo.rooms.map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
-                        </select>
-                        <button className={`${secondary} w-auto`}>{mn.save}</button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Fold>
-            <Fold title={mn.repeatsTitle} lead={mn.repeatsLead} level={3}>
-              {!repeats.length ? <p className="mt-4 text-muted">{mn.noRepeats}</p> : (
-                <ul className="mt-4 divide-y divide-line">
-                  {repeats.map(rp => (
-                    <li key={rp.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                      <span>{rp.name} · {fmtTaka(rp.amount)} · {mn.splits[rp.split]}</span>
-                      <form action={stopRepeatAction}>
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="id" value={rp.id} />
-                        <button className={`min-h-11 px-2 ${link}`}>{mn.stopRepeat}</button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Fold>
           </div>
-        </div>
       </main>
     </>
   );

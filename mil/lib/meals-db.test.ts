@@ -143,6 +143,9 @@ describe('meal storage', { timeout: 30000 }, () => {
     await saveMeal(db, flatId, memberId, { memberId, date: '2026-10-09', meal: 'l', count: 0, guests: 0 }, true);   // Nafis, own, late
     await saveMeal(db, flatId, memberId, { memberId: tahsin, date: '2026-10-09', meal: 'd', count: 0, guests: 0 }, true);
     expect((await loadHistory(db, flatId))[2].entity).toBe('flats');
+    // Show older changes reloads a longer slice of the same newest-first list: a shorter one is exactly its start
+    const all = await loadHistory(db, flatId);
+    expect(await loadHistory(db, flatId, null, 2)).toEqual(all.slice(0, 2));
     const mine = await loadHistory(db, flatId, tahsin);
     expect(mine.map(h => h.entity)).toEqual(['meal_changes', 'flats']);   // my meal + the flat-wide rule change
   });

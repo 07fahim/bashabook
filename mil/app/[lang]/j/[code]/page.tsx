@@ -44,7 +44,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
               <h1 className={h1}>{a.pickName}</h1>
               <p className="mt-2 text-muted">{a.pickLead}</p>
             </div>
-            <ul className="mt-6 grid gap-3">
+            <ul className="mt-6 grid grid-cols-1 gap-3">
               {flat.members.map(x => (
                 <li key={x.id}>
                   <Link href={`/${lang}/j/${code}?m=${x.id}`} className={`flex min-h-14 items-center justify-between gap-4 rounded-xl border border-line bg-surface px-5 text-lg font-semibold ${focus}`}>
