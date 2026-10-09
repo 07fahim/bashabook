@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addDays, isDate, mealDecision, daysOfMonth, weightedMeals, daysPresent, headcount, isLocked, type MealMember, type MealChange } from './meals';
+import { addDays, countChanges, isDate, mealDecision, daysOfMonth, weightedMeals, daysPresent, headcount, isLocked, type MealMember, type MealChange } from './meals';
 
 const all = { b: true, l: true, d: true };
 const members: MealMember[] = [
@@ -58,6 +58,13 @@ describe('meal rules', () => {
     expect(isDate('2026-02-30')).toBe(false);
     expect(isDate('2026-13-01')).toBe(false);
     expect(isDate('9 Oct')).toBe(false);
+  });
+});
+
+describe('count changes', () => {
+  it('lists the meals whose count moved', () => {
+    expect(countChanges({ b: 6, l: 8, d: 9 }, { b: 6, l: 8, d: 9 })).toEqual([]);
+    expect(countChanges({ b: 6, l: 8, d: 9 }, { b: 5, l: 8, d: 10 })).toEqual([{ meal: 'b', from: 6, to: 5 }, { meal: 'd', from: 9, to: 10 }]);
   });
 });
 

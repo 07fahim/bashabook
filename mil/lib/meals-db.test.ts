@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { addMember, createFlat } from './auth';
-import { headcount, indexChanges, mealCount, type Meal } from './meals';
+import { countChanges, headcount, indexChanges, mealCount, type Meal } from './meals';
 import {
-  addGuests, cancelAway, countAtLock, currentPlates, removeGuests, setOwn, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, setAway, setCookContact, setDefaults, upcomingAway, updateSettings,
+  addGuests, cancelAway, countAtLock, currentPlates, removeGuests, setOwn, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, setAway, setDefaults, upcomingAway, updateSettings,
 } from './meals-db';
 
 const ALL_OFF = { b: false, l: false, d: false }, ALL_ON = { b: true, l: true, d: true };
@@ -323,15 +323,6 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await currentPlates(db, flatId, tahsin, '2026-10-14', 'l')).toEqual({ own: 0, guests: 2 });
   });
 
-  it('saves the cook contact; the database refuses a bad number', async () => {
-    const { flatId, load } = await flat();
-    await setCookContact(db, flatId, '01712345678', true);
-    expect((await load()).flat).toMatchObject({ cookPhone: '01712345678', cookWhatsapp: true });
-    await setCookContact(db, flatId, null, false);
-    expect((await load()).flat).toMatchObject({ cookPhone: null, cookWhatsapp: false });
-    await expect(setCookContact(db, flatId, '123', false)).rejects.toThrow();
-  });
-
   it('keeps the count first seen after the lock, so any later change shows, even a new member', async () => {
     const { flatId, load } = await flat();
     const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
@@ -342,6 +333,17 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(now.l).toBe(first.l + 1);
     expect(await countAtLock(db, flatId, '2026-10-10', now)).toEqual(first);      // still the first one
     expect(await countAtLock(db, flatId, '2026-10-11', now)).toEqual(now);        // a new day starts over
+  });
+
+  it('after the lock, deleted rows count as a change, and a count back at the baseline shows none', async () => {
+    const { flatId, tahsin, load } = await flat();
+    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-12'); };
+    await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');
+    const base = await countAtLock(db, flatId, '2026-10-12', await hc());        // first view after the lock
+    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');            // deletes Tahsin's rows
+    expect(countChanges(base, await hc())).toEqual([{ meal: 'b', from: 1, to: 2 }, { meal: 'l', from: 1, to: 2 }, { meal: 'd', from: 1, to: 2 }]);
+    await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');               // back to what it was
+    expect(countChanges(await countAtLock(db, flatId, '2026-10-12', await hc()), await hc())).toEqual([]);
   });
 });
 

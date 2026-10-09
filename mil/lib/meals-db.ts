@@ -4,7 +4,6 @@ import { addDays, indexChanges, isPresent, mealCount, mealDecision, type Decisio
 
 export type FlatInfo = {
   name: string; cutoff: string; cookToken: string | null; lang: 'bn' | 'en'; weights: Record<Meal, number>;
-  cookPhone: string | null; cookWhatsapp: boolean;
 };
 export type Member = MealMember & { name: string; role: 'member' | 'manager'; inMeals: boolean };
 export type HistoryRow = {
@@ -26,7 +25,7 @@ const cell = (c: MealChange) => `${c.memberId}|${c.date}|${c.meal}`;
 /** Everything the meal screens need for dates from..to. */
 export async function loadMeals(db: Db, flatId: string, from: string, to: string) {
   const [flat] = await db<FlatInfo>(
-    `select name, cutoff_time::text as cutoff, cook_link_token as "cookToken", cook_phone as "cookPhone", cook_whatsapp as "cookWhatsapp", language as lang,
+    `select name, cutoff_time::text as cutoff, cook_link_token as "cookToken", language as lang,
        json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights
      from flats where id = $1`, [flatId]);
   const members = await db<Member>(
@@ -261,9 +260,6 @@ export const loadHistory = (db: Db, flatId: string, mine: string | null = null) 
 export const loadNoCookDays = (db: Db, flatId: string, from: string) => db<{ date: string; meals: string }>(
   `select date::text as date, string_agg(meal, ',' order by position(meal in 'bld')) as meals
    from no_cook where flat_id = $1 and date >= $2 group by date order by date`, [flatId, from]);
-
-export const setCookContact = (db: Db, flatId: string, phone: string | null, whatsapp: boolean) =>
-  db(`update flats set cook_phone = $2, cook_whatsapp = $3 where id = $1`, [flatId, phone, whatsapp]);
 
 /** Tomorrow's count as first seen after the lock time. The first call for `date` saves `hc`; later calls return the saved one,
  *  so comparing it with the live count catches every change after the lock, whatever caused it (deleted rows, new members). */

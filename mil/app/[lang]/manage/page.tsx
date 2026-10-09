@@ -3,16 +3,17 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { listMembers } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { addDays, editFrom, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
-import { loadMeals, loadNoCookDays } from '@/lib/meals-db';
+import { addDays, countChanges, editFrom, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
 import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, resetPinAction, settingsAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtDay, fmtTime } from '../format';
+import { countText, fmtDay, fmtTime } from '../format';
 import { DateField } from '../date-field';
 import { FocusHere } from '../focus-here';
 import { Header } from '../header';
+import { LockChange } from '../lock-change';
 import { Nav } from '../nav';
 import { ShareButton } from '../share-button';
 import { checkChip, field, Field, Fold, focus, groupLabel, link, PinField, primary, secondary, PageSkeleton } from '../ui';
@@ -48,7 +49,9 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   const firstOpen = isLocked(tomorrow, nowDhaka(), meals.flat.cutoff) ? addDays(tomorrow, 1) : tomorrow;
   // tomorrow can still change until the lock time (and late after it), so the count and the shared text say so
   const status = firstOpen === tomorrow ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
-  const text = `${me.flatName} · ${m.tomorrow}, ${fmtDay(tomorrow, lang)}\n${line(tom)}\n${status}`;
+  // only after the lock does a change matter: before it, the card already says the count can still move
+  const changes = firstOpen === tomorrow ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, tom), tom);
+  const text = countText(me.flatName, m, tomorrow, tom, status, lang);
   const person = picked.members.find(x => x.id === who) ?? picked.members.find(x => x.id === me.memberId)!;
   const idx = indexChanges(picked.changes);
   const step = `grid size-11 place-items-center rounded-full border border-muted text-xl font-bold disabled:opacity-40 ${focus}`;
@@ -78,6 +81,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 ))}
               </dl>
               <p className="mt-3 text-[15px] text-muted">{m.today}: {line(tod)}</p>
+              <LockChange m={m} changes={changes} />
               <ShareButton text={text} label={m.share} copied={m.copied} />
             </section>
 

@@ -2,14 +2,15 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { addDays, headcount, mealDecision, MEALS, nowDhaka } from '@/lib/meals';
+import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka } from '@/lib/meals';
 import { listMembers } from '@/lib/auth';
-import { loadMeals } from '@/lib/meals-db';
+import { countAtLock, loadMeals } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { logoutAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtDay, fmtTime } from '../format';
+import { countText, fmtDay, fmtTime } from '../format';
 import { Header } from '../header';
+import { LockChange } from '../lock-change';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
 import { WeekChart } from '../week-chart';
@@ -34,6 +35,9 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const starter = meals.members.find(x => x.role === 'manager');
   const note = starter?.id === me.memberId ? m.todayLockedSelf : m.todayLocked.replace('{name}', starter?.name ?? '');
   const hc = headcount(meals.members, meals.changes, tomorrow);
+  // only after the lock does a change matter: before it, the card already says the count can still move
+  const changes = decision === 'open' ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, hc), hc);
+  const status = decision === 'open' ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
   return (
     <>
       <Header t={t} lang={lang} path="/home"><Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} /></Header>
@@ -57,7 +61,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           </section>
           <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{m.headcountTitle}</h2>
-            <p className="mt-1 text-[15px] text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)} · {decision === 'open' ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final}</p>
+            <p className="mt-1 text-[15px] text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)} · {status}</p>
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
               {MEALS.map(x => (
                 <div key={x} className="rounded-xl bg-paper py-3">
@@ -66,6 +70,8 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
                 </div>
               ))}
             </dl>
+            <LockChange m={m} changes={changes} />
+            <ShareButton text={countText(me.flatName, m, tomorrow, hc, status, lang)} label={m.share} copied={m.copied} />
           </section>
           {someoneMissing && <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{a.shareTitle}</h2>
