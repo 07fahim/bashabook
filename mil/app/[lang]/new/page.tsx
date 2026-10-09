@@ -37,7 +37,7 @@ export default async function NewFlat({ params }: PageProps<'/[lang]/new'>) {
           <PinField label={a.pinAgain} name="pin2" autoComplete="new-password" />
           <label className="block font-semibold">
             {a.others}
-            <textarea name="others" rows={5} className={`${field} md:h-28`} aria-describedby="others-hint" />
+            <textarea name="others" rows={4} className={field} aria-describedby="others-hint" />
             <span id="others-hint" className="mt-1 block text-[15px] font-normal text-muted">{a.othersHint}</span>
           </label>
           <button className={primary}>{a.createBtn}</button>

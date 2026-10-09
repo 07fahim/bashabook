@@ -66,7 +66,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
         <p className="mt-2 text-muted">{m.weekLead}</p>
         <div className="mt-6 md:grid md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:items-start md:gap-10">
           <div>
-            <ul className="mb-8 space-y-6 md:space-y-0 md:divide-y md:divide-line md:rounded-2xl md:border md:border-line md:bg-surface md:px-5">
+            <ul className="mb-8 space-y-6 md:mb-0 md:space-y-0 md:divide-y md:divide-line md:rounded-2xl md:border md:border-line md:bg-surface md:px-5">
               {week.map((date, i) => (
                 <li key={date} className="md:[&>div]:mt-0 md:grid md:grid-cols-[11rem_1fr] md:items-center md:gap-x-4 md:py-3">
                   <p className="font-semibold">
@@ -150,13 +150,13 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
               </ActionForm>
             </Fold>
 
-            <section className={`${card} md:mt-6`}>
+            <section className={`${card} md:mt-3`}>
               <h2 className={h2}>{m.historyTitle}</h2>
               <p className="mt-1 text-muted">{m.historyLead}</p>
               <div className="mt-3 flex gap-2">
                 {[[false, m.everyoneTab], [true, m.mineOnly]].map(([on, label]) => (
                   <Link key={String(on)} href={on ? `/${lang}/meals?mine=1` : `/${lang}/meals`} scroll={false} aria-current={mine === on ? 'true' : undefined}
-                    className={`px-4 py-2 font-semibold ${mine === on ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
+                    className={`inline-flex min-h-11 items-center px-4 font-semibold ${mine === on ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
                     {label}
                   </Link>
                 ))}

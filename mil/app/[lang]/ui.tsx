@@ -47,7 +47,7 @@ export const groupLabel = 'mt-10 text-[15px] font-semibold text-muted';
 /** Shown for the moment a logged-in page waits for the database: the shape of the page, no words. */
 export function PageSkeleton() {
   return (
-    <div aria-hidden="true" className="mx-auto max-w-md animate-pulse px-5 pt-5 motion-reduce:animate-none">
+    <div aria-hidden="true" className="mx-auto max-w-md animate-pulse md:max-w-5xl px-5 pt-5 motion-reduce:animate-none">
       <div className="h-8 w-32 rounded-lg bg-line" />
       <div className="mt-10 h-9 w-56 rounded-lg bg-line" />
       <div className="mt-8 h-40 rounded-2xl bg-line" />

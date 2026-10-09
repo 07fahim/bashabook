@@ -22,7 +22,7 @@ export function Header({ t, lang, path, children }: { t: Dict; lang: Locale; pat
       </div>
       <div className="flex items-center gap-1">
         <ThemeToggle label={t.themeToggle} />
-        <Link href={`/${other}${path}`} hrefLang={other} lang={other} className={`px-3 py-2 text-muted underline-offset-4 hover:underline ${focus}`}>
+        <Link href={`/${other}${path}`} hrefLang={other} lang={other} className={`inline-flex min-h-11 items-center px-3 text-muted underline-offset-4 hover:underline ${focus}`}>
           {t.switchLang}
         </Link>
       </div>

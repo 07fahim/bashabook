@@ -30,7 +30,7 @@ export function MealRow({ lang, m, meId, date, decision, members, changes, noCoo
             <ChipButton on={count > 0} disabled={closed || off}>
               <span className="font-semibold">{m.names[meal]}</span>
               <span className="text-[15px]">{count > 1 ? `${count} ${m.platesShort}` : count ? m.on : m.off}</span>
-              {badge && <span className="mt-1 rounded-full bg-paper px-2 text-[15px] text-ink">{badge}</span>}
+              {badge && <span className="mt-1 rounded-full bg-paper md:mt-0 px-2 text-[15px] text-ink">{badge}</span>}
             </ChipButton>
           </form>
         );

@@ -162,7 +162,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     </div>
                     {x.claimed && x.id !== me.memberId && (
                       <details className="mt-2">
-                        <summary className={`inline-block cursor-pointer py-2 text-[15px] ${link}`}>{a.resetPin}</summary>
+                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
                         <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
                         <ActionForm action={resetPinAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />
