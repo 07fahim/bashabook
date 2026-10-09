@@ -113,9 +113,10 @@ export async function changePin(db: Db, memberId: string, current: string, next:
   const [m] = await db<{ pin_hash: string | null }>(`select pin_hash from members where id = $1`, [memberId]);
   if (!(await countTry(db, memberId))) return 'locked';
   if (!m?.pin_hash || !(await bcrypt.compare(current, m.pin_hash))) return 'wrongPin';
-  // pin_hash = the one we checked, so a reset that lands at the same moment wins
-  await db(`update members set pin_hash = $2, failed_pin_count = 0, locked_until = null, must_change_pin = false where id = $1 and pin_hash = $3`,
-    [memberId, await hashPin(next), m.pin_hash]);
+  // pin_hash = the one we checked, so a reset that lands at the same moment wins (and nothing else changes)
+  const done = await db(`update members set pin_hash = $2, failed_pin_count = 0, locked_until = null, must_change_pin = false
+    where id = $1 and pin_hash = $3 returning id`, [memberId, await hashPin(next), m.pin_hash]);
+  if (!done.length) return 'wrongPin';
   await db(`delete from sessions where member_id = $1 and token_hash <> $2`, [memberId, hashToken(keepToken)]);
   return 'ok';
 }
@@ -123,14 +124,19 @@ export async function changePin(db: Db, memberId: string, current: string, next:
 /** The person who runs the flat fixes a name. Refused if someone in the flat already has it; the change goes in the history. */
 export async function renameMember(db: Db, flatId: string, by: string, memberId: string, name: string): Promise<'ok' | 'taken' | 'notFound'> {
   if (!UUID.test(memberId)) return 'notFound';
-  const [r] = await db<{ ok: boolean; found: boolean }>(
-    `with old as (select name from members where flat_id = $1 and id = $2),
-     up as (update members set name = $3 where flat_id = $1 and id = $2
-       and not exists (select 1 from members where flat_id = $1 and name = $3 and id <> $2) returning name),
-     log as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
-       select $1, 'members', $2::text, jsonb_build_object('rename', jsonb_build_array(old.name, up.name)), $4 from old, up)
-     select exists (select 1 from up) as ok, exists (select 1 from old) as found`, [flatId, memberId, name, by]);
-  return r.ok ? 'ok' : r.found ? 'taken' : 'notFound';
+  try {
+    const [r] = await db<{ found: boolean }>(
+      `with old as (select name from members where flat_id = $1 and id = $2),
+       up as (update members set name = $3 where flat_id = $1 and id = $2 and name <> $3 returning name),
+       log as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
+         select $1, 'members', $2::text, jsonb_build_object('rename', jsonb_build_array(old.name, up.name)), $4 from old, up)
+       select exists (select 1 from old) as found`, [flatId, memberId, name, by]);
+    return r.found ? 'ok' : 'notFound';   // the same name again changes nothing and writes no history
+  } catch (e) {
+    // unique (flat_id, name): the database decides, so two renames at the same moment can't both take a name
+    if ((e as { code?: string }).code === '23505') return 'taken';
+    throw e;
+  }
 }
 
 export async function resetPin(db: Db, flatId: string, memberId: string, pin: string) {

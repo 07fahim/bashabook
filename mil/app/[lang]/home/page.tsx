@@ -30,7 +30,8 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const [meals, people] = await Promise.all([loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId)]);
-  const someoneMissing = people.some(p => !p.claimed);   // the invite card only matters while someone hasn't joined
+  const someoneMissing = people.some(p => !p.claimed);
+  const myPhone = people.find(p => p.id === me.memberId)?.phone ?? '';   // the invite card only matters while someone hasn't joined
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
   const decision = decide(tomorrow);
   const starter = meals.members.find(x => x.role === 'manager');
@@ -103,12 +104,12 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           <Fold title={a.myAccount}>
             <ActionForm action={phoneAction} className="mt-4">
               <input type="hidden" name="lang" value={lang} />
-              <Field label={a.phone} hint={a.phoneHint} name="phone" type="tel" inputMode="tel" autoComplete="tel"
-                defaultValue={people.find(p => p.id === me.memberId)?.phone ?? ''} />
+              {/* keyed on the saved number, so after a save the field shows it as stored (01712345678) */}
+              <Field key={myPhone} label={a.phone} hint={a.phoneHint} name="phone" type="tel" inputMode="tel" autoComplete="tel" defaultValue={myPhone} />
               <button className={primary}>{a.save}</button>
             </ActionForm>
             <h3 className="mt-8 font-semibold">{a.changePin}</h3>
-            <ActionForm action={changePinAction} className="mt-3">
+            <ActionForm action={changePinAction} className="mt-3" clearOnDone>
               <input type="hidden" name="lang" value={lang} />
               <PinField label={a.currentPin} name="pin" autoComplete="current-password" />
               <PinField label={a.newPin} name="newPin" autoComplete="new-password" />

@@ -88,6 +88,12 @@ describe('auth', { timeout: 30000 }, () => {
     expect(log.after.rename).toEqual(['Tahsin', 'Tahsin Ahmed']);
   });
 
+  it('renaming someone to the name they already have changes nothing and writes no history', async () => {
+    const { flatId, memberId, id } = await flat();
+    expect(await renameMember(db, flatId, memberId, id('Zarif'), 'Zarif')).toBe('ok');
+    expect(await db(`select 1 from audit_log where flat_id = $1 and entity = 'members'`, [flatId])).toEqual([]);
+  });
+
   it('reads a Bangladeshi mobile number however it is typed', () => {
     expect(normalizePhone('01712345678')).toBe('01712345678');
     expect(normalizePhone('+880 1712-345678')).toBe('01712345678');

@@ -27,7 +27,8 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
   return (
     <>
       <Header t={t} lang={lang} path={`/j/${code}`} />
-      <main className="mx-auto max-w-md px-5 pb-16 pt-6 md:grid md:max-w-7xl md:grid-cols-2 md:items-start md:gap-16 md:px-8 md:pt-12">
+      {/* one step of signing in: one centred column on wide screens, not two columns with empty space */}
+      <main className="mx-auto max-w-md px-5 pb-16 pt-6 md:max-w-lg md:pt-16">
         {!flat ? (
           <div>
             <h1 className={h1}>{a.joinTitle}</h1>
@@ -41,7 +42,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
               <h1 className={h1}>{a.pickName}</h1>
               <p className="mt-2 text-muted">{a.pickLead}</p>
             </div>
-            <ul className="mt-6 grid gap-3 md:mt-0">
+            <ul className="mt-6 grid gap-3">
               {flat.members.map(x => (
                 <li key={x.id}>
                   <Link href={`/${lang}/j/${code}?m=${x.id}`} className={`flex min-h-14 items-center justify-between gap-4 rounded-xl border border-line bg-surface px-5 text-lg font-semibold ${focus}`}>
@@ -60,7 +61,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
               <p className="mt-2 text-muted">{!me.claimed ? a.setPinLead : me.must_change_pin ? a.changePinLead : a.enterPinLead}</p>
             </div>
             <div>
-            <ActionForm action={loginAction} className="mt-8 md:mt-0 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
+            <ActionForm action={loginAction} className="mt-8 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="code" value={code} />
               <input type="hidden" name="memberId" value={me.id} />
