@@ -23,7 +23,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const sp = await searchParams;
   const mine = sp.mine === '1';
   // which week to show: 0 = this week, up to 7 weeks ahead (changes are allowed up to 60 days out)
-  const w = Math.min(7, Math.max(0, Number(sp.week) || 0));
+  const w = Math.min(7, Math.max(0, Math.trunc(Number(sp.week)) || 0));
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), m = t.meals;
@@ -40,7 +40,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const firstOpen = [1, 2].map(n => addDays(today, n)).find(d => decide(d) === 'open')!;   // tomorrow or the day after
   const guestDays = week.filter(d => decide(d) !== 'closed');
   const href = (n: number, only: boolean) => `/${lang}/meals?${new URLSearchParams({ ...(n ? { week: String(n) } : {}), ...(only ? { mine: '1' } : {}) })}`;
-  const arrow = `inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-muted px-3 font-semibold hover:bg-paper sm:px-4 ${focus}`;
+  const arrow = `inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-muted px-3 font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 sm:px-4 ${focus}`;
   const card = 'mt-8 rounded-3xl border border-line bg-surface p-5';
   const range = (r: [string, string]) => (r[0] === r[1] ? fmtDay(r[0], lang) : `${fmtDay(r[0], lang)} – ${fmtDay(r[1], lang)}`);
   /** One history line, e.g. 'Nafis → Tahsin · Sat, 10 October · Lunch: Off · Late'. */
@@ -71,10 +71,11 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{m.mealsTitle}</h1>
         <p className="mt-2 text-muted">{m.weekLead}</p>
-        <nav aria-label={m.weekNav} className="mt-6 flex items-center justify-between gap-3">
-          {w > 0 ? <Link href={href(w - 1, mine)} scroll={false} aria-label={m.prevWeek} className={arrow}><span aria-hidden="true">←</span><span aria-hidden="true" className="hidden sm:inline">{m.prevWeek}</span></Link> : <span className="size-11" />}
+        <nav aria-label={m.weekNav} className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          {/* at either end the arrow stays in place, greyed out, so keyboard focus is not lost */}
+          <Link href={href(Math.max(0, w - 1), mine)} scroll={false} aria-label={m.prevWeek} aria-disabled={w === 0 || undefined} className={`justify-self-start ${arrow}`}><span aria-hidden="true">←</span><span aria-hidden="true" className="hidden sm:inline">{m.prevWeek}</span></Link>
           <p className="text-center font-semibold">{fmtRange(week[0], week[6])}</p>
-          {w < 7 ? <Link href={href(w + 1, mine)} scroll={false} aria-label={m.nextWeek} className={arrow}><span aria-hidden="true" className="hidden sm:inline">{m.nextWeek}</span><span aria-hidden="true">→</span></Link> : <span className="size-11" />}
+          <Link href={href(Math.min(7, w + 1), mine)} scroll={false} aria-label={m.nextWeek} aria-disabled={w === 7 || undefined} className={`justify-self-end ${arrow}`}><span aria-hidden="true" className="hidden sm:inline">{m.nextWeek}</span><span aria-hidden="true">→</span></Link>
         </nav>
         <div className="mt-4">
           <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={todayNote} {...meals} />
