@@ -74,6 +74,14 @@ describe('fmtRange', () => {
     expect(fmtRange('2026-10-16', '2026-10-22')).toBe('16 – 22 October');
     expect(fmtRange('2026-11-27', '2026-12-03')).toBe('27 November – 3 December');
   });
+
+  it('money in whole taka with English digits', async () => {
+    const { fmtMonth, fmtTaka } = await import('../app/[lang]/format');
+    expect(fmtTaka(245049)).toBe('৳2,450');
+    expect(fmtTaka(-38000)).toBe('৳380');
+    expect(fmtTaka(150)).toBe('৳2');
+    expect(fmtMonth('2026-10-01')).toBe('October 2026');
+  });
 });
 
 

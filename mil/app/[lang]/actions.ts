@@ -8,6 +8,8 @@ import { addDays, editFrom, headcount, isDate, isLocked, isMeal, isPresent, MEAL
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
+import { toPoisha } from '@/lib/money';
+import { addEntry, addRoom, confirmEntry, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -311,4 +313,77 @@ export async function bringBackAction(_: FormState, d: FormData): Promise<FormSt
   if (r === 'no' && !(await listMembers(db, me.flatId)).some(x => x.id === id && !x.leftOn)) return { error: a.errors.notFound };
   // their Moved out row is gone after this, and its message with it, so the note shows under their name in the list
   redirect(`/${lang}/manage?back=${id}`);
+}
+
+const TYPES = ['bazar', 'bill', 'deposit', 'payout'] as const;
+const SPLITS = ['here', 'equal', 'room', 'meals', 'selected'] as const;
+const pick = <T extends string>(list: readonly T[], v: string) => (list as readonly string[]).includes(v) ? (v as T) : null;
+
+/** Every money entry form. `who`: for bazar and bills who paid ('fund' = flat money); for deposits and payouts the other person. */
+export async function entryAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireMember(lang);
+  const type = pick(TYPES, str(d, 'type')), amount = toPoisha(str(d, 'amount')), date = str(d, 'date'), today = todayDhaka();
+  if (!type) return { error: x.errors.bad };
+  if (amount === null) return { error: x.errors.amount };
+  if (!isDate(date) || date < editFrom(today) || date > today) return { error: x.errors.date };
+  const note = str(d, 'note').trim().slice(0, 100) || null, who = str(d, 'who');
+  const split = type === 'bill' ? pick(SPLITS, str(d, 'split')) : null, selected = d.getAll('people').map(String);
+  if (type === 'bill' && !split) return { error: x.errors.bad };
+  if (type === 'bill' && !note) return { error: x.errors.name };
+  if (split === 'selected' && !selected.length) return { error: x.errors.people };
+  const moving = type === 'deposit' || type === 'payout';
+  const r = await addEntry(db, me.flatId, me, {
+    type, amount, date, note, split, selected,
+    paidBy: moving || who === 'fund' ? null : who,
+    memberId: moving ? who || me.memberId : null,
+    repeat: type === 'bill' && d.get('repeat') === '1',   // saved with the bill in one statement
+  });
+  if (r !== 'ok') return { error: x.errors[r] };
+  refresh();
+  return { done: x.saved };
+}
+
+export async function confirmAction(d: FormData) {
+  const me = await requireMember(langOf(d)), id = str(d, 'id');
+  if (UUID.test(id)) await confirmEntry(db, me.flatId, me, id);
+  refresh();
+}
+
+export async function removeAction(d: FormData) {
+  const me = await requireMember(langOf(d)), id = str(d, 'id');
+  if (UUID.test(id)) await removeEntry(db, me.flatId, me, id);
+  refresh();
+}
+
+/** Rent typed in taka; 0 is allowed (a room that pays no rent). */
+const rentOf = (v: string) => (v.trim() === '0' ? 0 : toPoisha(v));
+
+export async function addRoomAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireManager(lang);
+  const name = cleanName(d.get('name')), rent = rentOf(str(d, 'rent'));
+  if (!name) return { error: x.errors.roomName };
+  if (rent === null) return { error: x.errors.amount };
+  await addRoom(db, me.flatId, me, name, rent);
+  refresh();
+  return { done: x.saved };
+}
+
+export async function rentAction(d: FormData) {
+  const me = await requireManager(langOf(d)), id = str(d, 'roomId'), rent = rentOf(str(d, 'rent'));
+  if (UUID.test(id) && rent !== null) await setRent(db, me.flatId, me, id, rent);
+  refresh();
+}
+
+export async function setRoomAction(d: FormData) {
+  const me = await requireManager(langOf(d)), memberId = str(d, 'memberId'), roomId = str(d, 'roomId');
+  if (UUID.test(memberId) && (roomId === '' || UUID.test(roomId))) await setRoom(db, me.flatId, me, memberId, roomId || null);
+  refresh();
+}
+
+export async function stopRepeatAction(d: FormData) {
+  const me = await requireManager(langOf(d)), id = str(d, 'id');
+  if (UUID.test(id)) await stopRepeat(db, me.flatId, me, id);
+  refresh();
 }
