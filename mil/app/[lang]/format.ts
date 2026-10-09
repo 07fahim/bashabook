@@ -7,6 +7,13 @@ export function fmtDay(date: string, lang: Locale) {
   return `${weekday}, ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })}`;
 }
 
+/** '9 – 15 October' or '27 November – 3 December' (no weekday, same in both languages). */
+export function fmtRange(from: string, to: string) {
+  const day = (x: string) => Number(x.slice(8, 10));
+  const month = (x: string) => new Date(`${x}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
+  return month(from) === month(to) ? `${day(from)} – ${day(to)} ${month(to)}` : `${day(from)} ${month(from)} – ${day(to)} ${month(to)}`;
+}
+
 /** '22:00' or '22:00:00' → '10:00 pm'. */
 export function fmtTime(time: string) {
   const [h, m] = time.split(':').map(Number);

@@ -60,3 +60,12 @@ describe('meal rules', () => {
     expect(isDate('9 Oct')).toBe(false);
   });
 });
+
+describe('fmtRange', () => {
+  it('shows one month once, or both months across a month end', async () => {
+    const { fmtRange } = await import('../app/[lang]/format');
+    expect(fmtRange('2026-10-16', '2026-10-22')).toBe('16 – 22 October');
+    expect(fmtRange('2026-11-27', '2026-12-03')).toBe('27 November – 3 December');
+  });
+});
+

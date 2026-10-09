@@ -74,7 +74,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
         {/* wider screens: the whole week at a glance, phones use the Meals tab */}
         <div className="mt-10 hidden md:block">
           <h2 className="mb-4 text-2xl font-bold">{m.weekTitle}</h2>
-          <WeekChart lang={lang} m={m} meId={me.memberId} week={week} decide={decide} note={note} {...meals} />
+          <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={note} {...meals} />
         </div>
         <form action={logoutAction} className="mt-8">
           <input type="hidden" name="lang" value={lang} />
