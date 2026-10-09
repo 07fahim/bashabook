@@ -12,10 +12,18 @@ export function PayerSelect({ label, fundLabel, people, initial, today }: { labe
   const [date, setDate] = useState(today), [picked, setPicked] = useState(initial);
   useEffect(() => {
     const form = ref.current?.form;
-    const onInput = (e: Event) => { const t = e.target as HTMLInputElement; if (t.name === 'date' && t.value) setDate(t.value); };
+    const lives = (id: string, d: string) => people.some(p => p.id === id && p.joinedOn <= d && (p.leftOn === null || p.leftOn >= d));
+    const onInput = (e: Event) => {
+      const t = e.target as HTMLInputElement;
+      if (t.name !== 'date' || !t.value) return;
+      setDate(t.value);
+      setPicked(v => (v === 'fund' || lives(v, t.value) ? v : initial));   // a pick that drops out goes back to the default for good
+    };
+    const onReset = () => { setDate(today); setPicked(initial); };       // a cleared form starts from today again
     form?.addEventListener('input', onInput);
-    return () => form?.removeEventListener('input', onInput);
-  }, []);
+    form?.addEventListener('reset', onReset);
+    return () => { form?.removeEventListener('input', onInput); form?.removeEventListener('reset', onReset); };
+  }, [people, initial, today]);
   const here = people.filter(p => p.joinedOn <= date && (p.leftOn === null || p.leftOn >= date));
   const ok = (v: string) => v === 'fund' || here.some(p => p.id === v);
   const value = ok(picked) ? picked : ok(initial) ? initial : 'fund';

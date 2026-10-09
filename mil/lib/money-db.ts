@@ -63,11 +63,11 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
      from ledger l where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
   // per entry only its latest removal (audit ids follow commit order per entry: see putBack), and only while it is still gone
   const removed = await db<Removed>(
-    `select * from (select distinct on (a.entity_id) a.entity_id as id, a.at, m.name as by, a.by_member as "byId",
+    `select id, at, by, "byId", type, amount, date, note from (select distinct on (a.entity_id) a.entity_id as id, a.at, m.name as by, a.by_member as "byId",
          a.before->>'type' as type, (a.before->>'amount_poisha')::int as amount, a.before->>'date' as date, a.before->>'note' as note, a.id as seq
        from audit_log a join members m on m.flat_id = a.flat_id and m.id = a.by_member
        where a.flat_id = $1 and a.entity = 'ledger' and a.after->>'removed' = 'true' and a.before->>'month' = $2
-         and not exists (select 1 from ledger l where l.flat_id = a.flat_id and l.id::text = a.entity_id)
+         and not exists (select 1 from ledger l where l.flat_id = a.flat_id and l.id = a.entity_id::uuid)
        order by a.entity_id, a.id desc) r order by seq desc`, [flatId, month]);
   const meals = weightedMeals(members, changes, month, flat.weights, upTo);
   const guestMeals = new Map(members.map(m => [m.id, changes
@@ -205,7 +205,8 @@ export async function stopRepeat(db: Db, flatId: string, by: Actor, id: string) 
   return done.length > 0;   // false: no such monthly bill in this flat
 }
 
-const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at';
+/** Every ledger column: a removal record missing any of them is never put back. A test keeps this in step with the table. */
+export const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at';
 
 /** Brings a removed entry back exactly as it was (same id, status, people), rebuilt only from its latest removal record.
  *  Allowed for whoever made that removal or the current collector, only in this open month (`today` is the Dhaka date).

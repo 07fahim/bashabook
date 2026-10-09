@@ -4,7 +4,7 @@ import { addMember, bringBack, createFlat, setLeaving } from './auth';
 import { editFrom } from './meals';
 import { noCooking, saveMeal } from './meals-db';
 import { foodSplit } from './money';
-import { addEntry, addRoom, confirmEntry, loadMonth, openMonth, putBack, removeEntry, setRent, setRoom, stopRepeat, toConfirm, type NewEntry } from './money-db';
+import { addEntry, addRoom, confirmEntry, LEDGER_COLUMNS, loadMonth, openMonth, putBack, removeEntry, setRent, setRoom, stopRepeat, toConfirm, type NewEntry } from './money-db';
 
 const OCT = '2026-10-01', TODAY = '2026-10-09';
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -349,5 +349,11 @@ describe('money storage', { timeout: 30000 }, () => {
     await db(`update audit_log set before = before - 'created_by' where entity_id = $1`, [id]);
     expect(await putBack(db, flatId, ids.Nafis, id, TODAY)).toBe(false);
     expect((await month()).entries.map(x => x.amount)).toEqual([70000]);   // the bazar added in between is untouched
+  });
+
+  it('put back checks every ledger column: the list matches the table', async () => {
+    await migrate();
+    const cols = await db<{ c: string }>(`select column_name as c from information_schema.columns where table_name = 'ledger' order by ordinal_position`);
+    expect(cols.map(r => r.c).join(',')).toBe(LEDGER_COLUMNS);
   });
 });
