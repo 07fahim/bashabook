@@ -112,13 +112,17 @@ export async function addGuests(db: Db, flatId: string, memberId: string, date: 
 }
 
 /** Away: every meal off from..to, one audit row for the range. */
+/** Returns the booked guests it dropped (read before the update: every part of one statement sees the same snapshot). */
 export async function setAway(db: Db, flatId: string, memberId: string, from: string, to: string) {
-  await db(
-    `with up as (insert into meal_changes (flat_id, member_id, date, meal, count)
+  return db<{ date: string; meal: Meal; guests: number }>(
+    `with dropped as (select date::text as date, meal, guests from meal_changes
+       where member_id = $2 and date between $3::date and $4::date and guests > 0),
+     up as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select $1::uuid, $2::uuid, d::date, m, 0
        from generate_series($3::timestamp, $4::timestamp, interval '1 day') d, unnest(array['b','l','d']) m
-       on conflict (member_id, date, meal) do update set count = 0, guests = 0, late = false, updated_at = now())
-     insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', $5, $6, $2)`,
+       on conflict (member_id, date, meal) do update set count = 0, guests = 0, late = false, updated_at = now()),
+     log as (insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', $5, $6, $2))
+     select * from dropped order by date, position(meal in 'bld')`,
     [flatId, memberId, from, to, `${memberId}|away`, { away: [from, to] }]);
 }
 
