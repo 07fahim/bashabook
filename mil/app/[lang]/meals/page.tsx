@@ -49,6 +49,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const describe = (h: HistoryRow) => {
     const actor = h.actor ?? '?', who = h.who ?? '?', a = h.after;
     const mealList = (x: string) => x.split(',').map(y => m.names[y as Meal]).join(', ');
+    if (h.entity === 'cook') return `${actor} ${m.toldHistory} · ${fmtDay(a.told!, lang)}: ${MEALS.map(x => `${m.names[x]} ${a.plates?.[x] ?? 0}`).join(', ')}`;
     if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
     if (h.entity === 'members') {
       if (a.inMeals === false) return `${who} ${m.ownStarted}`;

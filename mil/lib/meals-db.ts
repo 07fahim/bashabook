@@ -1,13 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import type { Db } from './db';
-import { addDays, headcount, indexChanges, isLocked, isPresent, mealCount, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
+import { addDays, countChanges, headcount, indexChanges, isLocked, isPresent, mealCount, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
 
 export type FlatInfo = {
   name: string; cutoff: string; cookToken: string | null; lang: 'bn' | 'en'; weights: Record<Meal, number>;
 };
 export type Member = MealMember & { name: string; role: 'member' | 'manager'; inMeals: boolean };
 export type HistoryRow = {
-  at: Date | string; actor: string | null; who: string | null; entity: 'meal_changes' | 'members' | 'flats'; entityId: string;
+  at: Date | string; actor: string | null; who: string | null; entity: 'meal_changes' | 'members' | 'flats' | 'cook'; entityId: string;
   before?: { guests?: number; count?: number } | null;
   after: {
     count?: number; guests?: number; late?: boolean;
@@ -15,6 +15,7 @@ export type HistoryRow = {
     nocook?: [string, string]; cookAgain?: [string, string]; meals?: string;
     b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean;
     cutoff?: string; weights?: Record<Meal, number>;
+    told?: string; plates?: Record<Meal, number>;
   };
 };
 export type SavedChange = MealChange & { guests: number; late: boolean };
@@ -182,12 +183,17 @@ export const isInMeals = async (db: Db, flatId: string, memberId: string) =>
   (await db<{ v: boolean }>(`select in_meals as v from members where flat_id = $1 and id = $2`, [flatId, memberId]))[0]?.v ?? false;
 
 /** Weights are hundredths of a meal (breakfast 50 = 0.5) and apply to every day of the open month. Audited with the old values. */
-export async function updateSettings(db: Db, flatId: string, by: string, s: { cutoff: string; weights: Record<Meal, number> }) {
+/** `now` = nowDhaka(). If the new lock time opens tomorrow again, tomorrow's after-the-lock tracking starts over;
+ *  if tomorrow stays locked, the baseline stays (the cook may already have been told). */
+export async function updateSettings(db: Db, flatId: string, by: string, s: { cutoff: string; weights: Record<Meal, number> }, now: string) {
+  const reopened = !isLocked(addDays(now.slice(0, 10), 1), now, s.cutoff);
   await db(
     `with old as (select cutoff_time::text as cutoff, json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights from flats where id = $1),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member) select $1, 'flats', 'flat|settings', to_jsonb(old), $6, $7 from old)
-     update flats set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5 where id = $1`,
-    [flatId, s.cutoff, s.weights.b, s.weights.l, s.weights.d, s, by]);
+     update flats set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5,
+       lock_date = case when $8::boolean then null else lock_date end, lock_count = case when $8::boolean then null else lock_count end
+     where id = $1`,
+    [flatId, s.cutoff, s.weights.b, s.weights.l, s.weights.d, s, by, reopened]);
 }
 
 export async function setCookLink(db: Db, flatId: string, on: boolean) {
@@ -249,7 +255,7 @@ export const loadHistory = (db: Db, flatId: string, mine: string | null = null) 
    left join members actor on actor.id = a.by_member
    left join members who on who.flat_id = a.flat_id and who.id::text = split_part(a.entity_id, '|', 1)
    where a.flat_id = $1
-     and (a.entity in ('members', 'flats')
+     and (a.entity in ('members', 'flats', 'cook')
           or (a.entity = 'meal_changes' and (a.entity_id like 'flat|%' or a.entity_id like '%|away'
               or coalesce((a.after->>'guests')::int, 0) <> coalesce((a.before->>'guests')::int, 0)   -- every guest change is worth seeing
               or coalesce((a.after->>'late')::boolean, false) or split_part(a.entity_id, '|', 1) <> a.by_member::text)))
@@ -264,13 +270,14 @@ export const loadNoCookDays = (db: Db, flatId: string, from: string) => db<{ dat
 /** Tomorrow's count as first seen after the lock time. The first call for `date` saves `hc`; later calls return the saved one,
  *  so comparing it with the live count catches every change after the lock, whatever caused it (deleted rows, new members).
  *  Called after the lock by the cards, and by every meal-changing action through `seedLock`. */
-export async function countAtLock(db: Db, flatId: string, date: string, hc: Record<Meal, number>) {
-  // one statement that always updates: under concurrency the CASE sees the row the other request just wrote.
-  // $3 goes in as text: typed as jsonb, postgres.js would JSON-encode the string a second time
+export async function countAtLock(db: Db, flatId: string, date: string, hc: Record<Meal, number>, now: string) {
+  // One statement: under concurrency the CASE sees the row the other request just wrote, and the lock check reads the
+  // flat's current lock time, so a lock time saved at the same moment is never missed. Not locked yet: no baseline, `hc` back.
+  // $3 goes in as text: typed as jsonb, postgres.js would JSON-encode the string a second time.
   const [r] = await db<{ c: Record<Meal, number> }>(
     `update flats set lock_count = case when lock_date is distinct from $2::date then $3::text::jsonb else lock_count end, lock_date = $2::date
-     where id = $1 returning lock_count as c`, [flatId, date, JSON.stringify(hc)]);
-  return r.c;
+     where id = $1 and $4::timestamp >= ($2::date - 1) + cutoff_time returning lock_count as c`, [flatId, date, JSON.stringify(hc), now]);
+  return r?.c ?? hc;
 }
 
 /** Every server action that changes meals or members calls this first: if tomorrow is already locked, it saves tomorrow's
@@ -279,5 +286,21 @@ export async function seedLock(db: Db, flatId: string, now: string) {
   const tomorrow = addDays(now.slice(0, 10), 1);
   if (!isLocked(tomorrow, now, (await mealRules(db, flatId)).cutoff)) return;   // most taps: one query, nothing saved
   const { members, changes } = await loadMeals(db, flatId, tomorrow, tomorrow);
-  await countAtLock(db, flatId, tomorrow, headcount(members, changes, tomorrow));
+  await countAtLock(db, flatId, tomorrow, headcount(members, changes, tomorrow), now);
+}
+
+/** Someone told the cook the count their card showed: that count becomes the baseline, so the warning goes for everyone.
+ *  Only if their screen still shows the live count: an out-of-date tap changes nothing, so no change is hidden and no false alarm appears.
+ *  Only for the day the baseline belongs to: a page left open since yesterday changes nothing. */
+export async function toldCook(db: Db, flatId: string, by: string, date: string, seen: Record<Meal, number>) {
+  const { members, changes } = await loadMeals(db, flatId, date, date);
+  // the screen was out of date: change nothing (no false alarm, no hidden change); the page then shows the new count
+  if (countChanges(seen, headcount(members, changes, date)).length) return false;
+  // the history line lets everyone see who said they told the cook, and which count; a repeat of the same count writes none
+  const r = await db(
+    `with f as (update flats set lock_count = $4::text::jsonb where id = $1 and lock_date = $3::date and lock_count is distinct from $4::text::jsonb returning id)
+     insert into audit_log (flat_id, entity, entity_id, after, by_member)
+     select $1, 'cook', 'flat|told', jsonb_build_object('told', $3::date, 'plates', $4::text::jsonb), $2 from f returning 1`,
+    [flatId, by, date, JSON.stringify(seen)]);
+  return r.length > 0;
 }
