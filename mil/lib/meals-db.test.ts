@@ -195,4 +195,12 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await count('2026-10-09', 'd')).toBe(1);
     expect(tahsin).toBeTruthy();
   });
+
+  it('saving the same meal twice writes one history line', async () => {
+    const { flatId, tahsin } = await flat();
+    const c = { memberId: tahsin, date: '2026-10-10', meal: 'l' as const, count: 0 };
+    await saveMeal(db, flatId, tahsin, c, true);
+    await saveMeal(db, flatId, tahsin, c, true);
+    expect((await loadHistory(db, flatId)).filter(h => h.entityId.endsWith('2026-10-10|l'))).toHaveLength(1);
+  });
 });

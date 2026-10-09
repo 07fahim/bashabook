@@ -115,7 +115,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                     <p className="font-bold">{t.settleMsg[0]}</p>
                     <ul className="mt-2 space-y-1 tabular-nums">
                       {t.settleMsg.slice(1).map(line => {
-                        const at = line.indexOf('৳');
+                        const at = line.includes('৳') ? line.indexOf('৳') : line.length;   // no amount: the whole line is the label
                         return (
                           <li key={line} className="flex justify-between gap-4">
                             <span>{line.slice(0, at).trim()}</span>

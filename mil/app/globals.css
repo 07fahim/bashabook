@@ -68,3 +68,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .write { animation: none; }
 }
+
+/* keep keyboard focus clear of the sticky top bar on wider screens */
+@media (min-width: 48rem) {
+  html { scroll-padding-top: 5rem; }
+}
