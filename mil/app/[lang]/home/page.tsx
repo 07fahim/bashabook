@@ -16,7 +16,7 @@ import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
 import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
-import { Field, Fold, focus, link, PageSkeleton, PinField, primary } from '../ui';
+import { Field, Fold, focus, link, PageSkeleton, PinField, secondary } from '../ui';
 
 export default function Home({ params }: PageProps<'/[lang]/home'>) {
   return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} /></Suspense>;
@@ -94,7 +94,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             <ul className="mt-2 divide-y divide-line">
               {people.map(p => (
                 <li key={p.id} className="flex items-center justify-between gap-3 py-2">
-                  <span>{p.name}</span>
+                  <span>{p.name}{p.id === me.memberId && <span className="text-muted"> · {a.you}</span>}</span>
                   {p.phone ? <a href={`tel:${p.phone}`} aria-label={`${a.call} ${p.name}`} className={`inline-flex min-h-11 items-center tabular-nums ${link}`}>{p.phone}</a>
                     : <span className="text-[15px] text-muted">{a.noPhone}</span>}
                 </li>
@@ -105,17 +105,23 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             <ActionForm action={phoneAction} className="mt-4">
               <input type="hidden" name="lang" value={lang} />
               {/* keyed on the saved number, so after a save the field shows it as stored (01712345678) */}
-              <Field key={myPhone} label={a.phone} hint={a.phoneHint} name="phone" type="tel" inputMode="tel" autoComplete="tel" defaultValue={myPhone} />
-              <button className={primary}>{a.save}</button>
+              <Field key={myPhone} label={a.phone} hint={a.phoneHint} name="phone" type="tel" inputMode="tel" autoComplete="tel" defaultValue={myPhone} className="sm:max-w-xs" />
+              {/* settings are quiet (outlined): the bright buttons stay for the page's main actions */}
+              <button className={`${secondary} sm:w-auto`}>{a.savePhone}</button>
             </ActionForm>
-            <h3 className="mt-8 font-semibold">{a.changePin}</h3>
-            <ActionForm action={changePinAction} className="mt-3" clearOnDone>
-              <input type="hidden" name="lang" value={lang} />
-              <PinField label={a.currentPin} name="pin" autoComplete="current-password" />
-              <PinField label={a.newPin} name="newPin" autoComplete="new-password" />
-              <PinField label={a.newPinAgain} name="pin2" autoComplete="new-password" />
-              <button className={primary}>{a.changePin}</button>
-            </ActionForm>
+            <div className="mt-8 border-t border-line pt-6">
+              <h3 className="text-lg font-bold">{a.changePin}</h3>
+              <ActionForm action={changePinAction} className="mt-4" clearOnDone>
+                <input type="hidden" name="lang" value={lang} />
+                {/* a 4-digit PIN needs a short box: three side by side on wider screens */}
+                <div className="grid gap-5 sm:grid-cols-3">
+                  <PinField label={a.currentPin} name="pin" autoComplete="current-password" />
+                  <PinField label={a.newPin} name="newPin" autoComplete="new-password" />
+                  <PinField label={a.newPinAgain} name="pin2" autoComplete="new-password" />
+                </div>
+                <button className={`${secondary} sm:w-auto`}>{a.changePin}</button>
+              </ActionForm>
+            </div>
           </Fold>
         </div>
         <form action={logoutAction} className="mt-8">
