@@ -42,22 +42,27 @@ export function Fold({ id, title, lead, level = 2, open, children }: { id?: stri
 }
 
 /** A list that can grow long. Wider screens: every row, scrolling inside the card so the card's title and the page around
- *  it stay put. Phones (a scroll box inside a scrolling page is a trap there): the first `keep` rows, then Show all. */
-export function LongList({ items, keep, label, more, less }: { items: ReactNode[]; keep: number; label: string; more: string; less: string }) {
+ *  it stay put. Phones (a scroll box inside a scrolling page is a trap there): the first `keep` rows, then Show all.
+ *  `fill`: on wider screens the box takes exactly the height left in a stretched card, so the card ends level with the
+ *  column beside it; the absolute box adds no height of its own (24rem at least). Otherwise it stops at 70% of the screen.
+ *  No tabIndex: browsers make a scroll box keyboard-focusable themselves, and on phones nothing here scrolls. */
+export function LongList({ items, keep, label, more, less, fill }: { items: ReactNode[]; keep: number; label: string; more: string; less: string; fill?: boolean }) {
   const list = 'divide-y divide-line';
   return (
-    <div role="region" aria-label={label} tabIndex={0} className={`mt-3 flex flex-col md:max-h-[70vh] md:overflow-y-auto md:pr-3 md:[scrollbar-width:thin] ${focus}`}>
-      <ul className={list}>{items.slice(0, keep)}</ul>
-      {items.length > keep && (<>
-        {/* the button sits after the rows it opens (order-last) but before them in the page, as peer-open needs */}
-        <details className="group/all peer order-last md:hidden">
-          <summary className={`mt-2 inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden ${link}`}>
-            <span className="group-open/all:hidden">{more}</span>
-            <span className="hidden group-open/all:inline">{less}</span>
-          </summary>
-        </details>
-        <ul className={`${list} hidden border-t border-line peer-open:block md:block`}>{items.slice(keep)}</ul>
-      </>)}
+    <div className={fill ? 'mt-3 md:relative md:min-h-96 md:flex-1' : 'mt-3'}>
+      <div role="group" aria-label={label} className={`md:overflow-y-auto md:pr-3 md:[scrollbar-width:thin] ${fill ? 'md:absolute md:inset-0' : 'md:max-h-[70vh]'}`}>
+        <ul className={list}>{items.slice(0, keep)}</ul>
+        {items.length > keep && (<>
+          {/* between the first rows and the rest: one order for eyes, keyboards and screen readers (peer-open needs it first) */}
+          <details className="group/all peer md:hidden">
+            <summary className={`mt-2 inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden ${link}`}>
+              <span className="group-open/all:hidden">{more}</span>
+              <span className="hidden group-open/all:inline">{less}</span>
+            </summary>
+          </details>
+          <ul className={`${list} hidden border-t border-line peer-open:block md:block`}>{items.slice(keep)}</ul>
+        </>)}
+      </div>
     </div>
   );
 }

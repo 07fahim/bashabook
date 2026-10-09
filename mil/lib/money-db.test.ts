@@ -388,7 +388,7 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(await removeEntry(db, flatId, nafis, oct, '2026-10-31')).toBe(true);    // the last day of this month
     // the person who sent it can take back their own pending deposit too, nobody else
     expect(await addEntry(db, flatId, as('Tahsin'), e({ type: 'deposit', amount: 10000, memberId: ids.Tahsin, note: 'Tahsin September' }))).toBe('ok');
-    await db(`update ledger set date = '2026-09-20', month = '2026-09-01' where note = 'Tahsin September'`);   // as if sent last month
+    await db(`update ledger set date = '2026-09-20', month = '2026-09-01' where flat_id = $1 and note = 'Tahsin September'`, [flatId]);   // as if sent last month
     const mine = (await db<{ id: string; status: string }>(`select id, status from ledger where flat_id = $1 and note = 'Tahsin September'`, [flatId]))[0];
     expect(mine.status).toBe('pending');
     expect(await removeEntry(db, flatId, as('Zarif'), mine.id, TODAY)).toBe(false);

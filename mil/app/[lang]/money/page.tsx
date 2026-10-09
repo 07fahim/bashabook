@@ -61,9 +61,11 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const picked = (e: Entry) => e.selected.length < mo.members.length && e.selected.includes(me.memberId);
   const shown = mine ? mo.entries.filter(e => [e.createdBy, e.paidBy, e.memberId].includes(me.memberId) || picked(e)) : mo.entries;
   const dates = [...new Set(shown.map(e => e.date))];
-  // phones show whole days until about 15 entries, never splitting a day (its heading would show twice on wide screens)
-  let seen = 0;
-  const keep = Math.max(1, dates.findIndex(d => (seen += shown.filter(e => e.date === d).length) > 15) + 1 || dates.length);
+  // phones show whole days up to 15 entries (more only if the first day alone is bigger), never splitting a day: its
+  // heading would show twice on wide screens, where both parts are visible
+  let keep = 0;
+  for (let n = 0; keep < dates.length && (n += shown.filter(e => e.date === dates[keep]).length) <= 15; keep++);
+  keep = Math.max(1, keep);
   const who = (e: Entry) =>
     e.type === 'deposit' ? (e.memberId === collector.id ? collector.name : `${name(e.memberId)} → ${collector.name}`)
     : e.type === 'payout' ? `${collector.name} → ${name(e.memberId)}`
@@ -104,10 +106,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
 
         {/* desktop: my balance and the three forms on the left; the flat summary over the entries on the right, two thirds wide,
             so both sides grow downward together and no column leaves a hole */}
-        <div className="mt-6 grid gap-6 md:grid-cols-2 md:items-start lg:grid-cols-3">
-          {/* the balance and forms stay in view beside a long list (an app's side panel); taller than the screen, they scroll
-              on their own. -m-1 p-1 keeps focus outlines inside the scroll box */}
-          <div className="md:sticky md:top-24 md:-m-1 md:max-h-[calc(100dvh-10rem)] md:overflow-y-auto md:p-1 md:[scrollbar-width:thin]">
+        <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* balance, forms and everyone's balances (8 to 10 people): about as tall as the summary and entries beside them */}
+          <div>
             <section className={card}>
               <h2 className="text-xl font-bold">{t.app.hi}, {me.name}</h2>
               {!r || !balance ? <p className="mt-2 text-muted">{x.notHere}</p> : (<>
@@ -192,7 +193,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             </section>
           </div>
 
-          <div className="space-y-6 lg:col-span-2">
+          <div className="flex flex-col gap-6 lg:col-span-2">
           <section className={card}>
             <h2 className="text-xl font-bold">{x.summary}</h2>
             <dl className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -212,13 +213,12 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             {settle.length ? <ul className="mt-1 list-disc space-y-1 pl-5 md:columns-2 md:gap-10">{settle.map(s => <li key={s}>{s}</li>)}</ul> : <p className="mt-1 text-muted">{x.nobodyOwes}</p>}
           </section>
 
-          <section className={card}>
+          <section className={`flex flex-1 flex-col ${card}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xl font-bold">{x.entries}</h2>
               <Link href={href(month, !mine)} aria-pressed={mine} className={`inline-flex min-h-11 items-center rounded-full border border-muted px-4 font-semibold ${mine ? 'bg-turmeric text-on-turmeric border-turmeric' : ''} ${focus}`}>{x.onlyMine}</Link>
             </div>
-            {!dates.length && <p className="mt-3 text-muted">{x.noEntries}</p>}
-            <LongList label={x.entries} keep={keep} more={t.app.showAll.replace('{n}', String(shown.length))} less={t.app.showLess} items={dates.map(d => (
+            {!dates.length ? <p className="mt-3 text-muted">{x.noEntries}</p> : <LongList fill label={x.entries} keep={keep} more={t.app.showAll.replace('{n}', String(shown.length))} less={t.app.showLess} items={dates.map(d => (
                 <li key={d}>
                   <h3 className="pt-4 text-[15px] font-semibold text-muted">{fmtDay(d, lang)}</h3>
                   <ul className="divide-y divide-line">
@@ -253,7 +253,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                     ))}
                   </ul>
                 </li>
-              ))} />
+              ))} />}
             {/* removed entries are rarely needed: folded behind their count, still one tap from Put back */}
             {!mine && mo.removed.length > 0 && (
               <details className="mt-4 border-t border-line pt-2">

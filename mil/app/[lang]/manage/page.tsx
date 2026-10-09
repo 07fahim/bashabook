@@ -308,111 +308,111 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
             </div>
           </div>
         </div>
-          <div>
-            <h2 className={groupLabel}>{a.members}</h2>
-              <ul className="mt-3 grid gap-x-8 gap-y-3 md:grid-cols-2 md:items-start lg:grid-cols-3">
-                {members.map(x => (
-                  <li key={x.id} className="rounded-3xl border border-line bg-surface p-5">
-                    {/* a long badge (last day) drops below the name on a phone instead of squeezing it */}
-                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                      <span className="flex items-center gap-3 text-lg font-semibold"><Avatar id={x.id} name={x.name} v={x.photoV} size={36} />{x.name}</span>
-                      <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
-                        {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
-                      </span>
-                    </div>
-                    {sp.back === x.id && <p role="status" className="mt-1 font-semibold text-leaf">{a.broughtBack}</p>}
-                    {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
-                    {/* the member's actions sit on one line; an opened one takes the full width below */}
-                    <div className="flex flex-wrap items-start gap-x-6">
+        <div>
+          <h2 className={groupLabel}>{a.members}</h2>
+            <ul className="mt-3 grid gap-x-8 gap-y-3 md:grid-cols-2 md:items-start lg:grid-cols-3">
+              {members.map(x => (
+                <li key={x.id} className="rounded-3xl border border-line bg-surface p-5">
+                  {/* a long badge (last day) drops below the name on a phone instead of squeezing it */}
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                    <span className="flex items-center gap-3 text-lg font-semibold"><Avatar id={x.id} name={x.name} v={x.photoV} size={36} />{x.name}</span>
+                    <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
+                      {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
+                    </span>
+                  </div>
+                  {sp.back === x.id && <p role="status" className="mt-1 font-semibold text-leaf">{a.broughtBack}</p>}
+                  {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
+                  {/* the member's actions sit on one line; an opened one takes the full width below */}
+                  <div className="flex flex-wrap items-start gap-x-6">
+                    <details className="open:basis-full">
+                      <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.rename}</summary>
+                      <ActionForm action={renameAction} className="mt-2">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="memberId" value={x.id} />
+                        <div className="flex gap-2">
+                          <input name="name" required maxLength={40} autoComplete="off" defaultValue={x.name} aria-label={`${a.memberName}: ${x.name}`} className={`${field} mt-0 min-w-0 flex-1`} />
+                          {/* its own classes: the shared button style is full width */}
+                          <button className={`inline-flex min-h-12 shrink-0 items-center rounded-full border border-muted bg-surface px-5 font-semibold hover:bg-paper ${focus}`}>{a.save}</button>
+                        </div>
+                      </ActionForm>
+                    </details>
+                    {x.photoV !== null && (
+                      <form action={removePhotoAction}>
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="memberId" value={x.id} />
+                        <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.removePhoto}</button>
+                      </form>
+                    )}
+                    {x.claimed && x.id !== me.memberId && (
                       <details className="open:basis-full">
-                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.rename}</summary>
-                        <ActionForm action={renameAction} className="mt-2">
+                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
+                        <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
+                        <ActionForm action={resetPinAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="memberId" value={x.id} />
-                          <div className="flex gap-2">
-                            <input name="name" required maxLength={40} autoComplete="off" defaultValue={x.name} aria-label={`${a.memberName}: ${x.name}`} className={`${field} mt-0 min-w-0 flex-1`} />
-                            {/* its own classes: the shared button style is full width */}
-                            <button className={`inline-flex min-h-12 shrink-0 items-center rounded-full border border-muted bg-surface px-5 font-semibold hover:bg-paper ${focus}`}>{a.save}</button>
-                          </div>
+                          <PinField label={a.oneTimePin} name="pin" autoComplete="off" />
+                          <button className={`${secondary} sm:w-auto`}>{a.resetBtn}</button>
                         </ActionForm>
                       </details>
-                      {x.photoV !== null && (
-                        <form action={removePhotoAction}>
+                    )}
+                    {x.id !== me.memberId && (
+                      <details className="open:basis-full">
+                        <summary aria-label={`${a.movingOut}: ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.movingOut}</summary>
+                        <p className="mt-2 text-[15px] text-muted">{a.movingOutLead}</p>
+                        <ActionForm action={leavingAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="memberId" value={x.id} />
-                          <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.removePhoto}</button>
-                        </form>
-                      )}
-                      {x.claimed && x.id !== me.memberId && (
-                        <details className="open:basis-full">
-                          <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
-                          <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
-                          <ActionForm action={resetPinAction} className="mt-3">
+                          {/* no default day, so one slip of a tap can't mark someone as leaving */}
+                          <DateField lang={lang} label={a.lastDay} name="lastDay" required min={x.joinedOn > today ? x.joinedOn : today} max={to} defaultValue={x.leftOn ?? undefined} />
+                          <button className={`${secondary} sm:w-auto`}>{a.movingOutBtn}</button>
+                        </ActionForm>
+                        {x.leftOn && (
+                          <ActionForm action={leavingAction} className="mt-2">
                             <input type="hidden" name="lang" value={lang} />
                             <input type="hidden" name="memberId" value={x.id} />
-                            <PinField label={a.oneTimePin} name="pin" autoComplete="off" />
-                            <button className={`${secondary} sm:w-auto`}>{a.resetBtn}</button>
+                            <input type="hidden" name="stay" value="1" />
+                            <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.staying}</button>
                           </ActionForm>
-                        </details>
-                      )}
-                      {x.id !== me.memberId && (
-                        <details className="open:basis-full">
-                          <summary aria-label={`${a.movingOut}: ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.movingOut}</summary>
-                          <p className="mt-2 text-[15px] text-muted">{a.movingOutLead}</p>
-                          <ActionForm action={leavingAction} className="mt-3">
-                            <input type="hidden" name="lang" value={lang} />
-                            <input type="hidden" name="memberId" value={x.id} />
-                            {/* no default day, so one slip of a tap can't mark someone as leaving */}
-                            <DateField lang={lang} label={a.lastDay} name="lastDay" required min={x.joinedOn > today ? x.joinedOn : today} max={to} defaultValue={x.leftOn ?? undefined} />
-                            <button className={`${secondary} sm:w-auto`}>{a.movingOutBtn}</button>
-                          </ActionForm>
-                          {x.leftOn && (
-                            <ActionForm action={leavingAction} className="mt-2">
-                              <input type="hidden" name="lang" value={lang} />
-                              <input type="hidden" name="memberId" value={x.id} />
-                              <input type="hidden" name="stay" value="1" />
-                              <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.staying}</button>
-                            </ActionForm>
-                          )}
-                        </details>
-                      )}
+                        )}
+                      </details>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
+          {gone.length > 0 && (
+            <Fold title={a.movedOut} level={3}>
+              <ul className="mt-2 divide-y divide-line">
+                {gone.map(x => (
+                  <li key={x.id} className="py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                      <span className="font-semibold">{x.name}</span>
+                      <span className="text-[15px] text-muted">{a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}</span>
                     </div>
+                    <details>
+                      <summary aria-label={`${a.byMistake} ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.byMistake}</summary>
+                      <p className="mt-2 text-[15px] text-muted">{a.bringBackLead.replace('{d}', fmtDay(addDays(x.leftOn, 1), lang))}</p>
+                      <ActionForm action={bringBackAction} className="mt-3">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="memberId" value={x.id} />
+                        <button aria-label={`${a.bringBackBtn}: ${x.name}`} className={`${secondary} sm:w-auto`}>{a.bringBackBtn}</button>
+                      </ActionForm>
+                    </details>
                   </li>
                 ))}
               </ul>
-            <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
-            {gone.length > 0 && (
-              <Fold title={a.movedOut} level={3}>
-                <ul className="mt-2 divide-y divide-line">
-                  {gone.map(x => (
-                    <li key={x.id} className="py-3">
-                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                        <span className="font-semibold">{x.name}</span>
-                        <span className="text-[15px] text-muted">{a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}</span>
-                      </div>
-                      <details>
-                        <summary aria-label={`${a.byMistake} ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.byMistake}</summary>
-                        <p className="mt-2 text-[15px] text-muted">{a.bringBackLead.replace('{d}', fmtDay(addDays(x.leftOn, 1), lang))}</p>
-                        <ActionForm action={bringBackAction} className="mt-3">
-                          <input type="hidden" name="lang" value={lang} />
-                          <input type="hidden" name="memberId" value={x.id} />
-                          <button aria-label={`${a.bringBackBtn}: ${x.name}`} className={`${secondary} sm:w-auto`}>{a.bringBackBtn}</button>
-                        </ActionForm>
-                      </details>
-                    </li>
-                  ))}
-                </ul>
-              </Fold>
-            )}
-            <Fold title={a.addMember} level={3}>
-              <ActionForm action={addMemberAction} className="mt-3">
-                <input type="hidden" name="lang" value={lang} />
-                <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
-                <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={firstOpen} />
-                <button className={primary}>{a.addBtn}</button>
-              </ActionForm>
             </Fold>
-            </div>
+          )}
+          <Fold title={a.addMember} level={3}>
+            <ActionForm action={addMemberAction} className="mt-3">
+              <input type="hidden" name="lang" value={lang} />
+              <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
+              <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={firstOpen} />
+              <button className={primary}>{a.addBtn}</button>
+            </ActionForm>
+          </Fold>
+          </div>
           </div>
       </main>
     </>
