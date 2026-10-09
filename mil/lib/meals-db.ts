@@ -116,7 +116,7 @@ export async function addGuests(db: Db, flatId: string, memberId: string, date: 
 export async function setAway(db: Db, flatId: string, memberId: string, from: string, to: string) {
   return db<{ date: string; meal: Meal; guests: number }>(
     `with dropped as (select date::text as date, meal, guests from meal_changes
-       where member_id = $2 and date between $3::date and $4::date and guests > 0),
+       where flat_id = $1 and member_id = $2 and date between $3::date and $4::date and guests > 0),
      up as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select $1::uuid, $2::uuid, d::date, m, 0
        from generate_series($3::timestamp, $4::timestamp, interval '1 day') d, unnest(array['b','l','d']) m

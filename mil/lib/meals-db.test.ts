@@ -288,6 +288,17 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await currentPlates(db, flatId, tahsin, '2026-10-13', 'd')).toEqual({ own: 1, guests: 2 });
   });
 
+  it('away lists the guests it dropped in day and meal order, once', async () => {
+    const { flatId, tahsin } = await flat();
+    const now = '2026-10-09T13:00';
+    await addGuests(db, flatId, tahsin, '2026-10-11', 'l', 1, now);   // outside the range
+    await addGuests(db, flatId, tahsin, '2026-10-12', 'd', 3, now);
+    await addGuests(db, flatId, tahsin, '2026-10-12', 'l', 1, now);
+    expect(await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-13')).toEqual([
+      { date: '2026-10-12', meal: 'l', guests: 1 }, { date: '2026-10-12', meal: 'd', guests: 3 }]);
+    expect(await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-13')).toEqual([]);
+  });
+
   it('a meal takes at most 9 guests, so it never passes 10 plates', async () => {
     const { flatId, tahsin } = await flat();
     expect(await addGuests(db, flatId, tahsin, '2026-10-12', 'd', 9, '2026-10-09T13:00')).toBe('open');

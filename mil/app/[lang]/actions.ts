@@ -117,9 +117,9 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
   const dropped = await setAway(db, me.flatId, me.memberId, from, to);
   refresh();
   if (!dropped.length) return { done: m.saved };
-  const list = dropped.map(g => `${fmtDay(g.date, lang)} ${m.names[g.meal]}: ${g.guests === 1 ? m.guestOne.slice(1) : m.guestMany.slice(1).replace('{n}', String(g.guests))}`).join(', ');
-  // the person who runs the flat can add guests back themselves
-  return { done: `${m.awayGuestsDropped.replace('{list}', list)}${me.role === 'manager' ? '' : ` ${m.awayGuestsAsk}`}` };
+  // same shape as the guest list; dates hold commas, so items are split by semicolons
+  const list = dropped.map(g => `${fmtDay(g.date, lang)} · ${m.names[g.meal]} · ${g.guests === 1 ? m.guestOne : m.guestMany.replace('{n}', String(g.guests))}`).join('; ');
+  return { done: m.awayGuestsDropped.replace('{list}', list) };
 }
 
 export async function usualAction(_: FormState, d: FormData): Promise<FormState> {
