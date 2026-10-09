@@ -3,7 +3,7 @@ import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { headcount, indexChanges, mealCount, type Meal } from './meals';
 import {
-  cancelAway, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, setAway, setDefaults, upcomingAway, updateSettings,
+  addGuests, cancelAway, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, setAway, setDefaults, upcomingAway, updateSettings,
 } from './meals-db';
 
 const ALL_OFF = { b: false, l: false, d: false }, ALL_ON = { b: true, l: true, d: true };
@@ -203,4 +203,26 @@ describe('meal storage', { timeout: 30000 }, () => {
     await saveMeal(db, flatId, tahsin, c, true);
     expect((await loadHistory(db, flatId)).filter(h => h.entityId.endsWith('2026-10-10|l'))).toHaveLength(1);
   });
+
+  it('a host can add guests for today but never lower today', async () => {
+    const { flatId, tahsin, count } = await flat();
+    const now = '2026-10-09T13:00';   // today is locked for ordinary changes
+    expect(await addGuests(db, flatId, { memberId: tahsin, date: '2026-10-09', meal: 'd', count: 3 }, now)).toBe('late');
+    expect(await count('2026-10-09', 'd')).toBe(3);
+    expect(await addGuests(db, flatId, { memberId: tahsin, date: '2026-10-09', meal: 'd', count: 2 }, now)).toBe('closed');
+    expect(await count('2026-10-09', 'd')).toBe(3);
+    expect(await addGuests(db, flatId, { memberId: tahsin, date: '2026-10-08', meal: 'd', count: 4 }, now)).toBe('closed');   // past
+    await db(`update members set joined_on = '2026-10-20' where id = $1`, [tahsin]);
+    expect(await addGuests(db, flatId, { memberId: tahsin, date: '2026-10-09', meal: 'l', count: 2 }, now)).toBe('closed');   // not moved in yet
+    await db(`update members set joined_on = '2026-10-01' where id = $1`, [tahsin]);
+    const [h] = await loadHistory(db, flatId);
+    expect([h.entityId.endsWith('2026-10-09|d'), h.after.count, h.after.late]).toEqual([true, 3, true]);   // shows in history
+  });
+
+  it('adding guests for a later day is an ordinary change', async () => {
+    const { flatId, tahsin, count } = await flat();
+    expect(await addGuests(db, flatId, { memberId: tahsin, date: '2026-10-12', meal: 'l', count: 2 }, '2026-10-09T13:00')).toBe('open');
+    expect(await count('2026-10-12', 'l')).toBe(2);
+  });
 });
+

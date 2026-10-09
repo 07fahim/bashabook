@@ -226,6 +226,7 @@ const bn = {
     errors: {
       bad: 'কিছু একটা ঠিক নেই। দেখে আবার চেষ্টা করুন।',
       closed: 'এই দিনের মিল আর বদলানো যায় না।',
+      todayAddOnly: 'আজকের জন্য শুধু অতিথি বাড়ানো যায়, কমানো যায় না।',
       awayFrom: 'ছুটি শুরু করা যাবে {d} থেকে।',
       range: 'সর্বোচ্চ 60 দিন বাছতে পারবেন।',
       pickMeal: 'অন্তত একটা বেলা বাছুন।',
@@ -459,6 +460,7 @@ const en: Dict = {
     errors: {
       bad: "Something's not right. Check and try again.",
       closed: "This day's meals can't be changed anymore.",
+      todayAddOnly: 'For today you can only add guests, not remove them.',
       awayFrom: 'Time away can start from {d}.',
       range: 'Pick up to 60 days.',
       pickMeal: 'Pick at least one meal.',

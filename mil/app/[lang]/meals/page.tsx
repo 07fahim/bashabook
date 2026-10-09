@@ -38,7 +38,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const self = meals.members.find(x => x.id === me.memberId)!;
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
   const firstOpen = [1, 2].map(n => addDays(today, n)).find(d => decide(d) === 'open')!;   // tomorrow or the day after
-  const guestDays = week.filter(d => decide(d) !== 'closed');
+  const guestDays = week.filter(d => d === today || decide(d) !== 'closed');   // today too: a host may add surprise guests
   const href = (n: number, only: boolean) => `/${lang}/meals?${new URLSearchParams({ ...(n ? { week: String(n) } : {}), ...(only ? { mine: '1' } : {}) })}`;
   const arrow = `inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-muted px-3 font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 sm:px-4 ${focus}`;
   const card = 'mt-8 rounded-3xl border border-line bg-surface p-5';

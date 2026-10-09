@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { Db } from './db';
-import { addDays, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
+import { addDays, indexChanges, isPresent, mealCount, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
 
 export type FlatInfo = { name: string; cutoff: string; cookToken: string | null; lang: 'bn' | 'en'; weights: Record<Meal, number> };
 export type Member = MealMember & { name: string; role: 'member' | 'manager'; inMeals: boolean };
@@ -65,6 +65,18 @@ export async function changeMeal(db: Db, flatId: string, c: MealChange, now: str
   const decision = blocked ? 'closed' : mealDecision(c.date, now, r.cutoff);
   if (decision !== 'closed') await saveMeal(db, flatId, c.memberId, c, decision === 'late');
   return decision;
+}
+
+/** Guests for one of my meals. Today is open only to raise my plates (a surprise guest), saved as late so it shows in history. */
+export async function addGuests(db: Db, flatId: string, c: MealChange, now: string): Promise<Decision> {
+  const decision = await changeMeal(db, flatId, c, now);
+  if (decision !== 'closed' || c.date !== now.slice(0, 10)) return decision;
+  if ((await db(`select 1 from no_cook where flat_id = $1 and date = $2 and meal = $3`, [flatId, c.date, c.meal])).length) return 'closed';
+  const { members, changes } = await loadMeals(db, flatId, c.date, c.date);
+  const me = members.find(m => m.id === c.memberId);
+  if (!me || !isPresent(me, c.date) || c.count <= mealCount(me, indexChanges(changes), c.date, c.meal)) return 'closed';
+  await saveMeal(db, flatId, c.memberId, c, true);
+  return 'late';
 }
 
 /** Away: every meal off from..to, one audit row for the range. */

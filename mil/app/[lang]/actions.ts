@@ -6,7 +6,7 @@ import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/
 import { db } from '@/lib/db';
 import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
-  cancelAway, changeMeal, cookAgain, isInMeals, loadMeals, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults, updateSettings,
+  addGuests, cancelAway, changeMeal, cookAgain, isInMeals, loadMeals, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults, updateSettings,
 } from '@/lib/meals-db';
 import { endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -89,8 +89,9 @@ export async function guestAction(_: FormState, d: FormData): Promise<FormState>
   const guests = /^\d$/.test(str(d, 'guests')) ? Number(str(d, 'guests')) : null;
   const date = str(d, 'date'), meal = str(d, 'meal'), count = guests === null ? null : guests + (d.has('me') ? 1 : 0);
   if (!inRange(date) || !isMeal(meal) || count === null) return { error: m.errors.bad };
-  const r = await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka());
-  if (r === 'closed') return { error: m.errors.closed };
+  // the member always comes from the session, so nobody can change someone else's guests
+  const r = await addGuests(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka());
+  if (r === 'closed') return { error: date === todayDhaka() ? m.errors.todayAddOnly : m.errors.closed };
   refresh();
   return { done: m.saved };
 }
