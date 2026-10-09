@@ -290,7 +290,7 @@ export async function seedLock(db: Db, flatId: string, now: string) {
 }
 
 /** Someone told the cook the count their card showed: that count becomes the baseline, so the warning goes for everyone.
- *  It saves the count they saw, not the live one, so a change made after they looked still shows.
+ *  Only if their screen still shows the live count: an out-of-date tap changes nothing, so no change is hidden and no false alarm appears.
  *  Only for the day the baseline belongs to: a page left open since yesterday changes nothing. */
 export async function toldCook(db: Db, flatId: string, by: string, date: string, seen: Record<Meal, number>) {
   const { members, changes } = await loadMeals(db, flatId, date, date);
