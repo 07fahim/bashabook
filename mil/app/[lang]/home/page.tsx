@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka } from '@/lib/meals';
 import { listMembers } from '@/lib/auth';
 import { countAtLock, loadMeals } from '@/lib/meals-db';
+import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
 import { changePinAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
@@ -15,6 +16,7 @@ import { countText, fmtDay, fmtTime } from '../format';
 import { Header } from '../header';
 import { LockChange } from '../lock-change';
 import { MealRow } from '../meal-row';
+import { balanceText, ConfirmList } from '../money/bits';
 import { Nav } from '../nav';
 import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
@@ -31,7 +33,11 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const t = getDictionary(lang), a = t.app, m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const [meals, people] = await Promise.all([loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId)]);
+  const [meals, people, mo, waiting] = await Promise.all([
+    loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId),
+    loadMonth(db, me.flatId, monthOf(today), today, me.memberId), toConfirm(db, me.flatId, me.memberId, me.role === 'manager'),
+  ]);
+  const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
   const someoneMissing = people.some(p => !p.claimed);
   const self = people.find(p => p.id === me.memberId), myPhone = self?.phone ?? '';   // the invite card only matters while someone hasn't joined
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
@@ -62,6 +68,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
         </div>
         {/* side by side the cards are one height, their buttons on one line; a lone card keeps half the row,
             not a button as wide as the screen */}
+        {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
         <div className="mt-8 grid gap-6 md:grid-cols-2">
           {/* phones only: wider screens change tomorrow in the week chart, with the lock time above it */}
           <section className="rounded-3xl border border-line bg-surface p-5 md:hidden">
@@ -85,6 +92,12 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             <div className="grow" />
             <ShareButton text={countText(me.flatName, m, tomorrow, hc, status, lang)} label={m.share} copied={m.copied} />
           </section>
+          {bal && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
+            <h2 className="text-xl font-bold">{x.title}</h2>
+            <p className={`mt-2 text-lg font-semibold ${bal.tone}`}>{bal.text}</p>
+            <div className="grow" />
+            <Link href={`/${lang}/money`} className={`mt-3 inline-flex min-h-11 items-center ${link}`}>{x.seeMoney}</Link>
+          </section>}
           {someoneMissing && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{a.shareTitle}</h2>
             <p className="mt-2 text-muted">{a.shareLead}</p>
