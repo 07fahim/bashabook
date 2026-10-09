@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat, listMembers } from './auth';
-import { initials, photoOf, removePhoto, setPhoto } from './photo';
+import { fromDataUrl, initials, photoOf, removePhoto, setPhoto } from './photo';
 
 const jpeg = (n = 100) => Uint8Array.from({ length: n }, (_, i) => (i < 3 ? [0xff, 0xd8, 0xff][i] : i % 251));
 
@@ -9,7 +9,7 @@ async function flat(name = 'Flat 4B') {
   await migrate();
   const f = await createFlat(db, { flatName: name, name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-10-09', lang: 'bn' });
   const tahsin = (await listMembers(db, f.flatId)).find(m => m.name === 'Tahsin')!.id;
-  const nafis = { memberId: f.memberId, role: 'manager' as const }, asTahsin = { memberId: tahsin, role: 'member' as const };
+  const nafis = { flatId: f.flatId, memberId: f.memberId, role: 'manager' as const }, asTahsin = { flatId: f.flatId, memberId: tahsin, role: 'member' as const };
   return { ...f, tahsin, nafis, asTahsin };
 }
 
@@ -34,6 +34,13 @@ describe('photos', { timeout: 30000 }, () => {
     expect((await listMembers(db, flatId)).find(m => m.id === memberId)!.photoV).not.toBe(v1);           // a new photo, a new version
   });
 
+  it('reads only a base64 JPEG data URL', () => {
+    expect(Array.from(fromDataUrl('data:image/jpeg;base64,/9j/')!)).toEqual([0xff, 0xd8, 0xff]);
+    expect(fromDataUrl('')).toBeNull();                                  // a photo the phone could not open
+    expect(fromDataUrl('data:image/png;base64,iVBORw==')).toBeNull();
+    expect(fromDataUrl('data:image/jpeg;base64,<script>')).toBeNull();
+  });
+
   it('only the flat can see a photo', async () => {
     const a = await flat('A'), b = await flat('B');
     await setPhoto(db, a.memberId, jpeg());
@@ -45,10 +52,17 @@ describe('photos', { timeout: 30000 }, () => {
     const { flatId, memberId, tahsin, nafis, asTahsin } = await flat();
     await setPhoto(db, memberId, jpeg());
     await setPhoto(db, tahsin, jpeg());
-    expect(await removePhoto(db, flatId, asTahsin, memberId)).toBe(false);
-    expect(await removePhoto(db, flatId, asTahsin, tahsin)).toBe(true);
+    expect(await removePhoto(db, asTahsin, memberId)).toBe(false);
+    expect(await removePhoto(db, asTahsin, tahsin)).toBe(true);
     await setPhoto(db, tahsin, jpeg());
-    expect(await removePhoto(db, flatId, nafis, tahsin)).toBe(true);
+    expect(await removePhoto(db, nafis, tahsin)).toBe(true);
     expect(await photoOf(db, flatId, tahsin)).toBeNull();
+  });
+
+  it('the person who runs another flat cannot remove my photo', async () => {
+    const a = await flat('A'), b = await flat('B');
+    await setPhoto(db, a.memberId, jpeg());
+    expect(await removePhoto(db, b.nafis, a.memberId)).toBe(false);
+    expect(await photoOf(db, a.flatId, a.memberId)).not.toBeNull();
   });
 });

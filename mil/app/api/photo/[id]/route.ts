@@ -9,5 +9,5 @@ export async function GET(_req: Request, ctx: RouteContext<'/api/photo/[id]'>) {
   const me = await currentMember();
   const photo = me && UUID.test(id) ? await photoOf(db, me.flatId, id) : null;
   if (!photo) return new Response(null, { status: 404 });
-  return new Response(new Uint8Array(photo), { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=31536000, immutable' } });
+  return new Response(new Uint8Array(photo), { headers: { 'Content-Type': 'image/jpeg', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=31536000, immutable' } });
 }

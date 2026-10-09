@@ -8,7 +8,7 @@ import { addDays, editFrom, headcount, isDate, isLocked, isMeal, isPresent, MEAL
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
-import { removePhoto, setPhoto } from '@/lib/photo';
+import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
@@ -272,8 +272,8 @@ export async function renameAction(_: FormState, d: FormData): Promise<FormState
 export async function photoAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireMember(lang);
-  const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(str(d, 'photo'));
-  if (!m || !(await setPhoto(db, me.memberId, Uint8Array.from(Buffer.from(m[1], 'base64'))))) return { error: a.errors.photo };
+  const bytes = fromDataUrl(str(d, 'photo'));
+  if (!bytes || !(await setPhoto(db, me.memberId, bytes))) return { error: a.errors.photo };
   refresh();
   return { done: a.photoSaved };
 }
@@ -281,6 +281,6 @@ export async function photoAction(_: FormState, d: FormData): Promise<FormState>
 /** My own photo, or anyone's for the person who runs the flat. */
 export async function removePhotoAction(d: FormData) {
   const me = await requireMember(langOf(d)), id = str(d, 'memberId');
-  if (UUID.test(id)) await removePhoto(db, me.flatId, me, id);
+  if (UUID.test(id)) await removePhoto(db, me, id);
   refresh();
 }
