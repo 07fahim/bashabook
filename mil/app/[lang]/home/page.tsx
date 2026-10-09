@@ -95,14 +95,14 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           </section>
           {bal && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{x.title}</h2>
-            <p className={`mt-1 text-[15px] font-semibold ${bal.tone}`}>{bal.text}</p>
+            <p className={`mt-1 text-lg font-bold ${bal.tone}`}>{bal.text}</p>
             {/* the same shape as the plates card beside it: three numbers in tiles, the button at the bottom */}
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
               {([[x.mealRate, fmtRate(mo.result.mealRate, totalMeals)], [x.myMeals, fmtMeals(mo.meals.get(me.memberId) ?? 0)],
-                [x.withName.replace('{name}', starter?.name ?? ''), fmtTaka(Math.max(mo.result.fund, 0))]] as const).map(([k, v]) => (
+                [x.withName.replace('{name}', starter?.name ?? ''), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v]) => (
                 <div key={k} className="rounded-xl bg-paper px-1 py-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
-                  <dd className="text-2xl font-bold tabular-nums">{v}</dd>
+                  <dd className="text-lg font-bold tabular-nums sm:text-2xl">{v}</dd>
                 </div>
               ))}
             </dl>

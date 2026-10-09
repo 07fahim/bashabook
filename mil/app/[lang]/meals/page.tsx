@@ -11,7 +11,7 @@ import { getDictionary, hasLocale } from '../dictionaries';
 import { dhakaDate, fmtDay, fmtRange, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
-import { checkChip, field, Field, Fold, focus, link, primary, PageSkeleton } from '../ui';
+import { checkChip, field, Field, Fold, focus, link, LongList, primary, PageSkeleton } from '../ui';
 import { DateField } from '../date-field';
 import { WeekChart } from '../week-chart';
 
@@ -185,14 +185,12 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           {history.length === 0 ? (
             <p className="mt-3 text-muted">{m.noHistory}</p>
           ) : (
-            <ul className="mt-3 divide-y divide-line">
-              {history.map((h, i) => (
-                <li key={i} className="py-3">
-                  <p>{describe(h)}</p>
-                  <p className="text-[15px] text-muted">{fmtWhen(h.at, lang)}</p>
-                </li>
-              ))}
-            </ul>
+            <LongList label={m.historyTitle} keep={10} more={t.app.showAll.replace('{n}', String(history.length))} less={t.app.showLess} items={history.map((h, i) => (
+              <li key={i} className="py-3">
+                <p>{describe(h)}</p>
+                <p className="text-[15px] text-muted">{fmtWhen(h.at, lang)}</p>
+              </li>
+            ))} />
           )}
         </section>
       </main>

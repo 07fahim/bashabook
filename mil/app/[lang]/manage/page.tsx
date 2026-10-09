@@ -75,6 +75,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           <span>{m.lockTime.replace('{t}', fmtTime(meals.flat.cutoff))}</span> <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link>
         </p>
 
+        {/* three groups of about the same height side by side; everyone in the flat (8 to 10 people) gets the full width
+            below, so no column grows far past the others and leaves a hole */}
         <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
           <div>
             <h2 className={groupLabel}>{m.groupToday}</h2>
@@ -94,7 +96,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               <LockChange m={m} lang={lang} date={tomorrow} hc={tom} changes={changes} />
               <ShareButton text={text} label={m.share} copied={m.copied} />
             </section>
-            {/* the money jobs are daily too: they sit under today's plates, so the three columns stay balanced */}
+          </div>
+          <div>
             <h2 className={groupLabel}>{mn.groupMoney}</h2>
             <div className="mt-3">
               {waiting.length ? <ConfirmList lang={lang} x={mn} items={waiting} collector={me.name} /> : <p className="text-muted">{mn.noPending}</p>}
@@ -178,7 +181,9 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               )}
             </Fold>
           </div>
-          <div>
+          {/* on a tablet this group takes the whole second row, its two halves side by side */}
+          <div className="md:col-span-2 md:grid md:grid-cols-2 md:gap-x-8 lg:col-span-1 lg:block">
+            <div>
             <h2 className={groupLabel}>{m.groupChange}</h2>
             <Fold title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
               <form className="mt-4 space-y-4">
@@ -271,6 +276,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               </ActionForm>
             </Fold>
 
+            </div>
+            <div>
             <h2 className={groupLabel}>{m.groupSettings}</h2>
             <Fold id="rules" title={m.rulesTitle} level={3} open={'rules' in sp}>
               {'rules' in sp && <FocusHere />}
@@ -298,13 +305,14 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 {meals.flat.cookToken && <p className="mt-2 text-[15px] text-muted">{m.cookOffLead}</p>}
               </form>
             </Fold>
+            </div>
           </div>
+        </div>
           <div>
             <h2 className={groupLabel}>{a.members}</h2>
-            <section className={card}>
-              <ul className="divide-y divide-line">
+              <ul className="mt-3 grid gap-x-8 gap-y-3 md:grid-cols-2 md:items-start lg:grid-cols-3">
                 {members.map(x => (
-                  <li key={x.id} className="py-4 first:pt-0 last:pb-0">
+                  <li key={x.id} className="rounded-3xl border border-line bg-surface p-5">
                     {/* a long badge (last day) drops below the name on a phone instead of squeezing it */}
                     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                       <span className="flex items-center gap-3 text-lg font-semibold"><Avatar id={x.id} name={x.name} v={x.photoV} size={36} />{x.name}</span>
@@ -372,7 +380,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                   </li>
                 ))}
               </ul>
-            </section>
+            <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
             {gone.length > 0 && (
               <Fold title={a.movedOut} level={3}>
                 <ul className="mt-2 divide-y divide-line">
@@ -404,8 +412,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <button className={primary}>{a.addBtn}</button>
               </ActionForm>
             </Fold>
+            </div>
           </div>
-        </div>
       </main>
     </>
   );

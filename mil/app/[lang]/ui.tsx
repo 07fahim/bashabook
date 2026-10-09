@@ -41,6 +41,27 @@ export function Fold({ id, title, lead, level = 2, open, children }: { id?: stri
   );
 }
 
+/** A list that can grow long. Wider screens: every row, scrolling inside the card so the card's title and the page around
+ *  it stay put. Phones (a scroll box inside a scrolling page is a trap there): the first `keep` rows, then Show all. */
+export function LongList({ items, keep, label, more, less }: { items: ReactNode[]; keep: number; label: string; more: string; less: string }) {
+  const list = 'divide-y divide-line';
+  return (
+    <div role="region" aria-label={label} tabIndex={0} className={`mt-3 flex flex-col md:max-h-[70vh] md:overflow-y-auto md:pr-3 md:[scrollbar-width:thin] ${focus}`}>
+      <ul className={list}>{items.slice(0, keep)}</ul>
+      {items.length > keep && (<>
+        {/* the button sits after the rows it opens (order-last) but before them in the page, as peer-open needs */}
+        <details className="group/all peer order-last md:hidden">
+          <summary className={`mt-2 inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden ${link}`}>
+            <span className="group-open/all:hidden">{more}</span>
+            <span className="hidden group-open/all:inline">{less}</span>
+          </summary>
+        </details>
+        <ul className={`${list} hidden border-t border-line peer-open:block md:block`}>{items.slice(keep)}</ul>
+      </>)}
+    </div>
+  );
+}
+
 /** A small label above a group of cards. */
 export const groupLabel = 'mt-10 text-[15px] font-semibold text-muted';
 

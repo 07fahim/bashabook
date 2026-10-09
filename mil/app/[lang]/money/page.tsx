@@ -14,7 +14,7 @@ import { fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { PayerSelect } from '../payer-select';
-import { checkChip, Field, Fold, focus, link, PageSkeleton, primary } from '../ui';
+import { checkChip, Field, Fold, focus, link, LongList, PageSkeleton, primary } from '../ui';
 import { balanceText, ConfirmList } from './bits';
 
 export default function Money({ params, searchParams }: PageProps<'/[lang]/money'>) {
@@ -61,6 +61,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const picked = (e: Entry) => e.selected.length < mo.members.length && e.selected.includes(me.memberId);
   const shown = mine ? mo.entries.filter(e => [e.createdBy, e.paidBy, e.memberId].includes(me.memberId) || picked(e)) : mo.entries;
   const dates = [...new Set(shown.map(e => e.date))];
+  // phones show whole days until about 15 entries, never splitting a day (its heading would show twice on wide screens)
+  let seen = 0;
+  const keep = Math.max(1, dates.findIndex(d => (seen += shown.filter(e => e.date === d).length) > 15) + 1 || dates.length);
   const who = (e: Entry) =>
     e.type === 'deposit' ? (e.memberId === collector.id ? collector.name : `${name(e.memberId)} → ${collector.name}`)
     : e.type === 'payout' ? `${collector.name} → ${name(e.memberId)}`
@@ -102,7 +105,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
         {/* desktop: my balance and the three forms on the left; the flat summary over the entries on the right, two thirds wide,
             so both sides grow downward together and no column leaves a hole */}
         <div className="mt-6 grid gap-6 md:grid-cols-2 md:items-start lg:grid-cols-3">
-          <div>
+          {/* the balance and forms stay in view beside a long list (an app's side panel); taller than the screen, they scroll
+              on their own. -m-1 p-1 keeps focus outlines inside the scroll box */}
+          <div className="md:sticky md:top-24 md:-m-1 md:max-h-[calc(100dvh-10rem)] md:overflow-y-auto md:p-1 md:[scrollbar-width:thin]">
             <section className={card}>
               <h2 className="text-xl font-bold">{t.app.hi}, {me.name}</h2>
               {!r || !balance ? <p className="mt-2 text-muted">{x.notHere}</p> : (<>
@@ -173,6 +178,18 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 </ActionForm>
               </Fold>
             </>)}
+            {/* everyone's balance grows with the flat (8 to 10 people): here it fills the side column beside the long list */}
+            <section className={`mt-3 ${card}`}>
+              <h2 className="text-xl font-bold">{x.everyone}</h2>
+              <ul className="mt-1 divide-y divide-line">
+                {mo.result.perMember.map(p => (
+                  <li key={p.id} className="flex justify-between gap-4 py-2">
+                    <span>{name(p.id)}<span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span></span>
+                    <span className={`font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{p.balance > 0 ? '+' : p.balance < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           </div>
 
           <div className="space-y-6 lg:col-span-2">
@@ -180,8 +197,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             <h2 className="text-xl font-bold">{x.summary}</h2>
             <dl className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
               {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar')))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
-                [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? x.mealsSoFar : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
-                [x.withName.replace('{name}', collector.name), fmtTaka(Math.max(mo.result.fund, 0))]] as const).map(([k, v, sub]) => (
+                [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? (totalMeals === 100 ? x.mealSoFar : x.mealsSoFar) : totalMeals === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
+                [x.withName.replace('{name}', collector.name), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
                   <dd className="text-2xl font-bold tabular-nums">{v}</dd>
@@ -191,23 +208,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             </dl>
             {mo.result.fund < 0 && <p className="mt-3 font-semibold">{x.flatOwes.replace('{name}', collector.name).replace('{t}', fmtTaka(mo.result.fund))}</p>}
             {!mo.result.invariantOk && <p className="mt-3 font-semibold text-chili">{x.problem}</p>}
-            <div className="lg:grid lg:grid-cols-2 lg:gap-x-10">
-            <div>
-            <h3 className="mt-5 font-semibold">{x.everyone}</h3>
-            <ul className="mt-1 divide-y divide-line">
-              {mo.result.perMember.map(p => (
-                <li key={p.id} className="flex justify-between gap-4 py-2">
-                  <span>{name(p.id)}<span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span></span>
-                  <span className={`font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{p.balance > 0 ? '+' : p.balance < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
-                </li>
-              ))}
-            </ul>
-            </div>
-            <div>
             <h3 className="mt-5 font-semibold">{x.settleTitle}</h3>
-            {settle.length ? <ul className="mt-1 list-disc space-y-1 pl-5">{settle.map(s => <li key={s}>{s}</li>)}</ul> : <p className="mt-1 text-muted">{x.nobodyOwes}</p>}
-            </div>
-            </div>
+            {settle.length ? <ul className="mt-1 list-disc space-y-1 pl-5 md:columns-2 md:gap-10">{settle.map(s => <li key={s}>{s}</li>)}</ul> : <p className="mt-1 text-muted">{x.nobodyOwes}</p>}
           </section>
 
           <section className={card}>
@@ -216,10 +218,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               <Link href={href(month, !mine)} aria-pressed={mine} className={`inline-flex min-h-11 items-center rounded-full border border-muted px-4 font-semibold ${mine ? 'bg-turmeric text-on-turmeric border-turmeric' : ''} ${focus}`}>{x.onlyMine}</Link>
             </div>
             {!dates.length && <p className="mt-3 text-muted">{x.noEntries}</p>}
-            <ul>
-              {dates.map(d => (
+            <LongList label={x.entries} keep={keep} more={t.app.showAll.replace('{n}', String(shown.length))} less={t.app.showLess} items={dates.map(d => (
                 <li key={d}>
-                  <h3 className="mt-4 text-[15px] font-semibold text-muted">{fmtDay(d, lang)}</h3>
+                  <h3 className="pt-4 text-[15px] font-semibold text-muted">{fmtDay(d, lang)}</h3>
                   <ul className="divide-y divide-line">
                     {shown.filter(e => e.date === d).map(e => (
                       <li key={e.id} className="group py-3">
@@ -252,10 +253,12 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                     ))}
                   </ul>
                 </li>
-              ))}
-            </ul>
+              ))} />
+            {/* removed entries are rarely needed: folded behind their count, still one tap from Put back */}
             {!mine && mo.removed.length > 0 && (
-              <ul className="mt-4 divide-y divide-line border-t border-line text-[15px] text-muted">
+              <details className="mt-4 border-t border-line pt-2">
+              <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.removedTitle.replace('{n}', String(mo.removed.length))}</summary>
+              <ul className="divide-y divide-line text-[15px] text-muted">
                 {mo.removed.map(rm => (
                   <li key={rm.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
                     <span className="min-w-0 flex-1">{x.types[rm.type]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {x.removedBy.replace('{name}', rm.by)}</span>
@@ -272,6 +275,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   </li>
                 ))}
               </ul>
+              </details>
             )}
           </section>
           </div>
