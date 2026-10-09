@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { addDays, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
-import { loadHistory, loadMeals, myGuests, upcomingAway, type HistoryRow } from '@/lib/meals-db';
+import { addDays, firstWeek, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
+import { flatStart, loadHistory, loadMeals, myGuests, upcomingAway, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
 import { awayAction, cancelAwayAction, guestAction, removeGuestsAction, usualAction } from '../actions';
@@ -23,15 +23,16 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const { lang } = await params;
   const sp = await searchParams;
   const mine = sp.mine === '1';
-  // which week to show: 0 = this week, up to 7 weeks ahead (changes are allowed up to 60 days out) and 8 back, this month and
-  // last, read-only, so anyone can check what they were counted for
-  const w = Math.min(7, Math.max(-8, Math.trunc(Number(sp.week)) || 0));
   // older history comes 50 at a time (?older=1, 2 …); a longer slice of the same newest-first list, so nothing repeats or goes missing
   const older = Math.min(40, Math.max(0, Math.trunc(Number(sp.older)) || 0)), shownRows = 50 * (older + 1);
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10);
+  // which week to show: 0 = this week, up to 7 weeks ahead (changes are allowed up to 60 days out); back, read-only, so anyone
+  // can check what they were counted for: 8 weeks (this month and last), never before the flat's first move-in
+  const back = Math.max(-8, firstWeek(today, await flatStart(db, me.flatId)));
+  const w = Math.min(7, Math.max(back, Math.trunc(Number(sp.week)) || 0));
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, 7 * w + i));
   const [meals, history, aways, guestList] = await Promise.all([
     loadMeals(db, me.flatId, week[0], week[6]),
@@ -86,7 +87,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
         <p className="mt-2 text-muted">{w < 0 ? m.pastLead : m.weekLead}</p>
         <nav aria-label={m.weekNav} className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           {/* at either end the arrow stays in place, greyed out, so keyboard focus is not lost */}
-          <Link href={href(Math.max(-8, w - 1), mine)} scroll={false} aria-label={m.prevWeek} aria-disabled={w === -8 || undefined} className={`justify-self-start ${arrow}`}><span aria-hidden="true">←</span><span aria-hidden="true" className="hidden sm:inline">{m.prevWeek}</span></Link>
+          <Link href={href(Math.max(back, w - 1), mine)} scroll={false} aria-label={m.prevWeek} aria-disabled={w === back || undefined} className={`justify-self-start ${arrow}`}><span aria-hidden="true">←</span><span aria-hidden="true" className="hidden sm:inline">{m.prevWeek}</span></Link>
           <p className="text-center font-semibold">{fmtRange(week[0], week[6])}</p>
           <Link href={href(Math.min(7, w + 1), mine)} scroll={false} aria-label={m.nextWeek} aria-disabled={w === 7 || undefined} className={`justify-self-end ${arrow}`}><span aria-hidden="true" className="hidden sm:inline">{m.nextWeek}</span><span aria-hidden="true">→</span></Link>
         </nav>

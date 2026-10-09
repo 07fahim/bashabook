@@ -247,6 +247,10 @@ export async function cookAgain(db: Db, flatId: string, by: string, from: string
     [flatId, from, to, meals.join(','), { cookAgain: [from, to], meals: meals.join(',') }, by, firstOpen]);
 }
 
+/** The flat's first move-in day: meals start there. */
+export const flatStart = async (db: Db, flatId: string) =>
+  (await db<{ start: string }>(`select min(joined_on)::text as start from members where flat_id = $1`, [flatId]))[0].start;
+
 /** Changes worth seeing: late, made for someone else, away, no cooking, usual meals and meal rules. The newest `limit`
  *  (the page asks for one more to know whether older ones exist). `mine` keeps my own meals plus flat-wide rows. */
 export const loadHistory = (db: Db, flatId: string, mine: string | null = null, limit = 50) => db<HistoryRow>(

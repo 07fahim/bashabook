@@ -74,6 +74,11 @@ export const addDays = (date: string, n: number) => {
   return t.toISOString().slice(0, 10);
 };
 
+/** The earliest week (0 = the week starting today, -1 the one before) that still holds a day on or after `start`, the
+ *  flat's first move-in: going back further would only show days before anyone lived here. */
+export const firstWeek = (today: string, start: string) =>
+  Math.min(0, Math.ceil((Date.parse(start) - Date.parse(today) - 6 * 864e5) / (7 * 864e5))) || 0;   // || 0: never -0
+
 /** Dhaka clock as 'YYYY-MM-DDTHH:MM'. Dhaka is UTC+6 all year. */
 export const nowDhaka = () => new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 16);
 export const todayDhaka = () => nowDhaka().slice(0, 10);
