@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { addDays, headcount, MEALS, todayDhaka } from '@/lib/meals';
+import { addDays, headcount, isLocked, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import { flatIdByCookToken, loadMeals } from '@/lib/meals-db';
 import { getDictionary, hasLocale } from '../../dictionaries';
-import { fmtDay } from '../../format';
+import { fmtDay, fmtTime } from '../../format';
 import { PageSkeleton } from '../../ui';
 import { Header } from '../../header';
 
@@ -41,6 +41,7 @@ async function CookBody({ params }: Pick<Props, 'params'>) {
               return (
                 <section key={date} className="mt-6">
                   <h2 className={`${big ? 'text-3xl' : 'text-xl'} font-bold`}>{label} · {fmtDay(date, lang)}</h2>
+                  {big && <p className="mt-1 text-lg text-muted">{isLocked(date, nowDhaka(), data.flat.cutoff) ? m.final : m.finalAt.replace('{t}', fmtTime(data.flat.cutoff))}</p>}
                   <dl className="mt-3 divide-y divide-line border-y border-line">
                     {MEALS.map(x => (
                       <div key={x} className="flex items-baseline justify-between py-3">

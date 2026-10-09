@@ -6,7 +6,7 @@ import { addMember, cleanName, createFlat, isPin, login, resetPin } from '@/lib/
 import { db } from '@/lib/db';
 import { addDays, editFrom, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
-  cancelAway, changeMeal, cookAgain, isInMeals, loadMeals, mealRules, noCooking, saveMeal, setAway, setCookLink, setDefaults, updateSettings,
+  addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, setAway, setCookLink, setDefaults, setOwn, updateSettings,
 } from '@/lib/meals-db';
 import { endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -75,11 +75,20 @@ const inRange = (date: string) => isDate(date) && date >= todayDhaka() && date <
 /** A meal chip tap. The chip sends the count it wants; repeating the tap is harmless. */
 export async function setMealAction(d: FormData) {
   const me = await requireMember(langOf(d));
-  const date = str(d, 'date'), meal = str(d, 'meal'), count = plates(str(d, 'count'));
-  if (inRange(date) && isMeal(meal) && count !== null) {
-    await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka());
+  // a chip switches only my own plate; my guests stay
+  const date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own');
+  if (inRange(date) && isMeal(meal) && (own === '0' || own === '1')) {
+    await setOwn(db, me.flatId, me.memberId, date, meal, own === '1' ? 1 : 0, nowDhaka());
   }
   refresh();   // also redraws a page left open past midnight
+}
+
+/** Removes my guests from one later meal; my own plate stays. */
+export async function removeGuestsAction(d: FormData) {
+  const me = await requireMember(langOf(d));
+  const date = str(d, 'date'), meal = str(d, 'meal');
+  if (inRange(date) && isMeal(meal)) await removeGuests(db, me.flatId, me.memberId, date, meal, nowDhaka());
+  refresh();
 }
 
 export async function guestAction(_: FormState, d: FormData): Promise<FormState> {
@@ -87,10 +96,12 @@ export async function guestAction(_: FormState, d: FormData): Promise<FormState>
   const me = await requireMember(lang);
   // guests plus my own plate when I'm eating too
   const guests = /^\d$/.test(str(d, 'guests')) ? Number(str(d, 'guests')) : null;
-  const date = str(d, 'date'), meal = str(d, 'meal'), count = guests === null ? null : guests + (d.has('me') ? 1 : 0);
-  if (!inRange(date) || !isMeal(meal) || count === null) return { error: m.errors.bad };
-  const r = await changeMeal(db, me.flatId, { memberId: me.memberId, date, meal, count }, nowDhaka());
-  if (r === 'closed') return { error: m.errors.closed };
+  const date = str(d, 'date'), meal = str(d, 'meal'), now = nowDhaka();
+  if (!inRange(date) || !isMeal(meal) || guests === null) return { error: m.errors.bad };
+  // the member always comes from the session, so nobody can change someone else's guests
+  const r = await addGuests(db, me.flatId, me.memberId, date, meal, guests, now);
+  if (r === 'full') return { error: m.errors.tooManyGuests };
+  if (r === 'closed') return { error: guests < 1 ? m.errors.todayAddOnly : m.errors.closed };
   refresh();
   return { done: m.saved };
 }
@@ -115,6 +126,7 @@ export async function usualAction(_: FormState, d: FormData): Promise<FormState>
   const usual = { b: d.has('b'), l: d.has('l'), d: d.has('d') };
   const inMeals = usual.b || usual.l || usual.d, was = await isInMeals(db, me.flatId, me.memberId);
   await setDefaults(db, me.flatId, me.memberId, usual, editFrom(todayDhaka()), await lastLocked(me.flatId), inMeals === was ? null : inMeals);
+  if (inMeals !== was) { refresh(); return { done: inMeals ? m.savedShared : m.savedOwn }; }
   refresh();
   return { done: m.saved };
 }
@@ -171,11 +183,12 @@ export async function cancelAwayAction(_: FormState, d: FormData): Promise<FormS
 /** The flat's starter sets anyone's plates for a meal (− / +), today and past days included. Late once the day is locked. */
 export async function adminSetAction(d: FormData) {
   const me = await requireManager(langOf(d));
-  const memberId = str(d, 'memberId'), date = str(d, 'date'), meal = str(d, 'meal'), count = plates(str(d, 'count'));
+  // own plate and guests are set separately, so a guest change never touches someone's own meal and back
+  const memberId = str(d, 'memberId'), date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own'), guests = plates(str(d, 'guests'));
   const member = (await loadMeals(db, me.flatId, date, date)).members.find(x => x.id === memberId);
-  if (member && editable(date) && isPresent(member, date) && isMeal(meal) && count !== null) {
+  if (member && editable(date) && isPresent(member, date) && isMeal(meal) && (own === '0' || own === '1') && guests !== null && guests <= 9) {
     const r = await mealRules(db, me.flatId);
-    await saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count }, isLocked(date, nowDhaka(), r.cutoff));
+    await saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count: Number(own) + guests, guests }, isLocked(date, nowDhaka(), r.cutoff));
   }
   refresh();
 }
