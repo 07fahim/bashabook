@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { allocate, monthBalances, type LedgerRow, type MonthInput } from './money';
+import { allocate, foodSplit, monthBalances, toPoisha, type LedgerRow, type MonthInput } from './money';
 
 describe('allocate', () => {
   it('splits exactly with largest remainder, ties to lowest index', () => {
@@ -168,3 +168,35 @@ describe('money moving between people', () => {
   });
 });
 
+
+describe('per-row shares and taka input', () => {
+  it('lists each person share of each row, adding up to the row', () => {
+    const r = monthBalances(base({ ledger: [
+      row({ id: 'z1', type: 'bazar', amount: 100000, paidBy: 'A' }),
+      row({ id: 'w1', type: 'bill', amount: 20000, split: 'selected', selected: ['B', 'C'] }),
+    ] }));
+    expect(r.lines.filter(l => l.rowId === 'w1')).toEqual([{ rowId: 'w1', memberId: 'B', amount: 10000 }, { rowId: 'w1', memberId: 'C', amount: 10000 }]);
+    expect(r.lines.filter(l => l.rowId === 'bazar').reduce((a, l) => a + l.amount, 0)).toBe(100000);
+  });
+
+  it('splits food cost into own and guest meals that add up exactly, at awkward totals too', () => {
+    expect(foodSplit(81667, 2450, 200)).toEqual({ own: 75000, guests: 6667 });   // 81667 x 200 / 2450 = 6666.7
+    expect(foodSplit(100001, 3, 1)).toEqual({ own: 66667, guests: 33334 });
+    expect(foodSplit(0, 0, 0)).toEqual({ own: 0, guests: 0 });
+    for (const [f, m, g] of [[99999, 7, 3], [1, 3, 1], [245000, 2450, 0]]) {
+      const x = foodSplit(f, m, g);
+      expect(x.own + x.guests).toBe(f);
+    }
+  });
+
+  it('reads taka the way people type it', () => {
+    expect(toPoisha('2450')).toBe(245000);
+    expect(toPoisha('2,450.5')).toBe(245050);
+    expect(toPoisha('৳ ২৪৫০')).toBe(245000);   // Bangla keyboard digits
+    expect(toPoisha('0')).toBeNull();
+    expect(toPoisha('-5')).toBeNull();
+    expect(toPoisha('12.345')).toBeNull();
+    expect(toPoisha('abc')).toBeNull();
+    expect(toPoisha('10000001')).toBeNull();   // over ৳1,00,00,000 is a typo
+  });
+});

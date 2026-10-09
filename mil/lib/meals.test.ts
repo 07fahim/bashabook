@@ -76,3 +76,12 @@ describe('fmtRange', () => {
   });
 });
 
+
+describe('meals so far', () => {
+  it('counts only up to the given day', () => {
+    const m = { id: 'A', joinedOn: '2026-10-01', leftOn: null, defaults: { b: true, l: true, d: true } };
+    const w = { b: 50, l: 100, d: 100 };
+    expect(weightedMeals([m], [], '2026-10-01', w).get('A')).toBe(31 * 250);
+    expect(weightedMeals([m], [], '2026-10-01', w, '2026-10-09').get('A')).toBe(9 * 250);
+  });
+});

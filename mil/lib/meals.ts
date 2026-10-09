@@ -39,10 +39,11 @@ export function mealCount(m: MealMember, idx: Map<string, number>, date: string,
   return idx.get(key(m.id, date, meal)) ?? (m.defaults[meal] ? 1 : 0);
 }
 
-/** Weighted meals per member for the month, in hundredths of a meal. Weights are hundredths too (b: 50 = 0.5). */
-export function weightedMeals(members: MealMember[], changes: MealChange[], month: string, weights: Record<Meal, number>): Map<string, number> {
+/** Weighted meals per member for the month, in hundredths of a meal. Weights are hundredths too (b: 50 = 0.5).
+ *  `upTo` stops the count at a day, for numbers so far. */
+export function weightedMeals(members: MealMember[], changes: MealChange[], month: string, weights: Record<Meal, number>, upTo = '9999-12-31'): Map<string, number> {
   const idx = indexChanges(changes);
-  const days = daysOfMonth(month);
+  const days = daysOfMonth(month).filter(d => d <= upTo);
   return new Map(members.map(m => [m.id, days.reduce((sum, d) => sum + MEALS.reduce((s, meal) => s + mealCount(m, idx, d, meal) * weights[meal], 0), 0)]));
 }
 
