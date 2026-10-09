@@ -265,9 +265,10 @@ export const loadNoCookDays = (db: Db, flatId: string, from: string) => db<{ dat
  *  so comparing it with the live count catches every change after the lock, whatever caused it (deleted rows, new members).
  *  Called after the lock by the cards, and by every meal-changing action through `seedLock`. */
 export async function countAtLock(db: Db, flatId: string, date: string, hc: Record<Meal, number>) {
-  // one statement that always updates: under concurrency the CASE sees the row the other request just wrote
+  // one statement that always updates: under concurrency the CASE sees the row the other request just wrote.
+  // $3 goes in as text: typed as jsonb, postgres.js would JSON-encode the string a second time
   const [r] = await db<{ c: Record<Meal, number> }>(
-    `update flats set lock_count = case when lock_date is distinct from $2::date then $3::jsonb else lock_count end, lock_date = $2::date
+    `update flats set lock_count = case when lock_date is distinct from $2::date then $3::text::jsonb else lock_count end, lock_date = $2::date
      where id = $1 returning lock_count as c`, [flatId, date, JSON.stringify(hc)]);
   return r.c;
 }
