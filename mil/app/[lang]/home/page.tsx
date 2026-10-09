@@ -42,6 +42,15 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   // only after the lock does a change matter: before it, the card already says the count can still move
   const changes = decision === 'open' ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, hc, now), hc);
   const status = decision === 'open' ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
+  // under the week chart it has to say which day; in the phone card the heading already says tomorrow
+  const lockLine = (wide: boolean) => (
+    <p className="mt-1 text-[15px] text-muted">
+      {(decision === 'open' ? (wide ? m.lockTime : m.locksAt) : `${wide ? `${m.tomorrow}: ` : ''}${m.lockedLate}`).replace('{t}', fmtTime(meals.flat.cutoff))}
+      {/* the person who runs the flat can find the lock time setting from here */}
+      {me.role === 'manager' && <> · <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link></>}
+    </p>
+  );
+
   return (
     <>
       <Header t={t} lang={lang} path="/home"><Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} /></Header>
@@ -51,22 +60,17 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           <Avatar id={me.memberId} name={me.name} v={self?.photoV ?? null} size={48} />
           <h1 className="font-display text-3xl font-bold">{a.hi}, {me.name}</h1>
         </div>
-        <div className="mt-8 grid gap-6 md:grid-cols-2 md:items-start lg:grid-cols-3">
-          <section className="rounded-3xl border border-line bg-surface p-5">
+        {/* side by side the cards are one height, their buttons on one line; a lone card keeps half the row,
+            not a button as wide as the screen */}
+        <div className="mt-8 grid gap-6 md:grid-cols-2">
+          {/* phones only: wider screens change tomorrow in the week chart, with the lock time above it */}
+          <section className="rounded-3xl border border-line bg-surface p-5 md:hidden">
             <h2 className="text-xl font-bold">{m.tomorrow} · {fmtDay(tomorrow, lang)}</h2>
-            <p className="mt-1 text-[15px] text-muted">
-              {(decision === 'open' ? m.locksAt : m.lockedLate).replace('{t}', fmtTime(meals.flat.cutoff))}
-              {/* the person who runs the flat can find the lock time setting from here */}
-              {me.role === 'manager' && <> · <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link></>}
-            </p>
-            {/* wider screens change meals in the week chart below */}
-            <p className="mt-3 hidden text-[15px] md:block">{m.changeBelow}</p>
-            <div className="md:hidden">
-              <MealRow lang={lang} m={m} meId={me.memberId} date={tomorrow} decision={decision} {...meals} />
-              <Link href={`/${lang}/meals`} className={`mt-3 inline-flex min-h-11 items-center ${link}`}>{m.seeWeek}</Link>
-            </div>
+            {lockLine(false)}
+            <MealRow lang={lang} m={m} meId={me.memberId} date={tomorrow} decision={decision} {...meals} />
+            <Link href={`/${lang}/meals`} className={`mt-3 inline-flex min-h-11 items-center ${link}`}>{m.seeWeek}</Link>
           </section>
-          <section className="rounded-3xl border border-line bg-surface p-5">
+          <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{m.headcountTitle}</h2>
             <p className="mt-1 text-[15px] text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)} · {status}</p>
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
@@ -78,20 +82,27 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
               ))}
             </dl>
             <LockChange m={m} lang={lang} date={tomorrow} hc={hc} changes={changes} />
+            <div className="grow" />
             <ShareButton text={countText(me.flatName, m, tomorrow, hc, status, lang)} label={m.share} copied={m.copied} />
           </section>
-          {someoneMissing && <section className="rounded-3xl border border-line bg-surface p-5">
+          {someoneMissing && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{a.shareTitle}</h2>
             <p className="mt-2 text-muted">{a.shareLead}</p>
             <p className="mt-4">
               {a.code}: <span className="font-bold tracking-widest">{me.joinCode}</span>
             </p>
+            <div className="grow" />
             <ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} />
           </section>}
         </div>
         {/* wider screens: the whole week at a glance, phones use the Meals tab */}
         <div className="mt-10 hidden md:block">
-          <h2 className="mb-4 text-2xl font-bold">{m.weekTitle}</h2>
+          {/* other weeks live on the Meals tab, which has the arrows */}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6">
+            <h2 className="text-2xl font-bold">{m.weekTitle}</h2>
+            <Link href={`/${lang}/meals?week=1`} className={`inline-flex min-h-11 items-center gap-2 ${link}`}>{m.nextWeek} <span aria-hidden="true">→</span></Link>
+          </div>
+          <div className="mb-4">{lockLine(true)}</div>
           <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={note} {...meals} />
         </div>
         <div className="mt-10 grid gap-x-6 md:grid-cols-2 md:items-start">
