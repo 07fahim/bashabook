@@ -53,7 +53,8 @@ export async function saveMeal(db: Db, flatId: string, by: string, c: MealChange
        on conflict (member_id, date, meal) do update set count = excluded.count, late = excluded.late, updated_at = now()
        returning count, late)
      insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
-     select $1, 'meal_changes', $7, (select to_jsonb(old) from old), to_jsonb(up), $8 from up`,
+     select $1, 'meal_changes', $7, (select to_jsonb(old) from old), to_jsonb(up), $8 from up
+     where not exists (select 1 from old where old.count = up.count)`,   // a repeated tap writes no second history line
     [flatId, c.memberId, c.date, c.meal, c.count, late, cell(c), by]);
 }
 

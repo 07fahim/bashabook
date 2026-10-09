@@ -12,11 +12,12 @@ export function ActionForm({ action, children, className }: { action: (prev: For
       className={className}
       onSubmit={e => {
         e.preventDefault();
+        if (pending) return;
         const data = new FormData(e.currentTarget);
         startTransition(() => run(data));
       }}
     >
-      <fieldset disabled={pending} className="space-y-5">{children}</fieldset>
+      <fieldset aria-busy={pending} className="space-y-5 aria-busy:pointer-events-none aria-busy:opacity-60">{children}</fieldset>
       {state?.error && <p role="alert" className="mt-4 font-semibold text-chili">{state.error}</p>}
       {state?.done && <p role="status" className="mt-4 font-semibold text-leaf">{state.done}</p>}
     </form>

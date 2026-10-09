@@ -41,7 +41,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   const tod = headcount(meals.members, meals.changes, today);
   const line = (hc: typeof tom) => MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(' · ');
   const text = `${me.flatName} · ${m.tomorrow}, ${fmtDay(tomorrow, lang)}\n${line(tom)}`;
-  const card = 'mt-3 rounded-2xl border border-line bg-surface p-5';
+  const card = 'mt-3 rounded-3xl border border-line bg-surface p-5';
   const own = new Set(meals.members.filter(x => !x.inMeals).map(x => x.id));
   const firstOpen = isLocked(tomorrow, nowDhaka(), meals.flat.cutoff) ? addDays(tomorrow, 1) : tomorrow;
   const person = picked.members.find(x => x.id === who) ?? picked.members.find(x => x.id === me.memberId)!;
@@ -50,12 +50,11 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
 
   return (
     <>
-      <Header t={t} lang={lang} path="/manage" />
-      <Nav t={t} lang={lang} current="manage" showFlat />
-      <main className="mx-auto max-w-md px-5 pb-28 md:max-w-5xl md:pb-16">
+      <Header t={t} lang={lang} path="/manage"><Nav t={t} lang={lang} current="manage" showFlat /></Header>
+      <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>
 
-        <div className="md:grid md:grid-cols-2 md:items-start md:gap-10">
+        <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
           <div>
             <h2 className={groupLabel}>{m.groupToday}</h2>
             <section className={card}>
@@ -73,6 +72,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               <ShareButton text={text} label={m.share} copied={m.copied} />
             </section>
 
+          </div>
+          <div>
             <h2 className={groupLabel}>{m.groupChange}</h2>
             <Fold title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
               <form className="mt-4 space-y-4">
@@ -139,7 +140,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     {MEALS.map(x => (
                       <label key={x} className={checkChip}>
-                        <input type="checkbox" name={x} defaultChecked className="size-5 shrink-0 accent-ink" />
+                        <input type="checkbox" name={x} defaultChecked className="size-5 shrink-0 accent-on-turmeric" />
                         {m.names[x]}
                       </label>
                     ))}
@@ -154,7 +155,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
             <section className={card}>
               <ul className="divide-y divide-line">
                 {members.map(x => (
-                  <li key={x.id} className="py-4">
+                  <li key={x.id} className="py-4 first:pt-0 last:pb-0">
                     <div className="flex items-baseline justify-between gap-4">
                       <span className="text-lg font-semibold">{x.name}</span>
                       <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
@@ -163,7 +164,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     </div>
                     {x.claimed && x.id !== me.memberId && (
                       <details className="mt-2">
-                        <summary className={`inline-block cursor-pointer py-2 text-[15px] ${link}`}>{a.resetPin}</summary>
+                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
                         <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
                         <ActionForm action={resetPinAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />

@@ -16,11 +16,11 @@
 }
 
 :root[data-theme="dark"] {
-  --paper: #14130F;
-  --surface: #1E1C17;
-  --ink: #F2EEE6;
-  --muted: #A39C90;
-  --line: #34302A;
+  --paper: #0A0A0A;
+  --surface: #1A1A1A;
+  --ink: #F5F5F5;
+  --muted: #A3A3A3;
+  --line: #2E2E2E;
   --turmeric-ink: #E8A93F;
   --leaf: #5FBF85;
   --chili: #F07A63;
@@ -67,4 +67,9 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .write { animation: none; }
+}
+
+/* keep keyboard focus clear of the sticky top bar on wider screens */
+@media (min-width: 48rem) {
+  html { scroll-padding-top: 5rem; }
 }
