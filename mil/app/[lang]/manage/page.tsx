@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { listMembers } from '@/lib/auth';
+import { listGone, listMembers } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { addDays, countChanges, editFrom, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, removePhotoAction, renameAction, resetPinAction, settingsAction } from '../actions';
+import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, bringBackAction, leavingAction, removePhotoAction, renameAction, resetPinAction, settingsAction } from '../actions';
 import { Avatar } from '../avatar';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtTime } from '../format';
@@ -35,8 +35,9 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   // the person and day picked in "Change someone's meals"
   const who = typeof sp.who === 'string' ? sp.who : me.memberId;
   const day = typeof sp.day === 'string' && isDate(sp.day) && sp.day >= from && sp.day <= to ? sp.day : today;
-  const [members, meals, picked, noCookDays] = await Promise.all([
+  const [members, gone, meals, picked, noCookDays] = await Promise.all([
     listMembers(db, me.flatId),
+    listGone(db, me.flatId, from),
     loadMeals(db, me.flatId, today, tomorrow),
     loadMeals(db, me.flatId, day, day),
     loadNoCookDays(db, me.flatId, today),
@@ -55,6 +56,9 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   const text = countText(me.flatName, m, tomorrow, tom, status, lang);
   const person = picked.members.find(x => x.id === who) ?? picked.members.find(x => x.id === me.memberId)!;
   const idx = indexChanges(picked.changes);
+  // tells two people with one name apart: the one leaving and the one moving in
+  const note = (x: { joinedOn: string; leftOn: string | null }) =>
+    x.leftOn ? ` · ${a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}` : x.joinedOn > today ? ` · ${a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang))}` : '';
   const step = `grid size-11 place-items-center rounded-full border border-muted text-xl font-bold disabled:opacity-40 ${focus}`;
 
   return (
@@ -94,7 +98,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <label className="block font-semibold">
                   {m.who}
                   <select name="who" defaultValue={person.id} className={field}>
-                    {members.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    {/* someone who moved out recently is here too: their last days can still need fixing */}
+                    {picked.members.filter(x => !x.leftOn || x.leftOn >= from).map(x => <option key={x.id} value={x.id}>{x.name}{note(x)}</option>)}
                   </select>
                 </label>
                 <DateField lang={lang} label={m.day} name="day" required min={from} max={to} defaultValue={day} />
@@ -213,10 +218,11 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               <ul className="divide-y divide-line">
                 {members.map(x => (
                   <li key={x.id} className="py-4 first:pt-0 last:pb-0">
-                    <div className="flex items-baseline justify-between gap-4">
+                    {/* a long badge (last day) drops below the name on a phone instead of squeezing it */}
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                       <span className="flex items-center gap-3 text-lg font-semibold"><Avatar id={x.id} name={x.name} v={x.photoV} size={36} />{x.name}</span>
                       <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
-                        {!x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
+                        {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
                       </span>
                     </div>
                     {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
@@ -253,11 +259,55 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                           </ActionForm>
                         </details>
                       )}
+                      {x.id !== me.memberId && (
+                        <details className="open:basis-full">
+                          <summary aria-label={`${a.movingOut}: ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.movingOut}</summary>
+                          <p className="mt-2 text-[15px] text-muted">{a.movingOutLead}</p>
+                          <ActionForm action={leavingAction} className="mt-3">
+                            <input type="hidden" name="lang" value={lang} />
+                            <input type="hidden" name="memberId" value={x.id} />
+                            {/* no default day, so one slip of a tap can't mark someone as leaving */}
+                            <DateField lang={lang} label={a.lastDay} name="lastDay" required min={x.joinedOn > today ? x.joinedOn : today} max={to} defaultValue={x.leftOn ?? undefined} />
+                            <button className={`${secondary} sm:w-auto`}>{a.movingOutBtn}</button>
+                          </ActionForm>
+                          {x.leftOn && (
+                            <ActionForm action={leavingAction} className="mt-2">
+                              <input type="hidden" name="lang" value={lang} />
+                              <input type="hidden" name="memberId" value={x.id} />
+                              <input type="hidden" name="stay" value="1" />
+                              <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.staying}</button>
+                            </ActionForm>
+                          )}
+                        </details>
+                      )}
                     </div>
                   </li>
                 ))}
               </ul>
             </section>
+            {gone.length > 0 && (
+              <Fold title={a.movedOut} level={3}>
+                <ul className="mt-2 divide-y divide-line">
+                  {gone.map(x => (
+                    <li key={x.id} className="py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                        <span className="font-semibold">{x.name}</span>
+                        <span className="text-[15px] text-muted">{a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}</span>
+                      </div>
+                      <details>
+                        <summary aria-label={`${a.byMistake} ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.byMistake}</summary>
+                        <p className="mt-2 text-[15px] text-muted">{a.bringBackLead.replace('{d}', fmtDay(addDays(x.leftOn, 1), lang))}</p>
+                        <ActionForm action={bringBackAction} className="mt-3">
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="memberId" value={x.id} />
+                          <button aria-label={`${a.bringBackBtn}: ${x.name}`} className={`${secondary} sm:w-auto`}>{a.bringBackBtn}</button>
+                        </ActionForm>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+              </Fold>
+            )}
             <Fold title={a.addMember} level={3}>
               <ActionForm action={addMemberAction} className="mt-3">
                 <input type="hidden" name="lang" value={lang} />
