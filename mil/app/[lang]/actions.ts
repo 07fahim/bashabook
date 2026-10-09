@@ -226,7 +226,8 @@ export async function noCookCancelAction(d: FormData) {
 export async function toldCookAction(d: FormData) {
   const me = await requireMember(langOf(d));
   const date = str(d, 'date');
-  if (isDate(date) && MEALS.every(x => /^\d{1,3}$/.test(str(d, x)))) {
+  // only tomorrow's count: a page left open overnight posts a day nobody looks at any more
+  if (date === addDays(todayDhaka(), 1) && MEALS.every(x => /^\d{1,3}$/.test(str(d, x)))) {
     await toldCook(db, me.flatId, me.memberId, date, { b: Number(str(d, 'b')), l: Number(str(d, 'l')), d: Number(str(d, 'd')) });
   }
   refresh();

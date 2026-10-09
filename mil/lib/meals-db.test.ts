@@ -388,7 +388,7 @@ describe('meal storage', { timeout: 30000 }, () => {
     await toldCook(db, flatId, memberId, '2026-10-10', seen);
     expect(countChanges(await countAtLock(db, flatId, '2026-10-10', await hc()), await hc())).toEqual([{ meal: 'l', from: 3, to: 4 }]);
     const lines = (await loadHistory(db, flatId)).length;
-    await toldCook(db, flatId, memberId, '2026-10-09', await hc());                            // a page left open since yesterday
+    await toldCook(db, flatId, memberId, '2026-10-09', await hc());                            // a date the baseline is not for
     expect((await loadHistory(db, flatId)).length).toBe(lines);                                 // changes nothing, so no history line
     expect(countChanges(await countAtLock(db, flatId, '2026-10-10', await hc()), await hc())).toEqual([{ meal: 'l', from: 3, to: 4 }]);
   });
