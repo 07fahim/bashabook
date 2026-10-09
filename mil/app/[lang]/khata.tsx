@@ -7,7 +7,7 @@ const step = (i: number) => ({ '--i': i }) as CSSProperties;
 export function Khata({ t }: { t: Dict['khata'] }) {
   const n = t.rows.length;
   return (
-    <figure className="rounded-2xl border border-line bg-surface p-5 shadow-[0_1px_2px_rgb(0_0_0/0.06)] sm:p-6">
+    <figure className="rounded-3xl border border-line bg-surface p-5 shadow-[0_1px_2px_rgb(0_0_0/0.06)] sm:p-6">
       <figcaption className="font-display text-xl font-semibold">{t.title}</figcaption>
       <dl className="mt-4">
         {t.rows.map(([date, what, amount], i) => (

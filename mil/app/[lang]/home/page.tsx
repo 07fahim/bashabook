@@ -11,6 +11,7 @@ import { fmtDay, fmtTime } from '../format';
 import { Header } from '../header';
 import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
+import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
 import { focus, link, PageSkeleton } from '../ui';
 
@@ -23,19 +24,22 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), a = t.app, m = t.meals;
-  const now = nowDhaka(), tomorrow = addDays(now.slice(0, 10), 1);
-  const meals = await loadMeals(db, me.flatId, tomorrow, tomorrow);
-  const decision = mealDecision(tomorrow, now, meals.flat.cutoff);
+  const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
+  const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
+  const meals = await loadMeals(db, me.flatId, today, week[6]);
+  const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
+  const decision = decide(tomorrow);
+  const starter = meals.members.find(x => x.role === 'manager');
+  const note = starter?.id === me.memberId ? m.todayLockedSelf : m.todayLocked.replace('{name}', starter?.name ?? '');
   const hc = headcount(meals.members, meals.changes, tomorrow);
   return (
     <>
       <Header t={t} lang={lang} path="/home"><Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} /></Header>
-      <div className="md:pl-60">
-      <main className="mx-auto max-w-md px-5 pb-28 md:max-w-6xl md:px-10 md:pt-10 md:pb-16">
+      <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <p className="text-muted">{me.flatName}</p>
         <h1 className="font-display text-3xl font-bold">{a.hi}, {me.name}</h1>
-        <div className="mt-8 grid gap-6 md:grid-cols-2 md:items-start xl:grid-cols-3">
-          <section className="rounded-2xl border border-line bg-surface p-5">
+        <div className="mt-8 grid gap-6 md:grid-cols-2 md:items-start lg:grid-cols-3">
+          <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{m.tomorrow} · {fmtDay(tomorrow, lang)}</h2>
             <p className="mt-1 text-[15px] text-muted">
               {decision === 'open' ? m.locksAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.lockedLate}
@@ -43,7 +47,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             <MealRow lang={lang} m={m} meId={me.memberId} date={tomorrow} decision={decision} {...meals} />
             <Link href={`/${lang}/meals`} className={`mt-5 inline-block ${link}`}>{m.seeWeek}</Link>
           </section>
-          <section className="rounded-2xl border border-line bg-surface p-5">
+          <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{m.headcountTitle}</h2>
             <p className="mt-1 text-[15px] text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)}</p>
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
@@ -55,7 +59,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
               ))}
             </dl>
           </section>
-          <section className="rounded-2xl border border-line bg-surface p-5">
+          <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{a.shareTitle}</h2>
             <p className="mt-2 text-muted">{a.shareLead}</p>
             <p className="mt-4">
@@ -64,12 +68,16 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             <ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} />
           </section>
         </div>
+        {/* wider screens: the whole week at a glance, phones use the Meals tab */}
+        <div className="mt-10 hidden md:block">
+          <h2 className="mb-4 text-2xl font-bold">{m.weekTitle}</h2>
+          <WeekChart lang={lang} m={m} meId={me.memberId} week={week} decide={decide} note={note} {...meals} />
+        </div>
         <form action={logoutAction} className="mt-8">
           <input type="hidden" name="lang" value={lang} />
           <button className={`text-muted underline-offset-4 hover:underline ${focus}`}>{a.logout}</button>
         </form>
       </main>
-      </div>
     </>
   );
 }

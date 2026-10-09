@@ -27,7 +27,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
   return (
     <>
       <Header t={t} lang={lang} path={`/j/${code}`} />
-      <main className="mx-auto max-w-md px-5 pb-16 md:grid md:max-w-5xl md:grid-cols-2 md:items-start md:gap-16 md:pt-6">
+      <main className="mx-auto max-w-md px-5 pb-16 pt-6 md:grid md:max-w-7xl md:grid-cols-2 md:items-start md:gap-16 md:px-8 md:pt-12">
         {!flat ? (
           <div>
             <h1 className={h1}>{a.joinTitle}</h1>
@@ -60,7 +60,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
               <p className="mt-2 text-muted">{!me.claimed ? a.setPinLead : me.must_change_pin ? a.changePinLead : a.enterPinLead}</p>
             </div>
             <div>
-            <ActionForm action={loginAction} className="mt-8 md:mt-0 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6">
+            <ActionForm action={loginAction} className="mt-8 md:mt-0 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="code" value={code} />
               <input type="hidden" name="memberId" value={me.id} />

@@ -20,12 +20,12 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
     <>
       <Header t={t} lang={lang} path="" />
 
-      <main className="mx-auto max-w-5xl px-5">
+      <main className="mx-auto max-w-7xl px-5 md:px-8">
         <section className="grid items-center gap-10 py-6 md:grid-cols-2 md:py-14">
           <div>
             <h1 className="font-display text-4xl leading-tight font-bold text-balance sm:text-5xl md:text-6xl">{t.heroTitle}</h1>
             <p className="mt-5 max-w-prose text-lg text-muted">{t.heroBody}</p>
-            <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 inline-flex min-h-14 items-center bg-turmeric px-8 text-lg font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
+            <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 inline-flex min-h-14 items-center rounded-full bg-turmeric px-8 text-lg font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
               {t.create}
             </Link>
             <p className="mt-4 text-muted">
@@ -46,7 +46,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                 <span className="grid size-10 place-items-center rounded-full bg-turmeric font-bold text-on-turmeric" aria-hidden="true">{i + 1}</span>
                 <h3 className="mt-4 text-xl font-bold">{step.title}</h3>
                 <p className="mt-2 text-muted">{step.body}</p>
-                <p className="mt-4 self-start rounded-lg border border-line bg-surface px-3 py-1.5 font-semibold tabular-nums">{step.stat}</p>
+                <p className="mt-4 self-start rounded-full border border-line bg-surface px-3 py-1.5 font-semibold tabular-nums">{step.stat}</p>
               </li>
             ))}
           </ol>
@@ -57,7 +57,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             <h2 className={h2}>{t.settleTitle}</h2>
             <p className="mt-3 text-muted">{t.settleBody}</p>
           </div>
-          <figure className="rounded-2xl border border-line bg-surface">
+          <figure className="rounded-3xl border border-line bg-surface">
             <figcaption className="border-b border-line px-5 py-3 font-semibold">{t.chat.group}</figcaption>
             <div className="flex items-end gap-2 p-5">
               <Image src="/logo-mark.png" alt="" width={31} height={32} className="mb-7 shrink-0" />
@@ -90,7 +90,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             <h2 className={h2}>{t.price.title}</h2>
             <p className="mt-3 text-lg text-muted">{t.price.lead}</p>
           </div>
-          <div className="rounded-2xl border border-line bg-surface p-6 sm:p-8">
+          <div className="rounded-3xl border border-line bg-surface p-6 sm:p-8">
             <p className="flex items-baseline gap-2">
               <span className="text-5xl font-bold tabular-nums">{t.price.amount}</span>
               <span className="text-lg text-muted">{t.price.period}</span>
@@ -106,7 +106,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                 </li>
               ))}
             </ul>
-            <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 flex min-h-12 w-full items-center justify-center bg-turmeric px-6 font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
+            <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 flex min-h-12 w-full items-center justify-center rounded-full bg-turmeric px-6 font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
               {t.price.cta}
             </Link>
           </div>
@@ -128,7 +128,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
         </section>
       </main>
 
-      <footer className="mx-auto max-w-5xl px-5">
+      <footer className="mx-auto max-w-7xl px-5">
         <div className="space-y-4 border-t border-line py-8 text-[15px] text-muted">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="font-semibold text-ink">{t.footer.tagline}</p>

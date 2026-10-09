@@ -41,7 +41,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   const tod = headcount(meals.members, meals.changes, today);
   const line = (hc: typeof tom) => MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(' · ');
   const text = `${me.flatName} · ${m.tomorrow}, ${fmtDay(tomorrow, lang)}\n${line(tom)}`;
-  const card = 'mt-3 rounded-2xl border border-line bg-surface p-5';
+  const card = 'mt-3 rounded-3xl border border-line bg-surface p-5';
   const own = new Set(meals.members.filter(x => !x.inMeals).map(x => x.id));
   const firstOpen = isLocked(tomorrow, nowDhaka(), meals.flat.cutoff) ? addDays(tomorrow, 1) : tomorrow;
   const person = picked.members.find(x => x.id === who) ?? picked.members.find(x => x.id === me.memberId)!;
@@ -51,11 +51,10 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   return (
     <>
       <Header t={t} lang={lang} path="/manage"><Nav t={t} lang={lang} current="manage" showFlat /></Header>
-      <div className="md:pl-60">
-      <main className="mx-auto max-w-md px-5 pb-28 md:max-w-6xl md:px-10 md:pt-10 md:pb-16">
+      <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>
 
-        <div className="md:grid md:grid-cols-2 md:items-start md:gap-10">
+        <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
           <div>
             <h2 className={groupLabel}>{m.groupToday}</h2>
             <section className={card}>
@@ -73,6 +72,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               <ShareButton text={text} label={m.share} copied={m.copied} />
             </section>
 
+          </div>
+          <div>
             <h2 className={groupLabel}>{m.groupChange}</h2>
             <Fold title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
               <form className="mt-4 space-y-4">
@@ -214,7 +215,6 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </div>
         </div>
       </main>
-      </div>
     </>
   );
 }
