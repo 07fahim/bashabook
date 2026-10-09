@@ -54,7 +54,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           </section>
           <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{m.headcountTitle}</h2>
-            <p className="mt-1 text-[15px] text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)}</p>
+            <p className="mt-1 text-[15px] text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)} · {decision === 'open' ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final}</p>
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
               {MEALS.map(x => (
                 <div key={x} className="rounded-xl bg-paper py-3">

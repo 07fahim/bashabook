@@ -55,8 +55,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
       <Header t={t} lang={lang} path="/manage"><Nav t={t} lang={lang} current="manage" showFlat /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>
-        <p className="mt-1 text-muted">
-          {m.lockTime.replace('{t}', fmtTime(meals.flat.cutoff))} · <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link>
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 text-muted">
+          <span>{m.lockTime.replace('{t}', fmtTime(meals.flat.cutoff))}</span> <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link>
         </p>
 
         <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
@@ -64,7 +64,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
             <h2 className={groupLabel}>{m.groupToday}</h2>
             <section className={card}>
               <h3 className="text-xl font-bold">{m.headcountTitle}</h3>
-              <p className="mt-1 text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)}</p>
+              {/* tomorrow can still change until the lock time, so say whether the count is final */}
+              <p className="mt-1 text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)} · {firstOpen === tomorrow ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final}</p>
               <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
                 {MEALS.map(x => (
                   <div key={x} className="rounded-xl bg-paper py-3">
