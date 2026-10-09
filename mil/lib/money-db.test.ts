@@ -4,7 +4,7 @@ import { addMember, bringBack, createFlat, setLeaving } from './auth';
 import { editFrom } from './meals';
 import { noCooking, saveMeal } from './meals-db';
 import { foodSplit } from './money';
-import { addEntry, addRoom, confirmEntry, loadMonth, openMonth, removeEntry, setRent, setRoom, stopRepeat, toConfirm, type NewEntry } from './money-db';
+import { addEntry, addRoom, confirmEntry, loadMonth, openMonth, putBack, removeEntry, setRent, setRoom, stopRepeat, toConfirm, type NewEntry } from './money-db';
 
 const OCT = '2026-10-01', TODAY = '2026-10-09';
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -261,5 +261,93 @@ describe('money storage', { timeout: 30000 }, () => {
     await addMember(db, flatId, 'Rafi', '2026-10-15');
     const rafi = (await db<{ id: string }>(`select id from members where flat_id = $1 and name = 'Rafi'`, [flatId]))[0].id;
     expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000, paidBy: rafi, date: '2026-10-05' }))).toBe('gone');   // not here yet
+  });
+  it('put back restores the exact entry, its people and status, and the balances', async () => {
+    const { flatId, ids, nafis, as, month } = await flat();
+    await addEntry(db, flatId, as('Zarif'), e({ type: 'deposit', amount: 300000, memberId: ids.Zarif, note: 'TRX9' }));
+    await confirmEntry(db, flatId, nafis, (await toConfirm(db, flatId, ids.Nafis, true))[0].id);
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 20000, note: 'Laundry', split: 'selected', selected: [ids.Tahsin, ids.Zarif] }));
+    const before = await month();
+    const rows = await db<{ j: unknown }>(`select to_jsonb(l) as j from ledger l order by id`);
+    for (const x of before.entries) expect(await removeEntry(db, flatId, nafis, x.id)).toBe(true);
+    expect((await month()).removed.map(r => r.type).sort()).toEqual(['bill', 'deposit']);
+    for (const x of before.entries) expect(await putBack(db, flatId, ids.Nafis, x.id, TODAY)).toBe(true);
+    const after = await month();
+    expect(await db<{ j: unknown }>(`select to_jsonb(l) as j from ledger l order by id`)).toEqual(rows);   // byte for byte, confirmed status too
+    expect(after.entries.find(x => x.type === 'bill')!.selected.sort()).toEqual([ids.Tahsin, ids.Zarif].sort());
+    expect(after.result.perMember).toEqual(before.result.perMember);
+    expect(after.removed).toEqual([]);
+  });
+
+  it('two put backs at once: the entry once, one history row, counted once', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 90000 }));
+    const id = (await month()).entries[0].id;
+    await removeEntry(db, flatId, nafis, id);
+    const r = await Promise.all([putBack(db, flatId, ids.Nafis, id, TODAY), putBack(db, flatId, ids.Nafis, id, TODAY)]);
+    expect(r.filter(Boolean)).toHaveLength(1);
+    expect(await db(`select 1 from ledger where id = $1`, [id])).toHaveLength(1);
+    expect(await db(`select 1 from audit_log where entity_id = $1 and after->>'putBack' = 'true'`, [id])).toHaveLength(1);
+    expect((await month()).result.perMember.reduce((a, m) => a + m.foodCost, 0)).toBe(90000);
+    expect(await putBack(db, flatId, ids.Nafis, id, TODAY)).toBe(false);   // already back: nothing written
+  });
+
+  it('two removes at once write one history row', async () => {
+    const { flatId, nafis, month } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 90000 }));
+    const id = (await month()).entries[0].id;
+    const r = await Promise.all([removeEntry(db, flatId, nafis, id), removeEntry(db, flatId, nafis, id)]);
+    expect(r.filter(Boolean)).toHaveLength(1);
+    expect(await db(`select 1 from audit_log where entity_id = $1 and after->>'removed' = 'true'`, [id])).toHaveLength(1);
+  });
+
+  it('only the latest remover or the current collector puts back', async () => {
+    const { flatId, ids, nafis, as, month } = await flat();
+    await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 50000, paidBy: ids.Tahsin }));
+    const id = (await month()).entries[0].id;
+    await removeEntry(db, flatId, as('Tahsin'), id);
+    expect(await putBack(db, flatId, ids.Zarif, id, TODAY)).toBe(false);    // not his removal, not the collector
+    expect(await putBack(db, flatId, ids.Tahsin, id, TODAY)).toBe(true);    // his own removal
+    await removeEntry(db, flatId, nafis, id);
+    expect(await putBack(db, flatId, ids.Tahsin, id, TODAY)).toBe(false);   // the latest removal is Nafis's
+    // the collector role moves to Zarif while the entry is removed: the new collector may, Nafis (now a member, not the remover) may not
+    await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 1000, paidBy: ids.Tahsin }));
+    const id2 = (await month()).entries.find(x => x.amount === 1000)!.id;
+    await removeEntry(db, flatId, as('Tahsin'), id2);
+    await db(`update members set role = 'member' where id = $1`, [ids.Nafis]);
+    await db(`update members set role = 'manager' where id = $1`, [ids.Zarif]);
+    expect(await putBack(db, flatId, ids.Nafis, id2, TODAY)).toBe(false);
+    expect(await putBack(db, flatId, ids.Zarif, id2, TODAY)).toBe(true);
+  });
+
+  it('put back only in the open current month, by the Dhaka date passed in', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000 }));
+    const id = (await month()).entries[0].id;
+    await removeEntry(db, flatId, nafis, id);
+    expect(await putBack(db, flatId, ids.Nafis, id, '2026-11-01')).toBe(false);   // next month: October is past
+    await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-10-01'`, [flatId]);
+    expect(await putBack(db, flatId, ids.Nafis, id, '2026-10-20')).toBe(false);   // closed before the month ended
+    await db(`update months set status = 'open' where flat_id = $1 and month = '2026-10-01'`, [flatId]);
+    expect(await putBack(db, flatId, ids.Nafis, id, '2026-10-31')).toBe(true);    // last day, open
+  });
+
+  it('put back keeps entries added in between, refuses a broken record, and is all or nothing', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 20000, note: 'Laundry', split: 'selected', selected: [ids.Tahsin] }));
+    const id = (await month()).entries[0].id;
+    await removeEntry(db, flatId, nafis, id);
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 70000 }));
+    // a split insert that fails rolls back the entry and its history
+    await db(`create or replace function boom3() returns trigger language plpgsql as $$ begin raise exception 'boom'; end $$`);
+    await db(`create trigger boom3 before insert on bill_split_members for each row execute function boom3()`);
+    await expect(putBack(db, flatId, ids.Nafis, id, TODAY)).rejects.toThrow(/boom/);
+    await db(`drop trigger boom3 on bill_split_members`);
+    expect(await db(`select 1 from ledger where id = $1`, [id])).toEqual([]);
+    expect(await db(`select 1 from audit_log where entity_id = $1 and after->>'putBack' = 'true'`, [id])).toEqual([]);
+    // a record missing a column is refused, never filled in
+    await db(`update audit_log set before = before - 'created_by' where entity_id = $1`, [id]);
+    expect(await putBack(db, flatId, ids.Nafis, id, TODAY)).toBe(false);
+    expect((await month()).entries.map(x => x.amount)).toEqual([70000]);   // the bazar added in between is untouched
   });
 });

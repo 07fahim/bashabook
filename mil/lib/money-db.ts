@@ -5,7 +5,7 @@ import { monthBalances, type LedgerRow, type Split } from './money';
 
 export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string };
 export type Room = { id: string; name: string; rentShare: number };
-export type Removed = { at: string; by: string; type: LedgerRow['type']; amount: number; date: string; note: string | null };
+export type Removed = { id: string; at: string; by: string; byId: string; type: LedgerRow['type']; amount: number; date: string; note: string | null };
 
 export const monthOf = (date: string) => `${date.slice(0, 8)}01`;
 
@@ -61,10 +61,14 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
        l.date::text as date, l.note, l.created_by as "createdBy",
        (select coalesce(json_agg(s.member_id), '[]'::json) from bill_split_members s where s.ledger_id = l.id) as selected
      from ledger l where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
+  // per entry only its latest removal (audit ids follow commit order per entry: see putBack), and only while it is still gone
   const removed = await db<Removed>(
-    `select a.at, m.name as by, a.before->>'type' as type, (a.before->>'amount_poisha')::int as amount, a.before->>'date' as date, a.before->>'note' as note
-     from audit_log a join members m on m.flat_id = a.flat_id and m.id = a.by_member
-     where a.flat_id = $1 and a.entity = 'ledger' and a.after->>'removed' = 'true' and a.before->>'month' = $2 order by a.id desc`, [flatId, month]);
+    `select * from (select distinct on (a.entity_id) a.entity_id as id, a.at, m.name as by, a.by_member as "byId",
+         a.before->>'type' as type, (a.before->>'amount_poisha')::int as amount, a.before->>'date' as date, a.before->>'note' as note, a.id as seq
+       from audit_log a join members m on m.flat_id = a.flat_id and m.id = a.by_member
+       where a.flat_id = $1 and a.entity = 'ledger' and a.after->>'removed' = 'true' and a.before->>'month' = $2
+         and not exists (select 1 from ledger l where l.flat_id = a.flat_id and l.id::text = a.entity_id)
+       order by a.entity_id, a.id desc) r order by seq desc`, [flatId, month]);
   const meals = weightedMeals(members, changes, month, flat.weights, upTo);
   const guestMeals = new Map(members.map(m => [m.id, changes
     .filter(c => c.memberId === m.id && c.date <= upTo && isPresent(m, c.date))
@@ -199,4 +203,29 @@ export async function stopRepeat(db: Db, flatId: string, by: Actor, id: string) 
      insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
      select $1, 'bill_templates', t.id::text, to_jsonb(t), '{"removed":true}', $3 from t returning 1`, [flatId, id, by.memberId]);
   return done.length > 0;   // false: no such monthly bill in this flat
+}
+
+const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at';
+
+/** Brings a removed entry back exactly as it was (same id, status, people), rebuilt only from its latest removal record.
+ *  Allowed for whoever made that removal or the current collector, only in this open month (`today` is the Dhaka date).
+ *  One statement: the entry, its people and the history row land together; a second tap finds the entry back and writes nothing.
+ *  Per entry, remove (delete … returning) and put back (insert … on conflict do nothing) can only succeed one after the other,
+ *  each after the previous committed, so the highest audit id is the latest removal. */
+export async function putBack(db: Db, flatId: string, by: string, id: string, today: string) {
+  const r = await db(
+    `with a as (select before, by_member from audit_log where flat_id = $1 and entity = 'ledger' and entity_id = $2 and after->>'removed' = 'true'
+       order by id desc limit 1),
+     ok as (select a.before from a
+       where (a.by_member = $3 or exists (select 1 from members where flat_id = $1 and id = $3 and role = 'manager'))
+         and a.before ?& string_to_array($5::text, ',')
+         and (a.before->>'flat_id')::uuid = $1 and (a.before->>'month')::date = $4::date
+         and exists (select 1 from months where flat_id = $1 and month = $4::date and status = 'open')),
+     l as (insert into ledger select (jsonb_populate_record(null::ledger, ok.before)).* from ok on conflict do nothing returning *),
+     s as (insert into bill_split_members (flat_id, ledger_id, member_id)
+       select $1, l.id, x::uuid from l, ok, jsonb_array_elements_text(coalesce(ok.before->'selected', '[]'::jsonb)) x)
+     insert into audit_log (flat_id, entity, entity_id, after, by_member)
+     select $1, 'ledger', l.id::text, to_jsonb(l) || '{"putBack":true}', $3 from l returning 1`,
+    [flatId, id, by, monthOf(today), LEDGER_COLUMNS]);
+  return r.length > 0;
 }
