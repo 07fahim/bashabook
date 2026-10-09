@@ -122,7 +122,7 @@ export async function setAway(db: Db, flatId: string, memberId: string, from: st
        where flat_id = $1 and member_id = $2 and date between $3::date and $4::date and guests > 0),
      up as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select $1::uuid, $2::uuid, d::date, m, 0
-       from generate_series($3::timestamp, $4::timestamp, interval '1 day') d, unnest(array['b','l','d']) m
+       from generate_series($3::text::timestamp, $4::text::timestamp, interval '1 day') d, unnest(array['b','l','d']) m
        on conflict (member_id, date, meal) do update set count = 0, guests = 0, late = false, updated_at = now()),
      log as (insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', $5, $6, $2))
      select * from dropped order by date, position(meal in 'bld')`,
@@ -165,7 +165,7 @@ export async function setDefaults(db: Db, flatId: string, memberId: string, d: R
   await db(
     `with frozen as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select m.flat_id, m.id, day::date, x.meal, (case x.meal when 'b' then m.default_b when 'l' then m.default_l else m.default_d end)::int
-       from members m, generate_series(greatest(m.joined_on, $3::date)::timestamp, $4::timestamp, interval '1 day') day, unnest(array['b','l','d']) x(meal)
+       from members m, generate_series(greatest(m.joined_on, $3::date)::timestamp, $4::text::timestamp, interval '1 day') day, unnest(array['b','l','d']) x(meal)
        where m.flat_id = $1 and m.id = $2
        on conflict (member_id, date, meal) do nothing),
      cleared as (delete from meal_changes where flat_id = $1 and member_id = $2 and date > $4::date and count = 1 and guests = 0 and $10::boolean = false),
@@ -213,11 +213,11 @@ export async function noCooking(db: Db, flatId: string, by: string, from: string
        where flat_id = $1 and date between $2::date and $3::date and meal = any(string_to_array($4::text, ','))),
      up as (insert into meal_changes (flat_id, member_id, date, meal, count, late)
        select m.flat_id, m.id, d::date, x, 0, d::date <= $7::date
-       from members m, generate_series($2::timestamp, $3::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
+       from members m, generate_series($2::text::timestamp, $3::text::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
        where m.flat_id = $1 and m.joined_on <= d::date and (m.left_on is null or d::date <= m.left_on)
        on conflict (member_id, date, meal) do update set count = 0, guests = 0, late = excluded.late, updated_at = now()),
      blocked as (insert into no_cook (flat_id, date, meal)
-       select $1, d::date, x from generate_series($2::timestamp, $3::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
+       select $1, d::date, x from generate_series($2::text::timestamp, $3::text::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
        on conflict do nothing)
      insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
      values ($1, 'meal_changes', 'flat|nocook', (select coalesce(jsonb_agg(old), '[]') from old), $5, $6)`,
@@ -273,10 +273,12 @@ export const loadNoCookDays = (db: Db, flatId: string, from: string) => db<{ dat
 export async function countAtLock(db: Db, flatId: string, date: string, hc: Record<Meal, number>, now: string) {
   // One statement: under concurrency the CASE sees the row the other request just wrote, and the lock check reads the
   // flat's current lock time, so a lock time saved at the same moment is never missed. Not locked yet: no baseline, `hc` back.
-  // $3 goes in as text: typed as jsonb, postgres.js would JSON-encode the string a second time.
+  // $3 goes in as text: typed as jsonb, postgres.js would JSON-encode the string a second time. $4 too: typed as a
+  // timestamp, postgres.js turns '2026-10-09T21:00' into a Date in the server's own time zone and sends it as UTC, so on a
+  // machine set to Dhaka the lock check ran six hours late and a change after the lock never showed.
   const [r] = await db<{ c: Record<Meal, number> }>(
     `update flats set lock_count = case when lock_date is distinct from $2::date then $3::text::jsonb else lock_count end, lock_date = $2::date
-     where id = $1 and $4::timestamp >= ($2::date - 1) + cutoff_time returning lock_count as c`, [flatId, date, JSON.stringify(hc), now]);
+     where id = $1 and $4::text::timestamp >= ($2::date - 1) + cutoff_time returning lock_count as c`, [flatId, date, JSON.stringify(hc), now]);
   return r?.c ?? hc;
 }
 
