@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { allocate, monthBalances, type LedgerRow, type MonthInput } from './money';
+import { allocate, foodSplit, monthBalances, toPoisha, type LedgerRow, type MonthInput } from './money';
 
 describe('allocate', () => {
   it('splits exactly with largest remainder, ties to lowest index', () => {
@@ -131,5 +131,72 @@ describe('monthBalances', () => {
     ] }));
     expect(r.invariantOk).toBe(false);
     expect(r.problems).toEqual(['d9: unknown member X', 'w1: unknown member X', 'balances differ from fund by 20000']);   // the unsplit laundry bill left the fund
+  });
+});
+
+// Plan 5 stress tests: money moving between people is never a second expense.
+// A is the collector. Each pair of ledgers must give the same balances and fund.
+describe('money moving between people', () => {
+  const same = (x: LedgerRow[], y: LedgerRow[]) => {
+    const [rx, ry] = [monthBalances(base({ ledger: x })), monthBalances(base({ ledger: y }))];
+    expect([rx.invariantOk, ry.invariantOk]).toEqual([true, true]);
+    expect(bal(rx)).toEqual(bal(ry));
+    expect(rx.fund).toBe(ry.fund);
+    return rx;
+  };
+  const deposit = row({ id: 'd', type: 'deposit', amount: 1000000, memberId: 'B' });
+
+  it('collector pays ৳5,000 personally, then is paid back from the fund', () => {
+    const r = same(
+      [deposit, row({ id: 'z', type: 'bazar', amount: 500000, paidBy: 'A' }), row({ id: 'p', type: 'payout', amount: 500000, memberId: 'A' })],
+      [deposit, row({ id: 'z', type: 'bazar', amount: 500000, paidBy: null })],
+    );
+    expect(r.perMember.reduce((a, m) => a + m.foodCost, 0)).toBe(500000);   // the expense counts once
+  });
+
+  it('shopper gets ৳3,000, spends ৳2,450, returns ৳550 change', () => {
+    const r = same(
+      [deposit, row({ id: 'a', type: 'payout', amount: 300000, memberId: 'C' }), row({ id: 'z', type: 'bazar', amount: 245000, paidBy: 'C' }),
+        row({ id: 'c', type: 'deposit', amount: 55000, memberId: 'C' })],
+      [deposit, row({ id: 'z', type: 'bazar', amount: 245000, paidBy: null })],
+    );
+    expect(r.fund).toBe(1000000 - 245000);   // what the collector should hold
+  });
+
+  it('an unconfirmed handover changes nothing until the receiver confirms', () => {
+    same([deposit, row({ id: 'a', type: 'payout', amount: 300000, memberId: 'C', status: 'pending' })], [deposit]);
+  });
+});
+
+
+describe('per-row shares and taka input', () => {
+  it('lists each person share of each row, adding up to the row', () => {
+    const r = monthBalances(base({ ledger: [
+      row({ id: 'z1', type: 'bazar', amount: 100000, paidBy: 'A' }),
+      row({ id: 'w1', type: 'bill', amount: 20000, split: 'selected', selected: ['B', 'C'] }),
+    ] }));
+    expect(r.lines.filter(l => l.rowId === 'w1')).toEqual([{ rowId: 'w1', memberId: 'B', amount: 10000 }, { rowId: 'w1', memberId: 'C', amount: 10000 }]);
+    expect(r.lines.filter(l => l.rowId === 'bazar').reduce((a, l) => a + l.amount, 0)).toBe(100000);
+  });
+
+  it('splits food cost into own and guest meals that add up exactly, at awkward totals too', () => {
+    expect(foodSplit(81667, 2450, 200)).toEqual({ own: 75000, guests: 6667 });   // 81667 x 200 / 2450 = 6666.7
+    expect(foodSplit(100001, 3, 1)).toEqual({ own: 66667, guests: 33334 });
+    expect(foodSplit(0, 0, 0)).toEqual({ own: 0, guests: 0 });
+    for (const [f, m, g] of [[99999, 7, 3], [1, 3, 1], [245000, 2450, 0]]) {
+      const x = foodSplit(f, m, g);
+      expect(x.own + x.guests).toBe(f);
+    }
+  });
+
+  it('reads taka the way people type it', () => {
+    expect(toPoisha('2450')).toBe(245000);
+    expect(toPoisha('2,450.5')).toBe(245050);
+    expect(toPoisha('৳ ২৪৫০')).toBe(245000);   // Bangla keyboard digits
+    expect(toPoisha('0')).toBeNull();
+    expect(toPoisha('-5')).toBeNull();
+    expect(toPoisha('12.345')).toBeNull();
+    expect(toPoisha('abc')).toBeNull();
+    expect(toPoisha('10000001')).toBeNull();   // over ৳1,00,00,000 is a typo
   });
 });

@@ -51,6 +51,7 @@ export interface MonthResult {
   fund: number;
   invariantOk: boolean;      // no problems (a balance/fund mismatch is itself a problem)
   problems: string[];        // reasons the month cannot close
+  lines: { rowId: string; memberId: string; amount: number }[];   // each person's share of each row ('bazar' for all bazar)
 }
 
 export function monthBalances(input: MonthInput): MonthResult {
@@ -60,6 +61,7 @@ export function monthBalances(input: MonthInput): MonthResult {
     return [id, { id, opening, paidIn: 0, foodCost: 0, billShare: 0, payouts: 0, balance: 0 }];
   }));
   const problems: string[] = [];
+  const lines: MonthResult['lines'] = [];
   const rows = input.ledger.filter(l => l.status === 'ok');
   const daysOf = (id: string) => input.daysPresent.get(id) ?? 0;
   const meals = ids.map(id => input.weightedMeals.get(id) ?? 0);
@@ -74,7 +76,7 @@ export function monthBalances(input: MonthInput): MonthResult {
     if (!known(rowId, who)) return;
     const shares = allocate(amount, weights);
     if (!shares) { problems.push(`${rowId}: nobody to split this between`); return; }
-    shares.forEach((s, i) => { res.get(who[i])![field] += s; });
+    shares.forEach((s, i) => { res.get(who[i])![field] += s; lines.push({ rowId, memberId: who[i], amount: s }); });
   };
 
   const totalBazar = rows.filter(l => l.type === 'bazar').reduce((a, l) => a + l.amount, 0);
@@ -116,5 +118,20 @@ export function monthBalances(input: MonthInput): MonthResult {
     fund,
     invariantOk: problems.length === 0,
     problems,
+    lines,
   };
+}
+
+/** A member's food cost split into their own meals and their guests' (meals in hundredths). The two always add up exactly. */
+export function foodSplit(foodCost: number, meals: number, guestMeals: number) {
+  const guests = meals ? Math.round((foodCost * guestMeals) / meals) : 0;
+  return { own: foodCost - guests, guests };
+}
+
+/** What someone typed as taka -> poisha. Takes commas, ৳ and Bangla digits; null unless 0 < amount <= ৳1,00,00,000 with at most 2 decimals. */
+export function toPoisha(v: string): number | null {
+  const s = v.replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/[,\s৳]/g, '');
+  if (!/^\d{1,8}(\.\d{1,2})?$/.test(s)) return null;
+  const p = Math.round(Number(s) * 100);
+  return p > 0 && p <= 1_000_000_000 ? p : null;
 }

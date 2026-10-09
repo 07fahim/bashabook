@@ -74,5 +74,22 @@ describe('fmtRange', () => {
     expect(fmtRange('2026-10-16', '2026-10-22')).toBe('16 – 22 October');
     expect(fmtRange('2026-11-27', '2026-12-03')).toBe('27 November – 3 December');
   });
+
+  it('money in whole taka with English digits', async () => {
+    const { fmtMonth, fmtTaka } = await import('../app/[lang]/format');
+    expect(fmtTaka(245049)).toBe('৳2,450');
+    expect(fmtTaka(-38000)).toBe('৳380');
+    expect(fmtTaka(150)).toBe('৳2');
+    expect(fmtMonth('2026-10-01')).toBe('October 2026');
+  });
 });
 
+
+describe('meals so far', () => {
+  it('counts only up to the given day', () => {
+    const m = { id: 'A', joinedOn: '2026-10-01', leftOn: null, defaults: { b: true, l: true, d: true } };
+    const w = { b: 50, l: 100, d: 100 };
+    expect(weightedMeals([m], [], '2026-10-01', w).get('A')).toBe(31 * 250);
+    expect(weightedMeals([m], [], '2026-10-01', w, '2026-10-09').get('A')).toBe(9 * 250);
+  });
+});

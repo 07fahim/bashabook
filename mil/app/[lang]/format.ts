@@ -33,3 +33,10 @@ export function fmtWhen(at: Date | string, lang: Locale) {
 /** The count as a message anyone can send the cook from their own phone. */
 export const countText = (flatName: string, m: Dict['meals'], date: string, hc: Record<Meal, number>, status: string, lang: Locale) =>
   `${flatName} · ${m.tomorrow}, ${fmtDay(date, lang)}\n${MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(' · ')}\n${status}`;
+
+/** Poisha -> '৳2,450': whole taka, no sign (the words around it say owe or get back). */
+export const fmtTaka = (p: number) => `৳${Math.round(Math.abs(p) / 100).toLocaleString('en-US')}`;
+
+/** '2026-10-01' -> 'October 2026' (same in both languages). */
+export const fmtMonth = (month: string) =>
+  new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
