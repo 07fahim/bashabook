@@ -310,7 +310,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
         </div>
         <div>
           <h2 className={groupLabel}>{a.members}</h2>
-            <ul className="mt-3 grid gap-x-8 gap-y-3 md:grid-cols-2 md:items-start lg:grid-cols-3">
+            <ul className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2 md:items-start lg:grid-cols-3">
               {members.map(x => (
                 <li key={x.id} className="rounded-3xl border border-line bg-surface p-5">
                   {/* a long badge (last day) drops below the name on a phone instead of squeezing it */}

@@ -106,7 +106,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
 
         {/* desktop: my balance and the three forms on the left; the flat summary over the entries on the right, two thirds wide,
             so both sides grow downward together and no column leaves a hole */}
-        <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* balance, forms and everyone's balances (8 to 10 people): about as tall as the summary and entries beside them */}
           <div>
             <section className={card}>
@@ -185,8 +185,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               <ul className="mt-1 divide-y divide-line">
                 {mo.result.perMember.map(p => (
                   <li key={p.id} className="flex justify-between gap-4 py-2">
-                    <span>{name(p.id)}<span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span></span>
-                    <span className={`font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{p.balance > 0 ? '+' : p.balance < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
+                    <span className="min-w-0">{name(p.id)}<span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span></span>
+                    <span className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{p.balance > 0 ? '+' : p.balance < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
                   </li>
                 ))}
               </ul>
@@ -196,13 +196,13 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           <div className="flex flex-col gap-6 lg:col-span-2">
           <section className={card}>
             <h2 className="text-xl font-bold">{x.summary}</h2>
-            <dl className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 lg:grid-cols-4">
               {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar')))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
                 [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? (totalMeals === 100 ? x.mealSoFar : x.mealsSoFar) : totalMeals === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
                 [x.withName.replace('{name}', collector.name), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
-                  <dd className="text-2xl font-bold tabular-nums">{v}</dd>
+                  <dd className="text-2xl font-bold tabular-nums [overflow-wrap:anywhere]">{v}</dd>
                   {sub && <dd className="text-[15px] text-muted">{sub}</dd>}
                 </div>
               ))}
@@ -256,8 +256,12 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               ))} />}
             {/* removed entries are rarely needed: folded behind their count, still one tap from Put back */}
             {!mine && mo.removed.length > 0 && (
-              <details className="mt-4 border-t border-line pt-2">
-              <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.removedTitle.replace('{n}', String(mo.removed.length))}</summary>
+              <details className="group/rm mt-4 border-t border-line pt-2">
+              {/* the same + (turning to ×) as every other fold, so open and closed are visible */}
+              <summary className={`inline-flex min-h-11 cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden ${link}`}>
+                {x.removedTitle.replace('{n}', String(mo.removed.length))}
+                <span aria-hidden="true" className="text-xl leading-none transition-transform group-open/rm:rotate-45">+</span>
+              </summary>
               <div className="text-[15px] text-muted">
               <LongList label={x.removedTitle.replace('{n}', String(mo.removed.length))} keep={5} more={t.app.showAll.replace('{n}', String(mo.removed.length))} less={t.app.showLess} items={mo.removed.map(rm => (
                   <li key={rm.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">

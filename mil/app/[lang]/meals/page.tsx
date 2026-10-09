@@ -23,8 +23,11 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const { lang } = await params;
   const sp = await searchParams;
   const mine = sp.mine === '1';
-  // which week to show: 0 = this week, up to 7 weeks ahead (changes are allowed up to 60 days out)
-  const w = Math.min(7, Math.max(0, Math.trunc(Number(sp.week)) || 0));
+  // which week to show: 0 = this week, up to 7 weeks ahead (changes are allowed up to 60 days out) and 8 back, this month and
+  // last, read-only, so anyone can check what they were counted for
+  const w = Math.min(7, Math.max(-8, Math.trunc(Number(sp.week)) || 0));
+  // older history comes 50 at a time (?older=1, 2 …); a longer slice of the same newest-first list, so nothing repeats or goes missing
+  const older = Math.min(40, Math.max(0, Math.trunc(Number(sp.older)) || 0)), shownRows = 50 * (older + 1);
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), m = t.meals;
@@ -32,7 +35,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, 7 * w + i));
   const [meals, history, aways, guestList] = await Promise.all([
     loadMeals(db, me.flatId, week[0], week[6]),
-    loadHistory(db, me.flatId, mine ? me.memberId : null),
+    loadHistory(db, me.flatId, mine ? me.memberId : null, shownRows + 1),
     upcomingAway(db, me.flatId, me.memberId, addDays(today, 1)),
     myGuests(db, me.flatId, me.memberId, today),
   ]);
@@ -41,7 +44,8 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
   const firstOpen = [1, 2].map(n => addDays(today, n)).find(d => decide(d) === 'open')!;   // tomorrow or the day after
   const guestDays = week.filter(d => d === today || decide(d) !== 'closed');   // today too: a host may add surprise guests
-  const href = (n: number, only: boolean) => `/${lang}/meals?${new URLSearchParams({ ...(n ? { week: String(n) } : {}), ...(only ? { mine: '1' } : {}) })}`;
+  const href = (n: number, only: boolean, more = 0) => `/${lang}/meals?${new URLSearchParams({ ...(n ? { week: String(n) } : {}), ...(only ? { mine: '1' } : {}), ...(more ? { older: String(more) } : {}) })}`;
+  const hasOlder = history.length > shownRows;
   const arrow = `inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-muted px-3 font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 sm:px-4 ${focus}`;
   const card = 'mt-8 rounded-3xl border border-line bg-surface p-5';
   const range = (r: [string, string]) => (r[0] === r[1] ? fmtDay(r[0], lang) : `${fmtDay(r[0], lang)} – ${fmtDay(r[1], lang)}`);
@@ -79,10 +83,10 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
       <Header t={t} lang={lang} path="/meals"><Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{m.mealsTitle}</h1>
-        <p className="mt-2 text-muted">{m.weekLead}</p>
+        <p className="mt-2 text-muted">{w < 0 ? m.pastLead : m.weekLead}</p>
         <nav aria-label={m.weekNav} className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           {/* at either end the arrow stays in place, greyed out, so keyboard focus is not lost */}
-          <Link href={href(Math.max(0, w - 1), mine)} scroll={false} aria-label={m.prevWeek} aria-disabled={w === 0 || undefined} className={`justify-self-start ${arrow}`}><span aria-hidden="true">←</span><span aria-hidden="true" className="hidden sm:inline">{m.prevWeek}</span></Link>
+          <Link href={href(Math.max(-8, w - 1), mine)} scroll={false} aria-label={m.prevWeek} aria-disabled={w === -8 || undefined} className={`justify-self-start ${arrow}`}><span aria-hidden="true">←</span><span aria-hidden="true" className="hidden sm:inline">{m.prevWeek}</span></Link>
           <p className="text-center font-semibold">{fmtRange(week[0], week[6])}</p>
           <Link href={href(Math.min(7, w + 1), mine)} scroll={false} aria-label={m.nextWeek} aria-disabled={w === 7 || undefined} className={`justify-self-end ${arrow}`}><span aria-hidden="true" className="hidden sm:inline">{m.nextWeek}</span><span aria-hidden="true">→</span></Link>
         </nav>
@@ -90,7 +94,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={todayNote} {...meals} />
         </div>
 
-        <div className="mt-8 grid gap-3 md:grid-cols-2 md:items-start lg:grid-cols-3 [&>*]:mt-0">
+        <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-2 md:items-start lg:grid-cols-3 [&>*]:mt-0">
           <Fold title={m.guestTitle} lead={m.guestLead}>
             {guestList.length > 0 && (
               <div className="mt-4">
@@ -184,14 +188,15 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           </div>
           {history.length === 0 ? (
             <p className="mt-3 text-muted">{m.noHistory}</p>
-          ) : (
-            <LongList label={m.historyTitle} keep={10} more={t.app.showAll.replace('{n}', String(history.length))} less={t.app.showLess} items={history.map((h, i) => (
+          ) : (<>
+            <LongList label={m.historyTitle} keep={10} more={t.app.showAll.replace('{n}', String(Math.min(history.length, shownRows)))} less={t.app.showLess} items={history.slice(0, shownRows).map((h, i) => (
               <li key={i} className="py-3">
                 <p>{describe(h)}</p>
                 <p className="text-[15px] text-muted">{fmtWhen(h.at, lang)}</p>
               </li>
             ))} />
-          )}
+            {hasOlder && <Link href={href(w, mine, older + 1)} scroll={false} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{m.olderHistory}</Link>}
+          </>)}
         </section>
       </main>
     </>

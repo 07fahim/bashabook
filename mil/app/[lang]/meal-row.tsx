@@ -34,7 +34,8 @@ export function MealRow({ lang, m, meId, date, decision, flat, members, changes,
             <input type="hidden" name="own" value={own > 0 ? 0 : 1} />
             <ChipButton on={own > 0} disabled={closed || off} badge={!!badge}>
               <span className="sr-only">{fmtDay(date, lang)}, </span>
-              <span className={`font-semibold ${chart ? 'md:sr-only' : ''}`}>{m.names[meal]}</span>
+              {/* 'Breakfast' is the longest name: below 360 px three buttons in a card leave it 2 px short, so it steps down a size */}
+              <span className={`font-semibold max-[359px]:text-[15px] ${chart ? 'md:sr-only' : ''}`}>{m.names[meal]}</span>
               <span aria-hidden="true" className={`text-[15px] ${chart ? 'md:font-semibold' : ''}`}>{own ? m.on : m.off}</span>
               {guests > 0 && <span className="text-[15px]">{guests === 1 ? m.guestOne : m.guestMany.replace('{n}', String(guests))}</span>}
               {badge && <span className="mt-1 rounded-full bg-paper px-2 text-[15px] text-ink md:basis-full md:text-center">{badge}</span>}

@@ -70,7 +70,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
         {/* side by side the cards are one height, their buttons on one line; a lone card keeps half the row,
             not a button as wide as the screen */}
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
+        <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
           {/* phones only: wider screens change tomorrow in the week chart, with the lock time above it */}
           <section className="rounded-3xl border border-line bg-surface p-5 md:hidden">
             <h2 className="text-xl font-bold">{m.tomorrow} · {fmtDay(tomorrow, lang)}</h2>
@@ -102,7 +102,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
                 [x.withName.replace('{name}', starter?.name ?? ''), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v]) => (
                 <div key={k} className="rounded-xl bg-paper px-1 py-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
-                  <dd className="text-lg font-bold tabular-nums sm:text-2xl">{v}</dd>
+                  <dd className="text-lg font-bold tabular-nums [overflow-wrap:anywhere] sm:text-2xl">{v}</dd>
                 </div>
               ))}
             </dl>
@@ -180,7 +180,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
               <ActionForm action={changePinAction} className="mt-4" clearOnDone>
                 <input type="hidden" name="lang" value={lang} />
                 {/* a 4-digit PIN needs a short box: three side by side on wider screens */}
-                <div className="grid gap-5 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
                   <PinField label={a.currentPin} name="pin" autoComplete="current-password" />
                   <PinField label={a.newPin} name="newPin" autoComplete="new-password" />
                   <PinField label={a.newPinAgain} name="pin2" autoComplete="new-password" />
