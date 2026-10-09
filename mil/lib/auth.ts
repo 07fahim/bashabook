@@ -89,8 +89,8 @@ export async function memberBySession(db: Db, token: string): Promise<Me | null>
 
 export const deleteSession = (db: Db, token: string) => db(`delete from sessions where token_hash = $1`, [hashToken(token)]);
 
-export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean; phone: string | null }>(
-  `select id, name, phone, pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked
+export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean; phone: string | null; photoV: number | null }>(
+  `select id, name, phone, case when photo is null then null else photo_v end as "photoV", pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked
    from members where flat_id = $1 order by role = 'manager' desc, name`, [flatId]);
 
 export async function addMember(db: Db, flatId: string, name: string, today: string) {

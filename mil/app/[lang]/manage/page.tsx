@@ -7,7 +7,8 @@ import { addDays, countChanges, editFrom, headcount, indexChanges, isDate, isLoc
 import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, renameAction, resetPinAction, settingsAction } from '../actions';
+import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, removePhotoAction, renameAction, resetPinAction, settingsAction } from '../actions';
+import { Avatar } from '../avatar';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtTime } from '../format';
 import { DateField } from '../date-field';
@@ -213,7 +214,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 {members.map(x => (
                   <li key={x.id} className="py-4 first:pt-0 last:pb-0">
                     <div className="flex items-baseline justify-between gap-4">
-                      <span className="text-lg font-semibold">{x.name}</span>
+                      <span className="flex items-center gap-3 text-lg font-semibold"><Avatar id={x.id} name={x.name} v={x.photoV} size={36} />{x.name}</span>
                       <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
                         {!x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
                       </span>
@@ -233,6 +234,13 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                           </div>
                         </ActionForm>
                       </details>
+                      {x.photoV !== null && (
+                        <form action={removePhotoAction}>
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="memberId" value={x.id} />
+                          <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.removePhoto}</button>
+                        </form>
+                      )}
                       {x.claimed && x.id !== me.memberId && (
                         <details className="open:basis-full">
                           <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
