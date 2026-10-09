@@ -14,7 +14,7 @@ import { fmtDay, fmtMonth, fmtTaka } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { PayerSelect } from '../payer-select';
-import { checkChip, Field, Fold, focus, link, PageSkeleton, primary, secondary } from '../ui';
+import { checkChip, Field, Fold, focus, link, PageSkeleton, primary } from '../ui';
 import { balanceText, ConfirmList } from './bits';
 
 export default function Money({ params, searchParams }: PageProps<'/[lang]/money'>) {
@@ -230,7 +230,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="id" value={e.id} />
                           <span>{x.confirmRemove.replace('{what}', `${x.types[e.type]} ${fmtTaka(e.amount)}`)}</span>
-                          <button className={`${secondary} w-auto`}>{x.yesRemove}</button>
+                          <button className={`inline-flex min-h-11 items-center rounded-full border border-chili px-5 font-semibold text-chili hover:bg-paper ${focus}`}>{x.yesRemove}</button>
                         </form>
                       </li>
                     ))}
