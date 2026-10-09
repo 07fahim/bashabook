@@ -1,0 +1,232 @@
+import { describe, it, expect } from 'vitest';
+import { db, migrate } from '../db/test-db';
+import { addMember, bringBack, createFlat, setLeaving } from './auth';
+import { editFrom } from './meals';
+import { noCooking, saveMeal } from './meals-db';
+import { foodSplit } from './money';
+import { addEntry, addRoom, confirmEntry, loadMonth, openMonth, removeEntry, setRent, setRoom, stopRepeat, toConfirm, type NewEntry } from './money-db';
+
+const OCT = '2026-10-01', TODAY = '2026-10-09';
+const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
+  ({ date: '2026-10-05', note: null, paidBy: null, memberId: null, split: null, selected: [], ...p });
+
+async function flat() {
+  await migrate();
+  const f = await createFlat(db, { flatName: 'Flat 4B', name: 'Nafis', pin: '1234', others: ['Tahsin', 'Zarif'], today: OCT, lang: 'bn' });
+  const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
+  const nafis = { memberId: ids.Nafis, role: 'manager' as const };
+  const as = (name: string) => ({ memberId: ids[name], role: 'member' as const });
+  const month = () => loadMonth(db, f.flatId, OCT, TODAY, ids.Nafis);
+  return { flatId: f.flatId, ids, nafis, as, month };
+}
+
+describe('money storage', { timeout: 30000 }, () => {
+  it('with guests and an odd bazar, every food share and its own/guest split add up exactly', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await saveMeal(db, flatId, ids.Tahsin, { memberId: ids.Tahsin, date: '2026-10-08', meal: 'd', count: 3, guests: 2 }, false);
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 100001 }));
+    const { result, meals, guestMeals } = await month();
+    expect(result.perMember.reduce((a, m) => a + m.foodCost, 0)).toBe(100001);
+    for (const m of result.perMember) {
+      const x = foodSplit(m.foodCost, meals.get(m.id) ?? 0, guestMeals.get(m.id) ?? 0);
+      expect(x.own + x.guests).toBe(m.foodCost);
+    }
+  });
+
+  it('meals count up to today; a guest plate is charged once to the host and shown apart', async () => {
+    const { flatId, ids, month } = await flat();
+    await saveMeal(db, flatId, ids.Tahsin, { memberId: ids.Tahsin, date: '2026-10-08', meal: 'd', count: 3, guests: 2 }, false);
+    const { meals, guestMeals, members, result, first } = await month();
+    expect(meals.get(ids.Nafis)).toBe(9 * 250);            // 1 to 9 October, breakfast counts half
+    expect(meals.get(ids.Tahsin)).toBe(9 * 250 + 200);     // two guest dinners on top
+    expect(guestMeals.get(ids.Tahsin)).toBe(200);
+    expect(members.map(m => m.name)).toEqual(['Nafis', 'Tahsin', 'Zarif']);
+    expect(result.invariantOk).toBe(true);
+    expect(first).toBe(OCT);
+  });
+  it('shopper gets ৳3,000, spends ৳2,450, hands back ৳550: flat money is what the collector holds', async () => {
+    const { flatId, ids, nafis, as, month } = await flat();
+    expect(await addEntry(db, flatId, as('Zarif'), e({ type: 'deposit', amount: 1000000, memberId: ids.Zarif }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 300000, memberId: ids.Tahsin, note: 'for bazar' }))).toBe('ok');
+    expect((await month()).result.fund).toBe(0);   // both wait for a tap
+    const [dep] = await toConfirm(db, flatId, ids.Nafis, true);
+    const [pay] = await toConfirm(db, flatId, ids.Tahsin, false);
+    expect(await confirmEntry(db, flatId, as('Tahsin'), dep.id)).toBe(false);   // only the collector confirms deposits
+    expect(await confirmEntry(db, flatId, nafis, pay.id)).toBe(false);          // only the receiver confirms a handover
+    expect(await confirmEntry(db, flatId, nafis, dep.id)).toBe(true);
+    expect(await confirmEntry(db, flatId, as('Tahsin'), pay.id)).toBe(true);
+    await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 245000, paidBy: ids.Tahsin }));
+    await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 55000, memberId: ids.Tahsin, note: 'change' }));
+    const { result } = await month();
+    expect(result.invariantOk).toBe(true);
+    expect(result.fund).toBe(1000000 - 245000);
+    const t = result.perMember.find(m => m.id === ids.Tahsin)!;
+    expect(t.paidIn - t.payouts).toBe(0);   // the advance, the shop and the change cancel out
+    expect(result.perMember.reduce((a, m) => a + m.foodCost, 0)).toBe(245000);   // the bazar counts once
+    // equal meals: ৳2,450 → 816.67, 816.67, 816.66 (largest remainder, ties to the first name)
+    const bal = new Map(result.perMember.map(m => [m.id, m.balance]));
+    expect([bal.get(ids.Nafis), bal.get(ids.Tahsin), bal.get(ids.Zarif)]).toEqual([-81667, -81667, 1000000 - 81666]);
+  });
+
+  it('a shopper who spends ৳500 of their own beyond a ৳3,000 advance is owed exactly that', async () => {
+    const { flatId, ids, nafis, as, month } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 1000000, memberId: ids.Zarif }));
+    await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 300000, memberId: ids.Tahsin }));
+    const [pay] = await toConfirm(db, flatId, ids.Tahsin, false);
+    await confirmEntry(db, flatId, as('Tahsin'), pay.id);
+    await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 350000, paidBy: ids.Tahsin }));
+    const { result } = await month();
+    expect(result.invariantOk).toBe(true);
+    expect(result.fund).toBe(700000);                                   // ৳10,000 in, ৳3,000 handed over
+    const bal = new Map(result.perMember.map(m => [m.id, m.balance]));
+    // food ৳3,500 → 1166.67, 1166.67, 1166.66; Tahsin is ৳500 up before his food share
+    expect([bal.get(ids.Nafis), bal.get(ids.Tahsin), bal.get(ids.Zarif)]).toEqual([-116667, 50000 - 116667, 1000000 - 116666]);
+  });
+
+  it('someone who joins mid-month shares an everyone bill by days here', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await addMember(db, flatId, 'Rafi', '2026-10-17');                  // 15 of 31 days
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 108000, note: 'Electricity', split: 'equal' }));
+    const { result, members } = await month();
+    const rafi = members.find(m => m.name === 'Rafi')!.id;
+    const share = new Map(result.perMember.map(m => [m.id, m.billShare]));
+    expect([share.get(ids.Nafis), share.get(ids.Tahsin), share.get(ids.Zarif), share.get(rafi)]).toEqual([31000, 31000, 31000, 15000]);
+  });
+
+  it('members deposit only for themselves and never hand out flat money', async () => {
+    const { flatId, ids, as } = await flat();
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ type: 'deposit', amount: 100, memberId: ids.Zarif }))).toBe('bad');
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ type: 'payout', amount: 100, memberId: ids.Tahsin }))).toBe('bad');
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 100, paidBy: 'not-a-member' }))).toBe('bad');
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ type: 'bill', amount: 100, split: 'selected', selected: [] }))).toBe('bad');
+  });
+
+  it('a one-off bill for everyone living here leaves out someone who moves in later', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await addMember(db, flatId, 'Rafi', '2026-10-07');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 30000, note: 'Fan repair', split: 'here' }))).toBe('ok');
+    const { entries, result } = await month();
+    expect([...entries[0].selected].sort()).toEqual([ids.Nafis, ids.Tahsin, ids.Zarif].sort());
+    expect(result.perMember.map(m => m.billShare).sort()).toEqual([0, 10000, 10000, 10000]);
+  });
+
+  it('rent by room waits until everyone has a room, then follows the rents', async () => {
+    const { flatId, ids, nafis, as, month } = await flat();
+    const rent = e({ type: 'bill', amount: 2000000, note: 'Rent', split: 'room' });
+    expect(await addEntry(db, flatId, nafis, rent)).toBe('rooms');
+    expect(await addRoom(db, flatId, as('Tahsin'), 'Mine', 100)).toBeNull();   // rooms are the collector's
+    const master = (await addRoom(db, flatId, nafis, 'Master', 1200000))!, small = (await addRoom(db, flatId, nafis, 'Small', 800000))!;
+    await setRoom(db, flatId, nafis, ids.Nafis, master);
+    await setRoom(db, flatId, nafis, ids.Tahsin, master);
+    expect(await addEntry(db, flatId, nafis, rent)).toBe('rooms');   // Zarif has no room, Small is empty
+    await setRoom(db, flatId, nafis, ids.Zarif, master);
+    expect(await addEntry(db, flatId, nafis, rent)).toBe('rooms');   // everyone has a room, but Small's rent has nobody to pay it
+    await setRoom(db, flatId, nafis, ids.Zarif, small);
+    expect(await addEntry(db, flatId, nafis, rent)).toBe('ok');
+    const share = new Map((await month()).result.perMember.map(m => [m.id, m.billShare]));
+    expect([share.get(ids.Nafis), share.get(ids.Tahsin), share.get(ids.Zarif)]).toEqual([600000, 600000, 800000]);
+  });
+
+  it('only whoever added an entry or the collector removes it, and the removal stays visible', async () => {
+    const { flatId, ids, as, nafis, month } = await flat();
+    await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 50000, paidBy: ids.Tahsin }));
+    await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 20000, memberId: ids.Nafis }));
+    await addEntry(db, flatId, as('Zarif'), e({ type: 'deposit', amount: 30000, memberId: ids.Zarif }));
+    const { entries } = await month();
+    const bazar = entries.find(x => x.type === 'bazar')!.id, zarifDep = entries.find(x => x.memberId === ids.Zarif)!.id;
+    expect(await removeEntry(db, flatId, as('Zarif'), bazar)).toBe(false);
+    await confirmEntry(db, flatId, nafis, zarifDep);
+    expect(await removeEntry(db, flatId, as('Zarif'), zarifDep)).toBe(false);   // the cash is with the collector now
+    expect(await removeEntry(db, flatId, nafis, bazar)).toBe(true);
+    const after = await month();
+    expect(after.entries.map(x => x.type)).toEqual(['deposit', 'deposit']);
+    expect(after.removed.map(r => [r.by, r.type, r.amount])).toEqual([['Nafis', 'bazar', 50000]]);
+  });
+
+  it('room and monthly-bill writes say false when nothing changed, and refuse bad rents', async () => {
+    const { flatId, ids, nafis } = await flat();
+    const ghost = '00000000-0000-4000-8000-000000000000';
+    expect(await addRoom(db, flatId, nafis, 'Master', -5)).toBeNull();
+    expect(await addRoom(db, flatId, nafis, 'Master', 1.5)).toBeNull();
+    const room = (await addRoom(db, flatId, nafis, 'Master', 1200000))!;
+    expect(await setRent(db, flatId, nafis, room, -1)).toBe(false);
+    expect(await setRent(db, flatId, nafis, ghost, 100)).toBe(false);            // no such room
+    expect(await setRoom(db, flatId, nafis, ghost, room)).toBe(false);           // no such member
+    expect(await setRoom(db, flatId, nafis, ids.Tahsin, ghost)).toBe(false);     // no such room
+    expect(await setRoom(db, flatId, nafis, ids.Tahsin, room)).toBe(true);
+    expect(await stopRepeat(db, flatId, nafis, ghost)).toBe(false);
+  });
+
+  it('a removed bill keeps everything in its record, the picked people too', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 20000, note: 'Laundry', split: 'selected', selected: [ids.Tahsin, ids.Zarif] }));
+    const id = (await month()).entries[0].id;
+    await removeEntry(db, flatId, nafis, id);
+    const [rec] = await db<{ b: Record<string, unknown> }>(`select before as b from audit_log where entity = 'ledger' and entity_id = $1 and after->>'removed' = 'true'`, [id]);
+    expect(rec.b).toMatchObject({ amount_poisha: 20000, split: 'selected', note: 'Laundry', date: '2026-10-05', created_by: ids.Nafis, paid_by_member_id: null });
+    expect([...(rec.b.selected as string[])].sort()).toEqual([ids.Tahsin, ids.Zarif].sort());
+  });
+
+  it('a monthly bill is copied once into each new month, from flat money', async () => {
+    const { flatId, ids, nafis, as } = await flat();
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ type: 'bill', amount: 100, note: 'Mine', split: 'equal', repeat: true }))).toBe('bad');   // the collector's
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 120000, note: 'Wi-Fi', split: 'here', repeat: true }));   // becomes "by days" when repeated
+    await openMonth(db, flatId, '2026-11-01', ids.Nafis);
+    const nov = await loadMonth(db, flatId, '2026-11-01', '2026-11-03', ids.Nafis);   // opens November again: no second copy
+    expect(nov.entries.map(x => [x.note, x.amount, x.paidBy, x.split])).toEqual([['Wi-Fi', 120000, null, 'equal']]);
+  });
+
+  it('a monthly bill for some people drops whoever left, and skips the bill if nobody is left', async () => {
+    const { flatId, ids, nafis } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 50000, note: 'AC', split: 'selected', selected: [ids.Tahsin, ids.Zarif], repeat: true }));
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 30000, note: 'Gym', split: 'selected', selected: [ids.Zarif], repeat: true }));
+    await db(`update members set left_on = '2026-10-31' where id = $1`, [ids.Zarif]);
+    const nov = await loadMonth(db, flatId, '2026-11-01', '2026-11-03', ids.Nafis);
+    expect(nov.entries.map(x => [x.note, x.selected])).toEqual([['AC', [ids.Tahsin]]]);
+  });
+
+  it('a bill and its repeat are saved together or not at all', async () => {
+    const { flatId, nafis, month } = await flat();
+    await db(`create or replace function boom2() returns trigger language plpgsql as $$ begin raise exception 'boom'; end $$`);
+    await db(`create trigger boom2 before insert on bill_templates for each row execute function boom2()`);
+    await expect(addEntry(db, flatId, nafis, e({ type: 'bill', amount: 120000, note: 'Wi-Fi', split: 'equal', repeat: true }))).rejects.toThrow(/boom/);
+    await db(`drop trigger boom2 on bill_templates`);
+    expect((await month()).entries).toEqual([]);                                     // no bill without its repeat
+    expect(await db(`select 1 from bill_templates where flat_id = $1`, [flatId])).toEqual([]);
+  });
+
+  it('opening a month is all or nothing: a failure leaves no month, and the retry copies every bill once', async () => {
+    const { flatId, ids, nafis } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 120000, note: 'Wi-Fi', split: 'equal', repeat: true }));
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 2000000, note: 'Rent', split: 'equal', repeat: true }));
+    // make the second bill's insert fail once
+    await db(`create or replace function boom() returns trigger language plpgsql as $$ begin
+      if new.note = 'Rent' then raise exception 'boom'; end if; return new; end $$`);
+    await db(`create trigger boom before insert on ledger for each row execute function boom()`);
+    await expect(openMonth(db, flatId, '2026-12-01', ids.Nafis)).rejects.toThrow(/boom/);
+    expect(await db(`select 1 from months where flat_id = $1 and month = '2026-12-01'`, [flatId])).toEqual([]);
+    await db(`drop trigger boom on ledger`);
+    await openMonth(db, flatId, '2026-12-01', ids.Nafis);
+    await openMonth(db, flatId, '2026-12-01', ids.Nafis);
+    const dec = await loadMonth(db, flatId, '2026-12-01', '2026-12-02', ids.Nafis);
+    expect(dec.entries.map(x => x.note).sort()).toEqual(['Rent', 'Wi-Fi']);
+  });
+
+  it('bring back: the gap days are no meals, so the meal rate stays; bills count those days as living here', async () => {
+    const { flatId, ids, nafis } = await flat();
+    expect(await setLeaving(db, flatId, ids.Nafis, ids.Zarif, '2026-10-08', '2026-10-08')).toBe('ok');
+    await noCooking(db, flatId, ids.Nafis, '2026-10-10', '2026-10-10', ['b', 'l', 'd'], '2026-10-09');
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 100000 }));
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 93000, note: 'Rent', split: 'equal' }));
+    const at12 = () => loadMonth(db, flatId, OCT, '2026-10-12', ids.Nafis);
+    const before = await at12();
+    expect(await bringBack(db, flatId, ids.Nafis, ids.Zarif, '2026-10-12', editFrom('2026-10-12'))).toBe('ok');
+    const after = await at12();
+    expect(after.meals.get(ids.Zarif)).toBe(8 * 250);             // 1 to 8 October only: 9 to 12 are saved as no meals
+    expect(after.result.mealRate).toBe(before.result.mealRate);
+    const share = (m: typeof after, id: string) => m.result.perMember.find(p => p.id === id)!.billShare;
+    expect(share(before, ids.Zarif)).toBe(10628);                  // 8 of 70 days lived here (31 + 31 + 8)
+    expect(share(after, ids.Zarif)).toBe(share(after, ids.Nafis)); // back for the whole month: rent for the gap days too
+    expect(after.result.lines.some(l => l.memberId === ids.Zarif && l.amount === share(after, ids.Zarif))).toBe(true);   // shown by name in the breakdown
+  });
+});
