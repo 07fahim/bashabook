@@ -43,7 +43,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
     loadMeals(db, me.flatId, today, tomorrow),
     loadMeals(db, me.flatId, day, day),
     loadNoCookDays(db, me.flatId, today),
-    loadMonth(db, me.flatId, monthOf(today), today, me.memberId),
+    loadMonth(db, me.flatId, monthOf(today), today),
     toConfirm(db, me.flatId, me.memberId, true),
     listRepeats(db, me.flatId),
   ]);
@@ -341,7 +341,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     </select>
                   </label>
                   <Field label={mn.amount} name="amount" inputMode="decimal" required placeholder="3000" />
-                  <DateField lang={lang} label={mn.date} name="date" required min={editFrom(today)} max={today} defaultValue={today} />
+                  <DateField lang={lang} label={mn.date} name="date" required min={monthOf(today)} max={today} defaultValue={today} />
                   <Field label={mn.note} name="note" maxLength={100} />
                   <button className={primary}>{mn.save}</button>
                 </ActionForm>

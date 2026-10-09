@@ -9,12 +9,14 @@ export type Removed = { at: string; by: string; type: LedgerRow['type']; amount:
 
 export const monthOf = (date: string) => `${date.slice(0, 8)}01`;
 
-/** Makes sure the month exists. The first time, it copies the monthly bills into it, paid from flat money. Safe to call again.
+/** Makes sure the month exists. The first time, it copies the monthly bills into it, paid from flat money and added by the
+ *  collector (whoever happens to open the page first must not own, or be able to remove, the flat's rent). Safe to call again.
  *  One statement: the month, its bills, their people and their history rows are created together or not at all, so a failure
  *  leaves no month and the next call tries again; two people opening the month at once can't both copy (one wins the month row). */
-export async function openMonth(db: Db, flatId: string, month: string, by: string) {
+export async function openMonth(db: Db, flatId: string, month: string) {
   await db(
     `with m as (insert into months (flat_id, month) values ($1, $2::date) on conflict do nothing returning month),
+     c as (select id from members where flat_id = $1 and role = 'manager'),
      here as (select id from members where flat_id = $1
        and joined_on <= ($2::date + interval '1 month' - interval '1 day')::date and (left_on is null or left_on >= $2::date)),
      t as (select gen_random_uuid() as lid, b.name, b.amount_poisha, b.split,
@@ -22,10 +24,10 @@ export async function openMonth(db: Db, flatId: string, month: string, by: strin
            from bill_templates b, m where b.flat_id = $1),
      ok as (select * from t where split <> 'selected' or cardinality(sel) > 0),
      l as (insert into ledger (id, flat_id, month, type, amount_poisha, split, date, note, status, created_by)
-           select lid, $1, $2::date, 'bill', amount_poisha, split, $2::date, name, 'ok', $3 from ok returning *),
+           select lid, $1, $2::date, 'bill', amount_poisha, split, $2::date, name, 'ok', (select id from c) from ok returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, ok.lid, unnest(ok.sel) from ok where ok.split = 'selected')
-     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), $3 from l`,
-    [flatId, month, by]);
+     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), l.created_by from l`,
+    [flatId, month]);
 }
 
 /** One ledger row, its split people, its history row and (if `repeat`) its monthly template, all in one statement,
@@ -45,8 +47,8 @@ async function insertEntry(db: Db, flatId: string, by: string,
 }
 
 /** Everything the money screens need for one month. Numbers so far: meals up to today, no carry-over until Plan 6 closes months. */
-export async function loadMonth(db: Db, flatId: string, month: string, today: string, by: string) {
-  if (month === monthOf(today)) await openMonth(db, flatId, month, by);
+export async function loadMonth(db: Db, flatId: string, month: string, today: string) {
+  if (month === monthOf(today)) await openMonth(db, flatId, month);
   const end = daysOfMonth(month).at(-1)!, upTo = today < end ? today : end;
   const { flat, members: everyone, changes } = await loadMeals(db, flatId, month, end);   // meals must come through loadMeals (no cooking)
   const roomOf = new Map((await db<{ id: string; roomId: string | null }>(
@@ -104,8 +106,9 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): 
   if (e.type === 'deposit' && !boss && e.memberId !== by.memberId) return 'bad';   // members deposit only for themselves
   if (e.repeat && (!boss || e.type !== 'bill')) return 'bad';                      // monthly bills are the collector's
   const month = monthOf(e.date), end = daysOfMonth(month).at(-1)!;
-  const here = await db<{ id: string; joinedOn: string; leftOn: string | null; roomId: string | null }>(
-    `select id, joined_on::text as "joinedOn", left_on::text as "leftOn", room_id as "roomId" from members
+  const here = await db<{ id: string; joinedOn: string; leftOn: string | null; roomId: string | null; gone: boolean }>(
+    `select id, joined_on::text as "joinedOn", left_on::text as "leftOn", room_id as "roomId",
+       left_on < (now() at time zone 'Asia/Dhaka')::date as gone from members
      where flat_id = $1 and joined_on <= $3 and (left_on is null or left_on >= $2)`, [flatId, month, end]);
   let split = e.split, selected = e.split === 'selected' ? e.selected : [];
   if (split === 'here') {
@@ -119,9 +122,11 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): 
     const rooms = await db<{ id: string }>(`select id from rooms where flat_id = $1 and rent_share_poisha > 0`, [flatId]);
     if (!rooms.length || here.some(m => !m.roomId) || rooms.some(r => !here.some(m => m.roomId === r.id))) return 'rooms';
   }
-  // money between two people waits for the receiver: the collector for deposits, the person for payouts
-  const pending = (e.type === 'deposit' && !boss) || (e.type === 'payout' && e.memberId !== by.memberId);
-  await openMonth(db, flatId, month, by.memberId);
+  // money between two people waits for the receiver: the collector for deposits, the person for payouts. Someone who has
+  // moved out can't sign in to confirm, so paying them back counts at once: the collector's entry is the record.
+  const gone = here.some(m => m.id === e.memberId && m.gone);
+  const pending = (e.type === 'deposit' && !boss) || (e.type === 'payout' && e.memberId !== by.memberId && !gone);
+  await openMonth(db, flatId, month);
   // a repeated "everyone living here" bill becomes "everyone, by days": the people living here change month to month
   const repeat = e.repeat ? (split === 'selected' && e.split !== 'here' ? { split: 'selected' as const, selected } : { split: e.split === 'here' ? 'equal' as const : split!, selected: [] }) : null;
   await insertEntry(db, flatId, by.memberId, { ...e, split, selected }, pending ? 'pending' : 'ok', repeat);
@@ -187,6 +192,9 @@ export const listRepeats = (db: Db, flatId: string) => db<{ id: string; name: st
 
 export async function stopRepeat(db: Db, flatId: string, by: Actor, id: string) {
   if (by.role !== 'manager') return false;
-  const done = await db(`delete from bill_templates where flat_id = $1 and id = $2 returning 1`, [flatId, id]);
+  const done = await db(
+    `with t as (delete from bill_templates where flat_id = $1 and id = $2 returning *)
+     insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
+     select $1, 'bill_templates', t.id::text, to_jsonb(t), '{"removed":true}', $3 from t returning 1`, [flatId, id, by.memberId]);
   return done.length > 0;   // false: no such monthly bill in this flat
 }

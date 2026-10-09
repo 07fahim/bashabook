@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { addDays, daysOfMonth, editFrom, todayDhaka } from '@/lib/meals';
+import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
 import { foodSplit } from '@/lib/money';
 import { loadMonth, monthOf, toConfirm, type Entry } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
@@ -21,6 +21,8 @@ export default function Money({ params, searchParams }: PageProps<'/[lang]/money
 }
 
 const sum = (rows: Entry[]) => rows.reduce((a, e) => a + e.amount, 0);
+/** '+৳500' / '−৳300', so the breakdown reads as a sum; no sign on ৳0. */
+const signed = (sign: '+' | '−', p: number) => `${p ? sign : ''}${fmtTaka(p)}`;
 
 async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
@@ -32,7 +34,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   // ?m=2026-09 picks a month; never later than this month
   const asked = typeof sp.m === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m) ? `${sp.m}-01` : thisMonth;
   const month = asked > thisMonth ? thisMonth : asked, mine = sp.mine === '1';
-  const [mo, waiting] = await Promise.all([loadMonth(db, me.flatId, month, today, me.memberId), toConfirm(db, me.flatId, me.memberId, boss)]);
+  const [mo, waiting] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss)]);
   const name = (id: string | null) => mo.all.find(p => p.id === id)?.name ?? '?';
   const collector = mo.all.find(p => p.role === 'manager')!;
   const prev = monthOf(addDays(month, -1)), next = addDays(daysOfMonth(month).at(-1)!, 1);
@@ -51,10 +53,12 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
 
   // Only mine = entries I added, paid, received, deposited, or was picked for. Bills shared by everyone (and bazar) are not
   // 'mine' here: they'd make the filter show nearly everything, and My balance already lists my share of each one by name.
-  const shown = mine ? mo.entries.filter(e => [e.createdBy, e.paidBy, e.memberId, ...e.selected].includes(me.memberId)) : mo.entries;
+  // A one-off bill for everyone living here is stored with every name ticked, so a full list doesn't count as picked.
+  const picked = (e: Entry) => e.selected.length < mo.members.length && e.selected.includes(me.memberId);
+  const shown = mine ? mo.entries.filter(e => [e.createdBy, e.paidBy, e.memberId].includes(me.memberId) || picked(e)) : mo.entries;
   const dates = [...new Set(shown.map(e => e.date))];
   const who = (e: Entry) =>
-    e.type === 'deposit' ? `${name(e.memberId)} → ${collector.name}`
+    e.type === 'deposit' ? (e.memberId === collector.id ? collector.name : `${name(e.memberId)} → ${collector.name}`)
     : e.type === 'payout' ? `${collector.name} → ${name(e.memberId)}`
     : e.paidBy ? x.paidBy.replace('{name}', name(e.paidBy)) : x.fundPaid;
   const settle = mo.result.perMember.filter(p => p.balance !== 0).map(p => {
@@ -66,7 +70,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const hidden = (type: Entry['type']) => (<><input type="hidden" name="lang" value={lang} /><input type="hidden" name="type" value={type} /></>);
   const amountDate = (<>
     <Field label={x.amount} name="amount" inputMode="decimal" required placeholder="2450" />
-    <DateField lang={lang} label={x.date} name="date" required min={editFrom(today)} max={today} defaultValue={today} />
+    <DateField lang={lang} label={x.date} name="date" required min={monthOf(today)} max={today} defaultValue={today} />
   </>);
   const whoPaid = (label: string) => (
     <label className="block font-semibold">
@@ -105,13 +109,13 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 <details className="mt-3">
                   <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.breakdown}</summary>
                   <dl className="mt-2 space-y-1 [&>div]:flex [&>div]:justify-between [&>div]:gap-4 [&_dd]:tabular-nums">
-                    <div className="font-semibold"><dt>{x.share}</dt><dd>{fmtTaka(r.foodCost + r.billShare)}</dd></div>
+                    <div className="font-semibold"><dt>{x.share}</dt><dd>{signed('−', r.foodCost + r.billShare)}</dd></div>
                     <div className="pl-4"><dt>{x.myMeals}</dt><dd>{fmtTaka(r.foodCost - guestFood)}</dd></div>
                     {guestFood > 0 && <div className="pl-4"><dt>{x.guestMeals}</dt><dd>{fmtTaka(guestFood)}</dd></div>}
                     {billLines.map(b => <div key={b.id} className="pl-4"><dt>{b.note}</dt><dd>{fmtTaka(b.amount)}</dd></div>)}
-                    <div><dt>{x.deposited}</dt><dd>{fmtTaka(deposited)}</dd></div>
-                    <div><dt>{x.spent}</dt><dd>{fmtTaka(spent)}</dd></div>
-                    <div><dt>{x.received}</dt><dd>{fmtTaka(r.payouts)}</dd></div>
+                    <div><dt>{x.deposited}</dt><dd>{signed('+', deposited)}</dd></div>
+                    <div><dt>{x.spent}</dt><dd>{signed('+', spent)}</dd></div>
+                    <div><dt>{x.received}</dt><dd>{signed('−', r.payouts)}</dd></div>
                     <div className="border-t border-line pt-1 font-bold"><dt>{x.balance}</dt><dd>{r.balance < 0 ? '−' : ''}{fmtTaka(r.balance)}</dd></div>
                   </dl>
                 </details>

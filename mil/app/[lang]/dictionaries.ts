@@ -395,7 +395,7 @@ const bn = {
     stopRepeat: 'আর লিখবেন না',
     errors: {
       amount: 'টাকার অঙ্কটা ঠিক করে লিখুন, যেমন 2450।',
-      date: 'তারিখ হবে গত মাসের 1 তারিখ থেকে আজকের মধ্যে।',
+      date: 'তারিখ হবে এই মাসের 1 তারিখ থেকে আজকের মধ্যে।',
       name: 'বিলটা কীসের, লিখুন।',
       roomName: 'রুমের নাম লিখুন।',
       people: 'অন্তত একজন বাছুন।',
@@ -800,7 +800,7 @@ const en: Dict = {
     stopRepeat: 'Stop repeating',
     errors: {
       amount: 'Enter the amount in taka, e.g. 2450.',
-      date: 'Pick a date from the 1st of last month to today.',
+      date: 'Pick a date from the 1st of this month to today.',
       name: 'Say what the bill is for.',
       roomName: 'Name the room.',
       people: 'Pick at least one person.',

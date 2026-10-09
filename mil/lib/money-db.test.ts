@@ -16,7 +16,7 @@ async function flat() {
   const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
   const nafis = { memberId: ids.Nafis, role: 'manager' as const };
   const as = (name: string) => ({ memberId: ids[name], role: 'member' as const });
-  const month = () => loadMonth(db, f.flatId, OCT, TODAY, ids.Nafis);
+  const month = () => loadMonth(db, f.flatId, OCT, TODAY);
   return { flatId: f.flatId, ids, nafis, as, month };
 }
 
@@ -171,9 +171,12 @@ describe('money storage', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, as } = await flat();
     expect(await addEntry(db, flatId, as('Tahsin'), e({ type: 'bill', amount: 100, note: 'Mine', split: 'equal', repeat: true }))).toBe('bad');   // the collector's
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 120000, note: 'Wi-Fi', split: 'here', repeat: true }));   // becomes "by days" when repeated
-    await openMonth(db, flatId, '2026-11-01', ids.Nafis);
-    const nov = await loadMonth(db, flatId, '2026-11-01', '2026-11-03', ids.Nafis);   // opens November again: no second copy
+    await openMonth(db, flatId, '2026-11-01');
+    const nov = await loadMonth(db, flatId, '2026-11-01', '2026-11-03');   // opens November again: no second copy
     expect(nov.entries.map(x => [x.note, x.amount, x.paidBy, x.split])).toEqual([['Wi-Fi', 120000, null, 'equal']]);
+    // added by the collector, whoever opens the page first, so no flatmate can remove the flat's bill
+    expect(nov.entries[0].createdBy).toBe(ids.Nafis);
+    expect(await removeEntry(db, flatId, as('Tahsin'), nov.entries[0].id)).toBe(false);
   });
 
   it('a monthly bill for some people drops whoever left, and skips the bill if nobody is left', async () => {
@@ -181,7 +184,7 @@ describe('money storage', { timeout: 30000 }, () => {
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 50000, note: 'AC', split: 'selected', selected: [ids.Tahsin, ids.Zarif], repeat: true }));
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 30000, note: 'Gym', split: 'selected', selected: [ids.Zarif], repeat: true }));
     await db(`update members set left_on = '2026-10-31' where id = $1`, [ids.Zarif]);
-    const nov = await loadMonth(db, flatId, '2026-11-01', '2026-11-03', ids.Nafis);
+    const nov = await loadMonth(db, flatId, '2026-11-01', '2026-11-03');
     expect(nov.entries.map(x => [x.note, x.selected])).toEqual([['AC', [ids.Tahsin]]]);
   });
 
@@ -196,19 +199,19 @@ describe('money storage', { timeout: 30000 }, () => {
   });
 
   it('opening a month is all or nothing: a failure leaves no month, and the retry copies every bill once', async () => {
-    const { flatId, ids, nafis } = await flat();
+    const { flatId, nafis } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 120000, note: 'Wi-Fi', split: 'equal', repeat: true }));
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 2000000, note: 'Rent', split: 'equal', repeat: true }));
     // make the second bill's insert fail once
     await db(`create or replace function boom() returns trigger language plpgsql as $$ begin
       if new.note = 'Rent' then raise exception 'boom'; end if; return new; end $$`);
     await db(`create trigger boom before insert on ledger for each row execute function boom()`);
-    await expect(openMonth(db, flatId, '2026-12-01', ids.Nafis)).rejects.toThrow(/boom/);
+    await expect(openMonth(db, flatId, '2026-12-01')).rejects.toThrow(/boom/);
     expect(await db(`select 1 from months where flat_id = $1 and month = '2026-12-01'`, [flatId])).toEqual([]);
     await db(`drop trigger boom on ledger`);
-    await openMonth(db, flatId, '2026-12-01', ids.Nafis);
-    await openMonth(db, flatId, '2026-12-01', ids.Nafis);
-    const dec = await loadMonth(db, flatId, '2026-12-01', '2026-12-02', ids.Nafis);
+    await openMonth(db, flatId, '2026-12-01');
+    await openMonth(db, flatId, '2026-12-01');
+    const dec = await loadMonth(db, flatId, '2026-12-01', '2026-12-02');
     expect(dec.entries.map(x => x.note).sort()).toEqual(['Rent', 'Wi-Fi']);
   });
 
@@ -218,7 +221,7 @@ describe('money storage', { timeout: 30000 }, () => {
     await noCooking(db, flatId, ids.Nafis, '2026-10-10', '2026-10-10', ['b', 'l', 'd'], '2026-10-09');
     await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 100000 }));
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 93000, note: 'Rent', split: 'equal' }));
-    const at12 = () => loadMonth(db, flatId, OCT, '2026-10-12', ids.Nafis);
+    const at12 = () => loadMonth(db, flatId, OCT, '2026-10-12');
     const before = await at12();
     expect(await bringBack(db, flatId, ids.Nafis, ids.Zarif, '2026-10-12', editFrom('2026-10-12'))).toBe('ok');
     const after = await at12();
@@ -228,5 +231,23 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(share(before, ids.Zarif)).toBe(10628);                  // 8 of 70 days lived here (31 + 31 + 8)
     expect(share(after, ids.Zarif)).toBe(share(after, ids.Nafis)); // back for the whole month: rent for the gap days too
     expect(after.result.lines.some(l => l.memberId === ids.Zarif && l.amount === share(after, ids.Zarif))).toBe(true);   // shown by name in the breakdown
+  });
+
+  it('paying back someone who moved out counts at once: they can no longer sign in to confirm', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await db(`update members set left_on = '2026-10-08' where id = $1`, [ids.Zarif]);   // before today, so gone
+    expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 120000, memberId: ids.Zarif, date: '2026-10-09' }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 50000, memberId: ids.Tahsin }))).toBe('ok');
+    const { entries } = await month();
+    expect(entries.map(x => [x.memberId, x.status]).sort()).toEqual([[ids.Tahsin, 'pending'], [ids.Zarif, 'ok']].sort());
+  });
+
+  it('stopping a monthly bill is written to the history', async () => {
+    const { flatId, nafis } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 120000, note: 'Wi-Fi', split: 'equal', repeat: true }));
+    const [t] = await db<{ id: string }>(`select id from bill_templates where flat_id = $1`, [flatId]);
+    expect(await stopRepeat(db, flatId, nafis, t.id)).toBe(true);
+    const [h] = await db<{ name: string }>(`select before->>'name' as name from audit_log where entity = 'bill_templates' and entity_id = $1`, [t.id]);
+    expect(h.name).toBe('Wi-Fi');
   });
 });

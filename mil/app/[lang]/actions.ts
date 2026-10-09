@@ -9,7 +9,7 @@ import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
-import { addEntry, addRoom, confirmEntry, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
+import { addEntry, addRoom, confirmEntry, monthOf, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -326,7 +326,8 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
   const type = pick(TYPES, str(d, 'type')), amount = toPoisha(str(d, 'amount')), date = str(d, 'date'), today = todayDhaka();
   if (!type) return { error: x.errors.bad };
   if (amount === null) return { error: x.errors.amount };
-  if (!isDate(date) || date < editFrom(today) || date > today) return { error: x.errors.date };
+  // this month only: last month's numbers change only through Plan 6's dated corrections
+  if (!isDate(date) || date < monthOf(today) || date > today) return { error: x.errors.date };
   const note = str(d, 'note').trim().slice(0, 100) || null, who = str(d, 'who');
   const split = type === 'bill' ? pick(SPLITS, str(d, 'split')) : null, selected = d.getAll('people').map(String);
   if (type === 'bill' && !split) return { error: x.errors.bad };
@@ -357,7 +358,7 @@ export async function removeAction(d: FormData) {
 }
 
 /** Rent typed in taka; 0 is allowed (a room that pays no rent). */
-const rentOf = (v: string) => (v.trim() === '0' ? 0 : toPoisha(v));
+const rentOf = (v: string) => (v.trim() !== '' && Number(v.trim()) === 0 ? 0 : toPoisha(v));
 
 export async function addRoomAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
