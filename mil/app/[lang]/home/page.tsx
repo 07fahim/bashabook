@@ -6,7 +6,8 @@ import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka } from 
 import { listMembers } from '@/lib/auth';
 import { countAtLock, loadMeals } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
-import { logoutAction } from '../actions';
+import { ActionForm } from '../action-form';
+import { changePinAction, logoutAction, phoneAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtTime } from '../format';
 import { Header } from '../header';
@@ -15,7 +16,7 @@ import { MealRow } from '../meal-row';
 import { Nav } from '../nav';
 import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
-import { focus, link, PageSkeleton } from '../ui';
+import { Field, Fold, focus, link, PageSkeleton, PinField, primary } from '../ui';
 
 export default function Home({ params }: PageProps<'/[lang]/home'>) {
   return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} /></Suspense>;
@@ -86,6 +87,35 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
         <div className="mt-10 hidden md:block">
           <h2 className="mb-4 text-2xl font-bold">{m.weekTitle}</h2>
           <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={note} {...meals} />
+        </div>
+        <div className="mt-10 grid gap-x-6 md:grid-cols-2 md:items-start">
+          <Fold title={a.flatmates}>
+            <ul className="mt-2 divide-y divide-line">
+              {people.map(p => (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-2">
+                  <span>{p.name}</span>
+                  {p.phone ? <a href={`tel:${p.phone}`} aria-label={`${a.call} ${p.name}`} className={`inline-flex min-h-11 items-center tabular-nums ${link}`}>{p.phone}</a>
+                    : <span className="text-[15px] text-muted">{a.noPhone}</span>}
+                </li>
+              ))}
+            </ul>
+          </Fold>
+          <Fold title={a.myAccount}>
+            <ActionForm action={phoneAction} className="mt-4">
+              <input type="hidden" name="lang" value={lang} />
+              <Field label={a.phone} hint={a.phoneHint} name="phone" type="tel" inputMode="tel" autoComplete="tel"
+                defaultValue={people.find(p => p.id === me.memberId)?.phone ?? ''} />
+              <button className={primary}>{a.save}</button>
+            </ActionForm>
+            <h3 className="mt-8 font-semibold">{a.changePin}</h3>
+            <ActionForm action={changePinAction} className="mt-3">
+              <input type="hidden" name="lang" value={lang} />
+              <PinField label={a.currentPin} name="pin" autoComplete="current-password" />
+              <PinField label={a.newPin} name="newPin" autoComplete="new-password" />
+              <PinField label={a.newPinAgain} name="pin2" autoComplete="new-password" />
+              <button className={primary}>{a.changePin}</button>
+            </ActionForm>
+          </Fold>
         </div>
         <form action={logoutAction} className="mt-8">
           <input type="hidden" name="lang" value={lang} />

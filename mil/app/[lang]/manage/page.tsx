@@ -7,7 +7,7 @@ import { addDays, countChanges, editFrom, headcount, indexChanges, isDate, isLoc
 import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, resetPinAction, settingsAction } from '../actions';
+import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, renameAction, resetPinAction, settingsAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtTime } from '../format';
 import { DateField } from '../date-field';
@@ -190,8 +190,18 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                         {!x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
                       </span>
                     </div>
+                    {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
+                    <details className="mt-1">
+                      <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.rename}</summary>
+                      <ActionForm action={renameAction} className="mt-3">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="memberId" value={x.id} />
+                        <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" defaultValue={x.name} />
+                        <button className={primary}>{a.save}</button>
+                      </ActionForm>
+                    </details>
                     {x.claimed && x.id !== me.memberId && (
-                      <details className="mt-2">
+                      <details className="mt-1">
                         <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
                         <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
                         <ActionForm action={resetPinAction} className="mt-3">
