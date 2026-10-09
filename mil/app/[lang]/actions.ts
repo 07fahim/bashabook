@@ -219,7 +219,8 @@ export async function noCookCancelAction(d: FormData) {
   const me = await requireManager(langOf(d));
   await seedLock(db, me.flatId, nowDhaka());
   const date = str(d, 'date'), meals = str(d, 'meals').split(',').filter(isMeal);
-  if (editable(date) && meals.length) await cookAgain(db, me.flatId, me.memberId, date, date, meals, date);
+  // today or later, as the screen offers: a past day was already cooked (or not), and un-blocking it would rewrite everyone's meals
+  if (editable(date) && date >= todayDhaka() && meals.length) await cookAgain(db, me.flatId, me.memberId, date, date, meals, date);
   refresh();
 }
 

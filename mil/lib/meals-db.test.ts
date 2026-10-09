@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { addMember, createFlat } from './auth';
+import { addMember, bringBack, createFlat } from './auth';
 import { countChanges, headcount, indexChanges, mealCount, type Meal } from './meals';
 import {
   addGuests, cancelAway, countAtLock, currentPlates, removeGuests, setOwn, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, seedLock, setAway, setDefaults, toldCook, upcomingAway, updateSettings,
@@ -430,5 +430,26 @@ describe('meal storage', { timeout: 30000 }, () => {
     await seedLock(db, flatId, '2026-10-09T22:30');                                   // before the new lock: nothing saved
     expect(await lock()).toBeNull();
   });
-});
 
+  it('bringing someone back after the lock shows on the plates card as a change after the lock', async () => {
+    const { flatId, memberId, tahsin, load } = await flat();
+    await db(`update members set left_on = '2026-10-05' where id = $1`, [tahsin]);
+    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
+    await seedLock(db, flatId, '2026-10-09T22:05');                                  // the action runs this first
+    expect(await bringBack(db, flatId, memberId, tahsin, '2026-10-09', '2026-09-01')).toBe('ok');
+    expect(countChanges(await countAtLock(db, flatId, '2026-10-10', await hc(), LATE), await hc()))
+      .toEqual(['b', 'l', 'd'].map(meal => ({ meal, from: 1, to: 2 })));
+  });
+
+  it('no cooking in the gap: the day stays at no meals; cancelling today’s no cooking gives everyone living here today their meal', async () => {
+    const { flatId, memberId, tahsin, count } = await flat();
+    await db(`update members set left_on = '2026-10-08' where id = $1`, [tahsin]);
+    await noCooking(db, flatId, memberId, '2026-10-10', '2026-10-10', ['d'], '2026-10-10');
+    await noCooking(db, flatId, memberId, '2026-10-12', '2026-10-12', ['d'], '2026-10-12');
+    expect(await bringBack(db, flatId, memberId, tahsin, '2026-10-12', '2026-09-01')).toBe('ok');   // back on the 12th
+    expect(await count('2026-10-10', 'd')).toBe(0);    // a past day in the gap: no meals, and only today or later can be un-blocked
+    await cookAgain(db, flatId, memberId, '2026-10-12', '2026-10-12', ['d'], '2026-10-12');   // as the action calls it for today
+    expect(await count('2026-10-12', 'd')).toBe(1);    // living here today, the cook cooks today: Tahsin eats like everyone
+    expect(await count('2026-10-10', 'd')).toBe(0);
+  });
+});
