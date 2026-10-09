@@ -7,7 +7,9 @@ import { listMembers } from '@/lib/auth';
 import { countAtLock, loadMeals } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { changePinAction, logoutAction, phoneAction } from '../actions';
+import { changePinAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
+import { Avatar } from '../avatar';
+import { PhotoPicker } from '../photo-picker';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtTime } from '../format';
 import { Header } from '../header';
@@ -31,7 +33,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const [meals, people] = await Promise.all([loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId)]);
   const someoneMissing = people.some(p => !p.claimed);
-  const myPhone = people.find(p => p.id === me.memberId)?.phone ?? '';   // the invite card only matters while someone hasn't joined
+  const self = people.find(p => p.id === me.memberId), myPhone = self?.phone ?? '';   // the invite card only matters while someone hasn't joined
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
   const decision = decide(tomorrow);
   const starter = meals.members.find(x => x.role === 'manager');
@@ -45,7 +47,10 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
       <Header t={t} lang={lang} path="/home"><Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <p className="text-muted">{me.flatName}</p>
-        <h1 className="font-display text-3xl font-bold">{a.hi}, {me.name}</h1>
+        <div className="flex items-center gap-3">
+          <Avatar id={me.memberId} name={me.name} v={self?.photoV ?? null} size={48} />
+          <h1 className="font-display text-3xl font-bold">{a.hi}, {me.name}</h1>
+        </div>
         <div className="mt-8 grid gap-6 md:grid-cols-2 md:items-start lg:grid-cols-3">
           <section className="rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{m.tomorrow} · {fmtDay(tomorrow, lang)}</h2>
@@ -94,7 +99,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             <ul className="mt-2 divide-y divide-line">
               {people.map(p => (
                 <li key={p.id} className="flex items-center justify-between gap-3 py-2">
-                  <span>{p.name}{p.id === me.memberId && <span className="text-muted"> · {a.you}</span>}</span>
+                  <span className="flex items-center gap-3"><Avatar id={p.id} name={p.name} v={p.photoV} size={32} />{p.name}{p.id === me.memberId && <span className="text-muted"> · {a.you}</span>}</span>
                   {p.phone ? <a href={`tel:${p.phone}`} aria-label={`${a.call} ${p.name}`} className={`inline-flex min-h-11 items-center tabular-nums ${link}`}>{p.phone}</a>
                     : <span className="text-[15px] text-muted">{a.noPhone}</span>}
                 </li>
@@ -102,7 +107,27 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             </ul>
           </Fold>
           <Fold title={a.myAccount}>
-            <ActionForm action={phoneAction} className="mt-4">
+            <div className="mt-4 flex items-center gap-4">
+              <Avatar id={me.memberId} name={me.name} v={self?.photoV ?? null} size={64} />
+              <div className="flex-1">
+                {/* two separate forms: the upload form handles its own submit, so removing can't go through it */}
+                <div className="flex flex-wrap items-start gap-x-4">
+                  <ActionForm action={photoAction}>
+                    <input type="hidden" name="lang" value={lang} />
+                    <PhotoPicker label={self?.photoV != null ? a.changePhoto : a.addPhoto} />
+                  </ActionForm>
+                  {self?.photoV != null && (
+                    <form action={removePhotoAction}>
+                      <input type="hidden" name="lang" value={lang} />
+                      <input type="hidden" name="memberId" value={me.memberId} />
+                      <button className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.removePhoto}</button>
+                    </form>
+                  )}
+                </div>
+                <p className="text-[15px] text-muted">{a.photoHint}</p>
+              </div>
+            </div>
+            <ActionForm action={phoneAction} className="mt-6 border-t border-line pt-6">
               <input type="hidden" name="lang" value={lang} />
               {/* keyed on the saved number, so after a save the field shows it as stored (01712345678) */}
               <Field key={myPhone} label={a.phone} hint={a.phoneHint} name="phone" type="tel" inputMode="tel" autoComplete="tel" defaultValue={myPhone} className="sm:max-w-xs" />

@@ -21,6 +21,12 @@ export async function endSession() {
 /** This phone's session token (for keeping it signed in when my PIN changes). */
 export const currentToken = async () => (await cookies()).get(COOKIE)?.value ?? '';
 
+/** The signed-in member, or null (for routes that answer 404 instead of redirecting). */
+export async function currentMember() {
+  const token = (await cookies()).get(COOKIE)?.value;
+  return token ? memberBySession(db, token) : null;
+}
+
 /** The logged-in member. flatId comes only from here, never from the URL or a form. */
 export async function requireMember(lang: string) {
   const token = (await cookies()).get(COOKIE)?.value;
