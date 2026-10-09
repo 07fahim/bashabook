@@ -7,13 +7,14 @@ import { foodSplit } from '@/lib/money';
 import { loadMonth, monthOf, toConfirm, type Entry } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { entryAction, removeAction } from '../actions';
+import { entryAction, putBackAction, removeAction } from '../actions';
 import { DateField } from '../date-field';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { fmtDay, fmtMonth, fmtTaka } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
-import { checkChip, field, Field, Fold, focus, link, PageSkeleton, primary } from '../ui';
+import { PayerSelect } from '../payer-select';
+import { checkChip, Field, Fold, focus, link, PageSkeleton, primary, secondary } from '../ui';
 import { balanceText, ConfirmList } from './bits';
 
 export default function Money({ params, searchParams }: PageProps<'/[lang]/money'>) {
@@ -73,13 +74,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
     <DateField lang={lang} label={x.date} name="date" required min={monthOf(today)} max={today} defaultValue={today} />
   </>);
   const whoPaid = (label: string) => (
-    <label className="block font-semibold">
-      {label}
-      <select name="who" defaultValue={boss ? 'fund' : me.memberId} className={field}>
-        <option value="fund">{x.flatMoney.replace('{name}', collector.name)}</option>
-        {mo.members.filter(p => p.id !== collector.id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
-    </label>
+    <PayerSelect label={label} fundLabel={x.flatMoney.replace('{name}', collector.name)} today={today} initial={boss ? 'fund' : me.memberId}
+      people={mo.members.filter(p => p.id !== collector.id).map(p => ({ id: p.id, name: p.name, joinedOn: p.joinedOn, leftOn: p.leftOn }))} />
   );
   const balance = r && balanceText(x, r.balance);
 
@@ -210,7 +206,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   <h3 className="mt-4 text-[15px] font-semibold text-muted">{fmtDay(d, lang)}</h3>
                   <ul className="divide-y divide-line">
                     {shown.filter(e => e.date === d).map(e => (
-                      <li key={e.id} className="flex items-start justify-between gap-x-3 py-3">
+                      <li key={e.id} className="group py-3">
+                        <div className="flex items-start justify-between gap-x-3">
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold">{x.types[e.type]} · {who(e)}</p>
                           {e.note && <p className="text-[15px]">{e.note}</p>}
@@ -222,13 +219,19 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="font-bold tabular-nums">{fmtTaka(e.amount)}</span>
                           {(boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
-                            <form action={removeAction}>
-                              <input type="hidden" name="lang" value={lang} />
-                              <input type="hidden" name="id" value={e.id} />
-                              <button aria-label={`${x.remove}: ${x.types[e.type]} ${fmtTaka(e.amount)}`} className={`min-h-11 px-2 ${link}`}>{x.remove}</button>
-                            </form>
+                            <details>
+                              <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtTaka(e.amount)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
+                            </details>
                           )}
                         </div>
+                        </div>
+                        {/* shown only while this entry's Remove fold is open: a second, deliberate tap */}
+                        <form action={removeAction} className="mt-2 hidden flex-wrap items-center justify-end gap-3 group-has-[details[open]]:flex">
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="id" value={e.id} />
+                          <span>{x.confirmRemove.replace('{what}', `${x.types[e.type]} ${fmtTaka(e.amount)}`)}</span>
+                          <button className={`${secondary} w-auto`}>{x.yesRemove}</button>
+                        </form>
                       </li>
                     ))}
                   </ul>
@@ -237,10 +240,19 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             </ul>
             {!mine && mo.removed.length > 0 && (
               <ul className="mt-4 divide-y divide-line border-t border-line text-[15px] text-muted">
-                {mo.removed.map((rm, i) => (
-                  <li key={i} className="flex justify-between gap-4 py-2">
-                    <span>{x.types[rm.type]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {x.removedBy.replace('{name}', rm.by)}</span>
-                    <s className="tabular-nums">{fmtTaka(rm.amount)}</s>
+                {mo.removed.map(rm => (
+                  <li key={rm.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
+                    <span className="min-w-0 flex-1">{x.types[rm.type]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {x.removedBy.replace('{name}', rm.by)}</span>
+                    <span className="flex items-center gap-2">
+                      <s className="tabular-nums">{fmtTaka(rm.amount)}</s>
+                      {month === thisMonth && (boss || rm.byId === me.memberId) && (
+                        <form action={putBackAction}>
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="id" value={rm.id} />
+                          <button aria-label={`${x.putBack}: ${x.types[rm.type]} ${fmtTaka(rm.amount)}`} className={`min-h-11 px-2 ${link}`}>{x.putBack}</button>
+                        </form>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>

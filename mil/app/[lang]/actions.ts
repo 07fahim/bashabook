@@ -9,7 +9,7 @@ import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
-import { addEntry, addRoom, confirmEntry, monthOf, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
+import { addEntry, addRoom, confirmEntry, monthOf, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -386,5 +386,11 @@ export async function setRoomAction(d: FormData) {
 export async function stopRepeatAction(d: FormData) {
   const me = await requireManager(langOf(d)), id = str(d, 'id');
   if (UUID.test(id)) await stopRepeat(db, me.flatId, me, id);
+  refresh();
+}
+
+export async function putBackAction(d: FormData) {
+  const me = await requireMember(langOf(d)), id = str(d, 'id');
+  if (UUID.test(id)) await putBack(db, me.flatId, me.memberId, id, todayDhaka());   // the rules live in putBack
   refresh();
 }
