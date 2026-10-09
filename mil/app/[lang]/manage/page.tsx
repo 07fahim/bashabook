@@ -225,6 +225,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                         {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
                       </span>
                     </div>
+                    {sp.back === x.id && <p role="status" className="mt-1 font-semibold text-leaf">{a.broughtBack}</p>}
                     {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
                     {/* the member's actions sit on one line; an opened one takes the full width below */}
                     <div className="flex flex-wrap items-start gap-x-6">
