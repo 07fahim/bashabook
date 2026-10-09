@@ -44,13 +44,14 @@ export function Fold({ id, title, lead, level = 2, open, children }: { id?: stri
 /** A list that can grow long. Wider screens: every row, scrolling inside the card so the card's title and the page around
  *  it stay put. Phones (a scroll box inside a scrolling page is a trap there): the first `keep` rows, then Show all.
  *  `fill`: on wider screens the box takes exactly the height left in a stretched card, so the card ends level with the
- *  column beside it; the absolute box adds no height of its own (24rem at least). Otherwise it stops at 70% of the screen.
+ *  column beside it; the absolute box adds no height of its own (24rem at least). `short`: about three rows, for a list
+ *  that sits above a page's main content. Otherwise it stops at 70% of the screen.
  *  No tabIndex: browsers make a scroll box keyboard-focusable themselves, and on phones nothing here scrolls. */
-export function LongList({ items, keep, label, more, less, fill }: { items: ReactNode[]; keep: number; label: string; more: string; less: string; fill?: boolean }) {
+export function LongList({ items, keep, label, more, less, fill, short }: { items: ReactNode[]; keep: number; label: string; more: string; less: string; fill?: boolean; short?: boolean }) {
   const list = 'divide-y divide-line';
   return (
     <div className={fill ? 'mt-3 md:relative md:min-h-96 md:flex-1' : 'mt-3'}>
-      <div role="group" aria-label={label} className={`md:overflow-y-auto md:pr-3 md:[scrollbar-width:thin] ${fill ? 'md:absolute md:inset-0' : 'md:max-h-[70vh]'}`}>
+      <div role="group" aria-label={label} className={`md:overflow-y-auto md:pr-3 md:[scrollbar-width:thin] ${fill ? 'md:absolute md:inset-0' : short ? 'md:max-h-64' : 'md:max-h-[70vh]'}`}>
         <ul className={list}>{items.slice(0, keep)}</ul>
         {items.length > keep && (<>
           {/* between the first rows and the rest: one order for eyes, keyboards and screen readers (peer-open needs it first) */}
