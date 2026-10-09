@@ -15,7 +15,7 @@ export function MealRow({ lang, m, meId, date, decision, members, changes, noCoo
   const idx = indexChanges(changes);
   const closed = decision === 'closed' || !isPresent(self, date);
   return (
-    <div className="mt-3 grid grid-cols-3 gap-2">
+    <div className="mt-3 grid grid-cols-3 gap-2 md:mt-0">
       {MEALS.map(meal => {
         const late = changes.some(c => c.memberId === meId && c.date === date && c.meal === meal && c.late);
         const count = mealCount(self, idx, date, meal);

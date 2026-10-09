@@ -63,19 +63,19 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
       <Header t={t} lang={lang} path="/meals" />
       <Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} />
       <main className="mx-auto max-w-md px-5 pb-28 md:max-w-5xl md:pb-16">
-        <div className="md:grid md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:items-start md:gap-10">
+        <h1 className="font-display text-3xl font-bold">{m.weekTitle}</h1>
+        <p className="mt-2 text-muted">{m.weekLead}</p>
+        <div className="mt-6 md:grid md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:items-start md:gap-10">
           <div>
-            <h1 className="font-display text-3xl font-bold">{m.weekTitle}</h1>
-            <p className="mt-2 text-muted">{m.weekLead}</p>
-            <ul className="mt-6 mb-8 space-y-6">
+            <ul className="mb-8 space-y-6 md:space-y-0 md:divide-y md:divide-line md:rounded-2xl md:border md:border-line md:bg-surface md:px-5">
               {week.map((date, i) => (
-                <li key={date}>
+                <li key={date} className="md:grid md:grid-cols-[11rem_1fr] md:items-center md:gap-x-4 md:py-3">
                   <p className="font-semibold">
                     {i === 0 ? `${m.today} · ` : i === 1 ? `${m.tomorrow} · ` : ''}{fmtDay(date, lang)}
                   </p>
                   <MealRow lang={lang} m={m} meId={me.memberId} date={date} decision={decide(date)} {...meals} />
                   {i === 0 && (
-                    <p className="mt-2 text-[15px] text-muted">
+                    <p className="mt-2 text-[15px] text-muted md:col-start-2">
                       {starter?.id === me.memberId ? m.todayLockedSelf : m.todayLocked.replace('{name}', starter?.name ?? '')}
                     </p>
                   )}
@@ -83,7 +83,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
               ))}
             </ul>
           </div>
-          <div className="md:pt-2">
+          <div className="[&>:first-child]:mt-0">
             <Fold title={m.guestTitle} lead={m.guestLead}>
               <ActionForm action={guestAction} className="mt-4">
                 <input type="hidden" name="lang" value={lang} />

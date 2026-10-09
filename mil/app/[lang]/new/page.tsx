@@ -16,8 +16,20 @@ export default async function NewFlat({ params }: PageProps<'/[lang]/new'>) {
         <div>
           <h1 className="font-display text-3xl font-bold md:text-4xl">{a.newTitle}</h1>
           <p className="mt-2 text-lg text-muted">{a.newLead}</p>
+          {/* desktop only: fills the side next to the long form */}
+          <div className="mt-12 hidden md:block">
+            <h2 className="text-xl font-bold">{t.trust.title}</h2>
+            <dl className="mt-4 divide-y divide-line border-y border-line">
+              {t.trust.points.map(([what, how]) => (
+                <div key={what} className="py-4">
+                  <dt className="font-semibold">{what}</dt>
+                  <dd className="mt-1 text-muted">{how}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         </div>
-        <ActionForm action={createFlatAction} className="mt-8 md:mt-0">
+        <ActionForm action={createFlatAction} className="mt-8 md:mt-0 md:rounded-2xl md:border md:border-line md:bg-surface md:p-8">
           <input type="hidden" name="lang" value={lang} />
           <Field label={a.flatName} name="flatName" hint={a.flatNameHint} required maxLength={40} />
           <Field label={a.yourName} name="name" required maxLength={40} autoComplete="given-name" />
