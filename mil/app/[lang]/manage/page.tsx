@@ -51,7 +51,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   return (
     <>
       <Header t={t} lang={lang} path="/manage"><Nav t={t} lang={lang} current="manage" showFlat /></Header>
-      <main className="mx-auto max-w-md px-5 pb-28 md:max-w-5xl md:pb-16">
+      <div className="md:pl-60">
+      <main className="mx-auto max-w-md px-5 pb-28 md:max-w-6xl md:px-10 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>
 
         <div className="md:grid md:grid-cols-2 md:items-start md:gap-10">
@@ -213,6 +214,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </div>
         </div>
       </main>
+      </div>
     </>
   );
 }

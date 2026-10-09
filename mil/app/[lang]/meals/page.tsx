@@ -61,7 +61,8 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   return (
     <>
       <Header t={t} lang={lang} path="/meals"><Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} /></Header>
-      <main className="mx-auto max-w-md px-5 pb-28 md:max-w-5xl md:pb-16">
+      <div className="md:pl-60">
+      <main className="mx-auto max-w-md px-5 pb-28 md:max-w-6xl md:px-10 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{m.weekTitle}</h1>
         <p className="mt-2 text-muted">{m.weekLead}</p>
         <div className="mt-6 md:grid md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:items-start md:gap-10">
@@ -177,6 +178,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           </div>
         </div>
       </main>
+      </div>
     </>
   );
 }
