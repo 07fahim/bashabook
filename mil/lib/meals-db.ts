@@ -276,6 +276,7 @@ export async function countAtLock(db: Db, flatId: string, date: string, hc: Reco
  *  count as the baseline before the change, so the change shows on the cards even if nobody looked after the lock. */
 export async function seedLock(db: Db, flatId: string, now: string) {
   const tomorrow = addDays(now.slice(0, 10), 1);
-  const { flat, members, changes } = await loadMeals(db, flatId, tomorrow, tomorrow);
-  if (isLocked(tomorrow, now, flat.cutoff)) await countAtLock(db, flatId, tomorrow, headcount(members, changes, tomorrow));
+  if (!isLocked(tomorrow, now, (await mealRules(db, flatId)).cutoff)) return;   // most taps: one query, nothing saved
+  const { members, changes } = await loadMeals(db, flatId, tomorrow, tomorrow);
+  await countAtLock(db, flatId, tomorrow, headcount(members, changes, tomorrow));
 }
