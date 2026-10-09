@@ -3,9 +3,11 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { flatByCode } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { todayDhaka } from '@/lib/meals';
 import { ActionForm } from '../../action-form';
 import { loginAction } from '../../actions';
 import { getDictionary, hasLocale } from '../../dictionaries';
+import { fmtDay } from '../../format';
 import { Header } from '../../header';
 import { focus, link, PinField, primary, PageSkeleton } from '../../ui';
 
@@ -47,7 +49,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
                 <li key={x.id}>
                   <Link href={`/${lang}/j/${code}?m=${x.id}`} className={`flex min-h-14 items-center justify-between gap-4 rounded-xl border border-line bg-surface px-5 text-lg font-semibold ${focus}`}>
                     {x.name}
-                    {!x.claimed && <span className="text-[15px] font-normal text-muted">{a.newBadge}</span>}
+                    {!x.claimed && <span className="text-[15px] font-normal text-muted">{x.joinedOn > todayDhaka() ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : a.newBadge}</span>}
                   </Link>
                 </li>
               ))}

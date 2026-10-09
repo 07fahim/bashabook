@@ -32,8 +32,8 @@ export async function createFlat(db: Db, f: { flatName: string; name: string; pi
 export async function flatByCode(db: Db, code: string) {
   const [flat] = await db<{ id: string; name: string }>(`select id, name from flats where join_code = $1`, [code.toUpperCase()]);
   if (!flat) return null;
-  const members = await db<{ id: string; name: string; claimed: boolean; must_change_pin: boolean }>(
-    `select id, name, pin_hash is not null as claimed, must_change_pin from members where flat_id = $1 and ${STAYING} order by name`, [flat.id]);
+  const members = await db<{ id: string; name: string; claimed: boolean; must_change_pin: boolean; joinedOn: string }>(
+    `select id, name, pin_hash is not null as claimed, must_change_pin, joined_on::text as "joinedOn" from members where flat_id = $1 and ${STAYING} order by name`, [flat.id]);
   return { ...flat, members };
 }
 
