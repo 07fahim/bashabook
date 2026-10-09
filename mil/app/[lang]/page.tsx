@@ -52,20 +52,61 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           </ol>
         </section>
 
+        {/* Real moments from flat life, each with the bit of the app that handles it */}
+        <section className="border-t border-line py-14">
+          <h2 className={h2}>{t.uses.title}</h2>
+          <p className="mt-3 max-w-2xl text-lg text-muted">{t.uses.lead}</p>
+          <ul className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {t.uses.items.map(u => (
+              <li key={u.when} className="flex flex-col rounded-3xl border border-line bg-surface p-6">
+                <div className="rounded-2xl bg-paper px-4 py-5">
+                  <span className="inline-block rounded-full bg-turmeric px-4 py-1.5 text-[15px] font-semibold text-on-turmeric tabular-nums">{u.chip}</span>
+                </div>
+                <h3 className="mt-5 text-xl font-bold">{u.when}</h3>
+                <p className="mt-2 text-muted">{u.what}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section className="grid items-center gap-8 border-t border-line py-14 md:grid-cols-2">
           <div>
             <h2 className={h2}>{t.settleTitle}</h2>
-            <p className="mt-3 text-muted">{t.settleBody}</p>
+            <p className="mt-3 text-lg text-muted">{t.settleBody}</p>
           </div>
-          <figure className="rounded-3xl border border-line bg-surface">
-            <figcaption className="border-b border-line px-5 py-3 font-semibold">{t.chat.group}</figcaption>
-            <div className="flex items-end gap-2 p-5">
-              <Image src="/logo-mark.png" alt="" width={31} height={32} className="mb-7 shrink-0" />
+          {/* A group chat at month end: someone asks, BashaBook answers, someone replies. */}
+          <figure className="overflow-hidden rounded-3xl border border-line bg-surface">
+            <figcaption className="flex items-center gap-3 border-b border-line px-5 py-3 font-semibold">
+              <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-paper text-[15px]">4B</span>
+              {t.chat.group}
+            </figcaption>
+            <div className="space-y-4 bg-paper p-5">
               <div>
-                <p className="mb-1 text-[15px] text-muted">{t.chat.sender}</p>
-                <p className="rounded-2xl rounded-bl-sm bg-turmeric px-4 py-3 whitespace-pre-line text-on-turmeric">{t.settleMsg.join('\n')}</p>
-                <p className="mt-1 text-[15px] text-muted">{t.chat.time}</p>
+                <p className="mb-1 text-[15px] text-muted">{t.chat.askBy}</p>
+                <p className="inline-block rounded-2xl rounded-tl-sm border border-line bg-surface px-4 py-2">{t.chat.ask}</p>
               </div>
+              <div className="flex items-start gap-2">
+                <Image src="/logo-mark.png" alt="" width={31} height={32} className="mt-7 shrink-0" />
+                <div className="w-full max-w-xs">
+                  <p className="mb-1 text-[15px] text-muted">{t.chat.sender}</p>
+                  <div className="rounded-2xl rounded-tl-sm bg-turmeric px-4 py-3 text-on-turmeric">
+                    <p className="font-bold">{t.settleMsg[0]}</p>
+                    <ul className="mt-2 space-y-1 tabular-nums">
+                      {t.settleMsg.slice(1).map(line => {
+                        const at = line.indexOf('৳');
+                        return (
+                          <li key={line} className="flex justify-between gap-4">
+                            <span>{line.slice(0, at).trim()}</span>
+                            <span className="font-semibold">{line.slice(at)}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                  <p className="mt-1 text-[15px] text-muted">{t.chat.time}</p>
+                </div>
+              </div>
+              <p className="ml-auto w-fit rounded-2xl rounded-tr-sm bg-ink px-4 py-2 text-paper">{t.chat.reply}</p>
             </div>
           </figure>
         </section>
