@@ -457,8 +457,9 @@ describe('meal storage', { timeout: 30000 }, () => {
     // typed as timestamp, postgres.js reads '2026-10-09T21:00' in the server's time zone (six hours off in Dhaka);
     // typed as json, it encodes a string a second time. PGlite here does neither, so this guards the SQL itself.
     const { readFileSync, readdirSync } = await import('node:fs');
-    const bad = readdirSync('lib').filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'))
-      .flatMap(f => (readFileSync(`lib/${f}`, 'utf8').match(/[$][0-9]+::(timestamp|json)/g) ?? []).map(m => `${f}: ${m}`));
+    const files = ['lib', 'app'].flatMap(d => readdirSync(d, { recursive: true, encoding: 'utf8' }).map(f => `${d}/${f}`))
+      .filter(f => /[.]tsx?$/.test(f) && !f.endsWith('.test.ts'));
+    const bad = files.flatMap(f => (readFileSync(f, 'utf8').match(/[$][0-9]+[ ]*::[ ]*(timestamp|json)/g) ?? []).map(m => `${f}: ${m}`));
     expect(bad).toEqual([]);
   });
 });

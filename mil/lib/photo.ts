@@ -17,7 +17,7 @@ export function initials(name: string) {
   const letters = new Intl.Segmenter('bn', { granularity: 'grapheme' });
   return name.trim().split(/\s+/)
     .map(w => [...letters.segment(w)].find(g => /\p{L}/u.test(g.segment))?.segment)
-    .filter(Boolean).slice(0, 2).join('').toUpperCase();
+    .filter(Boolean).slice(0, 2).join('').toUpperCase() || [...letters.segment(name.trim())][0]?.segment || '?';   // no letters at all: its first sign
 }
 
 /** My photo; a new one bumps photo_v so phones fetch it again. False if it isn't a small JPEG. */

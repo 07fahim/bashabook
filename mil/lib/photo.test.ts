@@ -21,6 +21,7 @@ describe('photos', { timeout: 30000 }, () => {
     expect(initials('তাহসিন আহমেদ')).toBe('তাআ');   // a consonant with its vowel sign is one letter
     expect(initials('Zarif "Z"')).toBe('ZZ');         // quotes, brackets and digits are not initials
     expect(initials('(Rahim) 2 Khan')).toBe('RK');
+    expect(initials('42')).toBe('4');                   // no letters: never an empty circle
   });
 
   it('saves a small JPEG, shows its version in the members list, and refuses anything else', async () => {
