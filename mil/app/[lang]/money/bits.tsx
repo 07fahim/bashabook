@@ -2,7 +2,7 @@ import type { toConfirm } from '@/lib/money-db';
 import { confirmAction } from '../actions';
 import type { Dict, Locale } from '../dictionaries';
 import { fmtDay, fmtTaka } from '../format';
-import { secondary } from '../ui';
+import { LongList, secondary } from '../ui';
 
 /** 'You get back ৳380 so far' in leaf, 'You owe ৳210 so far' in chili. */
 export const balanceText = (x: Dict['money'], balance: number) =>
@@ -11,15 +11,15 @@ export const balanceText = (x: Dict['money'], balance: number) =>
   : { text: x.even, tone: '' };
 
 /** Money waiting for this person's tap: shown on Home, Money and the Flat tab until confirmed. */
-export function ConfirmList({ lang, x, items, collector }: {
-  lang: Locale; x: Dict['money']; items: Awaited<ReturnType<typeof toConfirm>>; collector: string;
+/** Pending money piles up if nobody taps: the first three, then Show all, so it never pushes a page down. */
+export function ConfirmList({ lang, x, a, items, collector }: {
+  lang: Locale; x: Dict['money']; a: Dict['app']; items: Awaited<ReturnType<typeof toConfirm>>; collector: string;
 }) {
   if (!items.length) return null;
   return (
     <section className="rounded-3xl border-2 border-turmeric bg-surface p-5">
       <h2 className="text-xl font-bold">{x.waitingTitle}</h2>
-      <ul className="mt-2 divide-y divide-line">
-        {items.map(w => (
+      <LongList label={x.waitingTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(w => (
           <li key={w.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
             <span>
               {(w.type === 'payout' ? x.confirmGot.replace('{name}', collector) : x.confirmDeposit.replace('{name}', w.name)).replace('{t}', fmtTaka(w.amount))}
@@ -31,8 +31,7 @@ export function ConfirmList({ lang, x, items, collector }: {
               <button className={`${secondary} md:w-auto`}>{w.type === 'payout' ? x.confirmYes : x.confirm}</button>
             </form>
           </li>
-        ))}
-      </ul>
+        ))} />
     </section>
   );
 }

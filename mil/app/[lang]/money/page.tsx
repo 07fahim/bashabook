@@ -100,7 +100,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           </span>
         </nav>
 
-        {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} x={x} items={waiting} collector={collector.name} /></div>}
+        {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={collector.name} /></div>}
 
         {/* desktop: my balance and the three forms on the left; the flat summary over the entries on the right, two thirds wide,
             so both sides grow downward together and no column leaves a hole */}
@@ -258,8 +258,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             {!mine && mo.removed.length > 0 && (
               <details className="mt-4 border-t border-line pt-2">
               <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.removedTitle.replace('{n}', String(mo.removed.length))}</summary>
-              <ul className="divide-y divide-line text-[15px] text-muted">
-                {mo.removed.map(rm => (
+              <div className="text-[15px] text-muted">
+              <LongList label={x.removedTitle.replace('{n}', String(mo.removed.length))} keep={5} more={t.app.showAll.replace('{n}', String(mo.removed.length))} less={t.app.showLess} items={mo.removed.map(rm => (
                   <li key={rm.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
                     <span className="min-w-0 flex-1">{x.types[rm.type]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {x.removedBy.replace('{name}', rm.by)}</span>
                     <span className="flex items-center gap-2">
@@ -273,8 +273,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       )}
                     </span>
                   </li>
-                ))}
-              </ul>
+                ))} />
+              </div>
               </details>
             )}
           </section>

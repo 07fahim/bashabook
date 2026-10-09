@@ -69,7 +69,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
         </div>
         {/* side by side the cards are one height, their buttons on one line; a lone card keeps half the row,
             not a button as wide as the screen */}
-        {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
+        {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
         <div className="mt-8 grid gap-6 md:grid-cols-2">
           {/* phones only: wider screens change tomorrow in the week chart, with the lock time above it */}
           <section className="rounded-3xl border border-line bg-surface p-5 md:hidden">

@@ -100,7 +100,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           <div>
             <h2 className={groupLabel}>{mn.groupMoney}</h2>
             <div className="mt-3">
-              {waiting.length ? <ConfirmList lang={lang} x={mn} items={waiting} collector={me.name} /> : <p className="text-muted">{mn.noPending}</p>}
+              {waiting.length ? <ConfirmList lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /> : <p className="text-muted">{mn.noPending}</p>}
             </div>
             {([['payout', mn.giveTitle, mn.giveLead, mn.to], ['deposit', mn.gotTitle, mn.gotLead, mn.from]] as const).map(([type, title, lead, label]) => (
               <Fold key={type} title={title} lead={lead} level={3}>
