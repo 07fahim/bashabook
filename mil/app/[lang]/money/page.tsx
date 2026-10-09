@@ -159,6 +159,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 </ActionForm>
               </Fold>
               <Fold title={x.iPaid} lead={boss ? x.iPaidLeadSelf : x.iPaidLead.replaceAll('{name}', collector.name)}>
+                {/* "I paid" only credits me; money paid for a friend must be recorded by the collector under the friend's name */}
+                {!boss && <p className="mt-2 font-semibold">{x.forSomeone.replaceAll('{name}', collector.name)}</p>}
                 <ActionForm action={entryAction} className="mt-4">
                   {hidden('deposit')}{amountDate}
                   <Field label={x.noteRef} name="note" maxLength={100} />
