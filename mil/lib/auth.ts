@@ -23,9 +23,9 @@ export async function createFlat(db: Db, f: { flatName: string; name: string; pi
   const [row] = await db<{ flat_id: string; member_id: string }>(
     `with f as (insert into flats (name, join_code, language) values ($1, $2, $7) returning id),
      m as (insert into members (flat_id, name, pin_hash, role, joined_on) select id, $3::text, $4::text, 'manager', $5::date from f returning id),
-     o as (insert into members (flat_id, name, joined_on) select f.id, n, $5::date from f, json_array_elements_text($6::json) n)
+     o as (insert into members (flat_id, name, joined_on) select f.id, n, $5::date from f, json_array_elements_text($6::text::json) n)
      select f.id as flat_id, m.id as member_id from f, m`,
-    [f.flatName, newJoinCode(), f.name, await hashPin(f.pin), f.today, others, f.lang]);
+    [f.flatName, newJoinCode(), f.name, await hashPin(f.pin), f.today, JSON.stringify(others), f.lang]);
   return { flatId: row.flat_id, memberId: row.member_id };
 }
 
@@ -180,7 +180,7 @@ export async function bringBack(db: Db, flatId: string, by: string, memberId: st
        -- with them living here, so it stands. Skip no-cooking days here if pilot flats find it wrong.
        fill as (insert into meal_changes (flat_id, member_id, date, meal, count)
          select $1::uuid, m.id, d::date, x, 0
-         from m, generate_series((m.left_on + 1)::timestamp, $3::timestamp, interval '1 day') d, unnest(array['b','l','d']) x
+         from m, generate_series((m.left_on + 1)::timestamp, $3::text::timestamp, interval '1 day') d, unnest(array['b','l','d']) x
          on conflict (member_id, date, meal) do update set count = 0, guests = 0, late = false, updated_at = now()),
        log as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
          select $1, 'members', $2::text, jsonb_build_object('back', jsonb_build_array((m.left_on + 1)::text, $3::text)), $4 from m join up using (id))

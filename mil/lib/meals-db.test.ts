@@ -452,4 +452,14 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await count('2026-10-12', 'd')).toBe(1);    // living here today, the cook cooks today: Tahsin eats like everyone
     expect(await count('2026-10-10', 'd')).toBe(0);
   });
+
+  it('sends times and JSON to Postgres as text, which postgres.js passes through untouched', async () => {
+    // typed as timestamp, postgres.js reads '2026-10-09T21:00' in the server's time zone (six hours off in Dhaka);
+    // typed as json, it encodes a string a second time. PGlite here does neither, so this guards the SQL itself.
+    const { readFileSync, readdirSync } = await import('node:fs');
+    const files = ['lib', 'app'].flatMap(d => readdirSync(d, { recursive: true, encoding: 'utf8' }).map(f => `${d}/${f}`))
+      .filter(f => /[.]tsx?$/.test(f) && !f.endsWith('.test.ts'));
+    const bad = files.flatMap(f => (readFileSync(f, 'utf8').match(/[$][0-9]+[ ]*::[ ]*(timestamp|json)/g) ?? []).map(m => `${f}: ${m}`));
+    expect(bad).toEqual([]);
+  });
 });

@@ -11,10 +11,13 @@ export function fromDataUrl(s: string) {
   return m ? Uint8Array.from(Buffer.from(m[1], 'base64')) : null;
 }
 
-/** 'Nafis Rahman' → 'NR', 'তাহসিন আহমেদ' → 'তাআ': the first letter of the first two words (a Bangla letter with its vowel sign counts as one). */
+/** 'Nafis Rahman' → 'NR', 'তাহসিন আহমেদ' → 'তাআ': the first letter of the first two words (a Bangla letter with its vowel sign
+ *  counts as one). Quotes, brackets and digits are skipped, so 'Zarif "Z"' is 'ZZ', not 'Z"'. */
 export function initials(name: string) {
   const letters = new Intl.Segmenter('bn', { granularity: 'grapheme' });
-  return name.trim().split(/\s+/).slice(0, 2).map(w => [...letters.segment(w)][0]?.segment ?? '').join('').toUpperCase();
+  return name.trim().split(/\s+/)
+    .map(w => [...letters.segment(w)].find(g => /\p{L}/u.test(g.segment))?.segment)
+    .filter(Boolean).slice(0, 2).join('').toUpperCase() || [...letters.segment(name.trim())][0]?.segment || '?';   // no letters at all: its first sign
 }
 
 /** My photo; a new one bumps photo_v so phones fetch it again. False if it isn't a small JPEG. */
