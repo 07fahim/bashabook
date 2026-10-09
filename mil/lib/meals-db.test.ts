@@ -339,9 +339,9 @@ describe('meal storage', { timeout: 30000 }, () => {
     const { flatId, tahsin, load } = await flat();
     const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-12'); };
     await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');
-    const base = await countAtLock(db, flatId, '2026-10-12', await hc());        // first view after the lock
+    await countAtLock(db, flatId, '2026-10-12', await hc());        // first view after the lock
     await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');            // deletes Tahsin's rows
-    expect(countChanges(base, await hc())).toEqual([{ meal: 'b', from: 1, to: 2 }, { meal: 'l', from: 1, to: 2 }, { meal: 'd', from: 1, to: 2 }]);
+    expect(countChanges(await countAtLock(db, flatId, '2026-10-12', await hc()), await hc())).toEqual([{ meal: 'b', from: 1, to: 2 }, { meal: 'l', from: 1, to: 2 }, { meal: 'd', from: 1, to: 2 }]);
     await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');               // back to what it was
     expect(countChanges(await countAtLock(db, flatId, '2026-10-12', await hc()), await hc())).toEqual([]);
   });
