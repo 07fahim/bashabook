@@ -114,9 +114,12 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
   if (to > addDays(from, 59)) return { error: m.errors.range };
   const first = addDays(await lastLocked(me.flatId), 1);
   if (from < first) return { error: m.errors.awayFrom.replace('{d}', fmtDay(first, lang)) };
-  await setAway(db, me.flatId, me.memberId, from, to);
+  const dropped = await setAway(db, me.flatId, me.memberId, from, to);
   refresh();
-  return { done: m.saved };
+  if (!dropped.length) return { done: m.saved };
+  // same shape as the guest list; dates hold commas, so items are split by semicolons
+  const list = dropped.map(g => `${fmtDay(g.date, lang)} · ${m.names[g.meal]} · ${g.guests === 1 ? m.guestOne : m.guestMany.replace('{n}', String(g.guests))}`).join('; ');
+  return { done: m.awayGuestsDropped.replace('{list}', list) };
 }
 
 export async function usualAction(_: FormState, d: FormData): Promise<FormState> {
