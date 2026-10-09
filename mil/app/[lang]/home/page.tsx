@@ -97,7 +97,11 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
         </div>
         {/* wider screens: the whole week at a glance, phones use the Meals tab */}
         <div className="mt-10 hidden md:block">
-          <h2 className="text-2xl font-bold">{m.weekTitle}</h2>
+          {/* other weeks live on the Meals tab, which has the arrows */}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6">
+            <h2 className="text-2xl font-bold">{m.weekTitle}</h2>
+            <Link href={`/${lang}/meals?week=1`} className={`inline-flex min-h-11 items-center gap-2 ${link}`}>{m.nextWeek} <span aria-hidden="true">→</span></Link>
+          </div>
           <div className="mb-4">{lockLine(true)}</div>
           <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={note} {...meals} />
         </div>
