@@ -2,7 +2,7 @@
 
 import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack } from '@/lib/auth';
+import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { addDays, editFrom, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
@@ -304,9 +304,11 @@ export async function bringBackAction(_: FormState, d: FormData): Promise<FormSt
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireManager(lang);
   await seedLock(db, me.flatId, nowDhaka());
-  const today = todayDhaka();
-  const r = await bringBack(db, me.flatId, me.memberId, str(d, 'memberId'), today, editFrom(today));
-  if (r !== 'ok') return { error: r === 'taken' ? a.errors.nameUsedSince : a.errors.notFound };
-  refresh();
-  return { done: a.broughtBack };
+  const today = todayDhaka(), id = str(d, 'memberId');
+  const r = await bringBack(db, me.flatId, me.memberId, id, today, editFrom(today));
+  if (r === 'taken') return { error: a.errors.nameUsedSince };
+  // a second phone pressing at the same moment finds them already back: that is the same good outcome, not an error
+  if (r === 'no' && !(await listMembers(db, me.flatId)).some(x => x.id === id && !x.leftOn)) return { error: a.errors.notFound };
+  // their Moved out row is gone after this, and its message with it, so the note shows under their name in the list
+  redirect(`/${lang}/manage?back=${id}`);
 }
