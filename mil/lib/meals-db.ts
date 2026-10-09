@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { Db } from './db';
-import { addDays, headcount, indexChanges, isLocked, isPresent, mealCount, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
+import { addDays, countChanges, headcount, indexChanges, isLocked, isPresent, mealCount, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
 
 export type FlatInfo = {
   name: string; cutoff: string; cookToken: string | null; lang: 'bn' | 'en'; weights: Record<Meal, number>;
@@ -270,13 +270,14 @@ export const loadNoCookDays = (db: Db, flatId: string, from: string) => db<{ dat
 /** Tomorrow's count as first seen after the lock time. The first call for `date` saves `hc`; later calls return the saved one,
  *  so comparing it with the live count catches every change after the lock, whatever caused it (deleted rows, new members).
  *  Called after the lock by the cards, and by every meal-changing action through `seedLock`. */
-export async function countAtLock(db: Db, flatId: string, date: string, hc: Record<Meal, number>) {
-  // one statement that always updates: under concurrency the CASE sees the row the other request just wrote.
-  // $3 goes in as text: typed as jsonb, postgres.js would JSON-encode the string a second time
+export async function countAtLock(db: Db, flatId: string, date: string, hc: Record<Meal, number>, now: string) {
+  // One statement: under concurrency the CASE sees the row the other request just wrote, and the lock check reads the
+  // flat's current lock time, so a lock time saved at the same moment is never missed. Not locked yet: no baseline, `hc` back.
+  // $3 goes in as text: typed as jsonb, postgres.js would JSON-encode the string a second time.
   const [r] = await db<{ c: Record<Meal, number> }>(
     `update flats set lock_count = case when lock_date is distinct from $2::date then $3::text::jsonb else lock_count end, lock_date = $2::date
-     where id = $1 returning lock_count as c`, [flatId, date, JSON.stringify(hc)]);
-  return r.c;
+     where id = $1 and $4::timestamp >= ($2::date - 1) + cutoff_time returning lock_count as c`, [flatId, date, JSON.stringify(hc), now]);
+  return r?.c ?? hc;
 }
 
 /** Every server action that changes meals or members calls this first: if tomorrow is already locked, it saves tomorrow's
@@ -285,15 +286,21 @@ export async function seedLock(db: Db, flatId: string, now: string) {
   const tomorrow = addDays(now.slice(0, 10), 1);
   if (!isLocked(tomorrow, now, (await mealRules(db, flatId)).cutoff)) return;   // most taps: one query, nothing saved
   const { members, changes } = await loadMeals(db, flatId, tomorrow, tomorrow);
-  await countAtLock(db, flatId, tomorrow, headcount(members, changes, tomorrow));
+  await countAtLock(db, flatId, tomorrow, headcount(members, changes, tomorrow), now);
 }
 
 /** Someone told the cook the count their card showed: that count becomes the baseline, so the warning goes for everyone.
  *  It saves the count they saw, not the live one, so a change made after they looked still shows.
  *  Only for the day the baseline belongs to: a page left open since yesterday changes nothing. */
-export const toldCook = (db: Db, flatId: string, by: string, date: string, seen: Record<Meal, number>) => db(
-  // the history line lets everyone see who said they told the cook, and which count; written only if the baseline changed
-  `with f as (update flats set lock_count = $4::text::jsonb where id = $1 and lock_date = $3::date returning id)
-   insert into audit_log (flat_id, entity, entity_id, after, by_member)
-   select $1, 'cook', 'flat|told', jsonb_build_object('told', $3::date, 'plates', $4::text::jsonb), $2 from f`,
-  [flatId, by, date, JSON.stringify(seen)]);
+export async function toldCook(db: Db, flatId: string, by: string, date: string, seen: Record<Meal, number>) {
+  const { members, changes } = await loadMeals(db, flatId, date, date);
+  // the screen was out of date: change nothing (no false alarm, no hidden change); the page then shows the new count
+  if (countChanges(seen, headcount(members, changes, date)).length) return false;
+  // the history line lets everyone see who said they told the cook, and which count; a repeat of the same count writes none
+  const r = await db(
+    `with f as (update flats set lock_count = $4::text::jsonb where id = $1 and lock_date = $3::date and lock_count is distinct from $4::text::jsonb returning id)
+     insert into audit_log (flat_id, entity, entity_id, after, by_member)
+     select $1, 'cook', 'flat|told', jsonb_build_object('told', $3::date, 'plates', $4::text::jsonb), $2 from f returning 1`,
+    [flatId, by, date, JSON.stringify(seen)]);
+  return r.length > 0;
+}

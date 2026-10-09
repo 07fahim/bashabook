@@ -50,7 +50,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   // tomorrow can still change until the lock time (and late after it), so the count and the shared text say so
   const status = firstOpen === tomorrow ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
   // only after the lock does a change matter: before it, the card already says the count can still move
-  const changes = firstOpen === tomorrow ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, tom), tom);
+  const changes = firstOpen === tomorrow ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, tom, nowDhaka()), tom);
   const text = countText(me.flatName, m, tomorrow, tom, status, lang);
   const person = picked.members.find(x => x.id === who) ?? picked.members.find(x => x.id === me.memberId)!;
   const idx = indexChanges(picked.changes);
