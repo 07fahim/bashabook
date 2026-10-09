@@ -8,7 +8,7 @@ import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
 import { awayAction, cancelAwayAction, guestAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtDay, fmtTime, fmtWhen } from '../format';
+import { fmtDay, fmtRange, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { checkChip, field, Field, Fold, focus, link, primary, PageSkeleton } from '../ui';
@@ -20,21 +20,27 @@ export default function Meals({ params, searchParams }: PageProps<'/[lang]/meals
 
 async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
-  const mine = (await searchParams).mine === '1';
+  const sp = await searchParams;
+  const mine = sp.mine === '1';
+  // which week to show: 0 = this week, up to 7 weeks ahead (changes are allowed up to 60 days out)
+  const w = Math.min(7, Math.max(0, Number(sp.week) || 0));
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10);
-  const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
+  const week = Array.from({ length: 7 }, (_, i) => addDays(today, 7 * w + i));
   const [meals, history, aways] = await Promise.all([
-    loadMeals(db, me.flatId, today, week[6]),
+    loadMeals(db, me.flatId, week[0], week[6]),
     loadHistory(db, me.flatId, mine ? me.memberId : null),
     upcomingAway(db, me.flatId, me.memberId, addDays(today, 1)),
   ]);
   const starter = meals.members.find(x => x.role === 'manager');
   const self = meals.members.find(x => x.id === me.memberId)!;
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
-  const firstOpen = week.find(d => decide(d) === 'open')!;   // tomorrow or the day after
+  const firstOpen = [1, 2].map(n => addDays(today, n)).find(d => decide(d) === 'open')!;   // tomorrow or the day after
+  const guestDays = week.filter(d => decide(d) !== 'closed');
+  const href = (n: number, only: boolean) => `/${lang}/meals?${new URLSearchParams({ ...(n ? { week: String(n) } : {}), ...(only ? { mine: '1' } : {}) })}`;
+  const arrow = `inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-muted px-3 font-semibold hover:bg-paper sm:px-4 ${focus}`;
   const card = 'mt-8 rounded-3xl border border-line bg-surface p-5';
   const range = (r: [string, string]) => (r[0] === r[1] ? fmtDay(r[0], lang) : `${fmtDay(r[0], lang)} – ${fmtDay(r[1], lang)}`);
   /** One history line, e.g. 'Nafis → Tahsin · Sat, 10 October · Lunch: Off · Late'. */
@@ -63,10 +69,15 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     <>
       <Header t={t} lang={lang} path="/meals"><Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
-        <h1 className="font-display text-3xl font-bold">{m.weekTitle}</h1>
+        <h1 className="font-display text-3xl font-bold">{m.mealsTitle}</h1>
         <p className="mt-2 text-muted">{m.weekLead}</p>
-        <div className="mt-6">
-          <WeekChart lang={lang} m={m} meId={me.memberId} week={week} decide={decide} note={todayNote} {...meals} />
+        <nav aria-label={m.weekNav} className="mt-6 flex items-center justify-between gap-3">
+          {w > 0 ? <Link href={href(w - 1, mine)} scroll={false} aria-label={m.prevWeek} className={arrow}><span aria-hidden="true">←</span><span aria-hidden="true" className="hidden sm:inline">{m.prevWeek}</span></Link> : <span className="size-11" />}
+          <p className="text-center font-semibold">{fmtRange(week[0], week[6])}</p>
+          {w < 7 ? <Link href={href(w + 1, mine)} scroll={false} aria-label={m.nextWeek} className={arrow}><span aria-hidden="true" className="hidden sm:inline">{m.nextWeek}</span><span aria-hidden="true">→</span></Link> : <span className="size-11" />}
+        </nav>
+        <div className="mt-4">
+          <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={todayNote} {...meals} />
         </div>
 
         <div className="mt-8 grid gap-3 md:grid-cols-2 md:items-start lg:grid-cols-3 [&>*]:mt-0">
@@ -75,8 +86,8 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
               <input type="hidden" name="lang" value={lang} />
               <label className="block font-semibold">
                 {m.day}
-                <select name="date" defaultValue={week[1]} className={field}>
-                  {week.slice(1).map(d => <option key={d} value={d}>{fmtDay(d, lang)}</option>)}
+                <select name="date" defaultValue={guestDays[0]} className={field}>
+                  {guestDays.map(d => <option key={d} value={d}>{fmtDay(d, lang)}</option>)}
                 </select>
               </label>
               <label className="block font-semibold">
@@ -143,7 +154,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           <p className="mt-1 text-muted">{m.historyLead}</p>
           <div className="mt-3 flex gap-2">
             {[[false, m.everyoneTab], [true, m.mineOnly]].map(([on, label]) => (
-              <Link key={String(on)} href={on ? `/${lang}/meals?mine=1` : `/${lang}/meals`} scroll={false} aria-current={mine === on ? 'true' : undefined}
+              <Link key={String(on)} href={href(w, on === true)} scroll={false} aria-current={mine === on ? 'true' : undefined}
                 className={`inline-flex min-h-11 items-center rounded-full px-4 font-semibold ${mine === on ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
                 {label}
               </Link>
