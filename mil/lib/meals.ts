@@ -13,7 +13,8 @@ export interface MealChange {
   memberId: string;
   date: string;
   meal: Meal;
-  count: number;             // 0 off, 1 on, 2+ with guests
+  count: number;             // total plates: my own (0 or 1) plus guests; the only number billing reads
+  guests?: number;           // guest plates inside count
 }
 
 /** All dates of the month that starts on `month` ('YYYY-MM-01'). */

@@ -101,18 +101,33 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               ) : (
                 <ul className="mt-2 divide-y divide-line">
                   {MEALS.map(meal => {
-                    const n = mealCount(person, idx, day, meal);
+                    // own meal and guests are two separate controls, so one never changes the other
+                    const g = picked.changes.find(c => c.memberId === person.id && c.date === day && c.meal === meal)?.guests ?? 0;
+                    const own = mealCount(person, idx, day, meal) - g;
+                    const hidden = (<>
+                      <input type="hidden" name="lang" value={lang} />
+                      <input type="hidden" name="memberId" value={person.id} />
+                      <input type="hidden" name="date" value={day} />
+                      <input type="hidden" name="meal" value={meal} />
+                    </>);
                     return (
-                      <li key={meal} className="flex items-center justify-between gap-3 py-3">
+                      <li key={meal} className="flex flex-wrap items-center justify-between gap-3 py-3">
                         <span className="font-semibold">{m.names[meal]}</span>
-                        <form action={adminSetAction} className="flex items-center gap-3">
-                          <input type="hidden" name="lang" value={lang} />
-                          <input type="hidden" name="memberId" value={person.id} />
-                          <input type="hidden" name="date" value={day} />
-                          <input type="hidden" name="meal" value={meal} />
-                          <button name="count" value={n - 1} disabled={n === 0} aria-label={`${m.names[meal]}: ${m.less}`} className={step}>−</button>
-                          <span className="w-20 text-center tabular-nums">{n > 1 ? `${n} ${m.platesShort}` : n ? m.onOther : m.offOther}</span>
-                          <button name="count" value={n + 1} disabled={n >= 10} aria-label={`${m.names[meal]}: ${m.more}`} className={step}>+</button>
+                        <form action={adminSetAction}>
+                          {hidden}
+                          <input type="hidden" name="guests" value={g} />
+                          <button name="own" value={own ? 0 : 1} aria-pressed={own > 0} aria-label={`${m.names[meal]}, ${m.ownLabel}`}
+                            className={`min-h-11 rounded-full px-4 font-semibold ${own ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
+                            {own ? m.onOther : m.offOther}
+                          </button>
+                        </form>
+                        <form action={adminSetAction} className="flex items-center gap-2">
+                          {hidden}
+                          <input type="hidden" name="own" value={own} />
+                          <span className="text-[15px] text-muted">{m.guestsLabel}</span>
+                          <button name="guests" value={g - 1} disabled={g === 0} aria-label={`${m.names[meal]}, ${m.guestsLabel}: ${m.less}`} className={step}>−</button>
+                          <span className="w-6 text-center tabular-nums">{g}</span>
+                          <button name="guests" value={g + 1} disabled={g >= 9} aria-label={`${m.names[meal]}, ${m.guestsLabel}: ${m.more}`} className={step}>+</button>
                         </form>
                       </li>
                     );

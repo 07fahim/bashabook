@@ -3,10 +3,10 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
 import { addDays, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
-import { loadHistory, loadMeals, upcomingAway, type HistoryRow } from '@/lib/meals-db';
+import { loadHistory, loadMeals, myGuests, upcomingAway, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { awayAction, cancelAwayAction, guestAction, usualAction } from '../actions';
+import { awayAction, cancelAwayAction, guestAction, removeGuestsAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { dhakaDate, fmtDay, fmtRange, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
@@ -30,10 +30,11 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const t = getDictionary(lang), m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, 7 * w + i));
-  const [meals, history, aways] = await Promise.all([
+  const [meals, history, aways, guestList] = await Promise.all([
     loadMeals(db, me.flatId, week[0], week[6]),
     loadHistory(db, me.flatId, mine ? me.memberId : null),
     upcomingAway(db, me.flatId, me.memberId, addDays(today, 1)),
+    myGuests(db, me.flatId, me.memberId, today),
   ]);
   const starter = meals.members.find(x => x.role === 'manager');
   const self = meals.members.find(x => x.id === me.memberId)!;
@@ -59,7 +60,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     if (a.away) return `${who} · ${m.away} · ${range(a.away)}`;
     if (a.awayCancel) return `${who} · ${m.awayCancelled} · ${range(a.awayCancel)}`;
     const [, date, meal] = h.entityId.split('|');
-    const value = a.count! > 1 ? `${a.count} ${m.platesShort}` : a.count ? m.onOther : m.offOther;
+    const g = a.guests ?? 0, value = `${a.count! - g ? m.onOther : m.offOther}${g ? ` ${g === 1 ? m.guestOne : m.guestMany.replace('{n}', String(g))}` : ''}`;
     const tag = !a.late ? '' : ` · ${dhakaDate(h.at) >= date ? m.lateSameDay : m.lateAfter.replace('{t}', fmtTime(meals.flat.cutoff))}`;
     return `${actor === who ? who : `${actor} → ${who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${tag}`;
   };
@@ -84,6 +85,27 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
 
         <div className="mt-8 grid gap-3 md:grid-cols-2 md:items-start lg:grid-cols-3 [&>*]:mt-0">
           <Fold title={m.guestTitle} lead={m.guestLead}>
+            {guestList.length > 0 && (
+              <div className="mt-4">
+                <p className="font-semibold">{m.yourGuests}</p>
+                <ul className="mt-2 divide-y divide-line">
+                  {guestList.map(g => (
+                    <li key={`${g.date}${g.meal}`} className="flex flex-wrap items-center justify-between gap-x-3 py-2">
+                      <span>{fmtDay(g.date, lang)} · {m.names[g.meal]} · {g.guests === 1 ? m.guestOne : m.guestMany.replace('{n}', String(g.guests))}</span>
+                      {/* removing today's guests stays with the person who runs the flat */}
+                      {g.date === today ? <span className="text-[15px] text-muted">{m.todayGuestsKeep}</span> : (
+                        <form action={removeGuestsAction}>
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="date" value={g.date} />
+                          <input type="hidden" name="meal" value={g.meal} />
+                          <button className={`min-h-11 px-2 font-semibold ${link}`}>{m.removeGuests}</button>
+                        </form>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <ActionForm action={guestAction} className="mt-4">
               <input type="hidden" name="lang" value={lang} />
               <DateField lang={lang} label={m.day} name="date" required min={today} max={addDays(today, 60)} defaultValue={guestDays[0]} />
