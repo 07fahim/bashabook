@@ -206,8 +206,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   <h3 className="mt-4 text-[15px] font-semibold text-muted">{fmtDay(d, lang)}</h3>
                   <ul className="divide-y divide-line">
                     {shown.filter(e => e.date === d).map(e => (
-                      <li key={e.id} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 py-3">
-                        <div className="min-w-0">
+                      <li key={e.id} className="flex items-start justify-between gap-x-3 py-3">
+                        <div className="min-w-0 flex-1">
                           <p className="font-semibold">{x.types[e.type]} · {who(e)}</p>
                           {e.note && <p className="text-[15px]">{e.note}</p>}
                           <p className="text-[15px] text-muted">
@@ -215,7 +215,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                             {e.status === 'pending' && <> · <span className="font-semibold text-ink">{x.pending}</span></>}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex shrink-0 items-center gap-2">
                           <span className="font-bold tabular-nums">{fmtTaka(e.amount)}</span>
                           {(boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
                             <form action={removeAction}>
