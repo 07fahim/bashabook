@@ -42,10 +42,12 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   const tom = headcount(meals.members, meals.changes, tomorrow);
   const tod = headcount(meals.members, meals.changes, today);
   const line = (hc: typeof tom) => MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(' · ');
-  const text = `${me.flatName} · ${m.tomorrow}, ${fmtDay(tomorrow, lang)}\n${line(tom)}`;
   const card = 'mt-3 rounded-3xl border border-line bg-surface p-5';
   const own = new Set(meals.members.filter(x => !x.inMeals).map(x => x.id));
   const firstOpen = isLocked(tomorrow, nowDhaka(), meals.flat.cutoff) ? addDays(tomorrow, 1) : tomorrow;
+  // tomorrow can still change until the lock time (and late after it), so the count and the shared text say so
+  const status = firstOpen === tomorrow ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
+  const text = `${me.flatName} · ${m.tomorrow}, ${fmtDay(tomorrow, lang)}\n${line(tom)}\n${status}`;
   const person = picked.members.find(x => x.id === who) ?? picked.members.find(x => x.id === me.memberId)!;
   const idx = indexChanges(picked.changes);
   const step = `grid size-11 place-items-center rounded-full border border-muted text-xl font-bold disabled:opacity-40 ${focus}`;
@@ -65,7 +67,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
             <section className={card}>
               <h3 className="text-xl font-bold">{m.headcountTitle}</h3>
               {/* tomorrow can still change until the lock time, so say whether the count is final */}
-              <p className="mt-1 text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)} · {firstOpen === tomorrow ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final}</p>
+              <p className="mt-1 text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)} · {status}</p>
               <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
                 {MEALS.map(x => (
                   <div key={x} className="rounded-xl bg-paper py-3">
@@ -108,7 +110,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                           <input type="hidden" name="date" value={day} />
                           <input type="hidden" name="meal" value={meal} />
                           <button name="count" value={n - 1} disabled={n === 0} aria-label={`${m.names[meal]}: ${m.less}`} className={step}>−</button>
-                          <span className="w-20 text-center tabular-nums">{n > 1 ? `${n} ${m.platesShort}` : n ? m.on : m.off}</span>
+                          <span className="w-20 text-center tabular-nums">{n > 1 ? `${n} ${m.platesShort}` : n ? m.onOther : m.offOther}</span>
                           <button name="count" value={n + 1} disabled={n >= 10} aria-label={`${m.names[meal]}: ${m.more}`} className={step}>+</button>
                         </form>
                       </li>
@@ -139,8 +141,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               )}
               <ActionForm action={noCookAction} className="mt-4">
                 <input type="hidden" name="lang" value={lang} />
-                <Field label={m.from} name="from" type="date" required min={from} max={to} defaultValue={today} />
-                <Field label={m.to} name="to" type="date" required min={from} max={to} defaultValue={today} />
+                <Field label={m.from} name="from" type="date" required min={from} max={to} defaultValue={tomorrow} hint={m.noCookPast} />
+                <Field label={m.to} name="to" type="date" required min={from} max={to} defaultValue={tomorrow} />
                 <fieldset>
                   <legend className="font-semibold">{m.whichMeals}</legend>
                   <div className="mt-2 grid grid-cols-3 gap-2">
@@ -165,7 +167,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     <div className="flex items-baseline justify-between gap-4">
                       <span className="text-lg font-semibold">{x.name}</span>
                       <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
-                        {!x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${a.failed}: ${x.failed}` : own.has(x.id) ? m.ownBadge : ''}
+                        {!x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
                       </span>
                     </div>
                     {x.claimed && x.id !== me.memberId && (
@@ -217,6 +219,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <input type="hidden" name="lang" value={lang} />
                 <input type="hidden" name="on" value={meals.flat.cookToken ? '0' : '1'} />
                 <button className={meals.flat.cookToken ? secondary : primary}>{meals.flat.cookToken ? m.cookOff : m.cookOn}</button>
+                {meals.flat.cookToken && <p className="mt-2 text-[15px] text-muted">{m.cookOffLead}</p>}
               </form>
             </Fold>
           </div>

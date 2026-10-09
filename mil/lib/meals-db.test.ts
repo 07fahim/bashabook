@@ -206,7 +206,7 @@ describe('meal storage', { timeout: 30000 }, () => {
 
   it('today: guests are added on top, never lowered, never the host own plate', async () => {
     const { flatId, memberId, tahsin, count } = await flat();
-    const now = '2026-10-09T13:00', add = (date: string, meal: Meal, guests: number, me = true) => addGuests(db, flatId, tahsin, date, meal, guests, me, now);
+    const now = '2026-10-09T13:00', add = (date: string, meal: Meal, guests: number) => addGuests(db, flatId, tahsin, date, meal, guests, now);
     expect(await add('2026-10-09', 'd', 2)).toBe('late');            // usual dinner 1 + 2 guests
     expect(await count('2026-10-09', 'd')).toBe(3);
     expect(await add('2026-10-09', 'd', 1)).toBe('late');            // one more on top, not a total
@@ -214,7 +214,7 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await add('2026-10-09', 'd', 0)).toBe('closed');          // nothing to add: no rewrite, no silent overwrite
     expect(await count('2026-10-09', 'd')).toBe(4);
     await saveMeal(db, flatId, memberId, { memberId: tahsin, date: '2026-10-09', meal: 'l', count: 0 }, true);   // lunch off today
-    expect(await add('2026-10-09', 'l', 0, true)).toBe('closed');    // cannot switch my own meal back on
+    expect(await add('2026-10-09', 'l', 0)).toBe('closed');          // cannot switch my own meal back on
     expect(await count('2026-10-09', 'l')).toBe(0);
     expect(await add('2026-10-08', 'd', 2)).toBe('closed');          // past day
     await noCooking(db, flatId, memberId, '2026-10-09', '2026-10-09', ['b'], '2026-10-09');
@@ -226,9 +226,15 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(h.map(x => [x.after.count, x.after.late])).toEqual([[4, true], [3, true]]);   // both additions in history
   });
 
-  it('a later day keeps the total: guests plus my own plate', async () => {
-    const { flatId, tahsin, count } = await flat();
-    expect(await addGuests(db, flatId, tahsin, '2026-10-12', 'l', 2, true, '2026-10-09T13:00')).toBe('open');
-    expect(await count('2026-10-12', 'l')).toBe(3);
+  it('a later day also adds on top and never switches my own meal on', async () => {
+    const { flatId, memberId, tahsin, count } = await flat();
+    const add = (meal: Meal, guests: number) => addGuests(db, flatId, tahsin, '2026-10-12', meal, guests, '2026-10-09T13:00');
+    expect(await add('l', 2)).toBe('open');
+    expect(await count('2026-10-12', 'l')).toBe(3);                   // my lunch + 2 guests
+    expect(await add('l', 1)).toBe('open');
+    expect(await count('2026-10-12', 'l')).toBe(4);                   // one more on top, not a new total
+    await saveMeal(db, flatId, memberId, { memberId: tahsin, date: '2026-10-12', meal: 'd', count: 0 }, false);   // my dinner off
+    expect(await add('d', 1)).toBe('open');
+    expect(await count('2026-10-12', 'd')).toBe(1);                   // only the guest, my dinner stays off
   });
 });

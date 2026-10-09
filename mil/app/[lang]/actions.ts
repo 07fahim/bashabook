@@ -90,8 +90,8 @@ export async function guestAction(_: FormState, d: FormData): Promise<FormState>
   const date = str(d, 'date'), meal = str(d, 'meal'), now = nowDhaka();
   if (!inRange(date) || !isMeal(meal) || guests === null) return { error: m.errors.bad };
   // the member always comes from the session, so nobody can change someone else's guests
-  const r = await addGuests(db, me.flatId, me.memberId, date, meal, guests, d.has('me'), now);
-  if (r === 'closed') return { error: date === now.slice(0, 10) && guests < 1 ? m.errors.todayAddOnly : m.errors.closed };
+  const r = await addGuests(db, me.flatId, me.memberId, date, meal, guests, now);
+  if (r === 'closed') return { error: guests < 1 ? m.errors.todayAddOnly : m.errors.closed };
   refresh();
   return { done: m.saved };
 }
@@ -116,6 +116,7 @@ export async function usualAction(_: FormState, d: FormData): Promise<FormState>
   const usual = { b: d.has('b'), l: d.has('l'), d: d.has('d') };
   const inMeals = usual.b || usual.l || usual.d, was = await isInMeals(db, me.flatId, me.memberId);
   await setDefaults(db, me.flatId, me.memberId, usual, editFrom(todayDhaka()), await lastLocked(me.flatId), inMeals === was ? null : inMeals);
+  if (inMeals !== was) { refresh(); return { done: inMeals ? m.savedShared : m.savedOwn }; }
   refresh();
   return { done: m.saved };
 }

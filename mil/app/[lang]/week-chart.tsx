@@ -1,4 +1,4 @@
-import { addDays, MEALS, type Decision } from '@/lib/meals';
+import { addDays, isPresent, MEALS, type Decision } from '@/lib/meals';
 import type { FlatInfo, Member, NoCook, SavedChange } from '@/lib/meals-db';
 import type { Dict, Locale } from './dictionaries';
 import { fmtDay } from './format';
@@ -13,6 +13,7 @@ type Props = {
 export function WeekChart({ lang, m, meId, today, week, decide, note, ...meals }: Props) {
   const tomorrow = addDays(today, 1);
   const hasToday = week.includes(today);
+  const self = meals.members.find(x => x.id === meId);
   return (
     <section className="md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
       <ul className="space-y-6 md:grid md:grid-flow-col md:grid-cols-[auto_repeat(7,minmax(0,1fr))] md:grid-rows-[auto_repeat(3,auto)] md:gap-2 md:space-y-0">
@@ -29,6 +30,7 @@ export function WeekChart({ lang, m, meId, today, week, decide, note, ...meals }
             </p>
             <MealRow lang={lang} m={m} meId={meId} date={date} decision={decide(date)} chart {...meals} />
             {date === today && <p className="mt-2 text-[15px] text-muted md:hidden">{note}</p>}
+            {self && !isPresent(self, date) && <p className="mt-2 text-[15px] text-muted md:hidden">{m.notInFlatSelf}</p>}
           </li>
         ))}
       </ul>
