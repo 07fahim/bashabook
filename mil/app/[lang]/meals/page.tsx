@@ -61,7 +61,8 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     if (a.awayCancel) return `${who} · ${m.awayCancelled} · ${range(a.awayCancel)}`;
     const [, date, meal] = h.entityId.split('|');
     // a guest change says so outright, so removing a guest never reads like switching a meal off
-    const g = a.guests ?? 0, was = h.before?.guests ?? 0;
+    // rows saved before guests had their own column: plates above one were guests, as in migration 004
+    const g = a.guests ?? Math.max(a.count! - 1, 0), was = h.before?.guests ?? Math.max((h.before?.count ?? 0) - 1, 0);
     const value = g !== was ? m.guestsChange.replace('{a}', String(was)).replace('{b}', String(g)) : a.count! - g ? m.onOther : m.offOther;
     const tag = !a.late ? '' : ` · ${dhakaDate(h.at) >= date ? m.lateSameDay : m.lateAfter.replace('{t}', fmtTime(meals.flat.cutoff))}`;
     return `${actor === who ? who : `${actor} → ${who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${tag}`;

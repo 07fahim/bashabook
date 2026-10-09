@@ -6,7 +6,7 @@ export type FlatInfo = { name: string; cutoff: string; cookToken: string | null;
 export type Member = MealMember & { name: string; role: 'member' | 'manager'; inMeals: boolean };
 export type HistoryRow = {
   at: Date | string; actor: string | null; who: string | null; entity: 'meal_changes' | 'members' | 'flats'; entityId: string;
-  before?: { guests?: number } | null;
+  before?: { guests?: number; count?: number } | null;
   after: {
     count?: number; guests?: number; late?: boolean;
     away?: [string, string]; awayCancel?: [string, string];
@@ -77,7 +77,7 @@ export async function changeMeal(db: Db, flatId: string, c: MealChange, now: str
   return decision;
 }
 
-/** A meal chip: switches only my own plate; my guests stay. */
+/** A meal chip: switches only my own plate; my guests stay. Same read-then-write note as addGuests. */
 export async function setOwn(db: Db, flatId: string, memberId: string, date: string, meal: Meal, own: 0 | 1, now: string): Promise<Decision> {
   const p = await currentPlates(db, flatId, memberId, date, meal);
   if (!p) return 'closed';
@@ -98,11 +98,12 @@ export const myGuests = (db: Db, flatId: string, memberId: string, from: string)
 
 /** Guests for one of my meals: always added on top of my current plates (at least 1); my own plate never changes.
  *  Later days follow the usual lock rule. Today (surprise guests) is allowed too, saved as late so it shows in history. */
-export async function addGuests(db: Db, flatId: string, memberId: string, date: string, meal: Meal, guests: number, now: string): Promise<Decision> {
+export async function addGuests(db: Db, flatId: string, memberId: string, date: string, meal: Meal, guests: number, now: string): Promise<Decision | 'full'> {
   if (guests < 1 || date < now.slice(0, 10)) return 'closed';
   if ((await db(`select 1 from no_cook where flat_id = $1 and date = $2 and meal = $3`, [flatId, date, meal])).length) return 'closed';
   const p = await currentPlates(db, flatId, memberId, date, meal);
   if (!p) return 'closed';
+  if (p.guests + guests > 9) return 'full';   // at most 9 guests, so a meal never passes 10 plates
   // ponytail: read then write, so two taps at the same moment can lose one guest; both still leave a history row
   const c = { memberId, date, meal, count: p.own + p.guests + guests, guests: p.guests + guests };
   if (date !== now.slice(0, 10)) return changeMeal(db, flatId, c, now);
@@ -161,6 +162,8 @@ export async function setDefaults(db: Db, flatId: string, memberId: string, d: R
        where m.flat_id = $1 and m.id = $2
        on conflict (member_id, date, meal) do nothing),
      cleared as (delete from meal_changes where flat_id = $1 and member_id = $2 and date > $4::date and count = 1 and guests = 0 and $10::boolean = false),
+     own_off as (update meal_changes set count = guests, updated_at = now()
+       where flat_id = $1 and member_id = $2 and date > $4::date and guests > 0 and count > guests and $10::boolean = false),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
        select flat_id, 'members', $5, jsonb_build_object('b', default_b, 'l', default_l, 'd', default_d, 'inMeals', in_meals), $6, id
        from members where flat_id = $1 and id = $2)

@@ -100,6 +100,7 @@ export async function guestAction(_: FormState, d: FormData): Promise<FormState>
   if (!inRange(date) || !isMeal(meal) || guests === null) return { error: m.errors.bad };
   // the member always comes from the session, so nobody can change someone else's guests
   const r = await addGuests(db, me.flatId, me.memberId, date, meal, guests, now);
+  if (r === 'full') return { error: m.errors.tooManyGuests };
   if (r === 'closed') return { error: guests < 1 ? m.errors.todayAddOnly : m.errors.closed };
   refresh();
   return { done: m.saved };
