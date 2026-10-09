@@ -27,19 +27,21 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
   return (
     <>
       <Header t={t} lang={lang} path={`/j/${code}`} />
-      <main className="mx-auto max-w-md px-5 pb-16">
+      <main className="mx-auto max-w-md px-5 pb-16 md:grid md:max-w-5xl md:grid-cols-2 md:items-start md:gap-16 md:pt-6">
         {!flat ? (
-          <>
+          <div>
             <h1 className={h1}>{a.joinTitle}</h1>
             <p role="alert" className="mt-3 font-semibold text-chili">{a.errors.badCode}</p>
             <Link href={`/${lang}/join`} className={`mt-6 inline-block ${link}`}>{a.tryCode}</Link>
-          </>
+          </div>
         ) : !me ? (
           <>
-            <p className="text-muted">{flat.name}</p>
-            <h1 className={h1}>{a.pickName}</h1>
-            <p className="mt-2 text-muted">{a.pickLead}</p>
-            <ul className="mt-6 grid gap-3">
+            <div>
+              <p className="text-muted">{flat.name}</p>
+              <h1 className={h1}>{a.pickName}</h1>
+              <p className="mt-2 text-muted">{a.pickLead}</p>
+            </div>
+            <ul className="mt-6 grid gap-3 md:mt-0">
               {flat.members.map(x => (
                 <li key={x.id}>
                   <Link href={`/${lang}/j/${code}?m=${x.id}`} className={`flex min-h-14 items-center justify-between gap-4 rounded-xl border border-line bg-surface px-5 text-lg font-semibold ${focus}`}>
@@ -52,10 +54,13 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
           </>
         ) : (
           <>
-            <p className="text-muted">{flat.name}</p>
-            <h1 className={h1}>{me.name}</h1>
-            <p className="mt-2 text-muted">{!me.claimed ? a.setPinLead : me.must_change_pin ? a.changePinLead : a.enterPinLead}</p>
-            <ActionForm action={loginAction} className="mt-8">
+            <div>
+              <p className="text-muted">{flat.name}</p>
+              <h1 className={h1}>{me.name}</h1>
+              <p className="mt-2 text-muted">{!me.claimed ? a.setPinLead : me.must_change_pin ? a.changePinLead : a.enterPinLead}</p>
+            </div>
+            <div>
+            <ActionForm action={loginAction} className="mt-8 md:mt-0">
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="code" value={code} />
               <input type="hidden" name="memberId" value={me.id} />
@@ -76,6 +81,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
               <button className={primary}>{a.enterBtn}</button>
             </ActionForm>
             <Link href={`/${lang}/j/${code}`} className={`mt-6 inline-block ${link}`}>{a.notYou}</Link>
+            </div>
           </>
         )}
       </main>
