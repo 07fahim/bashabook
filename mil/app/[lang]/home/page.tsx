@@ -12,7 +12,7 @@ import { changePinAction, logoutAction, phoneAction, photoAction, removePhotoAct
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { countText, fmtDay, fmtTaka, fmtTime } from '../format';
+import { countText, fmtDay, fmtRate, fmtTime } from '../format';
 import { Header } from '../header';
 import { LockChange } from '../lock-change';
 import { MealRow } from '../meal-row';
@@ -95,7 +95,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           {bal && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{x.title}</h2>
             <p className={`mt-2 text-lg font-semibold ${bal.tone}`}>{bal.text}</p>
-            <p className="mt-1 text-[15px] text-muted">{x.mealRate}: {fmtTaka(mo.result.mealRate)}</p>
+            <p className="mt-1 text-[15px] text-muted">{x.mealRate}: {fmtRate(mo.result.mealRate, [...mo.meals.values()].reduce((a, b) => a + b, 0))}</p>
             <div className="grow" />
             <Link href={`/${lang}/money`} className={`mt-3 inline-flex min-h-11 items-center ${link}`}>{x.seeMoney}</Link>
           </section>}

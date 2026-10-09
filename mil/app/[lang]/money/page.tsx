@@ -10,7 +10,7 @@ import { ActionForm } from '../action-form';
 import { entryAction, putBackAction, removeAction } from '../actions';
 import { DateField } from '../date-field';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtDay, fmtMonth, fmtTaka } from '../format';
+import { fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { PayerSelect } from '../payer-select';
@@ -47,8 +47,11 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const r = mo.result.perMember.find(p => p.id === me.memberId);
   const deposited = sum(ok.filter(e => e.type === 'deposit' && e.memberId === me.memberId));
   const spent = sum(ok.filter(e => e.type !== 'deposit' && e.type !== 'payout' && e.paidBy === me.memberId));
-  const myMeals = mo.meals.get(me.memberId) ?? 0;
-  const guestFood = r ? foodSplit(r.foodCost, myMeals, mo.guestMeals.get(me.memberId) ?? 0).guests : 0;   // own + guests = food cost, tested
+  const myMeals = mo.meals.get(me.memberId) ?? 0, myGuests = mo.guestMeals.get(me.memberId) ?? 0;
+  const guestFood = r ? foodSplit(r.foodCost, myMeals, myGuests).guests : 0;   // own + guests = food cost, tested
+  // meal counts are the engine's own numbers (hundredths, guests inside the host's count); the flat total is their sum
+  const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
+  const meals = (h: number) => (h === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(h));
   const billLines = mo.result.lines.filter(l => l.memberId === me.memberId && l.rowId !== 'bazar')
     .map(l => ({ id: l.rowId, amount: l.amount, note: mo.entries.find(e => e.id === l.rowId)?.note ?? x.types.bill }));
 
@@ -106,8 +109,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.breakdown}</summary>
                   <dl className="mt-2 space-y-1 [&>div]:flex [&>div]:justify-between [&>div]:gap-4 [&_dd]:tabular-nums">
                     <div className="font-semibold"><dt>{x.share}</dt><dd>{signed('−', r.foodCost + r.billShare)}</dd></div>
-                    <div className="pl-4"><dt>{x.myMeals}</dt><dd>{fmtTaka(r.foodCost - guestFood)}</dd></div>
-                    {guestFood > 0 && <div className="pl-4"><dt>{x.guestMeals}</dt><dd>{fmtTaka(guestFood)}</dd></div>}
+                    <div className="pl-4"><dt>{x.myMeals} · {meals(myMeals - myGuests)}</dt><dd>{fmtTaka(r.foodCost - guestFood)}</dd></div>
+                    {myGuests > 0 && <div className="pl-4"><dt>{x.guestMeals} · {meals(myGuests)}</dt><dd>{fmtTaka(guestFood)}</dd></div>}
                     {billLines.map(b => <div key={b.id} className="pl-4"><dt>{b.note}</dt><dd>{fmtTaka(b.amount)}</dd></div>)}
                     <div><dt>{x.deposited}</dt><dd>{signed('+', deposited)}</dd></div>
                     <div><dt>{x.spent}</dt><dd>{signed('+', spent)}</dd></div>
@@ -173,11 +176,13 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           <section className={card}>
             <h2 className="text-xl font-bold">{x.summary}</h2>
             <dl className="mt-3 grid grid-cols-2 gap-2">
-              {([[x.totalBazar, sum(ok.filter(e => e.type === 'bazar'))], [x.totalBills, sum(ok.filter(e => e.type === 'bill'))],
-                [x.mealRate, mo.result.mealRate], [x.withName.replace('{name}', collector.name), Math.max(mo.result.fund, 0)]] as const).map(([k, v]) => (
+              {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar')))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
+                [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), x.mealsSoFar.replace('{n}', fmtMeals(totalMeals))],
+                [x.withName.replace('{name}', collector.name), fmtTaka(Math.max(mo.result.fund, 0))]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
-                  <dd className="text-2xl font-bold tabular-nums">{fmtTaka(v)}</dd>
+                  <dd className="text-2xl font-bold tabular-nums">{v}</dd>
+                  {sub && <dd className="text-[15px] text-muted">{sub}</dd>}
                 </div>
               ))}
             </dl>
@@ -187,7 +192,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             <ul className="mt-1 divide-y divide-line">
               {mo.result.perMember.map(p => (
                 <li key={p.id} className="flex justify-between gap-4 py-2">
-                  <span>{name(p.id)}</span>
+                  <span>{name(p.id)}<span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span></span>
                   <span className={`font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{p.balance > 0 ? '+' : p.balance < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
                 </li>
               ))}
@@ -220,7 +225,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="font-bold tabular-nums">{fmtTaka(e.amount)}</span>
-                          {(boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
+                          {month === thisMonth && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
                             <details>
                               <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtTaka(e.amount)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
                             </details>

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { addDays, headcount, isLocked, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { addDays, headcount, isLocked, MEALS, nowDhaka, todayDhaka, type Meal } from '@/lib/meals';
 import { flatIdByCookToken, loadMeals } from '@/lib/meals-db';
 import { getDictionary, hasLocale } from '../../dictionaries';
 import { fmtDay, fmtTime } from '../../format';
@@ -38,6 +38,8 @@ async function CookBody({ params }: Pick<Props, 'params'>) {
             <h1 className="text-2xl font-bold">{data.flat.name}</h1>
             {days.map(({ date, label, big }) => {
               const hc = headcount(data.members, data.changes, date);
+              // a meal blocked by no cooking says so; if the starter still put plates on it, the number shows as usual
+              const off = (x: Meal) => hc[x] === 0 && data.noCook.some(n => n.date === date && n.meal === x);
               return (
                 <section key={date} className="mt-6">
                   <h2 className={`${big ? 'text-3xl' : 'text-xl'} font-bold`}>{label} · {fmtDay(date, lang)}</h2>
@@ -46,7 +48,8 @@ async function CookBody({ params }: Pick<Props, 'params'>) {
                     {MEALS.map(x => (
                       <div key={x} className="flex items-baseline justify-between py-3">
                         <dt className={big ? 'text-3xl' : 'text-xl'}>{m.names[x]}</dt>
-                        <dd className={`${big ? 'text-7xl' : 'text-4xl'} font-bold tabular-nums`}>{hc[x]}</dd>
+                        {off(x) ? <dd className={`${big ? 'text-2xl' : 'text-xl'} font-bold`}>{m.noCook}</dd>
+                          : <dd className={`${big ? 'text-7xl' : 'text-4xl'} font-bold tabular-nums`}>{hc[x]}</dd>}
                       </div>
                     ))}
                   </dl>
