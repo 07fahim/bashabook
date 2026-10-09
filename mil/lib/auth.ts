@@ -10,6 +10,8 @@ export const cleanName = (v: unknown) => { const s = String(v ?? '').trim(); ret
 export const isPin = (v: unknown) => /^\d{4}$/.test(String(v ?? ''));
 const hashPin = (pin: string) => bcrypt.hash(pin, 10);
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
+/** Still living here: no last day, or it hasn't passed yet (in Dhaka). Someone who moved out can't sign in or be picked. */
+const STAYING = "(left_on is null or left_on >= (now() at time zone 'Asia/Dhaka')::date)";
 const newJoinCode = () => Array.from({ length: 6 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join('');
 
 /** Flat, its starter (role manager, already claimed) and unclaimed names, in one statement. */
@@ -29,7 +31,7 @@ export async function flatByCode(db: Db, code: string) {
   const [flat] = await db<{ id: string; name: string }>(`select id, name from flats where join_code = $1`, [code.toUpperCase()]);
   if (!flat) return null;
   const members = await db<{ id: string; name: string; claimed: boolean; must_change_pin: boolean }>(
-    `select id, name, pin_hash is not null as claimed, must_change_pin from members where flat_id = $1 order by name`, [flat.id]);
+    `select id, name, pin_hash is not null as claimed, must_change_pin from members where flat_id = $1 and ${STAYING} order by name`, [flat.id]);
   return { ...flat, members };
 }
 
@@ -50,7 +52,7 @@ async function countTry(db: Db, memberId: string) {
 export async function login(db: Db, code: string, memberId: string, pin: string, newPin: string | null): Promise<{ memberId: string } | { error: LoginError }> {
   if (!UUID.test(memberId)) return { error: 'notFound' };
   const [m] = await db<{ pin_hash: string | null; must_change_pin: boolean }>(
-    `select m.pin_hash, m.must_change_pin from members m join flats f on f.id = m.flat_id where f.join_code = $1 and m.id = $2`, [code.toUpperCase(), memberId]);
+    `select m.pin_hash, m.must_change_pin from members m join flats f on f.id = m.flat_id where f.join_code = $1 and m.id = $2 and ${STAYING}`, [code.toUpperCase(), memberId]);
   if (!m) return { error: 'notFound' };
   if (m.pin_hash === null) {
     const claimed = await db(`update members set pin_hash = $2 where id = $1 and pin_hash is null returning id`, [memberId, await hashPin(pin)]);
@@ -83,15 +85,15 @@ export async function memberBySession(db: Db, token: string): Promise<Me | null>
   const [me] = await db<Me>(
     `select m.id as "memberId", m.flat_id as "flatId", m.role, m.name, f.name as "flatName", f.join_code as "joinCode", f.language as lang
      from sessions s join members m on m.id = s.member_id join flats f on f.id = m.flat_id
-     where s.token_hash = $1 and s.expires_at > now()`, [hashToken(token)]);
+     where s.token_hash = $1 and s.expires_at > now() and ${STAYING}`, [hashToken(token)]);
   return me ?? null;
 }
 
 export const deleteSession = (db: Db, token: string) => db(`delete from sessions where token_hash = $1`, [hashToken(token)]);
 
-export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean; phone: string | null; photoV: number | null }>(
-  `select id, name, phone, case when photo is null then null else photo_v end as "photoV", pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked
-   from members where flat_id = $1 order by role = 'manager' desc, name`, [flatId]);
+export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean; phone: string | null; photoV: number | null; leftOn: string | null }>(
+  `select id, name, phone, left_on::text as "leftOn", case when photo is null then null else photo_v end as "photoV", pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked
+   from members where flat_id = $1 and ${STAYING} order by role = 'manager' desc, name`, [flatId]);
 
 export async function addMember(db: Db, flatId: string, name: string, today: string) {
   const rows = await db(`insert into members (flat_id, name, joined_on) values ($1, $2, $3) on conflict (flat_id, name) do nothing returning id`, [flatId, name, today]);
@@ -137,6 +139,20 @@ export async function renameMember(db: Db, flatId: string, by: string, memberId:
     if ((e as { code?: string }).code === '23505') return 'taken';
     throw e;
   }
+}
+
+/** The person who runs the flat sets someone's last day here, or takes it back (null). Never their own: they hand the flat over first.
+ *  Only today or later, so a day already cooked never changes, and only while that person still lives here. */
+export async function setLeaving(db: Db, flatId: string, by: string, memberId: string, lastDay: string | null, today: string) {
+  if (!UUID.test(memberId)) return false;
+  const [r] = await db<{ done: boolean }>(
+    `with up as (update members set left_on = $3::date
+       where flat_id = $1 and id = $2 and id <> $4 and (left_on is null or left_on >= $5::date)
+         and ($3::date is null or $3::date >= greatest($5::date, joined_on)) returning id),
+     log as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
+       select $1, 'members', $2::text, jsonb_build_object('left', $3::date), $4 from up)
+     select exists (select 1 from up) as done`, [flatId, memberId, lastDay, by, today]);
+  return r.done;
 }
 
 export async function resetPin(db: Db, flatId: string, memberId: string, pin: string) {

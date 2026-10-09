@@ -7,7 +7,7 @@ import { addDays, countChanges, editFrom, headcount, indexChanges, isDate, isLoc
 import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, removePhotoAction, renameAction, resetPinAction, settingsAction } from '../actions';
+import { addMemberAction, adminSetAction, cookLinkAction, noCookAction, noCookCancelAction, leavingAction, removePhotoAction, renameAction, resetPinAction, settingsAction } from '../actions';
 import { Avatar } from '../avatar';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtTime } from '../format';
@@ -213,10 +213,11 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               <ul className="divide-y divide-line">
                 {members.map(x => (
                   <li key={x.id} className="py-4 first:pt-0 last:pb-0">
-                    <div className="flex items-baseline justify-between gap-4">
+                    {/* a long badge (last day) drops below the name on a phone instead of squeezing it */}
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                       <span className="flex items-center gap-3 text-lg font-semibold"><Avatar id={x.id} name={x.name} v={x.photoV} size={36} />{x.name}</span>
                       <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
-                        {!x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
+                        {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
                       </span>
                     </div>
                     {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
@@ -250,6 +251,21 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                             <input type="hidden" name="memberId" value={x.id} />
                             <PinField label={a.oneTimePin} name="pin" autoComplete="off" />
                             <button className={`${secondary} sm:w-auto`}>{a.resetBtn}</button>
+                          </ActionForm>
+                        </details>
+                      )}
+                      {x.id !== me.memberId && (
+                        <details className="open:basis-full">
+                          <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.movingOut}</summary>
+                          <p className="mt-2 text-[15px] text-muted">{a.movingOutLead}</p>
+                          <ActionForm action={leavingAction} className="mt-3">
+                            <input type="hidden" name="lang" value={lang} />
+                            <input type="hidden" name="memberId" value={x.id} />
+                            <DateField lang={lang} label={a.lastDay} name="lastDay" required min={today} max={to} defaultValue={x.leftOn ?? today} />
+                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                              <button className={`${secondary} sm:w-auto`}>{a.movingOutBtn}</button>
+                              {x.leftOn && <button name="stay" value="1" formNoValidate className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{a.staying}</button>}
+                            </div>
                           </ActionForm>
                         </details>
                       )}

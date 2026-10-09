@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, normalizePhone, renameMember, resetPin, setPhone } from './auth';
+import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, normalizePhone, renameMember, resetPin, setLeaving, setPhone } from './auth';
 
 const today = '2026-10-09';
 
@@ -109,5 +109,33 @@ describe('auth', { timeout: 30000 }, () => {
     await setPhone(db, memberId, null);
     expect((await listMembers(db, flatId)).find(m => m.id === memberId)!.phone).toBeNull();
     await expect(setPhone(db, memberId, '123')).rejects.toThrow();
+  });
+
+  it('the person who runs the flat sets someone’s last day, never their own, never a day already gone; it can be taken back', async () => {
+    const { flatId, memberId, id } = await flat();
+    expect(await setLeaving(db, flatId, memberId, id('Zarif'), '2026-10-20', today)).toBe(true);
+    expect((await listMembers(db, flatId)).find(m => m.id === id('Zarif'))!.leftOn).toBe('2026-10-20');
+    expect(await setLeaving(db, flatId, memberId, memberId, '2026-10-20', today)).toBe(false);       // hands the flat over first
+    await db(`update members set joined_on = '2026-10-01' where id = $1`, [id('Tahsin')]);
+    expect(await setLeaving(db, flatId, memberId, id('Tahsin'), '2026-10-08', today)).toBe(false);   // yesterday was already cooked
+    await db(`update members set joined_on = '2026-10-15' where id = $1`, [id('Tahsin')]);
+    expect(await setLeaving(db, flatId, memberId, id('Tahsin'), '2026-10-12', today)).toBe(false);   // before moving in
+    expect(await setLeaving(db, flatId, memberId, id('Zarif'), null, today)).toBe(true);             // staying after all
+    expect((await listMembers(db, flatId)).find(m => m.id === id('Zarif'))!.leftOn).toBeNull();
+    const log = await db<{ after: { left: string | null } }>(`select after from audit_log where entity = 'members' and entity_id = $1 order by id`, [id('Zarif')]);
+    expect(log.map(r => r.after.left)).toEqual(['2026-10-20', null]);
+  });
+
+  it('someone whose last day has passed can’t sign in, be picked or be listed, and stays gone', async () => {
+    const { flatId, memberId, code, id } = await flat();
+    const zarif = id('Zarif');
+    await login(db, code, zarif, '4321', null);
+    const token = await createSession(db, zarif);
+    await db(`update members set joined_on = '2020-01-01', left_on = '2020-01-31' where id = $1`, [zarif]);   // long gone, whatever today is
+    expect(await memberBySession(db, token)).toBeNull();
+    expect('error' in (await login(db, code, zarif, '4321', null))).toBe(true);
+    expect((await flatByCode(db, code))!.members.map(m => m.name)).not.toContain('Zarif');
+    expect((await listMembers(db, flatId)).map(m => m.name)).not.toContain('Zarif');
+    expect(await setLeaving(db, flatId, memberId, zarif, null, today)).toBe(false);
   });
 });
