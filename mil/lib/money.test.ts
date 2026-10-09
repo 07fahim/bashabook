@@ -133,3 +133,38 @@ describe('monthBalances', () => {
     expect(r.problems).toEqual(['d9: unknown member X', 'w1: unknown member X', 'balances differ from fund by 20000']);   // the unsplit laundry bill left the fund
   });
 });
+
+// Plan 5 stress tests: money moving between people is never a second expense.
+// A is the collector. Each pair of ledgers must give the same balances and fund.
+describe('money moving between people', () => {
+  const same = (x: LedgerRow[], y: LedgerRow[]) => {
+    const [rx, ry] = [monthBalances(base({ ledger: x })), monthBalances(base({ ledger: y }))];
+    expect([rx.invariantOk, ry.invariantOk]).toEqual([true, true]);
+    expect(bal(rx)).toEqual(bal(ry));
+    expect(rx.fund).toBe(ry.fund);
+    return rx;
+  };
+  const deposit = row({ id: 'd', type: 'deposit', amount: 1000000, memberId: 'B' });
+
+  it('collector pays ৳5,000 personally, then is paid back from the fund', () => {
+    const r = same(
+      [deposit, row({ id: 'z', type: 'bazar', amount: 500000, paidBy: 'A' }), row({ id: 'p', type: 'payout', amount: 500000, memberId: 'A' })],
+      [deposit, row({ id: 'z', type: 'bazar', amount: 500000, paidBy: null })],
+    );
+    expect(r.perMember.reduce((a, m) => a + m.foodCost, 0)).toBe(500000);   // the expense counts once
+  });
+
+  it('shopper gets ৳3,000, spends ৳2,450, returns ৳550 change', () => {
+    const r = same(
+      [deposit, row({ id: 'a', type: 'payout', amount: 300000, memberId: 'C' }), row({ id: 'z', type: 'bazar', amount: 245000, paidBy: 'C' }),
+        row({ id: 'c', type: 'deposit', amount: 55000, memberId: 'C' })],
+      [deposit, row({ id: 'z', type: 'bazar', amount: 245000, paidBy: null })],
+    );
+    expect(r.fund).toBe(1000000 - 245000);   // what the collector should hold
+  });
+
+  it('an unconfirmed handover changes nothing until the receiver confirms', () => {
+    same([deposit, row({ id: 'a', type: 'payout', amount: 300000, memberId: 'C', status: 'pending' })], [deposit]);
+  });
+});
+
