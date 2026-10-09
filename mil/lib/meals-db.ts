@@ -6,6 +6,7 @@ export type FlatInfo = { name: string; cutoff: string; cookToken: string | null;
 export type Member = MealMember & { name: string; role: 'member' | 'manager'; inMeals: boolean };
 export type HistoryRow = {
   at: Date | string; actor: string | null; who: string | null; entity: 'meal_changes' | 'members' | 'flats'; entityId: string;
+  before?: { guests?: number } | null;
   after: {
     count?: number; guests?: number; late?: boolean;
     away?: [string, string]; awayCancel?: [string, string];
@@ -234,7 +235,7 @@ export async function cookAgain(db: Db, flatId: string, by: string, from: string
 /** Changes worth seeing: late, made for someone else, away, no cooking, usual meals and meal rules. Newest 50.
  *  `mine` keeps my own meals plus flat-wide rows. */
 export const loadHistory = (db: Db, flatId: string, mine: string | null = null) => db<HistoryRow>(
-  `select a.at, actor.name as actor, who.name as who, a.entity, a.entity_id as "entityId", a.after
+  `select a.at, actor.name as actor, who.name as who, a.entity, a.entity_id as "entityId", a.after, a.before
    from audit_log a
    left join members actor on actor.id = a.by_member
    left join members who on who.flat_id = a.flat_id and who.id::text = split_part(a.entity_id, '|', 1)

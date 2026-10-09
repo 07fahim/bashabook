@@ -60,7 +60,9 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     if (a.away) return `${who} · ${m.away} · ${range(a.away)}`;
     if (a.awayCancel) return `${who} · ${m.awayCancelled} · ${range(a.awayCancel)}`;
     const [, date, meal] = h.entityId.split('|');
-    const g = a.guests ?? 0, value = `${a.count! - g ? m.onOther : m.offOther}${g ? ` ${g === 1 ? m.guestOne : m.guestMany.replace('{n}', String(g))}` : ''}`;
+    // a guest change says so outright, so removing a guest never reads like switching a meal off
+    const g = a.guests ?? 0, was = h.before?.guests ?? 0;
+    const value = g !== was ? m.guestsChange.replace('{a}', String(was)).replace('{b}', String(g)) : a.count! - g ? m.onOther : m.offOther;
     const tag = !a.late ? '' : ` · ${dhakaDate(h.at) >= date ? m.lateSameDay : m.lateAfter.replace('{t}', fmtTime(meals.flat.cutoff))}`;
     return `${actor === who ? who : `${actor} → ${who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${tag}`;
   };
