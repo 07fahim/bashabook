@@ -1,4 +1,5 @@
-import type { Locale } from './dictionaries';
+import { MEALS, type Meal } from '../../lib/meals';
+import type { Dict, Locale } from './dictionaries';
 
 /** 'Fri, 10 October' or 'শুক্র, 10 October': weekday in the page language, English digits and month. */
 export function fmtDay(date: string, lang: Locale) {
@@ -28,3 +29,7 @@ export function fmtWhen(at: Date | string, lang: Locale) {
   const d = new Date(new Date(at).getTime() + 6 * 3600_000).toISOString();
   return `${fmtDay(d.slice(0, 10), lang)}, ${fmtTime(d.slice(11, 16))}`;
 }
+
+/** The count as a message anyone can send the cook from their own phone. */
+export const countText = (flatName: string, m: Dict['meals'], date: string, hc: Record<Meal, number>, status: string, lang: Locale) =>
+  `${flatName} · ${m.tomorrow}, ${fmtDay(date, lang)}\n${MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(' · ')}\n${status}`;

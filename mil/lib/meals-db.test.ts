@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { createFlat } from './auth';
-import { headcount, indexChanges, mealCount, type Meal } from './meals';
+import { addMember, createFlat } from './auth';
+import { countChanges, headcount, indexChanges, mealCount, type Meal } from './meals';
 import {
-  addGuests, cancelAway, currentPlates, removeGuests, setOwn, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, setAway, setDefaults, upcomingAway, updateSettings,
+  addGuests, cancelAway, countAtLock, currentPlates, removeGuests, setOwn, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, seedLock, setAway, setDefaults, upcomingAway, updateSettings,
 } from './meals-db';
 
 const ALL_OFF = { b: false, l: false, d: false }, ALL_ON = { b: true, l: true, d: true };
@@ -321,6 +321,45 @@ describe('meal storage', { timeout: 30000 }, () => {
     await addGuests(db, flatId, tahsin, '2026-10-14', 'l', 2, '2026-10-09T13:00');
     await setDefaults(db, flatId, tahsin, ALL_OFF, '2026-09-01', '2026-10-10', false);
     expect(await currentPlates(db, flatId, tahsin, '2026-10-14', 'l')).toEqual({ own: 0, guests: 2 });
+  });
+
+  it('keeps the count first seen after the lock, so any later change shows, even a new member', async () => {
+    const { flatId, load } = await flat();
+    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
+    const first = await hc();
+    expect(await countAtLock(db, flatId, '2026-10-10', first)).toEqual(first);   // first view saves it
+    await addMember(db, flatId, 'Rafi', '2026-10-10');                             // no meal row is written for this
+    const now = await hc();
+    expect(now.l).toBe(first.l + 1);
+    expect(await countAtLock(db, flatId, '2026-10-10', now)).toEqual(first);      // still the first one
+    expect(await countAtLock(db, flatId, '2026-10-11', now)).toEqual(now);        // a new day starts over
+  });
+
+  it('after the lock, deleted rows count as a change, and a count back at the baseline shows none', async () => {
+    const { flatId, tahsin, load } = await flat();
+    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-12'); };
+    await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');
+    await countAtLock(db, flatId, '2026-10-12', await hc());        // first view after the lock
+    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');            // deletes Tahsin's rows
+    expect(countChanges(await countAtLock(db, flatId, '2026-10-12', await hc()), await hc())).toEqual([{ meal: 'b', from: 1, to: 2 }, { meal: 'l', from: 1, to: 2 }, { meal: 'd', from: 1, to: 2 }]);
+    await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');               // back to what it was
+    expect(countChanges(await countAtLock(db, flatId, '2026-10-12', await hc()), await hc())).toEqual([]);
+  });
+
+  it('a change after the lock is flagged even if nobody opened the card first', async () => {
+    const { flatId, tahsin, load } = await flat();
+    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
+    const before = await hc();
+    await seedLock(db, flatId, '2026-10-09T22:05');                                  // what every action runs first
+    await addGuests(db, flatId, tahsin, '2026-10-10', 'l', 1, '2026-10-09T22:05');
+    expect(countChanges(await countAtLock(db, flatId, '2026-10-10', await hc()), await hc())).toEqual([{ meal: 'l', from: before.l, to: before.l + 1 }]);
+  });
+
+  it('before the lock, seeding saves no baseline', async () => {
+    const { flatId } = await flat();
+    await seedLock(db, flatId, '2026-10-09T21:00');
+    const [f] = await db<{ d: string | null }>(`select lock_date::text as d from flats where id = $1`, [flatId]);
+    expect(f.d).toBeNull();
   });
 });
 

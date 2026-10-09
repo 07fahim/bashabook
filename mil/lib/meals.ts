@@ -92,3 +92,7 @@ export function mealDecision(date: string, now: string, cutoff: string): Decisio
 
 /** First day the person who runs the flat can still fix: the 1st of last month. Plan 6 moves this to the open month. */
 export const editFrom = (today: string) => `${addDays(`${today.slice(0, 8)}01`, -1).slice(0, 8)}01`;
+
+/** Meals whose plate count differs between two counts, in day order. */
+export const countChanges = (before: Record<Meal, number>, now: Record<Meal, number>) =>
+  MEALS.filter(m => before[m] !== now[m]).map(m => ({ meal: m, from: before[m], to: now[m] }));
