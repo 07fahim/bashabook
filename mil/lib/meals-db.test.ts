@@ -204,25 +204,31 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect((await loadHistory(db, flatId)).filter(h => h.entityId.endsWith('2026-10-10|l'))).toHaveLength(1);
   });
 
-  it('a host can add guests for today but never lower today', async () => {
-    const { flatId, tahsin, count } = await flat();
-    const now = '2026-10-09T13:00';   // today is locked for ordinary changes
-    expect(await addGuests(db, flatId, { memberId: tahsin, date: '2026-10-09', meal: 'd', count: 3 }, now)).toBe('late');
+  it('today: guests are added on top, never lowered, never the host own plate', async () => {
+    const { flatId, memberId, tahsin, count } = await flat();
+    const now = '2026-10-09T13:00', add = (date: string, meal: Meal, guests: number, me = true) => addGuests(db, flatId, tahsin, date, meal, guests, me, now);
+    expect(await add('2026-10-09', 'd', 2)).toBe('late');            // usual dinner 1 + 2 guests
     expect(await count('2026-10-09', 'd')).toBe(3);
-    expect(await addGuests(db, flatId, { memberId: tahsin, date: '2026-10-09', meal: 'd', count: 2 }, now)).toBe('closed');
-    expect(await count('2026-10-09', 'd')).toBe(3);
-    expect(await addGuests(db, flatId, { memberId: tahsin, date: '2026-10-08', meal: 'd', count: 4 }, now)).toBe('closed');   // past
+    expect(await add('2026-10-09', 'd', 1)).toBe('late');            // one more on top, not a total
+    expect(await count('2026-10-09', 'd')).toBe(4);
+    expect(await add('2026-10-09', 'd', 0)).toBe('closed');          // nothing to add: no rewrite, no silent overwrite
+    expect(await count('2026-10-09', 'd')).toBe(4);
+    await saveMeal(db, flatId, memberId, { memberId: tahsin, date: '2026-10-09', meal: 'l', count: 0 }, true);   // lunch off today
+    expect(await add('2026-10-09', 'l', 0, true)).toBe('closed');    // cannot switch my own meal back on
+    expect(await count('2026-10-09', 'l')).toBe(0);
+    expect(await add('2026-10-08', 'd', 2)).toBe('closed');          // past day
+    await noCooking(db, flatId, memberId, '2026-10-09', '2026-10-09', ['b'], '2026-10-09');
+    expect(await add('2026-10-09', 'b', 2)).toBe('closed');          // no cooking today
     await db(`update members set joined_on = '2026-10-20' where id = $1`, [tahsin]);
-    expect(await addGuests(db, flatId, { memberId: tahsin, date: '2026-10-09', meal: 'l', count: 2 }, now)).toBe('closed');   // not moved in yet
+    expect(await add('2026-10-09', 'd', 2)).toBe('closed');          // not moved in yet
     await db(`update members set joined_on = '2026-10-01' where id = $1`, [tahsin]);
-    const [h] = await loadHistory(db, flatId);
-    expect([h.entityId.endsWith('2026-10-09|d'), h.after.count, h.after.late]).toEqual([true, 3, true]);   // shows in history
+    const h = (await loadHistory(db, flatId)).filter(x => x.entityId.endsWith('2026-10-09|d'));
+    expect(h.map(x => [x.after.count, x.after.late])).toEqual([[4, true], [3, true]]);   // both additions in history
   });
 
-  it('adding guests for a later day is an ordinary change', async () => {
+  it('a later day keeps the total: guests plus my own plate', async () => {
     const { flatId, tahsin, count } = await flat();
-    expect(await addGuests(db, flatId, { memberId: tahsin, date: '2026-10-12', meal: 'l', count: 2 }, '2026-10-09T13:00')).toBe('open');
-    expect(await count('2026-10-12', 'l')).toBe(2);
+    expect(await addGuests(db, flatId, tahsin, '2026-10-12', 'l', 2, true, '2026-10-09T13:00')).toBe('open');
+    expect(await count('2026-10-12', 'l')).toBe(3);
   });
 });
-

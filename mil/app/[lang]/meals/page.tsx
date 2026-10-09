@@ -8,7 +8,7 @@ import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
 import { awayAction, cancelAwayAction, guestAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtDay, fmtRange, fmtTime, fmtWhen } from '../format';
+import { dhakaDate, fmtDay, fmtRange, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { checkChip, field, Field, Fold, focus, link, primary, PageSkeleton } from '../ui';
@@ -59,7 +59,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     if (a.awayCancel) return `${who} · ${m.awayCancelled} · ${range(a.awayCancel)}`;
     const [, date, meal] = h.entityId.split('|');
     const value = a.count! > 1 ? `${a.count} ${m.platesShort}` : a.count ? m.on : m.off;
-    const tag = a.late ? ` · ${m.late}` : '';
+    const tag = !a.late ? '' : ` · ${dhakaDate(h.at) >= date ? m.lateSameDay : m.lateAfter.replace('{t}', fmtTime(meals.flat.cutoff))}`;
     return `${actor === who ? who : `${actor} → ${who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${tag}`;
   };
   const h2 = 'text-xl font-bold';
@@ -97,7 +97,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                   {MEALS.map(x => <option key={x} value={x}>{m.names[x]}</option>)}
                 </select>
               </label>
-              <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={0} max={9} required defaultValue={1} />
+              <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={0} max={9} required defaultValue={1} hint={m.todayGuestHint} />
               <label className={checkChip}>
                 <input type="checkbox" name="me" defaultChecked={self.inMeals} className="size-5 shrink-0 accent-on-turmeric" />
                 {m.meToo}

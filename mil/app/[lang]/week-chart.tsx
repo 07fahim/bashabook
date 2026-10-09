@@ -1,12 +1,12 @@
 import { addDays, MEALS, type Decision } from '@/lib/meals';
-import type { Member, NoCook, SavedChange } from '@/lib/meals-db';
+import type { FlatInfo, Member, NoCook, SavedChange } from '@/lib/meals-db';
 import type { Dict, Locale } from './dictionaries';
 import { fmtDay } from './format';
 import { MealRow } from './meal-row';
 
 type Props = {
   lang: Locale; m: Dict['meals']; meId: string; today: string; week: string[]; decide: (date: string) => Decision; note: string;
-  members: Member[]; changes: SavedChange[]; noCook: NoCook[];
+  flat: FlatInfo; members: Member[]; changes: SavedChange[]; noCook: NoCook[];
 };
 
 /** My week: a list of days on phones, a days × meals chart on wider screens. Today gets a turmeric pill. */

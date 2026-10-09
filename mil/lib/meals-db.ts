@@ -67,15 +67,18 @@ export async function changeMeal(db: Db, flatId: string, c: MealChange, now: str
   return decision;
 }
 
-/** Guests for one of my meals. Today is open only to raise my plates (a surprise guest), saved as late so it shows in history. */
-export async function addGuests(db: Db, flatId: string, c: MealChange, now: string): Promise<Decision> {
-  const decision = await changeMeal(db, flatId, c, now);
-  if (decision !== 'closed' || c.date !== now.slice(0, 10)) return decision;
-  if ((await db(`select 1 from no_cook where flat_id = $1 and date = $2 and meal = $3`, [flatId, c.date, c.meal])).length) return 'closed';
-  const { members, changes } = await loadMeals(db, flatId, c.date, c.date);
-  const me = members.find(m => m.id === c.memberId);
-  if (!me || !isPresent(me, c.date) || c.count <= mealCount(me, indexChanges(changes), c.date, c.meal)) return 'closed';
-  await saveMeal(db, flatId, c.memberId, c, true);
+/** Guests for one of my meals. Later days: `guests` plus my own plate if `me`, the usual lock rule.
+ *  Today (surprise guests): `guests` are added on top of my current plates, at least 1, my own plate never changes;
+ *  saved as late so it shows in history. */
+export async function addGuests(db: Db, flatId: string, memberId: string, date: string, meal: Meal, guests: number, me: boolean, now: string): Promise<Decision> {
+  if (date !== now.slice(0, 10)) return changeMeal(db, flatId, { memberId, date, meal, count: guests + (me ? 1 : 0) }, now);
+  if (guests < 1) return 'closed';
+  if ((await db(`select 1 from no_cook where flat_id = $1 and date = $2 and meal = $3`, [flatId, date, meal])).length) return 'closed';
+  const { members, changes } = await loadMeals(db, flatId, date, date);
+  const self = members.find(m => m.id === memberId);
+  if (!self || !isPresent(self, date)) return 'closed';
+  // ponytail: read then write, so two taps at the same moment can lose one guest; both still leave a history row
+  await saveMeal(db, flatId, memberId, { memberId, date, meal, count: mealCount(self, indexChanges(changes), date, meal) + guests }, true);
   return 'late';
 }
 

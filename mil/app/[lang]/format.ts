@@ -20,6 +20,9 @@ export function fmtTime(time: string) {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
 }
 
+/** The Dhaka date of a moment, 'YYYY-MM-DD'. */
+export const dhakaDate = (at: Date | string) => new Date(new Date(at).getTime() + 6 * 3600_000).toISOString().slice(0, 10);
+
 /** A moment in Dhaka time: 'Sat, 10 October, 11:15 pm'. */
 export function fmtWhen(at: Date | string, lang: Locale) {
   const d = new Date(new Date(at).getTime() + 6 * 3600_000).toISOString();
