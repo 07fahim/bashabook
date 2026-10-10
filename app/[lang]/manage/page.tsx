@@ -62,6 +62,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   // tells two people with one name apart: the one leaving and the one moving in
   const note = (x: { joinedOn: string; leftOn: string | null }) =>
     x.leftOn ? ` · ${a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}` : x.joinedOn > today ? ` · ${a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang))}` : '';
+  const todo = !!closing || waiting.length > 0;   // anything waiting for the collector's tap
   const step = `grid size-11 place-items-center rounded-full border border-muted text-xl font-bold disabled:opacity-40 ${focus}`;
 
   return (
@@ -74,16 +75,20 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
         </p>
 
         {/* phone: to do, money, meals, settings, people (the reading order is the visual order everywhere).
-            Tablet: to do | money, meals, settings, people below. Desktop: to do | money, meals | settings, people below.
+            Tablet: to do across the top | money, meals | settings, people below.
+            Desktop with something to do: to do | money, meals | settings. On a day with nothing to do, to do is one line
+            across the top and money | meals | settings take the three columns, so no column is left empty.
             The wrappers are display:contents on a phone; wider, each column stacks on its own and no card stretches. */}
-        <div className="mt-6 flex flex-col md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
-          <div>
+        <div className="mt-6 flex flex-col md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-[1.3fr_1fr_1fr]">
+          {/* to do: the full width on a tablet (a third of it squeezes each payment to four lines); on a desktop its own
+              column, stretched to the row so the waiting list scrolls inside a box as tall as the tools beside it */}
+          <div className={`md:col-span-2 md:flex md:flex-col ${todo ? 'lg:col-span-1 lg:self-stretch' : 'lg:col-span-3'}`}>
             {closing && <div className="mt-3"><CloseCard lang={lang} x={mn} c={closing} collector={me.name} /></div>}
-            {waiting.length > 0 && <div className="mt-3"><ConfirmList lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /></div>}
-            {!closing && !waiting.length && <p className="mt-3 rounded-3xl border border-line bg-surface p-5 text-muted">{mn.noPending}</p>}
+            {waiting.length > 0 && <div className="mt-3 md:flex-1"><ConfirmList fill lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /></div>}
+            {!todo && <p className="mt-3 rounded-3xl border border-line bg-surface px-5 py-4 text-muted">{mn.noPending}</p>}
           </div>
-          <div className="contents md:grid md:items-start md:gap-x-8 lg:col-span-2 lg:grid-cols-2">
-          <div className="contents md:block">
+          <div className={`contents md:col-span-2 md:grid md:grid-cols-2 md:items-start md:gap-x-8 ${todo ? 'lg:col-span-2' : 'lg:col-span-3 lg:grid-cols-3'}`}>
+          <div className={todo ? 'contents md:block' : 'contents md:block lg:contents'}>
           <Group title={mn.groupMoney}>
             {([['payout', mn.giveTitle, mn.giveLead, mn.to], ['deposit', mn.gotTitle, mn.gotLead, mn.from]] as const).map(([type, title, lead, label]) => (
               <Fold row key={type} title={title} lead={lead} level={3}>
@@ -142,7 +147,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               )}
             </Fold>
           </Group>
-          <Group title={m.groupChange}>
+          <Group title={m.groupMeals}>
             <Fold row title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
               <form className="mt-4 space-y-4">
                 <label className="block font-semibold">
@@ -326,7 +331,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                       <span className="min-w-0 flex-1">
                         <span className="block font-semibold break-words">{x.name}</span>
                         <span className={`block text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
-                          {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
+                          {/* every row has a second line, so the names in one grid row line up; mine says "You" */}
+                          {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : x.id === me.memberId ? a.you.charAt(0).toUpperCase() + a.you.slice(1) : ''}
                         </span>
                       </span>
                       <span aria-hidden="true" className="text-2xl leading-none text-muted transition-transform group-open:rotate-45">+</span>
