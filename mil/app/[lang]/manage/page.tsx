@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { listGone, listMembers } from '@/lib/auth';
+import { openFrom } from '@/lib/close';
 import { db } from '@/lib/db';
-import { addDays, countChanges, editFrom, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { addDays, countChanges, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { listRepeats, loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireManager } from '@/lib/session';
@@ -33,7 +34,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   const me = await requireManager(lang);
   const sp = await searchParams;
   const today = todayDhaka(), tomorrow = addDays(today, 1);
-  const from = editFrom(today), to = addDays(today, 60);
+  const from = await openFrom(db, me.flatId, today), to = addDays(today, 60);
   // the person and day picked in "Change someone's meals"
   const who = typeof sp.who === 'string' ? sp.who : me.memberId;
   const day = typeof sp.day === 'string' && isDate(sp.day) && sp.day >= from && sp.day <= to ? sp.day : today;
