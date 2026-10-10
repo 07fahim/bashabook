@@ -39,9 +39,22 @@ describe('month triggers', { timeout: 30000 }, () => {
   });
 
   it('an adjustment must name who it moves to and the month it corrects', async () => {
-    const { flatId, ids, nafis } = await flat();
+    const { flatId, ids, nafis, version } = await flat();
     await openMonth(db, flatId, '2026-09-01');
+    await openMonth(db, flatId, '2026-10-01');
+    // moves and for_month both missing: violates only ledger_adjustment_check (member_id is set, so ledger_check2 is happy)
     await expect(db(`insert into ledger (flat_id, month, type, amount_poisha, member_id, date, status, created_by)
-      values ($1, '2026-09-01', 'adjustment', 100, $2, '2026-09-05', 'ok', $3)`, [flatId, ids.Tahsin, nafis.memberId])).rejects.toThrow();
+      values ($1, '2026-09-01', 'adjustment', 100, $2, '2026-09-05', 'ok', $3)`, [flatId, ids.Tahsin, nafis.memberId]))
+      .rejects.toThrow('ledger_adjustment_check');
+
+    await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-09-01'`, [flatId]);
+    const vClosed = await version('2026-09-01');
+    const vOpen = await version('2026-10-01');
+    // a real Kind B correction: posted into the open month, correcting the now-closed one
+    await db(`insert into ledger (flat_id, month, type, amount_poisha, member_id, moves, for_month, date, status, created_by)
+      values ($1, '2026-10-01', 'adjustment', 100, $2, $3, '2026-09-01', '2026-10-05', 'ok', $4)`,
+      [flatId, ids.Tahsin, ids.Zarif, nafis.memberId]);
+    expect(await version('2026-10-01')).toBe(vOpen + 1);
+    expect(await version('2026-09-01')).toBe(vClosed);
   });
 });
