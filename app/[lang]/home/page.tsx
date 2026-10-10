@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
 import { myLatestHandover } from '@/lib/handover';
-import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka } from '@/lib/meals';
+import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka, plates, type Meal } from '@/lib/meals';
 import { listMembers } from '@/lib/auth';
 import { countAtLock, loadMeals } from '@/lib/meals-db';
 import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
@@ -48,6 +48,9 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const starter = meals.members.find(x => x.role === 'manager');
   const note = starter?.id === me.memberId ? m.todayLockedSelf : m.todayLocked.replace('{name}', starter?.name ?? '');
   const hc = headcount(meals.members, meals.changes, tomorrow);
+  // today's count is what the cook asks for on arrival or on the phone: everyone sees it, not only the collector
+  const tod = headcount(meals.members, meals.changes, today);
+  const plate = (h: typeof hc, date: string, x: Meal) => { const p = plates(h, meals.noCook, date, x); return p === 'off' ? m.noCook : p; };
   // only after the lock does a change matter: before it, the card already says the count can still move
   const changes = decision === 'open' ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, hc, now), hc);
   const status = decision === 'open' ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
@@ -108,13 +111,14 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
               {MEALS.map(x => (
                 <div key={x} className="rounded-xl bg-paper py-3">
                   <dt className="text-[15px] text-muted">{m.names[x]}</dt>
-                  <dd className="text-3xl font-bold tabular-nums">{hc[x]}</dd>
+                  <dd className={`font-bold tabular-nums ${plates(hc, meals.noCook, tomorrow, x) === 'off' ? 'py-1.5 text-lg' : 'text-3xl'}`}>{plate(hc, tomorrow, x)}</dd>
                 </div>
               ))}
             </dl>
+            <p className="mt-3 text-[15px] text-muted">{m.today}: {MEALS.map(x => `${m.names[x]} ${plate(tod, today, x)}`).join(' · ')}</p>
             <LockChange m={m} lang={lang} date={tomorrow} hc={hc} changes={changes} />
             <div className="grow" />
-            <ShareButton text={countText(me.flatName, m, tomorrow, hc, status, lang)} label={m.share} copied={m.copied} />
+            <ShareButton text={countText(me.flatName, m, tomorrow, hc, status, lang, meals.noCook)} label={m.share} copied={m.copied} />
           </section>
           {bal && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{x.title}</h2>

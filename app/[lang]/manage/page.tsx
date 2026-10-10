@@ -6,12 +6,12 @@ import { listGone, listMembers } from '@/lib/auth';
 import { closeInfo, openFrom } from '@/lib/close';
 import { db } from '@/lib/db';
 import { currentOffer, flatMoney, lastOutcome, pendingCount } from '@/lib/handover';
-import { addDays, countChanges, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { addDays, countChanges, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, plates, todayDhaka, type Meal } from '@/lib/meals';
 import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { listRepeats, loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { addMemberAction, addRoomAction, adminSetAction, cancelHandoverAction, cookLinkAction, offerHandoverAction, entryAction, noCookAction, noCookCancelAction, bringBackAction, leavingAction, removePhotoAction, renameAction, rentAction, resetPinAction, setRoomAction, settingsAction, stopRepeatAction } from '../actions';
+import { addMemberAction, addRoomAction, adminSetAction, cancelHandoverAction, offerHandoverAction, entryAction, noCookAction, noCookCancelAction, bringBackAction, leavingAction, removePhotoAction, renameAction, rentAction, resetPinAction, setRoomAction, settingsAction, stopRepeatAction } from '../actions';
 import { Avatar } from '../avatar';
 import { CloseCard } from '../close-card';
 import { getDictionary, hasLocale } from '../dictionaries';
@@ -59,7 +59,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   const t = getDictionary(lang), a = t.app, m = t.meals, mn = t.money;
   const tom = headcount(meals.members, meals.changes, tomorrow);
   const tod = headcount(meals.members, meals.changes, today);
-  const line = (hc: typeof tom) => MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(' · ');
+  const plate = (hc: typeof tom, date: string, x: Meal) => { const p = plates(hc, meals.noCook, date, x); return p === 'off' ? m.noCook : p; };
+  const line = (hc: typeof tom, date: string) => MEALS.map(x => `${m.names[x]} ${plate(hc, date, x)}`).join(' · ');
   const card = 'mt-3 rounded-3xl border border-line bg-surface p-5';
   const own = new Set(meals.members.filter(x => !x.inMeals).map(x => x.id));
   const firstOpen = isLocked(tomorrow, nowDhaka(), meals.flat.cutoff) ? addDays(tomorrow, 1) : tomorrow;
@@ -67,7 +68,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   const status = firstOpen === tomorrow ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
   // only after the lock does a change matter: before it, the card already says the count can still move
   const changes = firstOpen === tomorrow ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, tom, nowDhaka()), tom);
-  const text = countText(me.flatName, m, tomorrow, tom, status, lang);
+  const text = countText(me.flatName, m, tomorrow, tom, status, lang, meals.noCook);
   const person = picked.members.find(x => x.id === who) ?? picked.members.find(x => x.id === me.memberId)!;
   const idx = indexChanges(picked.changes);
   // tells two people with one name apart: the one leaving and the one moving in
@@ -97,11 +98,11 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 {MEALS.map(x => (
                   <div key={x} className="rounded-xl bg-paper py-3">
                     <dt className="text-[15px] text-muted">{m.names[x]}</dt>
-                    <dd className="text-4xl font-bold tabular-nums">{tom[x]}</dd>
+                    <dd className={`font-bold tabular-nums ${plates(tom, meals.noCook, tomorrow, x) === 'off' ? 'py-2 text-lg' : 'text-4xl'}`}>{plate(tom, tomorrow, x)}</dd>
                   </div>
                 ))}
               </dl>
-              <p className="mt-3 text-[15px] text-muted">{m.today}: {line(tod)}</p>
+              <p className="mt-3 text-[15px] text-muted">{m.today}: {line(tod, today)}</p>
               <LockChange m={m} lang={lang} date={tomorrow} hc={tom} changes={changes} />
               <ShareButton text={text} label={m.share} copied={m.copied} />
             </section>
@@ -342,15 +343,6 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 </fieldset>
                 <button className={primary}>{m.save}</button>
               </ActionForm>
-            </Fold>
-            <Fold title={m.cookTitle} lead={m.cookLead} level={3}>
-              {meals.flat.cookToken && <ShareButton path={`/${meals.flat.lang}/c/${meals.flat.cookToken}`} label={m.share} copied={m.copied} />}
-              <form action={cookLinkAction} className="mt-3">
-                <input type="hidden" name="lang" value={lang} />
-                <input type="hidden" name="on" value={meals.flat.cookToken ? '0' : '1'} />
-                <button className={meals.flat.cookToken ? secondary : primary}>{meals.flat.cookToken ? m.cookOff : m.cookOn}</button>
-                {meals.flat.cookToken && <p className="mt-2 text-[15px] text-muted">{m.cookOffLead}</p>}
-              </form>
             </Fold>
             </div>
           </div>

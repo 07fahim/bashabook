@@ -60,6 +60,11 @@ export function headcount(members: MealMember[], changes: MealChange[], date: st
   return out;
 }
 
+/** The cook's number for one meal, or 'off' when no cooking blocks it. If someone still put plates on a blocked meal,
+ *  the number shows as usual: the cook has to make them. */
+export const plates = (hc: Record<Meal, number>, noCook: { date: string; meal: string }[], date: string, meal: Meal) =>
+  hc[meal] === 0 && noCook.some(n => n.date === date && n.meal === meal) ? 'off' as const : hc[meal];
+
 /** A date is locked if it is today or earlier, or it is tomorrow and the Dhaka clock has passed the cutoff.
  *  `nowDhaka` = 'YYYY-MM-DDTHH:MM' in Asia/Dhaka; `cutoff` = 'HH:MM' or 'HH:MM:SS' (Postgres time). */
 export function isLocked(date: string, nowDhaka: string, cutoff: string): boolean {
