@@ -6,7 +6,8 @@ import type { Dict, Locale } from './dictionaries';
 import { fmtExact, fmtMonth, fmtSigned } from './format';
 import { link, primary, secondary } from './ui';
 
-export type CloseInfo = { month: string; fund: number; pending: number; problems: number };
+/** `fund`: the month's own fund (below 0 = its gap is paid first); `held`: the cash to count, every open month's money now. */
+export type CloseInfo = { month: string; fund: number; held: number; later: number; pending: number; problems: number };
 
 /** The collector's card for the oldest finished month: what blocks it, or the cash count and Close. */
 /** `collector`: the collector's name (the signed-in person: only they see this card). */
@@ -46,8 +47,9 @@ export function CloseCard({ lang, x, c, collector }: { lang: Locale; x: Dict['mo
         <ActionForm action={closeAction} className="mt-4">
           <input type="hidden" name="lang" value={lang} />
           <input type="hidden" name="month" value={c.month} />
-          <p className="font-semibold">{x.expected.replace('{t}', fmtSigned(c.fund))}</p>
-          <CashCount x={x} fund={c.fund} />
+          <p className="font-semibold">{x.expected.replace('{t}', fmtSigned(c.held))}</p>
+          {c.later !== 0 && <p className="max-w-prose text-[15px] text-muted">{x.heldSplit.replace('{month}', name).replace('{a}', fmtSigned(c.fund)).replace('{b}', fmtSigned(c.later))}</p>}
+          <CashCount x={x} fund={c.held} />
           <button className={`${primary} @xl:w-auto`}>{x.closeBtn.replace('{month}', name)}</button>
         </ActionForm>
       )}

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { myLatestHandover } from '@/lib/handover';
+import { flatMoney, myLatestHandover } from '@/lib/handover';
 import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka, plates, type Meal } from '@/lib/meals';
 import { listMembers } from '@/lib/auth';
 import { changedByOthers, countAtLock, loadMeals } from '@/lib/meals-db';
@@ -42,6 +42,8 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   ]);
   const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
+  // what the collector holds now: while last month is open this month's own fund starts from 0, so add up every open month
+  const held = mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
   const someoneMissing = people.some(p => !p.claimed);
   const self = people.find(p => p.id === me.memberId), myPhone = self?.phone ?? '';   // the invite card only matters while someone hasn't joined
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
@@ -139,7 +141,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             {/* the same shape as the plates card beside it: three numbers in tiles, the button at the bottom */}
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
               {([[x.mealRate, fmtRate(mo.result.mealRate, totalMeals)], [x.myMeals, fmtMeals(mo.meals.get(me.memberId) ?? 0)],
-                [x.withName.replace('{name}', starter?.name ?? ''), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v]) => (
+                [x.withName.replace('{name}', starter?.name ?? ''), `${held < 0 ? '−' : ''}${fmtTaka(held)}`]] as const).map(([k, v]) => (
                 <div key={k} className="rounded-xl bg-paper px-1 py-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
                   <dd className="text-lg font-bold tabular-nums [overflow-wrap:anywhere] sm:text-2xl">{v}</dd>

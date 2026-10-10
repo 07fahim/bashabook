@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Db } from './db';
 import { addDays, daysOfMonth, editFrom } from './meals';
 import { CASH_KEYS, parseCash, type Cash } from './money';
+import { flatMoney } from './handover';
 import { addEntry, loadMonth, monthOf, openMonth, type Actor } from './money-db';
 
 export { CASH_KEYS, parseCash, type Cash };   // pure, in money.ts so the close card can use them in the browser
@@ -34,8 +35,17 @@ export async function closeInfo(db: Db, flatId: string, today: string) {
   const month = await closableMonth(db, flatId, today);
   if (!month) return null;
   const mo = await loadMonth(db, flatId, month, today);
-  return { month, fund: mo.result.fund, pending: mo.entries.filter(x => x.status === 'pending').length, problems: mo.result.problems.length };
+  const total = await flatMoney(db, flatId, today), fund = mo.result.fund;
+  // `later`: what the months after it added or spent since, so the card can say why the count differs from its own fund
+  return { month, fund, held: cashFrom(fund, total), later: total - fund,
+    pending: mo.entries.filter(x => x.status === 'pending').length, problems: mo.result.problems.length };
 }
+
+/** The cash the collector must count to close a month whose own fund is `fund`, when every open month together holds `total`
+ *  (flatMoney). After the 1st they also hold the later months' money, so it is the total, never below ৳0: spending past that
+ *  came from their own pocket and is a debt to them, not cash. A month whose own fund is below 0 can't be counted at all:
+ *  its gap is paid first (coverGap). */
+const cashFrom = (fund: number, total: number) => (fund < 0 ? fund : Math.max(0, total));
 
 /** The same id for the same month state: sha256 of (flat, month, version) shaped as a version-5 style UUID. */
 const gapId = (flatId: string, month: string, version: number) => {
@@ -96,9 +106,12 @@ export async function closeMonth(db: Db, flatId: string, by: Actor, month: strin
   if (mo.info.status === 'closed') return out('closed', expected);
   if (mo.entries.some(x => x.status === 'pending')) return out('pending', expected);
   if (!mo.result.invariantOk) return out('problems', expected);
-  if (actual !== expected) return out('cash', expected);
+  // ponytail: the count is checked against later open months too, but only this month's version guards the close; an entry
+  // landing in a later month mid-close can't change what is frozen here, only make this check slightly stale
+  const held = cashFrom(expected, await flatMoney(db, flatId, today));
+  if (actual !== held) return out('cash', held);
   await afterLoad?.();
-  const record = { ...cash, expected, actual, difference: actual - expected, by: by.memberId };
+  const record = { ...cash, expected: held, actual, difference: actual - held, by: by.memberId };
   const rows = mo.result.perMember.map(p => ({ ...p, meals: mo.meals.get(p.id) ?? 0, days: mo.days.get(p.id) ?? 0 }));
   const r = await db(
     `with m as (update months set status = 'closed', closing_fund = $4, meal_rate = $5, cash_counted = $6, cash = $7::text::jsonb, closed_at = now()
