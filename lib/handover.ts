@@ -52,8 +52,8 @@ export const cancelHandover = (db: Db, flatId: string, me: string, id: string) =
    where flat_id = $1 and id = $2 and status = 'offered' and from_member = $3 returning 1`, [flatId, id, me]);
 
 export async function currentOffer(db: Db, flatId: string) {
-  const [o] = await db<{ id: string; fromId: string; toId: string; from: string; to: string; amount: number }>(
-    `select h.id, h.from_member as "fromId", h.to_member as "toId", f.name as "from", t.name as "to", h.amount::int as amount
+  const [o] = await db<{ id: string; from: string; to: string; amount: number }>(
+    `select h.id, f.name as "from", t.name as "to", h.amount::int as amount
      from handovers h join members f on f.id = h.from_member join members t on t.id = h.to_member
      where h.flat_id = $1 and h.status = 'offered'`, [flatId]);
   return o ?? null;
@@ -93,6 +93,6 @@ export async function pendingCount(db: Db, flatId: string) {
 
 /** App team only (scripts/override-collector.mts). */
 export async function overrideCollector(db: Db, flatId: string, to: string, reason: string, admin: string) {
-  const [r] = await db<{ r: 'ok' | 'recipient' | 'reason' }>(`select override_collector($1, $2, $3, $4) as r`, [flatId, to, reason, admin]);
+  const [r] = await db<{ r: 'ok' | 'noCollector' | 'recipient' | 'reason' }>(`select override_collector($1, $2, $3, $4) as r`, [flatId, to, reason, admin]);
   return r.r;
 }

@@ -13,6 +13,7 @@ async function flat() {
   await migrate();
   const f = await createFlat(db, { flatName: 'Flat 4B', name: 'Nafis', pin: '1234', others: ['Tahsin', 'Zarif'], today: '2026-09-01', lang: 'bn' });
   const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
+  await db(`update members set pin_hash = 'x' where flat_id = $1`, [f.flatId]);   // everyone has signed in: only a claimed name can take the money
   const v = async () => (await db<{ v: number }>(`select offer_version as v from flats where id = $1`, [f.flatId]))[0].v;
   const collector = async () => (await db<{ id: string }>(`select id from members where flat_id = $1 and role = 'manager'`, [f.flatId])).map(r => r.id);
   const call = async (sql: string, p: unknown[]) => (await db<{ r: string }>(sql, p))[0].r;
@@ -71,6 +72,9 @@ describe('handover database rules', { timeout: 30000 }, () => {
     expect(await offer(ids.Nafis, ids.Tahsin, await v(), -500)).toBe('negative');
     await db(`update members set left_on = '2026-12-31' where id = $1`, [ids.Zarif]);
     expect(await offer(ids.Nafis, ids.Zarif, await v())).toBe('recipient');
+    await db(`update members set left_on = null, pin_hash = null where id = $1`, [ids.Zarif]);
+    expect(await offer(ids.Nafis, ids.Zarif, await v())).toBe('recipient');                   // never signed in
+    expect(await call(`select override_collector($1, $2, $3, $4) as r`, [flatId, ids.Zarif, 'x', 'y'])).toBe('recipient');
     await db(`insert into months (flat_id, month) values ($1, '2026-09-01') on conflict do nothing`, [flatId]);
     const [p] = await db<{ id: string }>(`insert into ledger (flat_id, month, type, amount_poisha, member_id, date, status, created_by)
       values ($1, '2026-09-01', 'payout', 1000, $2, '2026-09-03', 'pending', $3) returning id`, [flatId, ids.Tahsin, ids.Nafis]);
@@ -153,6 +157,23 @@ describe('handover database rules', { timeout: 30000 }, () => {
     const [b] = await db<{ held_by: string | null }>(`insert into ledger (flat_id, month, type, amount_poisha, date, status, created_by)
       values ($1, '2026-09-01', 'bazar', 500, '2026-09-04', 'ok', $2) returning held_by`, [flatId, ids.Zarif]);
     expect(b.held_by).toBeNull();
+  });
+
+  it('held_by: a payout or an ok deposit is held by whoever recorded it, a pending deposit by the collector now', async () => {
+    const { flatId, ids, call } = await flat();
+    await db(`insert into months (flat_id, month) values ($1, '2026-09-01') on conflict do nothing`, [flatId]);
+    expect(await call(`select override_collector($1, $2, $3, $4) as r`, [flatId, ids.Zarif, 'phone lost', 'app team'])).toBe('ok');
+    const ins = async (type: string, status: string, by: string) => (await db<{ h: string }>(`insert into ledger (flat_id, month, type, amount_poisha, member_id, date, status, created_by)
+      values ($1, '2026-09-01', $2, 500, $3, '2026-09-04', $4, $5) returning held_by as h`, [flatId, type, ids.Tahsin, status, by]))[0].h;
+    expect(await ins('payout', 'pending', ids.Nafis)).toBe(ids.Nafis);     // recorded by Nafis in the role-check window
+    expect(await ins('deposit', 'ok', ids.Nafis)).toBe(ids.Nafis);
+    expect(await ins('deposit', 'pending', ids.Tahsin)).toBe(ids.Zarif);
+  });
+
+  it('override with no collector says so', async () => {
+    const { flatId, ids, call } = await flat();
+    await db(`update members set role = 'member' where flat_id = $1`, [flatId]);
+    expect(await call(`select override_collector($1, $2, $3, $4) as r`, [flatId, ids.Zarif, 'phone lost', 'app team'])).toBe('noCollector');
   });
 
   it('set_leaving: only the current collector, never the collector, date and counter together', async () => {

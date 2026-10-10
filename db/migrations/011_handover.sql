@@ -33,9 +33,15 @@ update audit_log a set before = a.before || jsonb_build_object('held_by', m.id) 
   where a.entity = 'ledger' and a.after->>'removed' = 'true' and a.before->>'type' in ('deposit','payout')
     and not (a.before ? 'held_by') and m.flat_id = a.flat_id and m.role = 'manager';
 -- backfill end
+-- A payout or an ok deposit is only ever recorded by whoever holds the cash (payouts are collector-only; an ok deposit
+-- is the collector's own record or Pay the gap), so it is held by its recorder: a payout the old collector recorded in
+-- the window between the app's role check and the insert never names the new one. Only a pending deposit (a
+-- flatmate's own) reads the current collector. Only when held_by is null: put back restores its own.
 create function ledger_held_by() returns trigger language plpgsql as $$
 begin
-  if new.type in ('deposit','payout') and new.held_by is null then
+  if new.type = 'payout' or (new.type = 'deposit' and new.status = 'ok') then
+    new.held_by := coalesce(new.held_by, new.created_by);
+  elsif new.type = 'deposit' and new.held_by is null then
     select id into new.held_by from members where flat_id = new.flat_id and role = 'manager';
   end if;
   return new;
@@ -62,9 +68,9 @@ create table handovers (
 );
 create unique index one_offer_per_flat on handovers (flat_id) where status = 'offered';
 
--- living here now with no move-out date
+-- living here now with no move-out date, and has signed in (claimed their name)
 create function handover_eligible(f uuid, m uuid) returns boolean language sql stable as $$
-  select exists (select 1 from members where flat_id = f and id = m and left_on is null
+  select exists (select 1 from members where flat_id = f and id = m and left_on is null and pin_hash is not null
                    and joined_on <= (now() at time zone 'Asia/Dhaka')::date)
 $$;
 
@@ -140,6 +146,7 @@ declare cur uuid;
 begin
   perform 1 from flats where id = f for update;
   select id into cur from members where flat_id = f and role = 'manager';
+  if cur is null then return 'noCollector'; end if;
   if to_m = cur or not handover_eligible(f, to_m) then return 'recipient'; end if;
   if coalesce(trim(why), '') = '' or coalesce(trim(who), '') = '' then return 'reason'; end if;
   update handovers set status = 'cancelled', decided_at = now() where flat_id = f and status = 'offered';

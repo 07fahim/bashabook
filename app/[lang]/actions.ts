@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
-import { acceptHandover, cancelHandover, declineHandover, offerHandover } from '@/lib/handover';
+import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
 import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
@@ -478,8 +478,12 @@ export async function offerHandoverAction(_: FormState, d: FormData): Promise<Fo
   const r = await offerHandover(db, me.flatId, me, to, shown, todayDhaka());
   refresh();
   if (r === 'ok') return { done: x.saved };
+  if (r === 'waiting') {
+    const n = await pendingCount(db, me.flatId);
+    return { error: n > 1 ? x.handBlocked.replace('{n}', String(n)) : x.handBlockedOne };
+  }
   const errors = { changed: x.errors.handChanged, already: x.errors.handAlready, recipient: x.errors.handRecipient,
-    waiting: x.handBlockedOne, negative: x.handNegative, notCollector: x.errors.bad } as const;
+    negative: x.handNegative, notCollector: x.errors.bad } as const;
   return { error: errors[r] };
 }
 
