@@ -206,9 +206,8 @@ export async function upcomingAway(db: Db, flatId: string, memberId: string, tod
 /** New usual meals. Days freezeFrom..freezeTo first keep the old usual meals as saved rows, so locked days don't move;
  *  `freezeFrom` null = from the day they joined (no month closed yet, so every month is open).
  *  `inMeals = false` (cooking for yourself) also clears plain future rows, so booked meals don't keep counting.
- *  ponytail: the members update fires touch_open_months, which locks the open months in heap order, while the frozen rows
- *  lock them in date order: two such writes at once could rarely deadlock. If it ever shows, a new migration makes
- *  touch_open_months lock them `order by month` (select ... for update) first. */
+ *  The members update fires touch_open_months, which (since migration 014) locks the open months in month order, the same
+ *  order the frozen rows lock them in, so two such writes at once can't deadlock. */
 export async function setDefaults(db: Db, flatId: string, memberId: string, d: Record<Meal, boolean>, freezeFrom: string | null, freezeTo: string, inMeals: boolean | null = null) {
   // set_usual_meals (migration 012) locks the flat row first, so this always runs after any set_other_meal that got
   // there first (and before any that starts after): leaving shared meals never misses a row set_other_meal just wrote.
@@ -232,7 +231,7 @@ export async function updateSettings(db: Db, flatId: string, by: string, s: { cu
          (weight_b, weight_l, weight_d) is distinct from ($3::int, $4::int, $5::int) as reweigh from flats where id = $1),
      -- the ended months still open, locked so a close running now finishes first and its month drops out (see addRoom). No lock
      -- on old: it may run after up changed the flat row, and a locking read skips a row its own statement changed (the
-     -- history row would vanish). up locks the flat row itself; a rare deadlock with the month triggers is retried (db.ts)
+     -- history row would vanish). up locks the flat row itself.
      ended as (select month from months where flat_id = $1 and status = 'open' and month < date_trunc('month', $9::text::date)
        order by month for no key update),
      g as (select (select reweigh from old) and not $10::boolean and exists (select 1 from ended) as blocked),
