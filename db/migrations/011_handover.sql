@@ -6,7 +6,9 @@ alter table flats add column offer_version int not null default 0;
 -- the ledger trigger from 009 also bumps the flat's offer_version (a pending entry is a ledger row too)
 create or replace function touch_ledger() returns trigger language plpgsql as $$
 begin
-  -- flats first, then months: one lock order everywhere, so it can't deadlock with set_leaving or a settings save
+  -- flats first, then months, the same order as set_leaving and a settings save. The functions below lock the flat
+  -- row FOR NO KEY UPDATE, never FOR UPDATE: FOR UPDATE would also block every foreign key check against flats
+  -- (audit_log, ledger, ...), and a statement holding a member's row would then deadlock with them.
   update flats set offer_version = offer_version + 1 where id = case when tg_op = 'DELETE' then old.flat_id else new.flat_id end;
   if tg_op <> 'INSERT' then perform month_touch(old.flat_id, old.month); end if;
   if tg_op <> 'DELETE' then perform month_touch(new.flat_id, new.month); end if;
@@ -79,7 +81,7 @@ $$;
 create function offer_handover(f uuid, by uuid, to_m uuid, seen int, total bigint) returns text language plpgsql as $$
 declare v int;
 begin
-  select offer_version into v from flats where id = f for update;
+  select offer_version into v from flats where id = f for no key update;
   if v is distinct from seen then return 'changed'; end if;
   if not exists (select 1 from members where flat_id = f and id = by and role = 'manager') then return 'notCollector'; end if;
   if to_m = by or not handover_eligible(f, to_m) then return 'recipient'; end if;
@@ -96,7 +98,7 @@ end $$;
 create function accept_handover(f uuid, h_id uuid, me uuid) returns text language plpgsql as $$
 declare h handovers; v int;
 begin
-  select offer_version into v from flats where id = f for update;
+  select offer_version into v from flats where id = f for no key update;
   -- row lock: decline/cancel skip the flat lock, so a decline that started first makes this wait and read 'declined';
   -- one arriving later waits, then finds 'accepted'. Without it a decline could land between this read and the update.
   select * into h from handovers where id = h_id and flat_id = f for update;
@@ -126,7 +128,7 @@ end $$;
 -- counter bump commit together. A name clash (taking a move-out back while a newcomer has the name) still raises.
 create function set_leaving(f uuid, by uuid, m uuid, last_day date, today date) returns text language plpgsql as $$
 begin
-  perform 1 from flats where id = f for update;
+  perform 1 from flats where id = f for no key update;
   if not exists (select 1 from members where flat_id = f and id = by and role = 'manager')
      or m = by or exists (select 1 from members where flat_id = f and id = m and role = 'manager') then return 'no'; end if;
   if not exists (select 1 from members where flat_id = f and id = m and (left_on is null or left_on >= today)
@@ -144,7 +146,7 @@ end $$;
 create function override_collector(f uuid, to_m uuid, why text, who text) returns text language plpgsql as $$
 declare cur uuid;
 begin
-  perform 1 from flats where id = f for update;
+  perform 1 from flats where id = f for no key update;
   select id into cur from members where flat_id = f and role = 'manager';
   if cur is null then return 'noCollector'; end if;
   if to_m = cur or not handover_eligible(f, to_m) then return 'recipient'; end if;
