@@ -433,7 +433,7 @@ export async function coverGapAction(_: FormState, d: FormData): Promise<FormSta
   const shown = Number(str(d, 'shown'));
   if (!Number.isSafeInteger(shown)) return { error: x.errors.bad };
   const r = await unlessClosed(() => coverGap(db, me.flatId, me, todayDhaka(), x.coverNote, shown));
-  if (r === 'changed') { refresh(); return { error: x.errors.changed }; }
+  if (r === 'changed') { refresh(); return { error: x.errors.coverChanged }; }
   if (r !== 'ok') return { error: r === 'closed' ? x.errors.closed : x.errors.bad };
   refresh();
   return { done: x.saved };
@@ -459,7 +459,8 @@ export async function correctionAction(_: FormState, d: FormData): Promise<FormS
     : kind === 'bill' ? { ...base, kind, paidBy: str(d, 'who'), split: split!, selected: people }
     : { ...base, kind, paidBy: str(d, 'who') };
   const ids = kind === 'move' ? [str(d, 'from'), str(d, 'to')] : [str(d, 'who'), ...(split === 'selected' ? people : [])];
-  if (!ids.every(id => UUID.test(id)) || (kind === 'move' && ids[0] === ids[1]) || (split === 'selected' && !people.length)) return { error: x.errors.people };
+  if (kind === 'move' && ids[0] && ids[0] === ids[1]) return { error: x.errors.samePerson };
+  if (!ids.every(id => UUID.test(id)) || (split === 'selected' && !people.length)) return { error: x.errors.people };
   const r = await addCorrection(db, me.flatId, me, c, todayDhaka());
   if (r !== 'ok') return { error: r === 'month' ? x.errors.month : x.errors.bad };
   refresh();
