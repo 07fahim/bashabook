@@ -153,7 +153,6 @@ export type NewEntry = {
   id?: string;                    // one-time id from the form: a retry with the same id records nothing new
 };
 
-/** Adds an entry if the rules allow it. 'rooms' = rent by room asked before rooms and rents are set. */
 /** The first date an entry may have. Flatmates: this month. The collector: the oldest month still open, so a bazar found after
  *  the 1st can be added with its real date before last month closes (closed months refuse writes in the database anyway). */
 export async function entryFrom(db: Db, flatId: string, by: Actor, today: string) {
@@ -162,8 +161,14 @@ export async function entryFrom(db: Db, flatId: string, by: Actor, today: string
   return r.m && r.m < monthOf(today) ? r.m : monthOf(today);
 }
 
-export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): Promise<'ok' | 'bad' | 'rooms' | 'gone'> {
+/** Adds an entry if the rules allow it. 'rooms' = rent by room asked before rooms and rents are set. With `today` (every form
+ *  does), the date must lie from entryFrom to today ('date'), and only an entry in this month may repeat monthly. */
+export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, today?: string): Promise<'ok' | 'bad' | 'rooms' | 'gone' | 'date'> {
   const boss = by.role === 'manager', moving = e.type === 'deposit' || e.type === 'payout';
+  if (today !== undefined) {
+    if (e.date > today || e.date < await entryFrom(db, flatId, by, today)) return 'date';
+    if (e.repeat && monthOf(e.date) !== monthOf(today)) return 'bad';   // a forgotten bill from last month never starts a monthly one
+  }
   if (!Number.isInteger(e.amount) || e.amount <= 0) return 'bad';
   if ((e.type === 'bill') !== (e.split !== null)) return 'bad';
   if (moving ? !e.memberId || e.paidBy : e.memberId) return 'bad';

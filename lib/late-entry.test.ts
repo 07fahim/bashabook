@@ -29,9 +29,21 @@ describe('a forgotten entry in a month that is still open', { timeout: 30000 }, 
     expect(await entryFrom(db, flatId, tahsin, OCT2)).toBe('2026-10-01');
   });
 
+  it('addEntry with today enforces the dates and keeps a backfilled bill from repeating', async () => {
+    const { flatId, nafis, tahsin } = await flat();
+    const bill = (date: string, repeat: boolean) => e({ type: 'bill', amount: 5000, date, note: 'Gas', split: 'equal', repeat });
+    expect(await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 5000, date: '2026-09-28', memberId: tahsin.memberId }), OCT2)).toBe('date');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 5000, date: '2026-10-03' }), OCT2)).toBe('date');   // tomorrow
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 5000, date: '2026-08-31' }), OCT2)).toBe('date');   // before the oldest open month
+    expect(await addEntry(db, flatId, nafis, bill('2026-09-15', true), OCT2)).toBe('bad');
+    expect(await db(`select 1 from bill_templates where flat_id = $1`, [flatId])).toEqual([]);
+    expect(await addEntry(db, flatId, nafis, bill('2026-09-15', false), OCT2)).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, bill(OCT2, true), OCT2)).toBe('ok');   // this month may still repeat
+  });
+
   it('a late September bazar lands in September, the count matches, and once closed September refuses more', async () => {
     const { flatId, nafis } = await flat();
-    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 100000, date: '2026-09-28' }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 100000, date: '2026-09-28' }), OCT2)).toBe('ok');
     const sep = await loadMonth(db, flatId, '2026-09-01', OCT2);
     expect([sep.entries.some(x => x.date === '2026-09-28' && x.type === 'bazar'), sep.result.fund]).toEqual([true, 200000]);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', OCT2, cash(200000))).result).toBe('ok');
