@@ -118,3 +118,17 @@ begin
        and not exists (select 1 from snap s where s.m = mc.member_id and s.d = mc.date and s.x = mc.meal))
   insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', 'flat|nocook', $5, $6);
 end $$;
+
+-- A flatmate's own-meal writes (setOwn, addGuests, removeGuests in lib/meals-db.ts) guard against a no-cooking row,
+-- but one statement reads its snapshot before any lock wait, so it can't see a no-cooking save still in flight and
+-- would switch the meal back on just as no-cooking commits. The flat row first (as set_no_cook), then the caller's
+-- statement, run here so it reads after the lock: no-cooking that got there first is seen and the write is skipped.
+-- `q` is the app's own fixed statement, $1..$7 = f, m, d, ml, late, n, eid. True when it wrote a history row.
+create function locked_own_write(f uuid, m uuid, d date, ml text, late boolean, n int, eid text, q text) returns boolean language plpgsql as $$
+declare k int;
+begin
+  perform 1 from flats where id = f for no key update;
+  execute q using f, m, d, ml, late, n, eid;
+  get diagnostics k = row_count;
+  return k > 0;
+end $$;
