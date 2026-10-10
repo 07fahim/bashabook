@@ -40,7 +40,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const asked = typeof sp.m === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m) ? `${sp.m}-01` : thisMonth;
   const month = asked > thisMonth ? thisMonth : asked, mine = sp.mine === '1';
   const [mo, waiting, closing] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss),
-    boss ? closeInfo(db, me.flatId, today) : null]);
+    boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null]);   // the card only shows on the month to close
   const closed = mo.info?.status === 'closed';
   const name = (id: string | null) => mo.all.find(p => p.id === id)?.name ?? '?';
   const collector = mo.all.find(p => p.role === 'manager')!;

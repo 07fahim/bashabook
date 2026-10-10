@@ -12,7 +12,7 @@ import { changePinAction, logoutAction, phoneAction, photoAction, removePhotoAct
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { countText, fmtDay, fmtMeals, fmtRate, fmtTaka, fmtTime } from '../format';
+import { countText, fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka, fmtTime } from '../format';
 import { Header } from '../header';
 import { LockChange } from '../lock-change';
 import { MealRow } from '../meal-row';
@@ -96,6 +96,8 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           {bal && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
             <h2 className="text-xl font-bold">{x.title}</h2>
             <p className={`mt-1 text-lg font-bold ${bal.tone}`}>{bal.text}</p>
+            {/* the balance jumps when the earlier month closes: say why beforehand, as the Money page does */}
+            {mo.earlierOpen && <p className="mt-2 text-[15px] text-muted">{x.notClosedYet.replace('{month}', fmtMonth(mo.earlierOpen)).replace('{name}', starter?.name ?? '')}</p>}
             {/* the same shape as the plates card beside it: three numbers in tiles, the button at the bottom */}
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
               {([[x.mealRate, fmtRate(mo.result.mealRate, totalMeals)], [x.myMeals, fmtMeals(mo.meals.get(me.memberId) ?? 0)],

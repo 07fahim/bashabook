@@ -117,7 +117,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     {label}
                     <select name="who" className={field} required defaultValue="">
                       <option value="" disabled>—</option>
-                      {mo.members.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {/* everyone with a balance this month, so someone who moved out can still be settled with */}
+                      {mo.result.perMember.map(p => <option key={p.id} value={p.id}>{mo.all.find(a => a.id === p.id)?.name}</option>)}
                     </select>
                   </label>
                   <Field label={mn.amount} name="amount" inputMode="decimal" required placeholder="3000" />

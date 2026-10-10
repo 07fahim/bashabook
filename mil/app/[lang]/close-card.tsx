@@ -6,12 +6,12 @@ import type { Dict, Locale } from './dictionaries';
 import { fmtExact, fmtMonth, fmtSigned } from './format';
 import { link, primary, secondary } from './ui';
 
-export type CloseInfo = { month: string; fund: number; pending: number; problems: number; earlierOpen: string | null };
+export type CloseInfo = { month: string; fund: number; pending: number; problems: number };
 
 /** The collector's card for the oldest finished month: what blocks it, or the cash count and Close. */
 /** `collector`: the collector's name (the signed-in person: only they see this card). */
 export function CloseCard({ lang, x, c, collector }: { lang: Locale; x: Dict['money']; c: CloseInfo; collector: string }) {
-  const gap = fmtExact(c.fund), name = fmtMonth(c.month), blocked = c.pending > 0 || c.problems > 0 || c.earlierOpen !== null;
+  const gap = fmtExact(c.fund), name = fmtMonth(c.month), blocked = c.pending > 0 || c.problems > 0;
   // @container: full width on Money, one column on Flat; when wide, the four boxes sit in a row and text keeps a readable measure
   return (
     <section className="@container rounded-3xl border-2 border-turmeric bg-surface p-5">
@@ -19,7 +19,6 @@ export function CloseCard({ lang, x, c, collector }: { lang: Locale; x: Dict['mo
       <p className="mt-1 max-w-prose text-muted">{x.closeLead}</p>
       {blocked ? (
         <ul className="mt-3 list-disc space-y-2 pl-5">
-          {c.earlierOpen && <li>{x.blockEarlier.replace('{month}', fmtMonth(c.earlierOpen))}</li>}
           {c.pending > 0 && (
             <li>
               {c.pending === 1 ? x.blockPendingOne : x.blockPending.replace('{n}', String(c.pending))}{' '}
