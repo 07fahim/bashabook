@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
+import { openMonth } from './money-db';
 import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listGone, addMember } from './auth';
 
 const today = '2026-10-09';
@@ -53,12 +54,44 @@ describe('auth', { timeout: 30000 }, () => {
     await login(db, code, tahsin, '5555', null);
     const token = await createSession(db, tahsin);
     expect((await memberBySession(db, token))?.memberId).toBe(tahsin);
-    expect(await resetPin(db, flatId, tahsin, '9999')).toBe(true);
+    expect(await resetPin(db, flatId, tahsin, '9999', { memberId: id('Nafis') })).toBe(true);
     expect(await memberBySession(db, token)).toBeNull();
     expect(await login(db, code, tahsin, '5555', null)).toEqual({ error: 'wrongPin' });
     expect(await login(db, code, tahsin, '9999', null)).toEqual({ error: 'newPinNeeded' });
     expect(await login(db, code, tahsin, '9999', '4321')).toEqual({ memberId: tahsin });
     expect(await login(db, code, tahsin, '4321', null)).toEqual({ memberId: tahsin });
+  });
+
+  it('the collector reset is in the flat history, by whom', async () => {
+    const { flatId, code, id } = await flat();
+    await login(db, code, id('Tahsin'), '5555', null);
+    expect(await resetPin(db, flatId, id('Tahsin'), '9999', { memberId: id('Nafis') })).toBe(true);
+    const rows = await db<{ after: unknown; by: string | null }>(`select after, by_member as by from audit_log where flat_id = $1 and entity_id = $2`, [flatId, id('Tahsin')]);
+    expect(rows).toEqual([{ after: { pinReset: true }, by: id('Nafis') }]);
+  });
+
+  it('the app team resets only the collector living here, with a reason; nothing but the PIN changes', async () => {
+    const { flatId, code, id, memberId: nafis } = await flat();
+    await login(db, code, id('Tahsin'), '5555', null);
+    const token = await createSession(db, nafis);
+    const state = async () => db(`select role, name, joined_on::text, left_on::text, room_id, phone from members where flat_id = $1 order by name`, [flatId]);
+    const versions = async () => db(`select month, version from months where flat_id = $1 order by month`, [flatId]);
+    await openMonth(db, flatId, '2026-10-01');
+    const [s0, v0] = [await state(), await versions()];
+    expect(v0).toHaveLength(1);
+    const team = { admin: 'Fahim', reason: 'forgot PIN; called him and Tahsin' };
+    expect(await resetPin(db, flatId, id('Tahsin'), '7777', team)).toBe(false);                     // not the collector
+    expect(await resetPin(db, flatId, nafis, '7777', { admin: 'Fahim', reason: ' ' })).toBe(false);  // no reason
+    expect(await resetPin(db, flatId, nafis, '7777', { admin: '', reason: 'x' })).toBe(false);       // no name
+    expect(await memberBySession(db, token)).not.toBeNull();
+    expect(await resetPin(db, flatId, nafis, '7777', team)).toBe(true);
+    expect(await memberBySession(db, token)).toBeNull();                                               // every phone signed out
+    expect(await login(db, code, nafis, '1234', null)).toEqual({ error: 'wrongPin' });
+    expect(await login(db, code, nafis, '7777', null)).toEqual({ error: 'newPinNeeded' });            // must choose a new one
+    expect(await login(db, code, nafis, '7777', '2468')).toEqual({ memberId: nafis });
+    expect([await state(), await versions()]).toEqual([s0, v0]);                                       // role, people and months untouched
+    const rows = await db<{ entity_id: string; after: unknown; by: string | null }>(`select entity_id, after, by_member as by from audit_log where flat_id = $1 and after ? 'pinReset'`, [flatId]);
+    expect(rows).toEqual([{ entity_id: nafis, after: { pinReset: true, ...team }, by: null }]);
   });
 
   it('changes my own PIN with the current one, and signs out my other phones', async () => {

@@ -70,7 +70,7 @@ export async function resetPinAction(_: FormState, d: FormData): Promise<FormSta
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireManager(lang);
   if (!isPin(d.get('pin'))) return { error: a.errors.pin };
-  if (!(await resetPin(db, me.flatId, str(d, 'memberId'), str(d, 'pin')))) return { error: a.errors.notFound };
+  if (!(await resetPin(db, me.flatId, str(d, 'memberId'), str(d, 'pin'), { memberId: me.memberId }))) return { error: a.errors.notFound };
   refresh();
   return { done: a.resetDone };
 }
