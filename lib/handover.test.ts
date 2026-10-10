@@ -291,6 +291,21 @@ describe('handover in the app', { timeout: 30000 }, () => {
     expect([z?.status, z?.from, z?.decidedBy, z?.recent]).toEqual(['cancelled', 'Tahsin', null, true]);
     await db(`update handovers set decided_at = now() - interval '25 hours' where id = $1`, [z!.id]);
     expect((await myLatestHandover(db, flatId, ids.Zarif))?.recent).toBe(false);
+    await db(`update handovers set decided_at = now() where id = $1`, [z!.id]);
+    expect(await overrideCollector(db, flatId, ids.Nafis, 'lost phone', 'App team')).toBe('ok');   // a newer handover ends the stale notice
+    expect((await myLatestHandover(db, flatId, ids.Zarif))?.recent).toBe(false);
+  });
+
+  it('myLatestHandover: a later handover ends my accepted notice', async () => {
+    const { flatId, ids } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const }, tahsin = { memberId: ids.Tahsin, role: 'manager' as const };
+    expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 0, '2026-09-10')).toBe('ok');
+    expect(await acceptHandover(db, flatId, ids.Tahsin, (await currentOffer(db, flatId))!.id)).toBe('ok');
+    expect((await myLatestHandover(db, flatId, ids.Tahsin))?.recent).toBe(true);
+    expect(await offerHandover(db, flatId, tahsin, ids.Zarif, 0, '2026-09-10')).toBe('ok');
+    expect(await acceptHandover(db, flatId, ids.Zarif, (await currentOffer(db, flatId))!.id)).toBe('ok');
+    expect((await myLatestHandover(db, flatId, ids.Tahsin))?.recent).toBe(false);
+    expect((await myLatestHandover(db, flatId, ids.Zarif))?.recent).toBe(true);
   });
 
   it('pending money blocks the offer; pendingCount', async () => {
