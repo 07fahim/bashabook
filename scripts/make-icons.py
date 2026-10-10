@@ -1,5 +1,5 @@
 """Cuts the B symbol out of the BashaBook logo and writes the navbar mark and app icons.
-Run from mil/: python scripts/make-icons.py"""
+Run from the repo root: python scripts/make-icons.py"""
 from PIL import Image
 
 PAPER = '#FBF7F0'
