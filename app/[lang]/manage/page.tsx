@@ -73,9 +73,9 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           <span>{m.lockTime.replace('{t}', fmtTime(meals.flat.cutoff))}</span> <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link>
         </p>
 
-        {/* phone: to do, money, meals, people, settings. Tablet: to do | money, meals, settings, people below.
-            Desktop: to do | money, meals | settings, people below. The wrappers are display:contents on a phone,
-            so Settings can move below People there; wider, each column stacks on its own and no card stretches. */}
+        {/* phone: to do, money, meals, settings, people (the reading order is the visual order everywhere).
+            Tablet: to do | money, meals, settings, people below. Desktop: to do | money, meals | settings, people below.
+            The wrappers are display:contents on a phone; wider, each column stacks on its own and no card stretches. */}
         <div className="mt-6 flex flex-col md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
           <div>
             {closing && <div className="mt-3"><CloseCard lang={lang} x={mn} c={closing} collector={me.name} /></div>}
@@ -235,7 +235,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
             </Fold>
           </Group>
           </div>
-          <Group title={m.groupSettings} className="order-last md:order-none">
+          <Group title={m.groupSettings}>
             <Fold row id="rules" title={m.rulesTitle} level={3} open={'rules' in sp}>
               {'rules' in sp && <FocusHere />}
               <ActionForm action={settingsAction} className="mt-4">
