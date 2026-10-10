@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
 import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
-  addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOwn, toldCook, updateSettings,
+  addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOtherMeal, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
 import { addEntry, addRoom, confirmEntry, monthOf, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
@@ -214,6 +214,24 @@ export async function adminSetAction(d: FormData) {
     await unlessClosed(() => saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count: Number(own) + guests, guests }, isLocked(date, nowDhaka(), r.cutoff)));
   }
   refresh();
+}
+
+/** Another flatmate's own plate, before the lock. The actor always comes from the session; every rule is checked again
+ *  inside set_other_meal, so a forged form gets 'closed', never a write. */
+export async function otherMealAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), m = getDictionary(lang).meals;
+  const me = await requireMember(lang);
+  await seedLock(db, me.flatId, nowDhaka());
+  const target = str(d, 'target'), date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own'), seen = str(d, 'seen');
+  if (!UUID.test(target) || !isDate(date) || !isMeal(meal) || !/^[01]$/.test(own) || !/^[01]$/.test(seen)) return { error: m.errors.bad };
+  const r = await setOtherMeal(db, me.flatId, me.memberId, target, date, meal, Number(own) as 0 | 1, Number(seen) as 0 | 1);
+  if (r === 'changed') return { error: m.otherChanged };
+  if (r === 'closed') {
+    const [c] = await db<{ name: string }>(`select name from members where flat_id = $1 and role = 'manager'`, [me.flatId]);
+    return { error: m.otherClosed.replace('{name}', c?.name ?? '') };
+  }
+  refresh();
+  return { done: m.saved };
 }
 
 /** The cook is back for one listed no-cooking day. */

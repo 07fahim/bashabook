@@ -2,16 +2,16 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { addDays, firstWeek, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
+import { addDays, firstWeek, indexChanges, isPresent, mealCount, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
 import { flatStart, loadHistory, loadMeals, myGuests, upcomingAway, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { awayAction, cancelAwayAction, guestAction, removeGuestsAction, usualAction } from '../actions';
+import { awayAction, cancelAwayAction, guestAction, otherMealAction, removeGuestsAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { dhakaDate, fmtDay, fmtRange, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
-import { checkChip, field, Field, Fold, focus, link, LongList, primary, PageSkeleton } from '../ui';
+import { checkChip, field, Field, Fold, focus, link, LongList, primary, secondary, PageSkeleton } from '../ui';
 import { DateField } from '../date-field';
 import { WeekChart } from '../week-chart';
 
@@ -44,6 +44,11 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const self = meals.members.find(x => x.id === me.memberId)!;
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
   const firstOpen = [1, 2].map(n => addDays(today, n)).find(d => decide(d) === 'open')!;   // tomorrow or the day after
+  // "Someone else's meals": the person and day come from ?who=&day=, like the collector's fold on the Flat tab
+  const others = meals.members.filter(x => x.id !== me.memberId && x.inMeals && (!x.leftOn || x.leftOn >= firstOpen));
+  const pickDay = typeof sp.day === 'string' && sp.day >= firstOpen && sp.day <= addDays(today, 60) ? sp.day : firstOpen;
+  const pick = others.find(x => x.id === sp.who) ?? others[0];
+  const pickData = pick ? await loadMeals(db, me.flatId, pickDay, pickDay) : null;
   const guestDays = week.filter(d => d === today || decide(d) !== 'closed');   // today too: a host may add surprise guests
   const href = (n: number, only: boolean, more = 0) => `/${lang}/meals?${new URLSearchParams({ ...(n ? { week: String(n) } : {}), ...(only ? { mine: '1' } : {}), ...(more ? { older: String(more) } : {}) })}`;
   const hasOlder = history.length > shownRows;
@@ -173,6 +178,56 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
               <p className="text-[15px] text-muted">{m.usualOff}</p>
               <button className={primary}>{m.save}</button>
             </ActionForm>
+          </Fold>
+
+          <Fold title={m.otherTitle} lead={m.otherLead} open={'who' in sp}>
+            {!pick || !pickData ? <p className="mt-4 text-muted">{m.otherNone}</p> : (<>
+              <form className="mt-4 space-y-4">
+                {w !== 0 && <input type="hidden" name="week" value={w} />}
+                <label className="block font-semibold">
+                  {m.who}
+                  <select name="who" defaultValue={pick.id} className={field}>
+                    {others.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                  </select>
+                </label>
+                <DateField lang={lang} label={m.day} name="day" required min={firstOpen} max={addDays(today, 60)} defaultValue={pickDay} />
+                <button className={secondary}>{m.show}</button>
+              </form>
+              <p className="mt-5 font-semibold">{pick.name} · {fmtDay(pickDay, lang)}</p>
+              {(() => {
+                const person = pickData.members.find(x => x.id === pick.id);
+                if (!person || !isPresent(person, pickDay)) return <p className="mt-2 text-muted">{m.notInFlat}</p>;
+                const idx = indexChanges(pickData.changes);
+                return (
+                  <ul className="mt-2 divide-y divide-line">
+                    {MEALS.map(meal => {
+                      const g = pickData.changes.find(c => c.memberId === pick.id && c.date === pickDay && c.meal === meal)?.guests ?? 0;
+                      const own = mealCount(person, idx, pickDay, meal) - g > 0 ? 1 : 0;
+                      const blocked = pickData.noCook.some(n => n.date === pickDay && n.meal === meal);
+                      return (
+                        <li key={meal} className="py-3">
+                          {blocked ? <p><span className="font-semibold">{m.names[meal]}</span> · {m.noCook}</p> : (
+                            <ActionForm action={otherMealAction} className="flex flex-wrap items-center justify-between gap-3">
+                              <input type="hidden" name="lang" value={lang} />
+                              <input type="hidden" name="target" value={pick.id} />
+                              <input type="hidden" name="date" value={pickDay} />
+                              <input type="hidden" name="meal" value={meal} />
+                              <input type="hidden" name="own" value={own ? 0 : 1} />
+                              <input type="hidden" name="seen" value={own} />
+                              <span className="font-semibold">{m.names[meal]}</span>
+                              <button aria-pressed={own > 0} aria-label={`${pick.name}, ${m.names[meal]}`}
+                                className={`min-h-11 rounded-full px-4 font-semibold ${own ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
+                                {own ? m.onOther : m.offOther}
+                              </button>
+                            </ActionForm>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()}
+            </>)}
           </Fold>
         </div>
 

@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { myLatestHandover } from '@/lib/handover';
 import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka, plates, type Meal } from '@/lib/meals';
 import { listMembers } from '@/lib/auth';
-import { countAtLock, loadMeals } from '@/lib/meals-db';
+import { changedByOthers, countAtLock, loadMeals } from '@/lib/meals-db';
 import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
@@ -21,7 +21,7 @@ import { balanceText, ConfirmList } from '../money/bits';
 import { Nav } from '../nav';
 import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
-import { Field, Fold, focus, link, PageSkeleton, PinField, primary, secondary } from '../ui';
+import { Field, Fold, focus, link, LongList, PageSkeleton, PinField, primary, secondary } from '../ui';
 
 export default function Home({ params }: PageProps<'/[lang]/home'>) {
   return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} /></Suspense>;
@@ -34,10 +34,11 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const t = getDictionary(lang), a = t.app, m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const [meals, people, mo, waiting, ho] = await Promise.all([
+  const [meals, people, mo, waiting, ho, byOthers] = await Promise.all([
     loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId),
     loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId, me.role === 'manager'),
     myLatestHandover(db, me.flatId, me.memberId),
+    changedByOthers(db, me.flatId, me.memberId, today),
   ]);
   const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
@@ -94,6 +95,16 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           </section>
         )}
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
+        {/* only the person whose meals were changed sees this; it goes when the day passes or they change it themselves */}
+        {byOthers.length > 0 && (
+          <section className="mt-6 rounded-3xl border-2 border-turmeric bg-surface p-5">
+            <h2 className="text-xl font-bold">{m.noticeTitle}</h2>
+            <p className="mt-1 text-[15px] text-muted">{m.noticeLead}</p>
+            <LongList label={m.noticeTitle} keep={3} more={a.showAll.replace('{n}', String(byOthers.length))} less={a.showLess} items={byOthers.map(c => (
+              <li key={`${c.date}${c.meal}`} className="py-2">{c.actor} · {fmtDay(c.date, lang)} · {m.names[c.meal]}: {c.own ? m.onOther : m.offOther}</li>
+            ))} />
+          </section>
+        )}
         {/* side by side the cards are one height, their buttons on one line; a lone card keeps half the row,
             not a button as wide as the screen */}
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
