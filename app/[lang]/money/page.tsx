@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { closeInfo } from '@/lib/close';
 import { db } from '@/lib/db';
+import { handoverHistory } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
 import { foodSplit, settleLines } from '@/lib/money';
 import { loadMonth, monthOf, toConfirm, type Entry } from '@/lib/money-db';
@@ -13,7 +14,7 @@ import { correctionAction, entryAction, putBackAction, removeAction } from '../a
 import { CloseCard } from '../close-card';
 import { DateField } from '../date-field';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { dhakaDate, fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
+import { dhakaDate, fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka, fmtTaka2 } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { PayerSelect } from '../payer-select';
@@ -39,8 +40,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   // ?m=2026-09 picks a month; never later than this month
   const asked = typeof sp.m === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m) ? `${sp.m}-01` : thisMonth;
   const month = asked > thisMonth ? thisMonth : asked, mine = sp.mine === '1';
-  const [mo, waiting, closing] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss),
-    boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null]);   // the card only shows on the month to close
+  const [mo, waiting, closing, history] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss),
+    boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null, handoverHistory(db, me.flatId)]);   // the card only shows on the month to close
   const closed = mo.info?.status === 'closed';
   const name = (id: string | null) => mo.all.find(p => p.id === id)?.name ?? '?';
   const collector = mo.all.find(p => p.role === 'manager')!;
@@ -78,8 +79,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   for (let n = 0; keep < dates.length && (n += shown.filter(e => e.date === dates[keep]).length) <= 15; keep++);
   keep = Math.max(1, keep);
   const who = (e: Entry) =>
-    e.type === 'deposit' ? (e.memberId === collector.id ? collector.name : `${name(e.memberId)} → ${collector.name}`)
-    : e.type === 'payout' ? `${collector.name} → ${name(e.memberId)}`
+    e.type === 'deposit' ? (e.memberId === e.heldBy ? name(e.heldBy) : `${name(e.memberId)} → ${name(e.heldBy)}`)
+    : e.type === 'payout' ? `${name(e.heldBy)} → ${name(e.memberId)}`
     : e.type === 'adjustment' ? `${name(e.memberId)} → ${name(e.moves)}`
     : e.paidBy ? x.paidBy.replace('{name}', name(e.paidBy)) : x.fundPaid;
   const settle = mo.result.perMember.filter(p => p.balance !== 0).map(p => {
@@ -99,6 +100,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
       people={mo.members.filter(p => p.id !== collector.id).map(p => ({ id: p.id, name: p.name, joinedOn: p.joinedOn, leftOn: p.leftOn }))} />
   );
   const balance = r && balanceText(x, r.balance, mo.info?.status === 'closed');
+  // a closed month's fund was held by whoever closed it, not by today's collector if a handover happened since
+  const holder = closed && mo.info?.cash ? name(mo.info.cash.by) : collector.name;
 
   return (
     <>
@@ -269,7 +272,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 lg:grid-cols-4">
               {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar')))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
                 [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? (totalMeals === 100 ? x.mealSoFar : x.mealsSoFar) : totalMeals === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
-                [x.withName.replace('{name}', collector.name), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v, sub]) => (
+                [x.withName.replace('{name}', holder), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
                   <dd className="text-2xl font-bold tabular-nums [overflow-wrap:anywhere]">{v}</dd>
@@ -277,7 +280,22 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 </div>
               ))}
             </dl>
-            {mo.result.fund < 0 && <p className="mt-3 font-semibold">{x.flatOwes.replace('{name}', collector.name).replace('{t}', fmtTaka(mo.result.fund))}</p>}
+            {/* who holds the money now and how they got it; the newest row explains today's collector, older ones fold away */}
+            {month === thisMonth && history.length > 0 && (() => {
+              const [h, ...older] = history;
+              const line = (r: typeof h) => (r.status === 'accepted' ? x.holds : x.holdsOverride)
+                .replace('{name}', r.to).replace('{from}', r.from).replace('{d}', fmtDay(dhakaDate(r.at), lang)).replace('{t}', fmtTaka2(r.amount ?? 0));
+              const past = (r: typeof h) => (r.status === 'accepted' ? x.handedPast : x.overridePast)
+                .replace('{name}', r.to).replace('{from}', r.from).replace('{d}', fmtDay(dhakaDate(r.at), lang)).replace('{t}', fmtTaka2(r.amount ?? 0));
+              return (
+                <div className="mt-3 text-[15px]">
+                  <p>{line(h)}</p>
+                  {older.length > 0 && <details className="mt-1"><summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.earlierHandovers}</summary>
+                    <ul className="mt-1 space-y-1 text-muted">{older.map(r => <li key={r.at}>{past(r)}</li>)}</ul></details>}
+                </div>
+              );
+            })()}
+            {mo.result.fund < 0 && <p className="mt-3 font-semibold">{x.flatOwes.replace('{name}', holder).replace('{t}', fmtTaka(mo.result.fund))}</p>}
             {!mo.result.invariantOk && <p className="mt-3 font-semibold text-chili">{x.problem}</p>}
             {closed ? (() => {
               const lines = settleLines(mo.result.perMember, collector.id).map(l => {
@@ -286,7 +304,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   : l.kind === 'collectorAdds' ? x.adds.replace('{a}', a).replace('{t}', amt)
                   : x.paysTo.replace('{a}', l.kind === 'pays' ? a : collector.name).replace('{b}', l.kind === 'pays' ? collector.name : a).replace('{t}', amt);
               });
-              const text = [`${mo.flat.name} · ${fmtMonth(month)}`, ...lines, `${x.withName.replace('{name}', collector.name)}: ${fmtSigned(mo.result.fund)}`,
+              const text = [`${mo.flat.name} · ${fmtMonth(month)}`, ...lines, `${x.withName.replace('{name}', holder)}: ${fmtSigned(mo.result.fund)}`,
                 `${x.mealRate}: ${fmtExact(mo.result.mealRate)}`].join('\n');
               return (<>
                 <h3 className="mt-5 font-semibold">{x.settleUp}</h3>

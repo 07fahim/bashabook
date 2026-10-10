@@ -5,16 +5,17 @@ import { Suspense } from 'react';
 import { listGone, listMembers } from '@/lib/auth';
 import { closeInfo, openFrom } from '@/lib/close';
 import { db } from '@/lib/db';
+import { currentOffer, flatMoney, lastOutcome, pendingCount } from '@/lib/handover';
 import { addDays, countChanges, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { listRepeats, loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { addMemberAction, addRoomAction, adminSetAction, cookLinkAction, entryAction, noCookAction, noCookCancelAction, bringBackAction, leavingAction, removePhotoAction, renameAction, rentAction, resetPinAction, setRoomAction, settingsAction, stopRepeatAction } from '../actions';
+import { addMemberAction, addRoomAction, adminSetAction, cancelHandoverAction, cookLinkAction, offerHandoverAction, entryAction, noCookAction, noCookCancelAction, bringBackAction, leavingAction, removePhotoAction, renameAction, rentAction, resetPinAction, setRoomAction, settingsAction, stopRepeatAction } from '../actions';
 import { Avatar } from '../avatar';
 import { CloseCard } from '../close-card';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { countText, fmtDay, fmtTaka, fmtTime } from '../format';
+import { countText, fmtDay, fmtTaka, fmtTaka2, fmtTime } from '../format';
 import { DateField } from '../date-field';
 import { FocusHere } from '../focus-here';
 import { Header } from '../header';
@@ -40,7 +41,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   // the person and day picked in "Change someone's meals"
   const who = typeof sp.who === 'string' ? sp.who : me.memberId;
   const day = typeof sp.day === 'string' && isDate(sp.day) && sp.day >= from && sp.day <= to ? sp.day : today;
-  const [members, gone, meals, picked, noCookDays, mo, waiting, repeats, closing] = await Promise.all([
+  const [members, gone, meals, picked, noCookDays, mo, waiting, repeats, closing, offer, pending, money, outcome] = await Promise.all([
     listMembers(db, me.flatId),
     listGone(db, me.flatId, from),
     loadMeals(db, me.flatId, today, tomorrow),
@@ -50,6 +51,10 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
     toConfirm(db, me.flatId, me.memberId, true),
     listRepeats(db, me.flatId),
     closeInfo(db, me.flatId, today),
+    currentOffer(db, me.flatId),
+    pendingCount(db, me.flatId),
+    flatMoney(db, me.flatId, today),
+    lastOutcome(db, me.flatId, me.memberId),
   ]);
   const t = getDictionary(lang), a = t.app, m = t.meals, mn = t.money;
   const tom = headcount(meals.members, meals.changes, tomorrow);
@@ -128,6 +133,41 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 </ActionForm>
               </Fold>
             ))}
+            <Fold title={mn.handTitle} lead={mn.handLead} level={3} open={!!offer || !!(outcome && (outcome.status === 'declined' || outcome.stale))}>
+              {offer ? (
+                <div className="mt-4">
+                  <p className="font-semibold">{mn.handWaiting.replace('{name}', offer.to).replace('{t}', fmtTaka2(offer.amount))}</p>
+                  <form action={cancelHandoverAction} className="mt-3">
+                    <input type="hidden" name="lang" value={lang} />
+                    <input type="hidden" name="id" value={offer.id} />
+                    <button className={`${secondary} sm:w-auto`}>{mn.handCancel}</button>
+                  </form>
+                </div>
+              ) : pending > 0 ? (
+                <p className="mt-4">{pending === 1 ? mn.handBlockedOne : mn.handBlocked.replace('{n}', String(pending))}</p>
+              ) : money < 0 ? (
+                <p className="mt-4">{mn.handNegative}</p>
+              ) : (
+                <ActionForm action={offerHandoverAction} className="mt-4 space-y-3">
+                  {/* a plain cancel by me says nothing; a decline or a cancel by a change says why */}
+                  {outcome && (outcome.status === 'declined' || outcome.stale) && (
+                    <p className="font-semibold">{(outcome.status === 'declined' ? mn.handDeclined : mn.handStale).replace('{name}', outcome.to)}</p>
+                  )}
+                  <input type="hidden" name="lang" value={lang} />
+                  <input type="hidden" name="shown" value={money} />
+                  <label className="block font-semibold">{mn.handTo}
+                    <select name="to" className={field} required defaultValue="">
+                      <option value="" disabled>—</option>
+                      {members.filter(p => p.id !== me.memberId && !p.leftOn && p.joinedOn <= today && p.claimed).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </label>
+                  <details>
+                    <summary className={`${secondary} cursor-pointer list-none sm:inline-flex sm:w-auto [&::-webkit-details-marker]:hidden`}>{mn.handBtn} · {fmtTaka2(money)}</summary>
+                    <button className={`${primary} mt-3 sm:w-auto`}>{mn.handYes}</button>
+                  </details>
+                </ActionForm>
+              )}
+            </Fold>
             <Fold title={mn.roomsTitle} lead={mn.roomsLead} level={3}>
               {mo.rooms.length > 0 && (
                 <ul className="mt-4 divide-y divide-line">
