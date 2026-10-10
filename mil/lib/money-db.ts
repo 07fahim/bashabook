@@ -208,7 +208,9 @@ export async function stopRepeat(db: Db, flatId: string, by: Actor, id: string) 
 }
 
 /** Every ledger column: a removal record missing any of them is never put back. A test keeps this in step with the table. */
-export const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at';
+export const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at,for_month,moves';
+/** What a removal record must hold to be put back: every column a row had before migration 009 added the two correction ones. */
+const PUT_BACK_COLUMNS = LEDGER_COLUMNS.replace(',for_month,moves', '');
 
 /** Brings a removed entry back exactly as it was (same id, status, people), rebuilt only from its latest removal record.
  *  Allowed for whoever made that removal or the current collector, only in this open month (`today` is the Dhaka date).
@@ -229,6 +231,6 @@ export async function putBack(db: Db, flatId: string, by: string, id: string, to
        select $1, l.id, x::uuid from l, ok, jsonb_array_elements_text(coalesce(ok.before->'selected', '[]'::jsonb)) x)
      insert into audit_log (flat_id, entity, entity_id, after, by_member)
      select $1, 'ledger', l.id::text, to_jsonb(l) || '{"putBack":true}', $3 from l returning 1`,
-    [flatId, id, by, monthOf(today), LEDGER_COLUMNS]);
+    [flatId, id, by, monthOf(today), PUT_BACK_COLUMNS]);
   return r.length > 0;
 }
