@@ -298,6 +298,15 @@ describe('handover in the app', { timeout: 30000 }, () => {
     expect((await handoverHistory(db, flatId))[0]).toMatchObject({ status: 'overridden', from: 'Nafis', to: 'Zarif', amount: null });
   });
 
+  it('a waiting payout also shows who actually paid it, after a handover', async () => {
+    const { flatId, ids } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const };
+    expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 20000, date: '2026-09-05', memberId: ids.Zarif }))).toBe('ok');
+    expect(await overrideCollector(db, flatId, ids.Tahsin, 'phone lost', 'app team: Fahim')).toBe('ok');
+    const [w] = await toConfirm(db, flatId, ids.Zarif, false);
+    expect(w.paidTo).toBe('Nafis');
+  });
+
   it('a re-sent identical move-out date leaves the counter and a waiting offer alone', async () => {
     const { flatId, ids, v } = await flat();
     const nafis = { memberId: ids.Nafis, role: 'manager' as const };

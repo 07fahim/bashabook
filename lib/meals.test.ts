@@ -106,7 +106,7 @@ describe('fmtRange', () => {
 
   it('fmtTaka2 always shows two decimals', async () => {
     const { fmtTaka2 } = await import('../app/[lang]/format');
-    expect([fmtTaka2(2721200), fmtTaka2(50000), fmtTaka2(5), fmtTaka2(-50000)]).toEqual(['৳27,212.00', '৳500.00', '৳0.05', '−৳500.00']);
+    expect([fmtTaka2(2721200), fmtTaka2(50000), fmtTaka2(5), fmtTaka2(-50000), fmtTaka2(0)]).toEqual(['৳27,212.00', '৳500.00', '৳0.05', '−৳500.00', '৳0.00']);
   });
 });
 

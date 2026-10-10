@@ -25,8 +25,8 @@ export function ConfirmList({ lang, x, a, items, collector }: {
       <LongList short label={x.waitingTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(w => (
           <li key={w.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <span>
-              {/* heldByName: who actually handed it out, never relabelled to the current collector after a handover */}
-              {(w.type === 'payout' ? x.confirmGot.replace('{name}', w.heldByName ?? collector) : x.confirmDeposit.replace('{name}', w.name)).replace('{t}', fmtTaka(w.amount))}
+              {/* paidTo: who actually handed it out, never relabelled to the current collector after a handover */}
+              {(w.type === 'payout' ? x.confirmGot.replace('{name}', w.paidTo ?? collector) : x.confirmDeposit.replace('{name}', w.name)).replace('{t}', fmtTaka(w.amount))}
               <span className="block text-[15px] text-muted">{fmtDay(w.date, lang)}{w.note ? ` · ${w.note}` : ''}</span>
             </span>
             <form action={confirmAction}>

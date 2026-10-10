@@ -99,6 +99,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
       people={mo.members.filter(p => p.id !== collector.id).map(p => ({ id: p.id, name: p.name, joinedOn: p.joinedOn, leftOn: p.leftOn }))} />
   );
   const balance = r && balanceText(x, r.balance, mo.info?.status === 'closed');
+  // a closed month's fund was held by whoever closed it, not by today's collector if a handover happened since
+  const holder = closed && mo.info?.cash ? name(mo.info.cash.by) : collector.name;
 
   return (
     <>
@@ -269,7 +271,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 lg:grid-cols-4">
               {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar')))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
                 [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? (totalMeals === 100 ? x.mealSoFar : x.mealsSoFar) : totalMeals === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
-                [x.withName.replace('{name}', collector.name), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v, sub]) => (
+                [x.withName.replace('{name}', holder), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
                   <dd className="text-2xl font-bold tabular-nums [overflow-wrap:anywhere]">{v}</dd>
@@ -277,7 +279,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 </div>
               ))}
             </dl>
-            {mo.result.fund < 0 && <p className="mt-3 font-semibold">{x.flatOwes.replace('{name}', collector.name).replace('{t}', fmtTaka(mo.result.fund))}</p>}
+            {mo.result.fund < 0 && <p className="mt-3 font-semibold">{x.flatOwes.replace('{name}', holder).replace('{t}', fmtTaka(mo.result.fund))}</p>}
             {!mo.result.invariantOk && <p className="mt-3 font-semibold text-chili">{x.problem}</p>}
             {closed ? (() => {
               const lines = settleLines(mo.result.perMember, collector.id).map(l => {
@@ -286,7 +288,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   : l.kind === 'collectorAdds' ? x.adds.replace('{a}', a).replace('{t}', amt)
                   : x.paysTo.replace('{a}', l.kind === 'pays' ? a : collector.name).replace('{b}', l.kind === 'pays' ? collector.name : a).replace('{t}', amt);
               });
-              const text = [`${mo.flat.name} · ${fmtMonth(month)}`, ...lines, `${x.withName.replace('{name}', collector.name)}: ${fmtSigned(mo.result.fund)}`,
+              const text = [`${mo.flat.name} · ${fmtMonth(month)}`, ...lines, `${x.withName.replace('{name}', holder)}: ${fmtSigned(mo.result.fund)}`,
                 `${x.mealRate}: ${fmtExact(mo.result.mealRate)}`].join('\n');
               return (<>
                 <h3 className="mt-5 font-semibold">{x.settleUp}</h3>
