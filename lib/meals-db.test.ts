@@ -3,7 +3,7 @@ import { db, migrate } from '../db/test-db';
 import { addMember, bringBack, createFlat } from './auth';
 import { countChanges, headcount, indexChanges, mealCount, type Meal } from './meals';
 import {
-  addGuests, cancelAway, countAtLock, currentPlates, removeGuests, setOwn, changeMeal, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, seedLock, setAway, setDefaults, toldCook, upcomingAway, updateSettings,
+  addGuests, cancelAway, countAtLock, currentPlates, removeGuests, setOwn, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, seedLock, setAway, setDefaults, toldCook, upcomingAway, updateSettings,
 } from './meals-db';
 
 const ALL_OFF = { b: false, l: false, d: false }, ALL_ON = { b: true, l: true, d: true };
@@ -37,11 +37,11 @@ describe('meal storage', { timeout: 30000 }, () => {
 
   it('turns a change into a save, a late save or nothing', async () => {
     const { flatId, tahsin, load } = await flat();
-    const c = (date: string) => ({ memberId: tahsin, date, meal: 'd' as const, count: 0 });
-    expect(await changeMeal(db, flatId, c('2026-10-11'), '2026-10-09T23:00')).toBe('open');
-    expect(await changeMeal(db, flatId, c('2026-10-10'), '2026-10-09T23:00')).toBe('late');
-    expect(await changeMeal(db, flatId, c('2026-10-08'), '2026-10-09T23:00')).toBe('closed');
-    expect(await changeMeal(db, flatId, c('2026-10-09'), '2026-10-09T23:00')).toBe('closed');   // today
+    const own = (date: string) => setOwn(db, flatId, tahsin, date, 'd', 0, '2026-10-09T23:00');
+    expect(await own('2026-10-11')).toBe('open');
+    expect(await own('2026-10-10')).toBe('late');
+    expect(await own('2026-10-08')).toBe('closed');
+    expect(await own('2026-10-09')).toBe('closed');   // today
     const { changes } = await load();
     expect(changes.map(x => [x.date, x.late]).sort()).toEqual([['2026-10-10', true], ['2026-10-11', false]]);
   });
@@ -112,7 +112,7 @@ describe('meal storage', { timeout: 30000 }, () => {
   it('no-cooking days are closed to members, and cooking again brings usual meals back', async () => {
     const { flatId, memberId, tahsin, load, count } = await flat();
     await noCooking(db, flatId, memberId, '2026-10-12', '2026-10-13', ['d'], '2026-10-09');
-    expect(await changeMeal(db, flatId, { memberId: tahsin, date: '2026-10-12', meal: 'd', count: 1 }, '2026-10-09T10:00')).toBe('closed');
+    expect(await setOwn(db, flatId, tahsin, '2026-10-12', 'd', 1, '2026-10-09T10:00')).toBe('closed');
     expect((await load()).noCook).toHaveLength(2);
     await cookAgain(db, flatId, memberId, '2026-10-12', '2026-10-13', ['d'], '2026-10-10');
     expect((await load()).noCook).toEqual([]);
