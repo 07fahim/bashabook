@@ -98,7 +98,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
     <PayerSelect label={label} fundLabel={x.flatMoney.replace('{name}', collector.name)} today={today} initial={boss ? 'fund' : me.memberId}
       people={mo.members.filter(p => p.id !== collector.id).map(p => ({ id: p.id, name: p.name, joinedOn: p.joinedOn, leftOn: p.leftOn }))} />
   );
-  const balance = r && balanceText(x, r.balance);
+  const balance = r && balanceText(x, r.balance, mo.info?.status === 'closed');
 
   return (
     <>

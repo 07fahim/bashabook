@@ -4,11 +4,13 @@ import type { Dict, Locale } from '../dictionaries';
 import { fmtDay, fmtTaka } from '../format';
 import { LongList, secondary } from '../ui';
 
-/** 'You get back ৳380 so far' in leaf, 'You owe ৳210 so far' in chili. */
-export const balanceText = (x: Dict['money'], balance: number) =>
-  balance > 0 ? { text: x.getBack.replace('{t}', fmtTaka(balance)), tone: 'text-leaf' }
-  : balance < 0 ? { text: x.owe.replace('{t}', fmtTaka(balance)), tone: 'text-chili' }
-  : { text: x.even, tone: '' };
+/** 'You get back ৳380 so far' in leaf, 'You owe ৳210 so far' in chili; a closed month drops 'so far'. */
+export const balanceText = (x: Dict['money'], balance: number, closed = false) => {
+  const c = closed ? x.final : x;
+  return balance > 0 ? { text: c.getBack.replace('{t}', fmtTaka(balance)), tone: 'text-leaf' }
+    : balance < 0 ? { text: c.owe.replace('{t}', fmtTaka(balance)), tone: 'text-chili' }
+    : { text: c.even, tone: '' };
+};
 
 /** Money waiting for this person's tap: shown on Home, Money and the Flat tab until confirmed. */
 /** Pending money piles up if nobody taps: phones show three, then Show all; wider screens about three rows that scroll. Either
