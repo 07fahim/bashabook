@@ -6,8 +6,8 @@ import { listGone, listMembers } from '@/lib/auth';
 import { closeInfo, openFrom } from '@/lib/close';
 import { db } from '@/lib/db';
 import { currentOffer, flatMoney, lastOutcome, pendingCount } from '@/lib/handover';
-import { addDays, countChanges, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, plates, todayDhaka, type Meal } from '@/lib/meals';
-import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
+import { addDays, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { listRepeats, loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
@@ -15,15 +15,13 @@ import { addMemberAction, addRoomAction, adminSetAction, cancelHandoverAction, o
 import { Avatar } from '../avatar';
 import { CloseCard } from '../close-card';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { countText, fmtDay, fmtTaka, fmtTaka2, fmtTime } from '../format';
+import { fmtDay, fmtTaka, fmtTaka2, fmtTime } from '../format';
 import { DateField } from '../date-field';
 import { FocusHere } from '../focus-here';
 import { Header } from '../header';
-import { LockChange } from '../lock-change';
 import { ConfirmList } from '../money/bits';
 import { Nav } from '../nav';
-import { ShareButton } from '../share-button';
-import { checkChip, field, Field, Fold, focus, groupLabel, link, PinField, primary, secondary, PageSkeleton } from '../ui';
+import { checkChip, field, Field, Fold, focus, Group, link, PinField, primary, secondary, PageSkeleton } from '../ui';
 
 type Props = PageProps<'/[lang]/manage'>;
 
@@ -57,18 +55,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
     lastOutcome(db, me.flatId, me.memberId),
   ]);
   const t = getDictionary(lang), a = t.app, m = t.meals, mn = t.money;
-  const tom = headcount(meals.members, meals.changes, tomorrow);
-  const tod = headcount(meals.members, meals.changes, today);
-  const plate = (hc: typeof tom, date: string, x: Meal) => { const p = plates(hc, meals.noCook, date, x); return p === 'off' ? m.noCook : p; };
-  const line = (hc: typeof tom, date: string) => MEALS.map(x => `${m.names[x]} ${plate(hc, date, x)}`).join(' · ');
-  const card = 'mt-3 rounded-3xl border border-line bg-surface p-5';
   const own = new Set(meals.members.filter(x => !x.inMeals).map(x => x.id));
   const firstOpen = isLocked(tomorrow, nowDhaka(), meals.flat.cutoff) ? addDays(tomorrow, 1) : tomorrow;
-  // tomorrow can still change until the lock time (and late after it), so the count and the shared text say so
-  const status = firstOpen === tomorrow ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
-  // only after the lock does a change matter: before it, the card already says the count can still move
-  const changes = firstOpen === tomorrow ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, tom, nowDhaka()), tom);
-  const text = countText(me.flatName, m, tomorrow, tom, status, lang, meals.noCook);
   const person = picked.members.find(x => x.id === who) ?? picked.members.find(x => x.id === me.memberId)!;
   const idx = indexChanges(picked.changes);
   // tells two people with one name apart: the one leaving and the one moving in
@@ -85,36 +73,20 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           <span>{m.lockTime.replace('{t}', fmtTime(meals.flat.cutoff))}</span> <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link>
         </p>
 
-        {/* three groups of about the same height side by side; everyone in the flat (8 to 10 people) gets the full width
-            below, so no column grows far past the others and leaves a hole */}
-        <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
+        {/* phone: to do, money, meals, people, settings. Tablet: to do | money, meals, settings, people below.
+            Desktop: to do | money, meals | settings, people below. The wrappers are display:contents on a phone,
+            so Settings can move below People there; wider, each column stacks on its own and no card stretches. */}
+        <div className="mt-6 flex flex-col md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
           <div>
-            <h2 className={groupLabel}>{m.groupToday}</h2>
-            <section className={card}>
-              <h3 className="text-xl font-bold">{m.headcountTitle}</h3>
-              {/* tomorrow can still change until the lock time, so say whether the count is final */}
-              <p className="mt-1 text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)} · {status}</p>
-              <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-                {MEALS.map(x => (
-                  <div key={x} className="rounded-xl bg-paper py-3">
-                    <dt className="text-[15px] text-muted">{m.names[x]}</dt>
-                    <dd className={`font-bold tabular-nums ${plates(tom, meals.noCook, tomorrow, x) === 'off' ? 'py-2 text-lg' : 'text-4xl'}`}>{plate(tom, tomorrow, x)}</dd>
-                  </div>
-                ))}
-              </dl>
-              <p className="mt-3 text-[15px] text-muted">{m.today}: {line(tod, today)}</p>
-              <LockChange m={m} lang={lang} date={tomorrow} hc={tom} changes={changes} />
-              <ShareButton text={text} label={m.share} copied={m.copied} />
-            </section>
-          </div>
-          <div>
-            <h2 className={groupLabel}>{mn.groupMoney}</h2>
             {closing && <div className="mt-3"><CloseCard lang={lang} x={mn} c={closing} collector={me.name} /></div>}
-            <div className="mt-3">
-              {waiting.length ? <ConfirmList lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /> : <p className="text-muted">{mn.noPending}</p>}
-            </div>
+            {waiting.length > 0 && <div className="mt-3"><ConfirmList lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /></div>}
+            {!closing && !waiting.length && <p className="mt-3 rounded-3xl border border-line bg-surface p-5 text-muted">{mn.noPending}</p>}
+          </div>
+          <div className="contents md:grid md:items-start md:gap-x-8 lg:col-span-2 lg:grid-cols-2">
+          <div className="contents md:block">
+          <Group title={mn.groupMoney}>
             {([['payout', mn.giveTitle, mn.giveLead, mn.to], ['deposit', mn.gotTitle, mn.gotLead, mn.from]] as const).map(([type, title, lead, label]) => (
-              <Fold key={type} title={title} lead={lead} level={3}>
+              <Fold row key={type} title={title} lead={lead} level={3}>
                 <ActionForm action={entryAction} className="mt-4">
                   <input type="hidden" name="lang" value={lang} />
                   <input type="hidden" name="type" value={type} />
@@ -134,7 +106,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 </ActionForm>
               </Fold>
             ))}
-            <Fold title={mn.handTitle} lead={mn.handLead} level={3} open={!!offer || !!(outcome && (outcome.status === 'declined' || outcome.stale))}>
+            <Fold row title={mn.handTitle} lead={mn.handLead} level={3} open={!!offer || !!(outcome && (outcome.status === 'declined' || outcome.stale))}>
               {offer ? (
                 <div className="mt-4">
                   <p className="font-semibold">{mn.handWaiting.replace('{name}', offer.to).replace('{t}', fmtTaka2(offer.amount))}</p>
@@ -169,71 +141,9 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 </ActionForm>
               )}
             </Fold>
-            <Fold title={mn.roomsTitle} lead={mn.roomsLead} level={3}>
-              {mo.rooms.length > 0 && (
-                <ul className="mt-4 divide-y divide-line">
-                  {mo.rooms.map(room => (
-                    <li key={room.id} className="py-3">
-                      <form action={rentAction} className="flex flex-wrap items-end gap-3">
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="roomId" value={room.id} />
-                        <span className="min-w-24 flex-1 self-center font-semibold">{room.name}</span>
-                        <label className="text-[15px] font-semibold">{mn.rent}
-                          <input name="rent" inputMode="decimal" defaultValue={room.rentShare / 100} className={`${field} w-32`} />
-                        </label>
-                        <button className={`${secondary} w-auto`}>{mn.save}</button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <ActionForm action={addRoomAction} className="mt-4">
-                <input type="hidden" name="lang" value={lang} />
-                <Field label={mn.roomName} name="name" required maxLength={40} />
-                <Field label={mn.rent} name="rent" inputMode="decimal" required placeholder="12000" />
-                <button className={secondary}>{mn.addRoom}</button>
-              </ActionForm>
-              {mo.rooms.length > 0 && (
-                <ul className="mt-6 divide-y divide-line">
-                  {mo.members.map(p => (
-                    <li key={p.id} className="py-2">
-                      <form action={setRoomAction} className="flex flex-wrap items-center gap-3">
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="memberId" value={p.id} />
-                        <span className="min-w-24 flex-1">{p.name}</span>
-                        <select name="roomId" defaultValue={p.roomId ?? ''} aria-label={`${p.name}: ${mn.roomName}`} className={`${field} mt-0 w-40`}>
-                          <option value="">{mn.noRoom}</option>
-                          {mo.rooms.map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
-                        </select>
-                        <button className={`${secondary} w-auto`}>{mn.save}</button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Fold>
-            <Fold title={mn.repeatsTitle} lead={mn.repeatsLead} level={3}>
-              {!repeats.length ? <p className="mt-4 text-muted">{mn.noRepeats}</p> : (
-                <ul className="mt-4 divide-y divide-line">
-                  {repeats.map(rp => (
-                    <li key={rp.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                      <span>{rp.name} · {fmtTaka(rp.amount)} · {mn.splits[rp.split]}</span>
-                      <form action={stopRepeatAction}>
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="id" value={rp.id} />
-                        <button className={`min-h-11 px-2 ${link}`}>{mn.stopRepeat}</button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Fold>
-          </div>
-          {/* on a tablet this group takes the whole second row, its two halves side by side */}
-          <div className="md:col-span-2 md:grid md:grid-cols-2 md:gap-x-8 lg:col-span-1 lg:block">
-            <div>
-            <h2 className={groupLabel}>{m.groupChange}</h2>
-            <Fold title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
+          </Group>
+          <Group title={m.groupChange}>
+            <Fold row title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
               <form className="mt-4 space-y-4">
                 <label className="block font-semibold">
                   {m.who}
@@ -286,7 +196,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               )}
             </Fold>
 
-            <Fold title={m.noCookTitle} lead={m.noCookLead} level={3}>
+            <Fold row title={m.noCookTitle} lead={m.noCookLead} level={3}>
               {noCookDays.length > 0 && (
                 <div className="mt-4">
                   <p className="font-semibold">{m.noCookDays}</p>
@@ -323,11 +233,10 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <button className={primary}>{m.noCookBtn}</button>
               </ActionForm>
             </Fold>
-
-            </div>
-            <div>
-            <h2 className={groupLabel}>{m.groupSettings}</h2>
-            <Fold id="rules" title={m.rulesTitle} level={3} open={'rules' in sp}>
+          </Group>
+          </div>
+          <Group title={m.groupSettings} className="order-last md:order-none">
+            <Fold row id="rules" title={m.rulesTitle} level={3} open={'rules' in sp}>
               {'rules' in sp && <FocusHere />}
               <ActionForm action={settingsAction} className="mt-4">
                 <input type="hidden" name="lang" value={lang} />
@@ -344,22 +253,86 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <button className={primary}>{m.save}</button>
               </ActionForm>
             </Fold>
-            </div>
+            <Fold row title={mn.roomsTitle} lead={mn.roomsLead} level={3}>
+              {mo.rooms.length > 0 && (
+                <ul className="mt-4 divide-y divide-line">
+                  {mo.rooms.map(room => (
+                    <li key={room.id} className="py-3">
+                      <form action={rentAction} className="flex flex-wrap items-end gap-3">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="roomId" value={room.id} />
+                        <span className="min-w-24 flex-1 self-center font-semibold">{room.name}</span>
+                        <label className="text-[15px] font-semibold">{mn.rent}
+                          <input name="rent" inputMode="decimal" defaultValue={room.rentShare / 100} className={`${field} w-32`} />
+                        </label>
+                        <button className={`${secondary} w-auto`}>{mn.save}</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <ActionForm action={addRoomAction} className="mt-4">
+                <input type="hidden" name="lang" value={lang} />
+                <Field label={mn.roomName} name="name" required maxLength={40} />
+                <Field label={mn.rent} name="rent" inputMode="decimal" required placeholder="12000" />
+                <button className={secondary}>{mn.addRoom}</button>
+              </ActionForm>
+              {mo.rooms.length > 0 && (
+                <ul className="mt-6 divide-y divide-line">
+                  {mo.members.map(p => (
+                    <li key={p.id} className="py-2">
+                      <form action={setRoomAction} className="flex flex-wrap items-center gap-3">
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="memberId" value={p.id} />
+                        <span className="min-w-24 flex-1">{p.name}</span>
+                        <select name="roomId" defaultValue={p.roomId ?? ''} aria-label={`${p.name}: ${mn.roomName}`} className={`${field} mt-0 w-40`}>
+                          <option value="">{mn.noRoom}</option>
+                          {mo.rooms.map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
+                        </select>
+                        <button className={`${secondary} w-auto`}>{mn.save}</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Fold>
+            <Fold row title={mn.repeatsTitle} lead={mn.repeatsLead} level={3}>
+              {!repeats.length ? <p className="mt-4 text-muted">{mn.noRepeats}</p> : (
+                <ul className="mt-4 divide-y divide-line">
+                  {repeats.map(rp => (
+                    <li key={rp.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <span>{rp.name} · {fmtTaka(rp.amount)} · {mn.splits[rp.split]}</span>
+                      <form action={stopRepeatAction}>
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="id" value={rp.id} />
+                        <button className={`min-h-11 px-2 ${link}`}>{mn.stopRepeat}</button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Fold>
+          </Group>
           </div>
-        </div>
-        <div>
-          <h2 className={groupLabel}>{a.members}</h2>
-            <ul className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2 md:items-start lg:grid-cols-3">
+          {/* everyone in the flat (8 to 10 people) gets the full width below the columns, a compact row each */}
+          <Group title={`${a.members} (${members.length})`} className="md:col-span-2 md:mt-8 lg:col-span-3">
+            {/* a line above each row, none above the first row: one column on a phone, two on a tablet, three wider */}
+            <ul className="mt-2 grid px-5 md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
               {members.map(x => (
-                <li key={x.id} className="rounded-3xl border border-line bg-surface p-5">
-                  {/* a long badge (last day) drops below the name on a phone instead of squeezing it */}
-                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                    <span className="flex items-center gap-3 text-lg font-semibold"><Avatar id={x.id} name={x.name} v={x.photoV} size={36} />{x.name}</span>
-                    <span className={`text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
-                      {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
-                    </span>
-                  </div>
-                  {sp.back === x.id && <p role="status" className="mt-1 font-semibold text-leaf">{a.broughtBack}</p>}
+                <li key={x.id} className="border-t border-line first:border-t-0 md:[&:nth-child(-n+2)]:border-t-0 lg:[&:nth-child(-n+3)]:border-t-0">
+                  <details open={sp.back === x.id} className="group">
+                    <summary className={`flex min-h-11 cursor-pointer list-none items-center gap-3 py-3 [&::-webkit-details-marker]:hidden ${focus}`}>
+                      <Avatar id={x.id} name={x.name} v={x.photoV} size={36} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold break-words">{x.name}</span>
+                        <span className={`block text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
+                          {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : ''}
+                        </span>
+                      </span>
+                      <span aria-hidden="true" className="text-2xl leading-none text-muted transition-transform group-open:rotate-45">+</span>
+                    </summary>
+                    <div className="pb-4">
+                  {sp.back === x.id && <p role="status" className="font-semibold text-leaf">{a.broughtBack}</p>}
                   {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
                   {/* the member's actions sit on one line; an opened one takes the full width below */}
                   <div className="flex flex-wrap items-start gap-x-6">
@@ -416,12 +389,13 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                       </details>
                     )}
                   </div>
+                    </div>
+                  </details>
                 </li>
               ))}
             </ul>
-          <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
           {gone.length > 0 && (
-            <Fold title={a.movedOut} level={3}>
+            <Fold row title={a.movedOut} level={3}>
               <ul className="mt-2 divide-y divide-line">
                 {gone.map(x => (
                   <li key={x.id} className="py-3">
@@ -443,7 +417,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               </ul>
             </Fold>
           )}
-          <Fold title={a.addMember} level={3}>
+          <Fold row title={a.addMember} level={3}>
             <ActionForm action={addMemberAction} className="mt-3">
               <input type="hidden" name="lang" value={lang} />
               <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
@@ -451,8 +425,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               <button className={primary}>{a.addBtn}</button>
             </ActionForm>
           </Fold>
-          </div>
-          </div>
+          </Group>
+        </div>
       </main>
     </>
   );

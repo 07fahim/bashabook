@@ -1,6 +1,8 @@
 import type { ComponentProps, ReactNode } from 'react';
 
 export const focus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
+/** The same ring drawn inside, for full-width rows in a card that clips its edges. */
+export const insetFocus = 'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink';
 // focus (not focus-visible): date and time fields only report focus on their inner parts
 export const field = 'mt-1.5 block w-full rounded-3xl border border-muted bg-surface px-4 py-3 text-lg md:py-2 font-normal focus:outline-2 focus:outline-offset-2 focus:outline-ink';
 export const primary = `flex min-h-12 w-full rounded-full items-center justify-center bg-turmeric px-6 font-semibold text-on-turmeric hover:brightness-95 disabled:opacity-60 ${focus}`;
@@ -25,11 +27,12 @@ export const PinField = (p: { label: string; name: string; autoComplete: string 
 
 /** A card that folds away: the title is the button, the content shows when opened. */
 /** `open` only sets how the page first loads; after that the reader decides. */
-export function Fold({ id, title, lead, level = 2, open, children }: { id?: string; title: string; lead?: string; level?: 2 | 3; open?: boolean; children: ReactNode }) {
+/** `row`: a row inside a `Group` card, so no card of its own; its focus ring sits inside, the card clips its edges. */
+export function Fold({ id, title, lead, level = 2, open, row, children }: { id?: string; title: string; lead?: string; level?: 2 | 3; open?: boolean; row?: boolean; children: ReactNode }) {
   const H = level === 2 ? 'h2' : 'h3';
   return (
-    <details id={id} open={open} className="group mt-3 scroll-mt-24 rounded-3xl border border-line bg-surface">
-      <summary className={`flex cursor-pointer list-none items-center justify-between gap-4 rounded-3xl p-5 [&::-webkit-details-marker]:hidden ${focus}`}>
+    <details id={id} open={open} className={row ? 'group scroll-mt-24' : 'group mt-3 scroll-mt-24 rounded-3xl border border-line bg-surface'}>
+      <summary className={`flex cursor-pointer list-none items-center justify-between gap-4 p-5 [&::-webkit-details-marker]:hidden ${row ? insetFocus : `rounded-3xl ${focus}`}`}>
         <H className="text-lg font-bold">{title}</H>
         <span aria-hidden="true" className="text-2xl leading-none text-muted transition-transform group-open:rotate-45">+</span>
       </summary>
@@ -68,8 +71,15 @@ export function LongList({ items, keep, label, more, less, fill, short }: { item
   );
 }
 
-/** A small label above a group of cards. */
-export const groupLabel = 'mt-10 text-[15px] font-semibold text-muted';
+/** One card holding a few `Fold row`s under a small heading, a line between them. */
+export function Group({ title, children, className = '' }: { title: string; children: ReactNode; className?: string }) {
+  return (
+    <section className={`mt-3 overflow-hidden rounded-3xl border border-line bg-surface ${className}`}>
+      <h2 className="px-5 pt-5 text-[15px] font-semibold text-muted">{title}</h2>
+      <div className="divide-y divide-line">{children}</div>
+    </section>
+  );
+}
 
 /** Shown for the moment a logged-in page waits for the database: the shape of the page, no words. */
 export function PageSkeleton() {
