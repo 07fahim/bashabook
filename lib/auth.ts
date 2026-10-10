@@ -149,14 +149,8 @@ export async function renameMember(db: Db, flatId: string, by: string, memberId:
 export async function setLeaving(db: Db, flatId: string, by: string, memberId: string, lastDay: string | null, today: string): Promise<'ok' | 'no' | 'taken'> {
   if (!UUID.test(memberId)) return 'no';
   try {
-    const [r] = await db<{ ok: boolean }>(
-      `with m as (select id from members where flat_id = $1 and id = $2 and id <> $4 and (left_on is null or left_on >= $5::date)
-         and ($3::date is null or $3::date >= greatest($5::date, joined_on))),
-       up as (update members set left_on = $3::date where id in (select id from m) and left_on is distinct from $3::date returning id),
-       log as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
-         select $1, 'members', $2::text, jsonb_build_object('left', $3::date), $4 from up)
-       select exists (select 1 from m) as ok`, [flatId, memberId, lastDay, by, today]);
-    return r.ok ? 'ok' : 'no';   // the same day again (or a stale "not leaving") changes nothing and writes no history
+    const [r] = await db<{ r: 'ok' | 'no' }>(`select set_leaving($1, $2, $3, $4::date, $5::date) as r`, [flatId, by, memberId, lastDay, today]);
+    return r.r;   // the same day again changes nothing and writes no history; a caller who is no longer collector gets 'no'
   } catch (e) {
     if (nameClash(e)) return 'taken';   // taking it back while a newcomer has the same name
     throw e;

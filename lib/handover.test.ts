@@ -4,6 +4,10 @@ import { join } from 'node:path';
 import { db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal } from './meals-db';
+import { addEntry, confirmEntry, putBack, removeEntry, toConfirm, type NewEntry } from './money-db';
+import { closeMonth } from './close';
+import { setLeaving } from './auth';
+import { acceptHandover, cancelHandover, currentOffer, declineHandover, flatMoney, handoverHistory, lastOutcome, offerHandover, overrideCollector, pendingCount } from './handover';
 
 async function flat() {
   await migrate();
@@ -194,5 +198,142 @@ describe('handover database rules', { timeout: 30000 }, () => {
       values ($1, 'ledger', gen_random_uuid()::text, jsonb_build_object('type', 'deposit', 'amount_poisha', 1000), '{"removed":true}', $2) returning id::text`, [flatId, ids.Nafis]);
     await backfill();
     expect((await db<{ h: string }>(`select before->>'held_by' as h from audit_log where id = $1`, [id]))[0].h).toBe(ids.Nafis);
+  });
+});
+
+const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount' | 'date'>): NewEntry => ({ note: null, paidBy: null, memberId: null, split: null, selected: [], ...p });
+
+describe('handover in the app', { timeout: 30000 }, () => {
+  it('the total: open months only, two open months, every month closed', async () => {
+    const { flatId, ids } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const };
+    expect(await flatMoney(db, flatId, '2026-09-10')).toBe(0);
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 300000, date: '2026-09-03', memberId: ids.Tahsin }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000, date: '2026-09-04' }))).toBe('ok');
+    expect(await flatMoney(db, flatId, '2026-09-10')).toBe(250000);
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 20000, date: '2026-10-02', memberId: ids.Zarif }))).toBe('ok');
+    expect(await flatMoney(db, flatId, '2026-10-05')).toBe(270000);                 // September (not closed) + October
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-05', { cash: 250000, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
+    expect(await flatMoney(db, flatId, '2026-10-05')).toBe(270000);                 // a close changes nothing
+    await db(`delete from ledger where flat_id = $1 and month = '2026-10-01'`, [flatId]);
+    await db(`delete from months where flat_id = $1 and month = '2026-10-01'`, [flatId]);
+    expect(await flatMoney(db, flatId, '2026-10-05')).toBe(250000);                 // every month closed: F, not zero
+  });
+
+  it('an offer stays valid across a month close (the total and the counter do not move)', async () => {
+    const { flatId, ids, collector } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const };
+    await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 300000, date: '2026-09-03', memberId: ids.Tahsin }));
+    await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 20000, date: '2026-10-02', memberId: ids.Zarif }));
+    expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 320000, '2026-10-05')).toBe('ok');
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-05', { cash: 300000, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
+    expect(await flatMoney(db, flatId, '2026-10-05')).toBe(320000);
+    expect(await acceptHandover(db, flatId, ids.Tahsin, (await currentOffer(db, flatId))!.id)).toBe('ok');
+    expect(await collector()).toEqual([ids.Tahsin]);
+  });
+
+  it('offer and accept through the app, history, a second handover', async () => {
+    const { flatId, ids, collector } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const }, tahsin = { memberId: ids.Tahsin, role: 'manager' as const };
+    await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 300000, date: '2026-09-03', memberId: ids.Tahsin }));
+    expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 299999, '2026-09-10')).toBe('changed');   // the card showed another amount
+    expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 300000, '2026-09-10')).toBe('ok');
+    const o = await currentOffer(db, flatId);
+    expect([o?.from, o?.to, o?.amount]).toEqual(['Nafis', 'Tahsin', 300000]);
+    expect(await acceptHandover(db, flatId, ids.Tahsin, o!.id)).toBe('ok');
+    expect(await currentOffer(db, flatId)).toBeNull();
+    expect(await offerHandover(db, flatId, tahsin, ids.Zarif, 300000, '2026-09-10')).toBe('ok');
+    expect(await acceptHandover(db, flatId, ids.Zarif, (await currentOffer(db, flatId))!.id)).toBe('ok');
+    expect(await collector()).toEqual([ids.Zarif]);
+    const h = await handoverHistory(db, flatId);
+    expect(h.map(x => `${x.status} ${x.from}→${x.to} ${x.amount}`)).toEqual(['accepted Tahsin→Zarif 300000', 'accepted Nafis→Tahsin 300000']);
+  });
+
+  it('move-out after the offer invalidates it; decline and cancel outcomes', async () => {
+    const { flatId, ids, collector } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const };
+    expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 0, '2026-09-10')).toBe('ok');
+    expect(await setLeaving(db, flatId, ids.Nafis, ids.Tahsin, '2026-12-31', '2026-09-10')).toBe('ok');
+    expect(await acceptHandover(db, flatId, ids.Tahsin, (await db<{ id: string }>(`select id from handovers where flat_id = $1`, [flatId]))[0].id)).toBe('changed');
+    expect(await lastOutcome(db, flatId, ids.Nafis)).toEqual({ status: 'cancelled', to: 'Tahsin', byMoney: true });
+    expect(await offerHandover(db, flatId, nafis, ids.Zarif, 0, '2026-09-10')).toBe('ok');
+    const id = (await currentOffer(db, flatId))!.id;
+    expect(await declineHandover(db, flatId, ids.Tahsin, id)).toBe('offered');     // not addressed to Tahsin: nothing changes
+    expect(await declineHandover(db, flatId, ids.Zarif, id)).toBe('ok');
+    expect(await cancelHandover(db, flatId, ids.Nafis, id)).toBe('declined');      // the first decision stands
+    expect(await lastOutcome(db, flatId, ids.Nafis)).toEqual({ status: 'declined', to: 'Zarif', byMoney: false });
+    expect(await collector()).toEqual([ids.Nafis]);
+  });
+
+  it('pending money blocks the offer; pendingCount', async () => {
+    const { flatId, ids } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const }, tahsin = { memberId: ids.Tahsin, role: 'member' as const };
+    await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 50000, date: '2026-09-03', memberId: ids.Tahsin }));
+    expect(await pendingCount(db, flatId)).toBe(1);
+    expect(await offerHandover(db, flatId, nafis, ids.Zarif, 0, '2026-09-10')).toBe('waiting');
+    await confirmEntry(db, flatId, nafis, (await toConfirm(db, flatId, ids.Nafis, true))[0].id);
+    expect(await offerHandover(db, flatId, nafis, ids.Zarif, 50000, '2026-09-10')).toBe('ok');
+  });
+
+  it('override from the app layer; a deposit made before any handover shows who it was paid to', async () => {
+    const { flatId, ids, collector } = await flat();
+    const tahsin = { memberId: ids.Tahsin, role: 'member' as const };
+    await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 50000, date: '2026-09-03', memberId: ids.Tahsin }));
+    expect(await overrideCollector(db, flatId, ids.Zarif, 'phone lost', 'app team: Fahim')).toBe('ok');
+    expect(await collector()).toEqual([ids.Zarif]);
+    const [w] = await toConfirm(db, flatId, ids.Zarif, true);
+    expect([w.name, w.paidTo]).toEqual(['Tahsin', 'Nafis']);                      // waiting deposit untouched, labelled by held_by
+    await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 1000, date: '2026-09-04', memberId: ids.Tahsin }));
+    const after = await toConfirm(db, flatId, ids.Zarif, true);
+    expect(after.find(x => x.amount === 1000)?.paidTo).toBeNull();                // held by the current collector: no label
+    expect((await handoverHistory(db, flatId))[0]).toMatchObject({ status: 'overridden', from: 'Nafis', to: 'Zarif', amount: null });
+  });
+
+  it('a re-sent identical move-out date leaves the counter and a waiting offer alone', async () => {
+    const { flatId, ids, v } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const };
+    expect(await setLeaving(db, flatId, ids.Nafis, ids.Zarif, '2026-12-31', '2026-09-10')).toBe('ok');
+    expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 0, '2026-09-10')).toBe('ok');
+    const v0 = await v();
+    expect(await setLeaving(db, flatId, ids.Nafis, ids.Zarif, '2026-12-31', '2026-09-10')).toBe('ok');   // a stale page re-sends it
+    expect(await v()).toBe(v0);
+    expect(await acceptHandover(db, flatId, ids.Tahsin, (await currentOffer(db, flatId))!.id)).toBe('ok');
+  });
+
+  it('a failure inside override rolls back status, roles and counter together', async () => {
+    const { flatId, ids, v, collector } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const };
+    expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 0, '2026-09-10')).toBe('ok');
+    const before = await v();
+    await db(`create function test_sabotage() returns trigger language plpgsql as $$ begin if new.role = 'manager' and old.role = 'member' then new.role := 'member'; end if; return new; end $$`);
+    await db(`create trigger test_sabotage before update on members for each row execute function test_sabotage()`);
+    try {
+      await expect(overrideCollector(db, flatId, ids.Zarif, 'phone lost', 'app team')).rejects.toThrow('handover invariant broken');
+      const rows = await db<{ status: string }>(`select status from handovers where flat_id = $1`, [flatId]);
+      expect([rows.map(r => r.status), await collector(), await v()]).toEqual([['offered'], [ids.Nafis], before]);
+    } finally {
+      await db(`drop trigger test_sabotage on members`);
+      await db(`drop function test_sabotage()`);
+    }
+  });
+
+  it('override leaves waiting entries alone: still pending, same holder', async () => {
+    const { flatId, ids } = await flat();
+    const tahsin = { memberId: ids.Tahsin, role: 'member' as const };
+    await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 50000, date: '2026-09-03', memberId: ids.Tahsin }));
+    expect(await overrideCollector(db, flatId, ids.Zarif, 'phone lost', 'app team')).toBe('ok');
+    const rows = await db<{ status: string; h: string }>(`select status, held_by as h from ledger where flat_id = $1`, [flatId]);
+    expect(rows).toEqual([{ status: 'pending', h: ids.Nafis }]);
+  });
+
+  it('removing and putting back a deposit keeps who held it', async () => {
+    const { flatId, ids } = await flat();
+    const tahsin = { memberId: ids.Tahsin, role: 'member' as const };
+    await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 50000, date: '2026-09-03', memberId: ids.Tahsin }));
+    const [{ id }] = await db<{ id: string }>(`select id from ledger where flat_id = $1`, [flatId]);
+    expect(await overrideCollector(db, flatId, ids.Zarif, 'phone lost', 'app team')).toBe('ok');
+    expect(await removeEntry(db, flatId, tahsin, id, '2026-09-10')).toBe(true);
+    expect(await putBack(db, flatId, ids.Tahsin, id, '2026-09-10')).toBe(true);
+    expect((await db<{ h: string }>(`select held_by as h from ledger where id = $1`, [id]))[0].h).toBe(ids.Nafis);   // not Zarif, the collector now
   });
 });
