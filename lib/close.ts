@@ -58,6 +58,27 @@ export async function coverGap(db: Db, flatId: string, by: Actor, today: string,
     date: daysOfMonth(month).at(-1)!, note, paidBy: null, memberId: by.memberId, split: null, selected: [] })) === 'ok' ? 'ok' : 'bad';
 }
 
+/** Saves every missing meal row of an open `month` as the calendar shows it now: a saved row stays as it is, a no-cooking
+ *  meal is 0, otherwise the person's usual meal, on the days they lived here. A closed month's days with no row would
+ *  otherwise follow later usual-meals changes while its bill stays frozen (Plan 6c). It can't run inside the close statement:
+ *  the closed-month trigger sees the month closed by then and refuses the write. So it runs just before; if the close then
+ *  fails the rows stay, which is safe only because each equals what the calendar and bill already compute. Every inserted
+ *  row bumps the month's version (trigger), so a close prepared before it is refused. Returns the rows inserted. */
+export async function freezeMonth(db: Db, flatId: string, month: string): Promise<number> {
+  const end = daysOfMonth(month).at(-1)!;
+  return (await db(
+    `insert into meal_changes (flat_id, member_id, date, meal, count)
+     select m.flat_id, m.id, d::date, x,
+       case when exists (select 1 from no_cook n where n.flat_id = m.flat_id and n.date = d::date and n.meal = x) then 0
+            else (case x when 'b' then m.default_b when 'l' then m.default_l else m.default_d end)::int end
+     from members m,
+       generate_series(greatest(m.joined_on, $2::text::date)::timestamp, least(coalesce(m.left_on, $3::text::date), $3::text::date)::timestamp, interval '1 day') d,
+       unnest(array['b','l','d']) x
+     where m.flat_id = $1 and exists (select 1 from months where flat_id = $1 and month = $2::text::date and status = 'open')
+     on conflict (member_id, date, meal) do nothing
+     returning 1`, [flatId, month, end])).length;
+}
+
 /** Closes a month. The version is read first (inside loadMonth), then the engine runs, then one statement closes the
  *  month only if nothing moved its version since: a write still running holds the month row, so this statement waits for
  *  it, re-checks, sees the new version and closes nothing. Two taps: the second finds 'closed'. `today` is the server's
@@ -68,6 +89,7 @@ export async function closeMonth(db: Db, flatId: string, by: Actor, month: strin
   const out = (result: CloseResult, expected = 0) => ({ result, expected, actual });
   if (by.role !== 'manager') return out('notCollector');
   if (today < nextMonth(month)) return out('early');
+  await freezeMonth(db, flatId, month);
   const mo = await loadMonth(db, flatId, month, today);
   const expected = mo.result.fund;
   if (!mo.info || mo.earlierOpen) return out('order', expected);
