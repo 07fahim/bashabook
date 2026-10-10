@@ -281,15 +281,17 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               ))}
             </dl>
             {/* who holds the money now and how they got it; the newest row explains today's collector, older ones fold away */}
-            {history.length > 0 && (() => {
+            {month === thisMonth && history.length > 0 && (() => {
               const [h, ...older] = history;
               const line = (r: typeof h) => (r.status === 'accepted' ? x.holds : x.holdsOverride)
+                .replace('{name}', r.to).replace('{from}', r.from).replace('{d}', fmtDay(dhakaDate(r.at), lang)).replace('{t}', fmtTaka2(r.amount ?? 0));
+              const past = (r: typeof h) => (r.status === 'accepted' ? x.handedPast : x.overridePast)
                 .replace('{name}', r.to).replace('{from}', r.from).replace('{d}', fmtDay(dhakaDate(r.at), lang)).replace('{t}', fmtTaka2(r.amount ?? 0));
               return (
                 <div className="mt-3 text-[15px]">
                   <p>{line(h)}</p>
                   {older.length > 0 && <details className="mt-1"><summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.earlierHandovers}</summary>
-                    <ul className="mt-1 space-y-1 text-muted">{older.map(r => <li key={r.at}>{line(r)}</li>)}</ul></details>}
+                    <ul className="mt-1 space-y-1 text-muted">{older.map(r => <li key={r.at}>{past(r)}</li>)}</ul></details>}
                 </div>
               );
             })()}

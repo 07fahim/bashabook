@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { currentOffer } from '@/lib/handover';
+import { myLatestHandover } from '@/lib/handover';
 import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka } from '@/lib/meals';
 import { listMembers } from '@/lib/auth';
 import { countAtLock, loadMeals } from '@/lib/meals-db';
@@ -34,10 +34,10 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
   const t = getDictionary(lang), a = t.app, m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const [meals, people, mo, waiting, offer] = await Promise.all([
+  const [meals, people, mo, waiting, ho] = await Promise.all([
     loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId),
     loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId, me.role === 'manager'),
-    currentOffer(db, me.flatId),
+    myLatestHandover(db, me.flatId, me.memberId),
   ]);
   const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
@@ -69,23 +69,30 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
           <Avatar id={me.memberId} name={me.name} v={self?.photoV ?? null} size={48} />
           <h1 className="font-display text-3xl font-bold">{a.hi}, {me.name}</h1>
         </div>
-        {/* side by side the cards are one height, their buttons on one line; a lone card keeps half the row,
-            not a button as wide as the screen */}
-        {offer?.toId === me.memberId && (
+        {/* an offer to me waits here; for a day after it ends, the result stays (it survives the refresh that hides the buttons) */}
+        {ho?.status === 'offered' ? (
           <section className="mt-6 rounded-3xl border-2 border-turmeric bg-surface p-5">
             <h2 className="text-xl font-bold">{x.takeTitle}</h2>
-            <p className="mt-2 max-w-prose font-semibold">{x.takeLead.replace('{name}', offer.from).replace('{t}', fmtTaka2(offer.amount))}</p>
+            <p className="mt-2 max-w-prose font-semibold">{x.takeLead.replace('{name}', ho.from).replace('{t}', fmtTaka2(ho.amount))}</p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               {([[acceptHandoverAction, primary, x.takeYes], [declineHandoverAction, secondary, x.takeNo]] as const).map(([action, cls, label]) => (
                 <ActionForm key={label} action={action}>
-                  <input type="hidden" name="lang" value={lang} /><input type="hidden" name="id" value={offer.id} /><input type="hidden" name="from" value={offer.from} />
+                  <input type="hidden" name="lang" value={lang} /><input type="hidden" name="id" value={ho.id} /><input type="hidden" name="from" value={ho.from} />
                   <button className={`${cls} sm:w-auto`}>{label}</button>
                 </ActionForm>
               ))}
             </div>
           </section>
+        ) : ho?.recent && (ho.decidedBy === me.memberId || (ho.status === 'cancelled' && !ho.decidedBy)) && (
+          <section role="status" className="mt-6 rounded-3xl border-2 border-turmeric bg-surface p-5">
+            <p className="max-w-prose font-semibold">
+              {ho.status === 'accepted' ? x.takeDone : (ho.status === 'declined' ? x.takeDeclined : x.takeStale).replace('{name}', ho.from)}
+            </p>
+          </section>
         )}
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
+        {/* side by side the cards are one height, their buttons on one line; a lone card keeps half the row,
+            not a button as wide as the screen */}
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
           {/* phones only: wider screens change tomorrow in the week chart, with the lock time above it */}
           <section className="rounded-3xl border border-line bg-surface p-5 md:hidden">

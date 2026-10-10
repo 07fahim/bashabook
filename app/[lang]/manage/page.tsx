@@ -133,7 +133,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 </ActionForm>
               </Fold>
             ))}
-            <Fold title={mn.handTitle} lead={mn.handLead} level={3} open={!!offer}>
+            <Fold title={mn.handTitle} lead={mn.handLead} level={3} open={!!offer || !!(outcome && (outcome.status === 'declined' || outcome.stale))}>
               {offer ? (
                 <div className="mt-4">
                   <p className="font-semibold">{mn.handWaiting.replace('{name}', offer.to).replace('{t}', fmtTaka2(offer.amount))}</p>
@@ -158,7 +158,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                   <label className="block font-semibold">{mn.handTo}
                     <select name="to" className={field} required defaultValue="">
                       <option value="" disabled>—</option>
-                      {members.filter(p => p.id !== me.memberId && !p.leftOn && p.joinedOn <= today).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {members.filter(p => p.id !== me.memberId && !p.leftOn && p.joinedOn <= today && p.claimed).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </label>
                   <details>

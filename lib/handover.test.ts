@@ -7,7 +7,7 @@ import { saveMeal } from './meals-db';
 import { addEntry, confirmEntry, loadMonth, putBack, removeEntry, toConfirm, type NewEntry } from './money-db';
 import { closeMonth } from './close';
 import { setLeaving } from './auth';
-import { acceptHandover, cancelHandover, currentOffer, declineHandover, flatMoney, handoverHistory, lastOutcome, offerHandover, overrideCollector, pendingCount } from './handover';
+import { acceptHandover, cancelHandover, currentOffer, declineHandover, flatMoney, handoverHistory, lastOutcome, myLatestHandover, offerHandover, overrideCollector, pendingCount } from './handover';
 
 async function flat() {
   await migrate();
@@ -272,6 +272,25 @@ describe('handover in the app', { timeout: 30000 }, () => {
     expect(await cancelHandover(db, flatId, ids.Nafis, id)).toBe('declined');      // the first decision stands
     expect(await lastOutcome(db, flatId, ids.Nafis)).toEqual({ status: 'declined', to: 'Zarif', stale: false });
     expect(await collector()).toEqual([ids.Nafis]);
+  });
+
+  it('myLatestHandover: waiting, accepted, then a stale cancel; old results are not recent', async () => {
+    const { flatId, ids } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const }, tahsin = { memberId: ids.Tahsin, role: 'manager' as const };
+    expect(await myLatestHandover(db, flatId, ids.Tahsin)).toBeNull();
+    expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 0, '2026-09-10')).toBe('ok');
+    const o = await myLatestHandover(db, flatId, ids.Tahsin);
+    expect([o?.status, o?.from, o?.amount, o?.decidedBy, o?.recent]).toEqual(['offered', 'Nafis', 0, null, false]);
+    expect(await acceptHandover(db, flatId, ids.Tahsin, o!.id)).toBe('ok');
+    const a = await myLatestHandover(db, flatId, ids.Tahsin);
+    expect([a?.status, a?.decidedBy, a?.recent]).toEqual(['accepted', ids.Tahsin, true]);
+    expect(await offerHandover(db, flatId, tahsin, ids.Zarif, 0, '2026-09-10')).toBe('ok');
+    await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 5000, date: '2026-09-10', memberId: ids.Zarif }));   // the money moves
+    expect(await acceptHandover(db, flatId, ids.Zarif, (await currentOffer(db, flatId))!.id)).toBe('changed');
+    const z = await myLatestHandover(db, flatId, ids.Zarif);
+    expect([z?.status, z?.from, z?.decidedBy, z?.recent]).toEqual(['cancelled', 'Tahsin', null, true]);
+    await db(`update handovers set decided_at = now() - interval '25 hours' where id = $1`, [z!.id]);
+    expect((await myLatestHandover(db, flatId, ids.Zarif))?.recent).toBe(false);
   });
 
   it('pending money blocks the offer; pendingCount', async () => {

@@ -75,6 +75,16 @@ export async function lastOutcome(db: Db, flatId: string, me: string) {
     ? { status: o.status as 'declined' | 'cancelled', to: o.to, stale: o.stale } : null;
 }
 
+/** The latest offer made to me, for Home: waiting, or how it ended. `recent` = decided in the last 24 hours. */
+export async function myLatestHandover(db: Db, flatId: string, me: string) {
+  const [o] = await db<{ id: string; status: string; from: string; amount: number; decidedBy: string | null; decidedAt: string | null; recent: boolean }>(
+    `select h.id, h.status, f.name as "from", h.amount::int as amount, h.decided_by as "decidedBy", h.decided_at::text as "decidedAt",
+       coalesce(h.decided_at > now() - interval '24 hours', false) as recent
+     from handovers h join members f on f.id = h.from_member
+     where h.flat_id = $1 and h.to_member = $2 order by h.created_at desc limit 1`, [flatId, me]);
+  return o ?? null;
+}
+
 export async function pendingCount(db: Db, flatId: string) {
   const [r] = await db<{ n: number }>(`select count(*)::int as n from ledger where flat_id = $1 and status = 'pending'`, [flatId]);
   return r.n;

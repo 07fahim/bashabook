@@ -466,6 +466,8 @@ const bn = {
     holds: 'ফ্ল্যাটের টাকা {d} থেকে {name} এর কাছে ({from} বুঝিয়ে দিয়েছেন {t})',
     holdsOverride: 'ফ্ল্যাটের টাকা {d} থেকে {name} এর দায়িত্বে (অ্যাপ টিম বদলেছে; টাকা হাতে পাওয়া নিশ্চিত হয়নি)',
     earlierHandovers: 'আগের হস্তান্তর',
+    handedPast: '{d}: {from} {name} কে {t} বুঝিয়ে দিয়েছেন',
+    overridePast: '{d}: অ্যাপ টিম {name} কে দায়িত্ব দিয়েছে (টাকা হাতে পাওয়া নিশ্চিত হয়নি)',
     confirmDepositTo: '{name} {to} কে {t} দিয়েছে',
     errors: {
       amount: 'টাকার অঙ্কটা ঠিক করে লিখুন, যেমন 2450।',
@@ -962,6 +964,8 @@ const en: Dict = {
     holds: '{name} holds the flat money since {d} ({from} handed over {t}).',
     holdsOverride: "{name} holds the flat money since {d} (changed by the app team; the cash handover wasn't confirmed).",
     earlierHandovers: 'Earlier handovers',
+    handedPast: '{d}: {from} handed {t} to {name}.',
+    overridePast: "{d}: the app team made {name} the holder (the cash handover wasn't confirmed).",
     confirmDepositTo: '{name} paid {t} to {to}',
     errors: {
       amount: 'Enter the amount in taka, e.g. 2450.',
