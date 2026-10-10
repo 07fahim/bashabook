@@ -39,17 +39,18 @@ export async function openMonth(db: Db, flatId: string, month: string) {
 /** One ledger row, its split people, its history row and (if `repeat`) its monthly template, all in one statement,
  *  so a bill can never be saved without the repeat the person ticked, or the other way round. Callers check the rules. */
 async function insertEntry(db: Db, flatId: string, by: string,
-  e: { type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[] },
+  e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[] },
   status: 'ok' | 'pending', repeat: { split: Split; selected: string[] } | null = null) {
   await db(
-    `with l as (insert into ledger (flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by)
-       values ($1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10) returning *),
+    `with l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by)
+       values (coalesce($15::uuid, gen_random_uuid()), $1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10)
+       on conflict (id) do nothing returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, l.id, x::uuid from l, json_array_elements_text($11::text::json) x),
      t as (insert into bill_templates (flat_id, name, amount_poisha, split, selected_member_ids)
-       select $1, $8, $4, $12, array(select json_array_elements_text($13::text::json)::uuid) where $14::boolean)
+       select $1, $8, $4, $12, array(select json_array_elements_text($13::text::json)::uuid) from l where $14::boolean)
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), $10 from l`,
     [flatId, e.date, e.type, e.amount, e.paidBy, e.memberId, e.split, e.note, status, by, JSON.stringify(e.split === 'selected' ? e.selected : []),
-     repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null]);
+     repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null, e.id ?? null]);
 }
 
 /** Everything the money screens need for one month. The version is read first: closeMonth freezes only results computed
@@ -144,6 +145,7 @@ export type NewEntry = {
   split: Split | 'here' | null;   // bills only; 'here' = everyone living here on the bill date
   selected: string[];
   repeat?: boolean;               // bills, collector only: also copy it into every new month (from flat money)
+  id?: string;                    // one-time id from the form: a retry with the same id records nothing new
 };
 
 /** Adds an entry if the rules allow it. 'rooms' = rent by room asked before rooms and rents are set. */
@@ -166,7 +168,11 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): 
     selected = here.filter(m => m.joinedOn <= e.date && (m.leftOn === null || m.leftOn >= e.date)).map(m => m.id);
   }
   if (split === 'selected' && !selected.length) return 'bad';
-  const ids = new Set(here.map(m => m.id));
+  // someone who moved out before this month but still has a balance from the latest closed month can be settled with
+  const owed = moving ? await db<{ id: string }>(
+    `select member_id as id from month_balances where flat_id = $1 and balance <> 0
+       and month = (select max(month) from months where flat_id = $1 and month < $2::date and status = 'closed')`, [flatId, month]) : [];
+  const ids = new Set([...here.map(m => m.id), ...owed.map(o => o.id)]);
   if (![e.paidBy, e.memberId, ...selected].every(id => id === null || ids.has(id))) return 'bad';
   // whoever paid the shop or the bill was living here that day; money to or from someone who left is settling up, so it stays allowed
   if (e.paidBy && !here.some(m => m.id === e.paidBy && m.joinedOn <= e.date && (m.leftOn === null || m.leftOn >= e.date))) return 'gone';
@@ -176,7 +182,7 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): 
   }
   // money between two people waits for the receiver: the collector for deposits, the person for payouts. Someone who has
   // moved out can't sign in to confirm, so paying them back counts at once: the collector's entry is the record.
-  const gone = here.some(m => m.id === e.memberId && m.gone);
+  const gone = here.some(m => m.id === e.memberId && m.gone) || (owed.some(o => o.id === e.memberId) && !here.some(m => m.id === e.memberId));
   const pending = (e.type === 'deposit' && !boss) || (e.type === 'payout' && e.memberId !== by.memberId && !gone);
   await openMonth(db, flatId, month);
   // a repeated "everyone living here" bill becomes "everyone, by days": the people living here change month to month

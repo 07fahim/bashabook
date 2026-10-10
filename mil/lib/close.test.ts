@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal } from './meals-db';
 import { addEntry, addRoom, loadMonth, openMonth, setRoom, type NewEntry } from './money-db';
-import { closeMonth, closeInfo, openFrom, parseCash } from './close';
+import { addCorrection, closeMonth, closeInfo, openFrom, parseCash } from './close';
+import { allocate } from './money';
 
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
   ({ date: '2026-09-05', note: null, paidBy: null, memberId: null, split: null, selected: [], ...p });
@@ -166,5 +168,79 @@ describe('closing a month', { timeout: 30000 }, () => {
     expect(await openFrom(db, flatId, '2026-10-05')).toBe('2026-10-01');   // editFrom alone would say 1 September
     await expect(saveMeal(db, flatId, nafis.memberId, { memberId: ids.Tahsin, date: '2026-09-09', meal: 'l', count: 0, guests: 0 }, false)).rejects.toThrow('month_closed');
     expect(await closeInfo(db, flatId, '2026-10-05')).toBeNull();
+  });
+});
+
+describe('corrections', { timeout: 30000 }, () => {
+  async function closedSeptember() {
+    const t = await flat();
+    await addEntry(db, t.flatId, t.nafis, e({ type: 'bazar', amount: 90000, paidBy: t.ids.Tahsin }));   // out of pocket: fund stays 0
+    expect((await closeMonth(db, t.flatId, t.nafis, '2026-09-01', '2026-10-02', cash(0))).result).toBe('ok');
+    return t;
+  }
+  const sumBalances = (r: { perMember: { balance: number }[] }) => r.perMember.reduce((a, p) => a + p.balance, 0);
+
+  it('a forgotten bazar is split by September frozen meals, lands in October, and leaves September and the fund alone', async () => {
+    const { flatId, ids, nafis } = await closedSeptember();
+    const before = await db(`select * from month_balances where flat_id = $1 order by member_id`, [flatId]);
+    const id = randomUUID();
+    expect(await addCorrection(db, flatId, nafis, { id, kind: 'bazar', forMonth: '2026-09-01', amount: 30000, paidBy: ids.Zarif, note: 'egg receipt' }, '2026-10-02')).toBe('ok');
+    expect(await addCorrection(db, flatId, nafis, { id, kind: 'bazar', forMonth: '2026-09-01', amount: 30000, paidBy: ids.Zarif, note: 'egg receipt' }, '2026-10-02')).toBe('ok');   // retry
+    expect(await db(`select 1 from ledger where flat_id = $1 and for_month = '2026-09-01'`, [flatId])).toHaveLength(1);
+    expect(await db(`select * from month_balances where flat_id = $1 order by member_id`, [flatId])).toEqual(before);
+    const oct = await loadMonth(db, flatId, '2026-10-01', '2026-10-02');
+    const z = oct.result.perMember.find(p => p.id === ids.Zarif)!;
+    expect(z.paidIn).toBe(30000);
+    expect(oct.result.perMember.reduce((a, p) => a + p.foodCost, 0)).toBe(30000);
+    expect(oct.result.fund).toBe(0);
+    expect(oct.result.invariantOk).toBe(true);
+    expect(sumBalances(oct.result)).toBe(oct.result.fund);
+  });
+
+  it('a move between two people, and the rules', async () => {
+    const { flatId, ids, nafis } = await closedSeptember();
+    const move = { id: randomUUID(), kind: 'move' as const, forMonth: '2026-09-01', amount: 2500, from: ids.Tahsin, to: ids.Zarif, note: 'wrong payer' };
+    expect(await addCorrection(db, flatId, nafis, move, '2026-10-02')).toBe('ok');
+    const oct = await loadMonth(db, flatId, '2026-10-01', '2026-10-02');
+    expect(oct.result.perMember.find(p => p.id === ids.Zarif)!.adjustments).toBe(2500);
+    expect(oct.result.invariantOk).toBe(true);
+    expect(sumBalances(oct.result)).toBe(oct.result.fund);
+    expect(await addCorrection(db, flatId, nafis, { ...move, id: randomUUID(), note: ' ' }, '2026-10-02')).toBe('bad');
+    expect(await addCorrection(db, flatId, { memberId: ids.Tahsin, role: 'member' }, { ...move, id: randomUUID() }, '2026-10-02')).toBe('bad');
+    expect(await addCorrection(db, flatId, nafis, { ...move, id: randomUUID(), forMonth: '2026-10-01' }, '2026-10-02')).toBe('month');   // not closed
+    // a cost fixed later always has a person who paid it: corrections never touch flat money
+    const noPayer = { id: randomUUID(), kind: 'bazar' as const, forMonth: '2026-09-01', amount: 100, paidBy: null as unknown as string, note: 'x' };
+    expect(await addCorrection(db, flatId, nafis, noPayer, '2026-10-02')).toBe('bad');
+    expect(await addCorrection(db, flatId, nafis, { ...noPayer, paidBy: '' }, '2026-10-02')).toBe('bad');
+    expect(await db(`select 1 from ledger where flat_id = $1 and for_month is not null`, [flatId])).toHaveLength(1);
+  });
+
+  it('someone who moved out keeps their balance until it is paid, a part payment leaves the rest', async () => {
+    const { flatId, ids, nafis } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 300000, paidBy: ids.Zarif }));   // Zarif +2,250: he is here 20 of September's 30 days, so his share is 750
+    await db(`update members set left_on = '2026-09-20' where id = $1`, [ids.Zarif]);
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(0))).result).toBe('ok');
+    const zarif = async () => (await loadMonth(db, flatId, '2026-10-01', '2026-10-05')).result.perMember.find(p => p.id === ids.Zarif);
+    expect((await zarif())!.balance).toBe(225000);
+    await db(`insert into months (flat_id, month) values ($1, '2026-10-01') on conflict do nothing`, [flatId]);
+    expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 80000, memberId: ids.Zarif, date: '2026-10-05' }))).toBe('ok');   // counts at once: they moved out
+    expect((await zarif())!.balance).toBe(145000);   // still listed with the rest owed
+    // a forgotten September bazar still charges Zarif his frozen share, next to his opening
+    expect(await addCorrection(db, flatId, nafis, { id: randomUUID(), kind: 'bazar', forMonth: '2026-09-01', amount: 30001, paidBy: ids.Tahsin, note: 'late receipt' }, '2026-10-05')).toBe('ok');
+    const sep = await db<{ id: string; meals: number }>(`select member_id as id, weighted_meals as meals from month_balances where flat_id = $1 and month = '2026-09-01' and weighted_meals > 0 order by member_id`, [flatId]);
+    const share = allocate(30001, sep.map(s => s.meals))![sep.findIndex(s => s.id === ids.Zarif)];
+    expect(share).toBeGreaterThan(0);
+    const oct = (await loadMonth(db, flatId, '2026-10-01', '2026-10-05')).result;
+    const z = oct.perMember.find(p => p.id === ids.Zarif)!;
+    expect([z.opening, z.foodCost, z.balance]).toEqual([225000, share, 145000 - share]);
+    expect(oct.invariantOk).toBe(true);
+    expect(sumBalances(oct)).toBe(oct.fund);
+  });
+
+  it('a retried money entry with the same one-time id is recorded once', async () => {
+    const { flatId, ids, nafis } = await flat();
+    const id = randomUUID();
+    for (let i = 0; i < 2; i++) expect(await addEntry(db, flatId, nafis, e({ id, type: 'deposit', amount: 7000, memberId: ids.Zarif }))).toBe('ok');
+    expect(await db(`select 1 from ledger where id = $1`, [id])).toHaveLength(1);
   });
 });

@@ -1,7 +1,7 @@
 import type { Db } from './db';
 import { addDays, daysOfMonth, editFrom } from './meals';
 import { toPoisha } from './money';
-import { loadMonth, monthOf, type Actor } from './money-db';
+import { loadMonth, monthOf, openMonth, type Actor } from './money-db';
 
 export type Cash = { cash: number; bkash: number; nagad: number; bank: number };
 export type CloseResult = 'ok' | 'closed' | 'early' | 'order' | 'pending' | 'problems' | 'cash' | 'changed' | 'notCollector';
@@ -80,4 +80,38 @@ export async function closeMonth(db: Db, flatId: string, by: Actor, month: strin
   if (r.length) return out('ok', expected);
   const [now] = await db<{ status: string }>(`select status from months where flat_id = $1 and month = $2`, [flatId, month]);
   return out(now?.status === 'closed' ? 'closed' : 'changed', expected);
+}
+
+export type Correction = { id: string; forMonth: string; amount: number; note: string } & (
+  | { kind: 'bazar'; paidBy: string }
+  | { kind: 'bill'; paidBy: string; split: 'meals' | 'equal' | 'selected'; selected: string[] }
+  | { kind: 'move'; from: string; to: string });
+
+/** A fix for a closed month, booked in this month. Never touches the fund: a cost someone paid from their own pocket
+ *  (split later by that month's frozen meals or days), or a move between two people. Only the collector; a reason is required;
+ *  every person must have lived here in that month. One statement; a retry with the same id records nothing new. */
+export async function addCorrection(db: Db, flatId: string, by: Actor, c: Correction, today: string): Promise<'ok' | 'bad' | 'month'> {
+  const note = c.note.trim();
+  if (by.role !== 'manager' || !note || note.length > 100 || !Number.isInteger(c.amount) || c.amount <= 0) return 'bad';
+  const move = c.kind === 'move';
+  if (move && c.from === c.to) return 'bad';
+  if (c.kind === 'bill' && c.split === 'selected' && !c.selected.length) return 'bad';
+  const selected = c.kind === 'bill' && c.split === 'selected' ? c.selected : [];
+  const people = move ? [c.from, c.to] : [c.paidBy, ...selected];
+  if (people.some(p => !p)) return 'bad';   // a cost with no payer would come out of flat money
+  await openMonth(db, flatId, monthOf(today));   // the correction is booked in this month
+  const r = await db(
+    `with ok as (select 1 from months where flat_id = $1 and month = $2::date and status = 'closed'
+         and (select count(distinct member_id) from month_balances where flat_id = $1 and month = $2::date and days_present > 0
+              and member_id in (select json_array_elements_text($3::text::json)::uuid)) = (select count(distinct x) from json_array_elements_text($3::text::json) x)),
+       l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, moves, split, date, note, status, created_by, for_month)
+         select $4::uuid, $1, date_trunc('month', $5::date)::date, $6, $7, $8::uuid, $9::uuid, $10::uuid, $11, $5::date, $12, 'ok', $13, $2::date from ok
+         on conflict (id) do nothing returning *),
+       s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, l.id, x::uuid from l, json_array_elements_text($14::text::json) x)
+     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), $13 from l returning 1`,
+    [flatId, c.forMonth, JSON.stringify(people), c.id, today, move ? 'adjustment' : c.kind, c.amount,
+     move ? null : c.paidBy, move ? c.from : null, move ? c.to : null, c.kind === 'bill' ? c.split : null, note, by.memberId, JSON.stringify(selected)]);
+  if (r.length) return 'ok';
+  // a retry finds its own row; anything else means the month or the people were wrong
+  return (await db(`select 1 from ledger where flat_id = $1 and id = $2`, [flatId, c.id])).length ? 'ok' : 'month';
 }
