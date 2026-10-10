@@ -49,6 +49,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const pickDay = isDate(sp.day) && sp.day >= firstOpen && sp.day <= addDays(today, 60) ? sp.day : firstOpen;
   const pick = others.find(x => x.id === sp.who) ?? others[0];
   const pickData = pick ? await loadMeals(db, me.flatId, pickDay, pickDay) : null;
+  const pickAway = pick ? (await upcomingAway(db, me.flatId, pick.id, firstOpen)).some(([f, t]) => pickDay >= f && pickDay <= t) : false;
   const guestDays = week.filter(d => d === today || decide(d) !== 'closed');   // today too: a host may add surprise guests
   const href = (n: number, only: boolean, more = 0) => `/${lang}/meals?${new URLSearchParams({ ...(n ? { week: String(n) } : {}), ...(only ? { mine: '1' } : {}), ...(more ? { older: String(more) } : {}) })}`;
   const hasOlder = history.length > shownRows;
@@ -197,6 +198,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
               {(() => {
                 const person = pickData.members.find(x => x.id === pick.id);
                 if (!person || !isPresent(person, pickDay)) return <p className="mt-2 text-muted">{m.notInFlat}</p>;
+                if (pickAway) return <p className="mt-2 text-muted">{pick.name} · {m.away}</p>;
                 const idx = indexChanges(pickData.changes);
                 return (
                   <ul className="mt-2 divide-y divide-line">

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
-import { addGuests, changedByOthers, cookAgain, loadMeals, noCooking, removeGuests, saveMeal, setAway, setDefaults, setOtherMeal, setOwn } from './meals-db';
+import { addGuests, cancelAway, changedByOthers, cookAgain, loadMeals, noCooking, removeGuests, saveMeal, setAway, setDefaults, setOtherMeal, setOwn } from './meals-db';
 import type { Db } from './db';
 import { headcount } from './meals';
 import { loadMonth } from './money-db';
@@ -102,6 +102,38 @@ describe('changing a flatmate’s meals', { timeout: 30000 }, () => {
     const after = await loadMeals(db, flatId, t, t);
     expect(headcount(after.members, after.changes, t).l).toBe(before - 1);
     expect((await loadMonth(db, flatId, month, t)).meals.get(ids.Fahim) ?? 0).toBeLessThan(mealsBefore);
+  });
+});
+
+describe('away days', { timeout: 30000 }, () => {
+  it('a day inside an away range is closed to another flatmate; cancelling it, and a day outside it, both work', async () => {
+    const { flatId, ids, today, day, set, row, audits } = await flat();
+    const t2 = await day(2), t3 = await day(3), t4 = await day(4), outside = await day(5);
+    await setAway(db, flatId, ids.Fahim, t2, t4);
+    expect(await set(ids.Tahsin, ids.Fahim, t3, 0, 1)).toBe('closed');
+    expect(await row(ids.Fahim, t3)).toEqual({ count: 0, guests: 0 });   // zeroed by setAway, untouched by the refused write
+    expect(await audits(ids.Tahsin)).toBe(0);
+    expect(await changedByOthers(db, flatId, ids.Fahim, today)).toEqual([]);
+    expect(await set(ids.Tahsin, ids.Fahim, outside, 0, 1)).toBe('ok');   // outside the away range: still works
+    await cancelAway(db, flatId, ids.Fahim, t3, t3);
+    expect(await set(ids.Tahsin, ids.Fahim, t3, 0, 1)).toBe('ok');   // cancelled: works again
+  });
+
+  it('the re-check: going away during the write rolls back the change and its history row', async () => {
+    const { ids, day, set, row, audits } = await flat();
+    const t = await day(3);
+    await db(`create function sneak_away() returns trigger language plpgsql as $$ begin
+        insert into audit_log (flat_id, entity, entity_id, after, by_member)
+          values (new.flat_id, 'meal_changes', new.member_id || '|away', jsonb_build_object('away', array[new.date::text, new.date::text]), new.member_id);
+        return null; end $$`);
+    await db(`create trigger sneak_away after insert on meal_changes for each row execute function sneak_away()`);
+    try {
+      expect(await set(ids.Tahsin, ids.Fahim, t, 0, 1)).toBe('closed');
+      expect([await row(ids.Fahim, t), await audits(ids.Tahsin)]).toEqual([undefined, 0]);
+    } finally {
+      await db(`drop trigger sneak_away on meal_changes`);
+      await db(`drop function sneak_away()`);
+    }
   });
 });
 

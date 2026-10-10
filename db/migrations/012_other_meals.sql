@@ -1,10 +1,20 @@
+-- Day d is away for member m when the latest (highest id) `|away` audit row whose range covers d is an `away` row,
+-- not an `awayCancel` (setAway/cancelAway in lib/meals-db.ts).
+create function is_away(f uuid, m uuid, d date) returns boolean language sql stable as $$
+  select coalesce((select a.after ? 'away' from audit_log a
+    where a.flat_id = f and a.entity_id = m::text || '|away'
+      and d between coalesce(a.after->'away'->>0, a.after->'awayCancel'->>0)::date
+                and coalesce(a.after->'away'->>1, a.after->'awayCancel'->>1)::date
+    order by a.id desc limit 1), false)
+$$;
+
 -- Any flatmate can switch another flatmate's own plate before the lock time (spec 2026-10-10-other-meals-design).
 -- Three steps, each a fresh read in READ COMMITTED, the whole call one transaction:
 -- 1. the flat row FOR NO KEY UPDATE (as 011: never FOR UPDATE, which blocks foreign-key checks): move-outs and handovers
 --    take it too, so they have committed or wait;
 -- 2. every rule, then a write guarded by the value the person saw (re-checked on the row at write time), guests kept,
 --    and its history row only when something was written;
--- 3. a re-check: no cooking or leaving shared meals that committed meanwhile rolls the write and its history back.
+-- 3. a re-check: no cooking, leaving shared meals or going away that committed meanwhile rolls the write and its history back.
 create function set_other_meal(f uuid, actor uuid, target uuid, d date, ml text, own int, seen int) returns text language plpgsql as $$
 declare
   today date := (now() at time zone 'Asia/Dhaka')::date;
@@ -17,7 +27,7 @@ begin
      or not exists (select 1 from members where flat_id = f and id = actor and joined_on <= today and (left_on is null or left_on >= today))
      or not exists (select 1 from members where flat_id = f and id = target and in_meals and joined_on <= d and (left_on is null or left_on >= d))
      or d <= today or d > today + 60 or (d = today + 1 and (now() at time zone 'Asia/Dhaka')::time >= cut)
-     or exists (select 1 from no_cook where flat_id = f and date = d and meal = ml) then
+     or exists (select 1 from no_cook where flat_id = f and date = d and meal = ml) or is_away(f, target, d) then
     return 'closed';
   end if;
   -- the guard already proves the own plate before the write was exactly `seen`; `before` is built from that, not a
@@ -35,7 +45,7 @@ begin
   select count(*) into n from up;
   if n = 0 then return 'changed'; end if;
   if exists (select 1 from no_cook where flat_id = f and date = d and meal = ml)
-     or not exists (select 1 from members where id = target and in_meals) then
+     or not exists (select 1 from members where id = target and in_meals) or is_away(f, target, d) then
     raise exception 'other_meal_recheck';
   end if;
   return 'ok';
