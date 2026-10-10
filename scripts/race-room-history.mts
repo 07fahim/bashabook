@@ -69,6 +69,27 @@ try {
     check(`room: a move waiting on another that ${commit ? 'commits' : 'rolls back'} records ${want} → no room`,
       w && ok === true && a.before?.room === want && a.after.roomId === null, { w, ok, a });
   }
+  {
+    // a change back to the original value while another holds: applied after it, never skipped as "nothing changed"
+    const f = await flat();
+    const h = hold(tx => setRent(tx, f.flatId, f.nafis, f.big, 350000)); await h.started;
+    const back = setRent(db, f.flatId, f.nafis, f.big, 300000);
+    const w = await waits(back);
+    h.release(); await h.done;
+    const ok = await back, a = await f.last(f.big);
+    check('rent: a change back to ৳3,000 waiting on one to ৳3,500 is applied and records ৳3,500 → ৳3,000',
+      w && ok === true && a.before?.rent_share_poisha === 350000 && a.after.rent_share_poisha === 300000, { w, ok, a });
+  }
+  {
+    const f = await flat();
+    const h = hold(tx => setRoom(tx, f.flatId, f.nafis, f.ids.Tahsin, f.big)); await h.started;
+    const back = setRoom(db, f.flatId, f.nafis, f.ids.Tahsin, f.small);
+    const w = await waits(back);
+    h.release(); await h.done;
+    const ok = await back, a = await f.last(f.ids.Tahsin);
+    check('room: a move back to Small waiting on one to Big is applied and records Big → Small',
+      w && ok === true && a.before?.room === 'Big' && a.after.room === 'Small', { w, ok, a });
+  }
 } catch (x) {
   check('no errors', false, String(x));
 }
