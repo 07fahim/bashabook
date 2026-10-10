@@ -274,4 +274,33 @@ describe('final review fixes', { timeout: 30000 }, () => {
     expect(await row(ids.Fahim, t)).toEqual({ count: 0, guests: 0 });          // Tahsin's Off is back, not the usual lunch
     expect(await row(ids.Zarif, t)).toBeUndefined();                             // nothing saved before: the usual meal again
   });
+
+  it('a no-cooking row appearing between the decision and the write closes setOwn, writing nothing', async () => {
+    const { flatId, ids, today, day, row } = await flat();
+    const t = await day(3), now = `${today}T10:00`;
+    const sneak = () => db(`insert into no_cook (flat_id, date, meal) values ($1, $2::date, 'l')`, [flatId, t]);
+    expect(await setOwn(racing(sneak), flatId, ids.Fahim, t, 'l', 0, now)).toBe('closed');
+    expect(await row(ids.Fahim, t)).toBeUndefined();
+  });
+
+  it('a new row through setOwn or addGuests writes an audit row with before null', async () => {
+    const { flatId, ids, today, day } = await flat();
+    const now = `${today}T10:00`, t1 = await day(3), t2 = await day(4);
+    await setOwn(db, flatId, ids.Fahim, t1, 'l', 0, now);
+    const [a] = await db<{ before: unknown }>(`select before from audit_log where entity_id = $1 order by id desc limit 1`, [`${ids.Fahim}|${t1}|l`]);
+    expect(a.before).toBeNull();
+    await addGuests(db, flatId, ids.Zarif, t2, 'l', 1, now);
+    const [b] = await db<{ before: unknown }>(`select before from audit_log where entity_id = $1 order by id desc limit 1`, [`${ids.Zarif}|${t2}|l`]);
+    expect(b.before).toBeNull();
+  });
+
+  it('removeGuests writes nothing when the guests change between its read and its write', async () => {
+    const { flatId, ids, today, day, row } = await flat();
+    const t = await day(3), now = `${today}T10:00`;
+    await addGuests(db, flatId, ids.Fahim, t, 'l', 2, now);
+    // a flatmate changes the guest count after removeGuests' read, before its write
+    const change = () => db(`update meal_changes set count = count + 1, guests = 3 where member_id = $1 and date = $2::date and meal = 'l'`, [ids.Fahim, t]);
+    expect(await removeGuests(racing(change), flatId, ids.Fahim, t, 'l', now)).toBe('open');
+    expect(await row(ids.Fahim, t)).toEqual({ count: 4, guests: 3 });   // stale read (2 guests): nothing written
+  });
 });

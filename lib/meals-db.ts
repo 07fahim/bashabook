@@ -77,13 +77,6 @@ const blocked = async (db: Db, flatId: string, date: string, meal: Meal) =>
 const decide = async (db: Db, flatId: string, date: string, meal: Meal, now: string): Promise<Decision> =>
   (await blocked(db, flatId, date, meal)) ? 'closed' : mealDecision(date, now, (await mealRules(db, flatId)).cutoff);
 
-/** Applies the lock rule to one of my changes and saves it. */
-export async function changeMeal(db: Db, flatId: string, c: MealChange, now: string): Promise<Decision> {
-  const decision = await decide(db, flatId, c.date, c.meal, now);
-  if (decision !== 'closed') await saveMeal(db, flatId, c.memberId, { ...c, guests: c.guests ?? 0 }, decision === 'late');
-  return decision;
-}
-
 /** My own write, relative to the saved row, so it never undoes a flatmate's change made after my screen loaded.
  *  `up` writes only when something changes and returns count, guests, late and `b`, the plates before (null for a new
  *  row) rebuilt from the written row; the history row goes in the same statement, only when `up` wrote. $6 = `n`. */
@@ -98,11 +91,20 @@ const writeMine = async (db: Db, flatId: string, memberId: string, date: string,
 export async function setOwn(db: Db, flatId: string, memberId: string, date: string, meal: Meal, own: 0 | 1, now: string): Promise<Decision> {
   if (!(await currentPlates(db, flatId, memberId, date, meal))) return 'closed';
   const decision = await decide(db, flatId, date, meal, now);
-  if (decision !== 'closed') await writeMine(db, flatId, memberId, date, meal, decision === 'late', own,
-    `insert into meal_changes (flat_id, member_id, date, meal, count, guests, late) values ($1, $2, $3::text::date, $4, $6, 0, $5)
+  if (decision === 'closed') return decision;
+  // the guard below closes the gap between the decide() read and this write: a no-cooking row inserted in between is
+  // caught here too, so the meal never switches on for a day no-cooking has just taken
+  const wrote = await writeMine(db, flatId, memberId, date, meal, decision === 'late', own,
+    `insert into meal_changes (flat_id, member_id, date, meal, count, guests, late)
+       select $1, $2, $3::text::date, $4, $6, 0, $5
+       where not exists (select 1 from no_cook where flat_id = $1 and date = $3::text::date and meal = $4)
      on conflict (member_id, date, meal) do update set count = $6 + meal_changes.guests, late = $5, updated_at = now()
        where meal_changes.count - meal_changes.guests <> $6
+         and not exists (select 1 from no_cook where flat_id = $1 and date = $3::text::date and meal = $4)
+     -- on the update path the matched row is locked first, so xmax is never 0; only a fresh insert leaves xmax = 0,
+     -- which is how the audit's before column tells a new row (null) from one that already existed
      returning count, guests, late, case when xmax = 0 then null else jsonb_build_object('count', guests + 1 - $6, 'guests', guests) end as b`);
+  if (!wrote && await blocked(db, flatId, date, meal)) return 'closed';
   return decision;
 }
 
@@ -112,10 +114,15 @@ export async function removeGuests(db: Db, flatId: string, memberId: string, dat
   const p = await currentPlates(db, flatId, memberId, date, meal);
   if (!p || p.guests === 0) return 'closed';
   const decision = await decide(db, flatId, date, meal, now);
-  if (decision !== 'closed') await writeMine(db, flatId, memberId, date, meal, decision === 'late', p.guests,
+  if (decision === 'closed') return decision;
+  // the guard below closes the gap between the decide() read and this write: a no-cooking row inserted in between is
+  // caught here too, so the removal never fires for a day no-cooking has just taken
+  const wrote = await writeMine(db, flatId, memberId, date, meal, decision === 'late', p.guests,
     `update meal_changes set count = count - guests, guests = 0, late = $5, updated_at = now()
      where flat_id = $1 and member_id = $2 and date = $3::text::date and meal = $4 and guests = $6
+       and not exists (select 1 from no_cook where flat_id = $1 and date = $3::text::date and meal = $4)
      returning count, guests, late, jsonb_build_object('count', count + $6, 'guests', $6) as b`);
+  if (!wrote && await blocked(db, flatId, date, meal)) return 'closed';
   return decision;
 }
 
@@ -131,15 +138,22 @@ export async function addGuests(db: Db, flatId: string, memberId: string, date: 
   if (!(await currentPlates(db, flatId, memberId, date, meal))) return 'closed';
   const decision = date !== now.slice(0, 10) ? await decide(db, flatId, date, meal, now) : (await blocked(db, flatId, date, meal)) ? 'closed' : 'late';
   if (decision === 'closed') return decision;
-  // at most 9 guests, so a meal never passes 10 plates; a new row starts from my usual meal
+  // at most 9 guests, so a meal never passes 10 plates; a new row starts from my usual meal. The not-exists guard
+  // closes the gap between the decide()/blocked() read above and this write: a no-cooking row inserted in between
+  // is caught here too, so guests never land on a day no-cooking has just taken
   const wrote = await writeMine(db, flatId, memberId, date, meal, decision === 'late', guests,
     `insert into meal_changes (flat_id, member_id, date, meal, count, guests, late)
      select $1, $2, $3::text::date, $4::text, (case $4::text when 'b' then default_b when 'l' then default_l else default_d end)::int + $6, $6, $5
      from members where id = $2 and $6 <= 9
+       and not exists (select 1 from no_cook where flat_id = $1 and date = $3::text::date and meal = $4)
      on conflict (member_id, date, meal) do update set count = meal_changes.count + $6, guests = meal_changes.guests + $6, late = $5, updated_at = now()
        where meal_changes.guests + $6 <= 9
+         and not exists (select 1 from no_cook where flat_id = $1 and date = $3::text::date and meal = $4)
+     -- on the update path the matched row is locked first, so xmax is never 0; only a fresh insert leaves xmax = 0,
+     -- which is how the audit's before column tells a new row (null) from one that already existed
      returning count, guests, late, case when xmax = 0 then null else jsonb_build_object('count', count - $6, 'guests', guests - $6) end as b`);
-  return wrote ? decision : 'full';
+  if (wrote) return decision;
+  return (await blocked(db, flatId, date, meal)) ? 'closed' : 'full';
 }
 
 /** Away: every meal off from..to, one audit row for the range. */
