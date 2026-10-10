@@ -139,7 +139,9 @@ export async function usualAction(_: FormState, d: FormData): Promise<FormState>
   // all three off = cooking for yourself; any on = back in shared meals
   const usual = { b: d.has('b'), l: d.has('l'), d: d.has('d') };
   const inMeals = usual.b || usual.l || usual.d, was = await isInMeals(db, me.flatId, me.memberId);
-  await setDefaults(db, me.flatId, me.memberId, usual, await openFrom(db, me.flatId, todayDhaka()), await lastLocked(me.flatId), inMeals === was ? null : inMeals);
+  const open = await openFrom(db, me.flatId, todayDhaka()), locked = await lastLocked(me.flatId);
+  const r = await unlessClosed(() => setDefaults(db, me.flatId, me.memberId, usual, open, locked, inMeals === was ? null : inMeals));
+  if (r === 'closed') return { error: m.errors.closed };
   if (inMeals !== was) { refresh(); return { done: inMeals ? m.savedShared : m.savedOwn }; }
   refresh();
   return { done: m.saved };
@@ -180,7 +182,8 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
   if (!editable(from, open) || !editable(to, open) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
   if (!meals.length) return { error: m.errors.pickMeal };
-  await noCooking(db, me.flatId, me.memberId, from, to, meals, await lastLocked(me.flatId));
+  const locked = await lastLocked(me.flatId);
+  if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, locked)) === 'closed') return { error: m.errors.closed };
   refresh();
   return { done: m.saved };
 }
@@ -223,7 +226,7 @@ export async function noCookCancelAction(d: FormData) {
   await seedLock(db, me.flatId, nowDhaka());
   const date = str(d, 'date'), meals = str(d, 'meals').split(',').filter(isMeal);
   // today or later, as the screen offers: a past day was already cooked (or not), and un-blocking it would rewrite everyone's meals
-  if (editable(date, await openFrom(db, me.flatId, todayDhaka())) && date >= todayDhaka() && meals.length) await cookAgain(db, me.flatId, me.memberId, date, date, meals, date);
+  if (editable(date, await openFrom(db, me.flatId, todayDhaka())) && date >= todayDhaka() && meals.length) await unlessClosed(() => cookAgain(db, me.flatId, me.memberId, date, date, meals, date));
   refresh();
 }
 
@@ -307,8 +310,9 @@ export async function bringBackAction(_: FormState, d: FormData): Promise<FormSt
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireManager(lang);
   await seedLock(db, me.flatId, nowDhaka());
-  const today = todayDhaka(), id = str(d, 'memberId');
-  const r = await bringBack(db, me.flatId, me.memberId, id, today, await openFrom(db, me.flatId, today));
+  const today = todayDhaka(), id = str(d, 'memberId'), open = await openFrom(db, me.flatId, today);
+  const r = await unlessClosed(() => bringBack(db, me.flatId, me.memberId, id, today, open));
+  if (r === 'closed') return { error: a.errors.notFound };
   if (r === 'taken') return { error: a.errors.nameUsedSince };
   // a second phone pressing at the same moment finds them already back: that is the same good outcome, not an error
   if (r === 'no' && !(await listMembers(db, me.flatId)).some(x => x.id === id && !x.leftOn)) return { error: a.errors.notFound };
@@ -335,7 +339,7 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
   // this month only: last month's numbers change only through Plan 6's dated corrections
   if (!isDate(date) || date < monthOf(today) || date > today) return { error: x.errors.date };
   const note = str(d, 'note').trim().slice(0, 100) || null, who = str(d, 'who');
-  const split = type === 'bill' ? pick(SPLITS, str(d, 'split')) : null, selected = d.getAll('people').map(String);
+  const split = type === 'bill' ? pick(SPLITS, str(d, 'split')) : null, selected = [...new Set(d.getAll('people').map(String))];
   if (type === 'bill' && !split) return { error: x.errors.bad };
   if (type === 'bill' && !note) return { error: x.errors.name };
   if (split === 'selected' && !selected.length) return { error: x.errors.people };
@@ -415,8 +419,8 @@ export async function closeAction(_: FormState, d: FormData): Promise<FormState>
   if (r.result === 'cash') {
     return { error: x.errors.cash.replace('{a}', fmtExact(r.actual)).replace('{b}', fmtExact(r.expected)).replace('{d}', fmtExact(r.actual - r.expected)) };
   }
-  if (r.result !== 'ok') return { error: r.result === 'notCollector' ? x.errors.bad : x.errors[r.result] };
-  redirect(`/${lang}/money?m=${month.slice(0, 7)}`);   // the closed month, with its settlement to share
+  if (r.result !== 'ok' && r.result !== 'closed') return { error: r.result === 'notCollector' ? x.errors.bad : x.errors[r.result] };
+  redirect(`/${lang}/money?m=${month.slice(0, 7)}`);   // the closed month, with its settlement to share; 'closed' means a second tap already got it there
 }
 
 const KINDS = ['bazar', 'bill', 'move'] as const;
