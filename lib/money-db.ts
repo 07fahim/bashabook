@@ -288,12 +288,12 @@ export async function setRent(db: Db, flatId: string, by: Actor, roomId: string,
      -- the old rent comes from the row this update locks (the newest committed one), never from the form
      r as (update rooms x set rent_share_poisha = $3
        from (select id, rent_share_poisha from rooms where flat_id = $1 and id = $2 for no key update) o
-       where x.id = o.id and not (select blocked from g) returning x.*, o.rent_share_poisha as was),
+       where x.id = o.id and o.rent_share_poisha <> $3 and not (select blocked from g) returning x.*, o.rent_share_poisha as was),
      a as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member) select $1, 'rooms', r.id::text,
        jsonb_build_object('rent_share_poisha', r.was), to_jsonb(r) - 'was' || ${fixNote('$6', 'ended')}, $4 from r)
      select (select count(*) from r)::int as n, (select blocked from g) as blocked`,
     [flatId, roomId, rent, by.memberId, guard?.today ?? null, guard?.fix ?? false]);
-  return r.blocked ? 'earlier' : r.n > 0;   // false: no such room in this flat
+  return r.blocked ? 'earlier' : r.n > 0;   // false: no such room in this flat, or the same rent again (no history line)
 }
 
 export async function setRoom(db: Db, flatId: string, by: Actor, memberId: string, roomId: string | null, guard?: Guard): Promise<boolean | 'earlier'> {
@@ -307,14 +307,14 @@ export async function setRoom(db: Db, flatId: string, by: Actor, memberId: strin
      -- the old room comes from the row this update locks, never from the form; names are saved too (rooms are never renamed)
      m as (update members p set room_id = $3
        from (select id, room_id from members where flat_id = $1 and id = $2 for no key update) o
-       where p.id = o.id and not (select blocked from g)
+       where p.id = o.id and o.room_id is distinct from $3::uuid and not (select blocked from g)
        and ($3::uuid is null or exists (select 1 from rooms where flat_id = $1 and id = $3)) returning p.id, p.room_id, o.room_id as was),
      a as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
        select $1, 'rooms', m.id::text, jsonb_build_object('roomId', m.was, 'room', (select name from rooms where id = m.was)),
          jsonb_build_object('roomId', m.room_id, 'room', (select name from rooms where id = m.room_id)) || ${fixNote('$6', 'hit')}, $4 from m)
      select (select count(*) from m)::int as n, (select blocked from g) as blocked`,
     [flatId, memberId, roomId, by.memberId, guard?.today ?? null, guard?.fix ?? false]);
-  return r.blocked ? 'earlier' : r.n > 0;   // false: no such member, or no such room, in this flat
+  return r.blocked ? 'earlier' : r.n > 0;   // false: no such member or room in this flat, or the same room again (no history line)
 }
 
 export const listRepeats = (db: Db, flatId: string) => db<{ id: string; name: string; amount: number; split: Split }>(

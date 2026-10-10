@@ -39,11 +39,13 @@ describe('room and rent history', { timeout: 30000 }, () => {
     expect(rows[1].before).toEqual({ roomId: null, room: null });
   });
 
-  it('a refused change writes no history', async () => {
+  it('a refused change, or saving the same value again, writes no history', async () => {
     const { flatId, ids, nafis, big } = await flat();
     const before = (await loadHistory(db, flatId)).length;
     expect(await setRoom(db, flatId, nafis, ids.Tahsin, '00000000-0000-0000-0000-000000000000')).toBe(false);   // no such room
     expect(await setRent(db, flatId, { memberId: ids.Tahsin, role: 'member' }, big, 1)).toBe(false);          // not the collector
+    expect(await setRent(db, flatId, nafis, big, 300000)).toBe(false);                                         // Save with the same rent
+    expect(await setRoom(db, flatId, nafis, ids.Tahsin, null)).toBe(false);                                    // still no room
     expect((await loadHistory(db, flatId)).length).toBe(before);
   });
 
