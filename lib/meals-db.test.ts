@@ -172,6 +172,16 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await count('2026-10-20', 'd')).toBe(0);   // away untouched
   });
 
+  it('changing usual meals after a no-cooking day keeps it 0 for someone who moved in after it was set', async () => {
+    const { flatId, memberId, load } = await flat();
+    await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-15', ['d'], '2026-10-09');
+    const [rafi] = await db<{ id: string }>(`insert into members (flat_id, name, joined_on) values ($1, 'Rafi', '2026-10-12') returning id`, [flatId]);
+    const dinner = async () => { const { members, changes } = await load(); return mealCount(members.find(m => m.id === rafi.id)!, indexChanges(changes), '2026-10-15', 'd'); };
+    expect(await dinner()).toBe(0);
+    await setDefaults(db, flatId, rafi.id, { b: false, l: true, d: false }, null, '2026-10-16');   // the lock has passed the 15th
+    expect(await dinner()).toBe(0);
+  });
+
   it('away set on a no-cooking day stays off when cooking starts again', async () => {
     const { flatId, memberId, tahsin, count } = await flat();
     await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-15', meal: 'd', count: 1, guests: 0 }, false);
