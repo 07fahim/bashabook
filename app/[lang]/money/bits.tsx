@@ -15,14 +15,16 @@ export const balanceText = (x: Dict['money'], balance: number, closed = false) =
 /** Money waiting for this person's tap: shown on Home, Money and the Flat tab until confirmed. */
 /** Pending money piles up if nobody taps: phones show three, then Show all; wider screens about three rows that scroll. Either
  *  way it never pushes the page's balances down. */
-export function ConfirmList({ lang, x, a, items, collector }: {
-  lang: Locale; x: Dict['money']; a: Dict['app']; items: Awaited<ReturnType<typeof toConfirm>>; collector: string;
+/** `fill`: on wider screens the card takes its column's full height and the list scrolls inside it (the Flat tab). */
+export function ConfirmList({ lang, x, a, items, collector, fill }: {
+  lang: Locale; x: Dict['money']; a: Dict['app']; items: Awaited<ReturnType<typeof toConfirm>>; collector: string; fill?: boolean;
 }) {
   if (!items.length) return null;
   return (
-    <section className="rounded-3xl border-2 border-turmeric bg-surface p-5">
-      <h2 className="text-xl font-bold">{x.waitingTitle}</h2>
-      <LongList short label={x.waitingTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(w => (
+    <section className={`rounded-3xl border-2 border-turmeric bg-surface p-5 ${fill ? 'md:flex md:h-full md:flex-col' : ''}`}>
+      {/* the count: on wider screens the list scrolls inside its card and Show all (n) is a phone-only control */}
+      <h2 className="text-xl font-bold">{x.waitingTitle} ({items.length})</h2>
+      <LongList short fill={fill} label={x.waitingTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(w => (
           <li key={w.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <span>
               {/* paidTo: who actually handed it out, never relabelled to the current collector after a handover */}
