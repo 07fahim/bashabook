@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
 import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
-  addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
+  addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
 import { addEntry, addRoom, confirmEntry, monthOf, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
@@ -166,12 +166,6 @@ export async function settingsAction(_: FormState, d: FormData): Promise<FormSta
     return { done: m.lockedNow.replace('{list}', MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(', ')) };
   }
   return { done: m.saved };
-}
-
-export async function cookLinkAction(d: FormData) {
-  const me = await requireManager(langOf(d));
-  await setCookLink(db, me.flatId, str(d, 'on') === '1');
-  refresh();
 }
 
 const editable = (date: string, from: string) => isDate(date) && date >= from && date <= addDays(todayDhaka(), 60);

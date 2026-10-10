@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { addDays, countChanges, firstWeek, isDate, mealDecision, daysOfMonth, weightedMeals, daysPresent, headcount, isLocked, type MealMember, type MealChange } from './meals';
+import { describe, it, expect, vi } from 'vitest';
+import { addDays, countChanges, firstWeek, isDate, mealDecision, daysOfMonth, weightedMeals, daysPresent, headcount, isLocked, nowDhaka, plates, todayDhaka, type MealMember, type MealChange } from './meals';
 
 const all = { b: true, l: true, d: true };
 const members: MealMember[] = [
@@ -117,5 +117,32 @@ describe('meals so far', () => {
     const w = { b: 50, l: 100, d: 100 };
     expect(weightedMeals([m], [], '2026-10-01', w).get('A')).toBe(31 * 250);
     expect(weightedMeals([m], [], '2026-10-01', w, '2026-10-09').get('A')).toBe(9 * 250);
+  });
+});
+
+describe('the cook card', () => {
+  it('today is the Dhaka day: it flips at Dhaka midnight, 18:00 UTC', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-09T17:59:00Z'));
+    expect([todayDhaka(), nowDhaka()]).toEqual(['2026-10-09', '2026-10-09T23:59']);
+    vi.setSystemTime(new Date('2026-10-09T18:00:00Z'));
+    expect([todayDhaka(), nowDhaka()]).toEqual(['2026-10-10', '2026-10-10T00:00']);
+    vi.useRealTimers();
+  });
+
+  it('a meal blocked by no cooking says off; plates put on it anyway still count', () => {
+    const noCook = [{ date: '2026-10-10', meal: 'l' }];
+    expect(plates({ b: 9, l: 0, d: 9 }, noCook, '2026-10-10', 'l')).toBe('off');
+    expect(plates({ b: 9, l: 2, d: 9 }, noCook, '2026-10-10', 'l')).toBe(2);
+    expect(plates({ b: 9, l: 0, d: 9 }, noCook, '2026-10-11', 'l')).toBe(0);   // another day: a real zero
+    expect(plates({ b: 0, l: 0, d: 9 }, noCook, '2026-10-10', 'b')).toBe(0);   // breakfast isn't blocked
+  });
+
+  it('Share says no cooking too, the same as the card', async () => {
+    const { countText } = await import('../app/[lang]/format');
+    const { getDictionary } = await import('../app/[lang]/dictionaries');
+    const m = getDictionary('en').meals;
+    expect(countText('Flat 4B', m, '2026-10-10', { b: 9, l: 0, d: 9 }, 'Final', 'en', [{ date: '2026-10-10', meal: 'l' }]))
+      .toBe('Flat 4B · Tomorrow, Sat, 10 October\nBreakfast 9 · Lunch No cooking · Dinner 9\nFinal');
   });
 });

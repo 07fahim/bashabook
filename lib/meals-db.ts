@@ -1,9 +1,8 @@
-import { randomBytes } from 'node:crypto';
 import type { Db } from './db';
 import { addDays, countChanges, headcount, indexChanges, isLocked, isPresent, mealCount, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
 
 export type FlatInfo = {
-  name: string; cutoff: string; cookToken: string | null; lang: 'bn' | 'en'; weights: Record<Meal, number>;
+  name: string; cutoff: string; lang: 'bn' | 'en'; weights: Record<Meal, number>;
 };
 export type Member = MealMember & { name: string; role: 'member' | 'manager'; inMeals: boolean };
 export type HistoryRow = {
@@ -26,7 +25,7 @@ const cell = (c: MealChange) => `${c.memberId}|${c.date}|${c.meal}`;
 /** Everything the meal screens need for dates from..to. */
 export async function loadMeals(db: Db, flatId: string, from: string, to: string) {
   const [flat] = await db<FlatInfo>(
-    `select name, cutoff_time::text as cutoff, cook_link_token as "cookToken", language as lang,
+    `select name, cutoff_time::text as cutoff, language as lang,
        json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights
      from flats where id = $1`, [flatId]);
   const members = await db<Member>(
@@ -198,15 +197,6 @@ export async function updateSettings(db: Db, flatId: string, by: string, s: { cu
        lock_date = case when $8::boolean then null else lock_date end, lock_count = case when $8::boolean then null else lock_count end
      where id = $1`,
     [flatId, s.cutoff, s.weights.b, s.weights.l, s.weights.d, s, by, reopened]);
-}
-
-export async function setCookLink(db: Db, flatId: string, on: boolean) {
-  await db(`update flats set cook_link_token = $2 where id = $1`, [flatId, on ? randomBytes(24).toString('base64url') : null]);
-}
-
-export async function flatIdByCookToken(db: Db, token: string) {
-  const [f] = await db<{ id: string }>(`select id from flats where cook_link_token = $1`, [token]);
-  return f?.id ?? null;
 }
 
 /** No cooking: the chosen meals are off for everyone living in the flat from..to, and members can't switch them on.
