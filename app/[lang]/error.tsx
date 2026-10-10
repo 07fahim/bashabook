@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
+import { useEffect } from 'react';
 import { primary, secondary } from './ui';
 
 // Shown instead of a page when it fails: the database is unreachable, the network dropped mid-save, or a bug. The text never
@@ -23,6 +24,7 @@ const copy = {
 export default function PageError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   const { lang } = useParams<{ lang: string }>();
   const c = lang === 'en' ? copy.en : copy.bn;
+  useEffect(() => { console.error(error); }, [error]);   // the server logs it too, under the same digest
   return (
     <main className="mx-auto max-w-md px-5 pt-16 pb-28">
       <h1 className="font-display text-3xl font-bold">{c.title}</h1>
