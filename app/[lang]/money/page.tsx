@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { closeInfo } from '@/lib/close';
 import { db } from '@/lib/db';
-import { handoverHistory } from '@/lib/handover';
+import { flatMoney, handoverHistory } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
 import { foodSplit, settleLines } from '@/lib/money';
 import { loadMonth, monthOf, toConfirm, type Entry } from '@/lib/money-db';
@@ -43,6 +43,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const [mo, waiting, closing, history] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss),
     boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null, handoverHistory(db, me.flatId)]);   // the card only shows on the month to close
   const closed = mo.info?.status === 'closed';
+  // money with the collector: a month's own fund, but for this month what they hold now. While last month is still open,
+  // this month's own fund starts from 0, so it would show a false gap: add up every open month instead (flatMoney)
+  const held = month === thisMonth && mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
   const name = (id: string | null) => mo.all.find(p => p.id === id)?.name ?? '?';
   const collector = mo.all.find(p => p.role === 'manager')!;
   const prev = monthOf(addDays(month, -1)), next = addDays(daysOfMonth(month).at(-1)!, 1);
@@ -272,7 +275,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 lg:grid-cols-4">
               {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar')))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
                 [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? (totalMeals === 100 ? x.mealSoFar : x.mealsSoFar) : totalMeals === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
-                [x.withName.replace('{name}', holder), `${mo.result.fund < 0 ? '−' : ''}${fmtTaka(mo.result.fund)}`]] as const).map(([k, v, sub]) => (
+                [x.withName.replace('{name}', holder), `${held < 0 ? '−' : ''}${fmtTaka(held)}`]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
                   <dd className="text-2xl font-bold tabular-nums [overflow-wrap:anywhere]">{v}</dd>
@@ -295,7 +298,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 </div>
               );
             })()}
-            {mo.result.fund < 0 && <p className="mt-3 font-semibold">{x.flatOwes.replace('{name}', holder).replace('{t}', fmtTaka(mo.result.fund))}</p>}
+            {held < 0 && <p className="mt-3 font-semibold">{x.flatOwes.replace('{name}', holder).replace('{t}', fmtTaka(held))}</p>}
             {!mo.result.invariantOk && <p className="mt-3 font-semibold text-chili">{x.problem}</p>}
             {closed ? (() => {
               const lines = settleLines(mo.result.perMember, collector.id).map(l => {

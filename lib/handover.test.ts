@@ -243,7 +243,7 @@ describe('handover in the app', { timeout: 30000 }, () => {
     expect(await flatMoney(db, flatId, '2026-09-10')).toBe(250000);
     expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 20000, date: '2026-10-02', memberId: ids.Zarif }))).toBe('ok');
     expect(await flatMoney(db, flatId, '2026-10-05')).toBe(270000);                 // September (not closed) + October
-    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-05', { cash: 250000, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-05', { cash: 270000, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
     expect(await flatMoney(db, flatId, '2026-10-05')).toBe(270000);                 // a close changes nothing
     await db(`delete from ledger where flat_id = $1 and month = '2026-10-01'`, [flatId]);
     await db(`delete from months where flat_id = $1 and month = '2026-10-01'`, [flatId]);
@@ -256,7 +256,7 @@ describe('handover in the app', { timeout: 30000 }, () => {
     await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 300000, date: '2026-09-03', memberId: ids.Tahsin }));
     await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 20000, date: '2026-10-02', memberId: ids.Zarif }));
     expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 320000, '2026-10-05')).toBe('ok');
-    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-05', { cash: 300000, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-05', { cash: 320000, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
     expect(await flatMoney(db, flatId, '2026-10-05')).toBe(320000);
     expect(await acceptHandover(db, flatId, ids.Tahsin, (await currentOffer(db, flatId))!.id)).toBe('ok');
     expect(await collector()).toEqual([ids.Tahsin]);
