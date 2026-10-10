@@ -257,7 +257,7 @@ export async function endedOpenMonth(db: Db, flatId: string, today: string) {
   return r.m;
 }
 /** SQL CTE `ended`: months that have ended (before the month of `t`) and are still open, locked with no key update in month
- *  order. The month triggers (009) lock in no fixed order, a known gap (see setDefaults); db.ts retries a deadlock once. */
+ *  order, the order the month triggers lock them in (migration 014). */
 const ended = (t: string) => `ended as (select month from months where flat_id = $1 and status = 'open'
     and month < date_trunc('month', ${t}::text::date) order by month for no key update)`;
 /** SQL: the history note for a ticked fix, naming every month it corrected (`m`: a set of months), or nothing. */
