@@ -143,7 +143,7 @@ describe('fix round 1', { timeout: 30000 }, () => {
     const t = await day(3);
     const month = `${t.slice(0, 7)}-01`;
     await db(`insert into months (flat_id, month, status) values ($1, $2::date, 'closed')`, [flatId, month]);
-    await expect(set(ids.Tahsin, ids.Fahim, t, 0, 1)).rejects.toThrow();
+    await expect(set(ids.Tahsin, ids.Fahim, t, 0, 1)).rejects.toThrow(/month_closed/);
   });
 
   it('the re-check also catches in_meals turning off mid-write, rolling back the change and its history row', async () => {
@@ -167,7 +167,8 @@ describe('fix round 1', { timeout: 30000 }, () => {
     const raw = async (f: string | null, actor: string | null, target: string | null, date: string | null, meal: string | null, own: number | null, seen: number | null) =>
       (await db<{ r: string }>(`select set_other_meal($1, $2, $3, $4::date, $5, $6, $7) as r`, [f, actor, target, date, meal, own, seen]))[0].r;
     expect(await raw(flatId, ids.Tahsin, ids.Fahim, t, 'x', 0, 1)).toBe('closed');     // bad meal code
-    expect(await raw(flatId, ids.Tahsin, ids.Fahim, t, 'l', 2, 2)).toBe('closed');     // own, seen both out of range
+    expect(await raw(flatId, ids.Tahsin, ids.Fahim, t, 'l', 2, 1)).toBe('closed');     // own out of range (2, 2 would be caught as a no-op instead)
+    expect(await raw(flatId, ids.Tahsin, ids.Fahim, t, 'l', 0, 2)).toBe('closed');     // seen out of range
     expect(await raw(flatId, ids.Tahsin, ids.Fahim, null, 'l', 0, 1)).toBe('closed');  // a null argument
     expect([await row(ids.Fahim, t), await audits(ids.Tahsin)]).toEqual([undefined, 0]);
   });
