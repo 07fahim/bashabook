@@ -432,6 +432,10 @@ const bn = {
     correctionsLater: 'পরে করা সংশোধন',
     bills: 'বিলের ভাগ',
     paidIn: 'আপনি দিয়েছেন (জমা আর খরচ)',
+    counted: 'আপনি গুনেছেন {t}',
+    short: '{d} কম',
+    over: '{d} বেশি',
+    matches: 'মিলে গেছে',
     errors: {
       amount: 'টাকার অঙ্কটা ঠিক করে লিখুন, যেমন 2450।',
       date: 'তারিখ হবে এই মাসের 1 তারিখ থেকে আজকের মধ্যে।',
@@ -888,6 +892,10 @@ const en: Dict = {
     correctionsLater: 'Corrections made later',
     bills: 'Bills',
     paidIn: 'You paid in (deposits and spending)',
+    counted: 'You counted {t}',
+    short: '{d} short',
+    over: '{d} too much',
+    matches: 'It matches',
     errors: {
       amount: 'Enter the amount in taka, e.g. 2450.',
       date: 'Pick a date from the 1st of this month to today.',

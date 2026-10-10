@@ -151,3 +151,18 @@ export function toPoisha(v: string): number | null {
   const p = Math.round(Number(s) * 100);
   return p > 0 && p <= 1_000_000_000 ? p : null;
 }
+
+export type Cash = { cash: number; bkash: number; nagad: number; bank: number };
+export const CASH_KEYS = ['cash', 'bkash', 'nagad', 'bank'] as const;
+
+/** The four cash boxes as typed: empty is 0, otherwise an amount like any entry (0 allowed). Null if any box is wrong. */
+export function parseCash(raw: Record<keyof Cash, string>): Cash | null {
+  const out = {} as Cash;
+  for (const k of CASH_KEYS) {
+    const v = (raw[k] ?? '').replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/[,\s৳]/g, '');
+    const p = v === '' || /^0+(\.0+)?$/.test(v) ? 0 : toPoisha(v);
+    if (p === null) return null;
+    out[k] = p;
+  }
+  return out;
+}

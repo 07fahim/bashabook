@@ -1,25 +1,13 @@
 import type { Db } from './db';
 import { addDays, daysOfMonth, editFrom } from './meals';
-import { toPoisha } from './money';
+import { CASH_KEYS, parseCash, type Cash } from './money';
 import { loadMonth, monthOf, openMonth, type Actor } from './money-db';
 
-export type Cash = { cash: number; bkash: number; nagad: number; bank: number };
+export { CASH_KEYS, parseCash, type Cash };   // pure, in money.ts so the close card can use them in the browser
+
 export type CloseResult = 'ok' | 'closed' | 'early' | 'order' | 'pending' | 'problems' | 'cash' | 'changed' | 'notCollector';
-export const CASH_KEYS = ['cash', 'bkash', 'nagad', 'bank'] as const;
 
 const nextMonth = (month: string) => addDays(daysOfMonth(month).at(-1)!, 1);
-
-/** The four cash boxes as typed: empty is 0, otherwise an amount like any entry (0 allowed). Null if any box is wrong. */
-export function parseCash(raw: Record<keyof Cash, string>): Cash | null {
-  const out = {} as Cash;
-  for (const k of CASH_KEYS) {
-    const v = (raw[k] ?? '').replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/[,\s৳]/g, '');
-    const p = v === '' || /^0+(\.0+)?$/.test(v) ? 0 : toPoisha(v);
-    if (p === null) return null;
-    out[k] = p;
-  }
-  return out;
-}
 
 /** First day meals and money may still change: never before last month (editFrom), never inside a closed month. */
 export async function openFrom(db: Db, flatId: string, today: string) {

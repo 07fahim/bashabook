@@ -1,10 +1,10 @@
 import Link from 'next/link';
-import { CASH_KEYS } from '@/lib/close';
 import { ActionForm } from './action-form';
 import { closeAction } from './actions';
+import { CashCount } from './cash-count';
 import type { Dict, Locale } from './dictionaries';
 import { fmtMonth, fmtSigned } from './format';
-import { Field, link, primary } from './ui';
+import { link, primary } from './ui';
 
 export type CloseInfo = { month: string; fund: number; pending: number; problems: number; earlierOpen: string | null };
 
@@ -32,9 +32,7 @@ export function CloseCard({ lang, x, c }: { lang: Locale; x: Dict['money']; c: C
           <input type="hidden" name="lang" value={lang} />
           <input type="hidden" name="month" value={c.month} />
           <p className="font-semibold">{x.expected.replace('{t}', fmtSigned(c.fund))}</p>
-          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
-            {CASH_KEYS.map(k => <Field key={k} label={x.cashMethods[k]} name={k} inputMode="decimal" placeholder="0" />)}
-          </div>
+          <CashCount x={x} fund={c.fund} />
           <button className={primary}>{x.closeBtn.replace('{month}', name)}</button>
         </ActionForm>
       )}
