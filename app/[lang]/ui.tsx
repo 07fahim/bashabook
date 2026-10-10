@@ -53,7 +53,7 @@ export function Fold({ id, title, lead, level = 2, open, row, children }: { id?:
 export function LongList({ items, keep, label, more, less, fill, short }: { items: ReactNode[]; keep: number; label: string; more: string; less: string; fill?: boolean; short?: boolean }) {
   const list = 'divide-y divide-line';
   return (
-    <div className={fill ? 'mt-3 md:relative md:min-h-96 md:flex-1' : 'mt-3'}>
+    <div className={fill ? `mt-3 md:relative md:flex-1 ${short ? 'md:min-h-64' : 'md:min-h-96'}` : 'mt-3'}>
       <div role="group" aria-label={label} className={`md:overflow-y-auto md:pr-3 md:[scrollbar-width:thin] ${fill ? 'md:absolute md:inset-0' : short ? 'md:max-h-64' : 'md:max-h-[70vh]'}`}>
         <ul className={list}>{items.slice(0, keep)}</ul>
         {items.length > keep && (<>

@@ -75,20 +75,20 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
         </p>
 
         {/* phone: to do, money, meals, settings, people (the reading order is the visual order everywhere).
-            Tablet: to do across the top | money, meals | settings, people below.
+            Tablet and small laptops (below 1280): to do across the top | money, meals | settings, people below.
             Desktop with something to do: to do | money, meals | settings. On a day with nothing to do, to do is one line
             across the top and money | meals | settings take the three columns, so no column is left empty.
             The wrappers are display:contents on a phone; wider, each column stacks on its own and no card stretches. */}
-        <div className="mt-6 flex flex-col md:grid md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-[1.3fr_1fr_1fr]">
+        <div className="mt-6 flex flex-col md:grid md:grid-cols-2 md:items-start md:gap-x-8 xl:grid-cols-[1.3fr_1fr_1fr]">
           {/* to do: the full width on a tablet (a third of it squeezes each payment to four lines); on a desktop its own
               column, stretched to the row so the waiting list scrolls inside a box as tall as the tools beside it */}
-          <div className={`md:col-span-2 md:flex md:flex-col ${todo ? 'lg:col-span-1 lg:self-stretch' : 'lg:col-span-3'}`}>
+          <div className={`md:col-span-2 md:flex md:flex-col ${todo ? 'xl:col-span-1 xl:self-stretch' : 'xl:col-span-3'}`}>
             {closing && <div className="mt-3"><CloseCard lang={lang} x={mn} c={closing} collector={me.name} /></div>}
             {waiting.length > 0 && <div className="mt-3 md:flex-1"><ConfirmList fill lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /></div>}
-            {!todo && <p className="mt-3 rounded-3xl border border-line bg-surface px-5 py-4 text-muted">{mn.noPending}</p>}
+            {!todo && <p className="mt-3 rounded-3xl border border-line bg-surface px-5 py-4 text-muted md:mb-5">{mn.noPending}</p>}
           </div>
-          <div className={`contents md:col-span-2 md:grid md:grid-cols-2 md:items-start md:gap-x-8 ${todo ? 'lg:col-span-2' : 'lg:col-span-3 lg:grid-cols-3'}`}>
-          <div className={todo ? 'contents md:block' : 'contents md:block lg:contents'}>
+          <div className={`contents md:col-span-2 md:grid md:grid-cols-2 md:items-start md:gap-x-8 ${todo ? 'xl:col-span-2' : 'xl:col-span-3 xl:grid-cols-3'}`}>
+          <div className={todo ? 'contents md:block' : 'contents md:block xl:contents'}>
           <Group title={mn.groupMoney}>
             {([['payout', mn.giveTitle, mn.giveLead, mn.to], ['deposit', mn.gotTitle, mn.gotLead, mn.from]] as const).map(([type, title, lead, label]) => (
               <Fold row key={type} title={title} lead={lead} level={3}>
@@ -320,7 +320,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </Group>
           </div>
           {/* everyone in the flat (8 to 10 people) gets the full width below the columns, a compact row each */}
-          <Group title={`${a.members} (${members.length})`} className="md:col-span-2 md:mt-8 lg:col-span-3">
+          <Group title={`${a.members} (${members.length})`} className="md:col-span-2 md:mt-8 xl:col-span-3">
             {/* a line above each row, none above the first row: one column on a phone, two on a tablet, three wider */}
             <ul className="mt-2 grid px-5 md:grid-cols-2 md:items-start md:gap-x-8 lg:grid-cols-3">
               {members.map(x => (
@@ -335,7 +335,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                           {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : x.id === me.memberId ? a.you.charAt(0).toUpperCase() + a.you.slice(1) : ''}
                         </span>
                       </span>
-                      <span aria-hidden="true" className="text-2xl leading-none text-muted transition-transform group-open:rotate-45">+</span>
+                      {/* the + text is clipped to its box, and the margin leaves room for that box when it turns to × */}
+                      <span aria-hidden="true" className="mr-1.5 inline-flex size-6 shrink-0 overflow-hidden items-center justify-center text-2xl leading-none text-muted transition-transform group-open:rotate-45">+</span>
                     </summary>
                     <div className="pb-4">
                   {sp.back === x.id && <p role="status" className="font-semibold text-leaf">{a.broughtBack}</p>}

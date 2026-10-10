@@ -24,7 +24,7 @@ export function ConfirmList({ lang, x, a, items, collector, fill }: {
     <section className={`rounded-3xl border-2 border-turmeric bg-surface p-5 ${fill ? 'md:flex md:h-full md:flex-col' : ''}`}>
       {/* the count: on wider screens the list scrolls inside its card and Show all (n) is a phone-only control */}
       <h2 className="text-xl font-bold">{x.waitingTitle} ({items.length})</h2>
-      <LongList short={!fill} fill={fill} label={x.waitingTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(w => (
+      <LongList short fill={fill} label={x.waitingTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(w => (
           <li key={w.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <span>
               {/* paidTo: who actually handed it out, never relabelled to the current collector after a handover */}
