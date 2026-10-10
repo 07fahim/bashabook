@@ -304,3 +304,27 @@ export async function toldCook(db: Db, flatId: string, by: string, date: string,
     [flatId, by, date, JSON.stringify(seen)]);
   return r.length > 0;
 }
+
+/** Another flatmate switches someone's own plate (guests stay). Every rule, the lock and the stale check are inside the
+ *  database function (migration 012), so a forged request can't get round them. `seen` = the own plate the screen showed. */
+export async function setOtherMeal(db: Db, flatId: string, actor: string, target: string, date: string, meal: Meal, own: 0 | 1, seen: 0 | 1) {
+  const [r] = await db<{ r: 'ok' | 'changed' | 'closed' }>(`select set_other_meal($1, $2, $3, $4::date, $5, $6, $7) as r`, [flatId, actor, target, date, meal, own, seen]);
+  return r.r;
+}
+
+/** My upcoming meals (from `today`) whose latest change was made by someone else and still stands: the Home notice.
+ *  Only own-plate changes (a guest-only fix by the collector isn't listed). */
+export const changedByOthers = (db: Db, flatId: string, me: string, today: string) => db<{ actor: string; date: string; meal: Meal; own: number }>(
+  `select actor.name as actor, split_part(a.entity_id, '|', 2) as date, split_part(a.entity_id, '|', 3) as meal,
+     (a.after->>'count')::int - coalesce((a.after->>'guests')::int, 0) as own
+   from (select distinct on (split_part(entity_id, '|', 2), split_part(entity_id, '|', 3)) id, entity_id, by_member, before, after
+         from audit_log
+         where flat_id = $1 and entity = 'meal_changes' and split_part(entity_id, '|', 1) = $2::text
+           and entity_id ~ '^[^|]+\\|\\d{4}-\\d{2}-\\d{2}\\|[bld]$' and split_part(entity_id, '|', 2) >= $3
+         order by split_part(entity_id, '|', 2), split_part(entity_id, '|', 3), id desc) a
+   join members actor on actor.id = a.by_member
+   join meal_changes mc on mc.member_id = $2::uuid and mc.date = split_part(a.entity_id, '|', 2)::date and mc.meal = split_part(a.entity_id, '|', 3)
+   where a.by_member <> $2::uuid
+     and mc.count - mc.guests = (a.after->>'count')::int - coalesce((a.after->>'guests')::int, 0)
+     and (a.before is null or (a.before->>'count')::int - coalesce((a.before->>'guests')::int, 0) <> (a.after->>'count')::int - coalesce((a.after->>'guests')::int, 0))
+   order by 2, position(split_part(a.entity_id, '|', 3) in 'bld')`, [flatId, me, today]);
