@@ -158,6 +158,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                     {r.adjustments !== 0 && <div><dt>{x.adjustments}</dt><dd>{r.adjustments < 0 ? '−' : '+'}{fmtTaka(r.adjustments)}</dd></div>}
                     <div className="border-t border-line pt-1 font-bold"><dt>{x.balance}</dt><dd>{r.balance < 0 ? '−' : ''}{fmtTaka(r.balance)}</dd></div>
                   </dl>
+                  {/* rent split by room counts the whole month by one room: say so where each person reads their share */}
+                  {mo.entries.some(e => e.split === 'room') && <p className="mt-2 max-w-prose text-[15px] text-muted">{x.roomMonthNote}</p>}
                 </details>
               </>)}
             </section>
