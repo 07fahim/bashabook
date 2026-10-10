@@ -37,6 +37,10 @@ export const countText = (flatName: string, m: Dict['meals'], date: string, hc: 
 /** Poisha -> '৳2,450': whole taka, no sign (the words around it say owe or get back). */
 export const fmtTaka = (p: number) => `৳${Math.round(Math.abs(p) / 100).toLocaleString('en-US')}`;
 
+/** Settlement amounts to the poisha: '৳850.37', and whole taka without decimals: '৳1,200'. */
+export const fmtExact = (p: number) =>
+  `৳${(Math.abs(p) / 100).toLocaleString('en-US', { minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+
 /** '2026-10-01' -> 'October 2026' (same in both languages). */
 export const fmtMonth = (month: string) =>
   new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });

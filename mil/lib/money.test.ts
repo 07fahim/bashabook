@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { allocate, foodSplit, monthBalances, toPoisha, type LedgerRow, type MonthInput } from './money';
+import { allocate, foodSplit, monthBalances, settleLines, toPoisha, type LedgerRow, type MonthInput } from './money';
 
 describe('allocate', () => {
   it('splits exactly with largest remainder, ties to lowest index', () => {
@@ -198,5 +198,39 @@ describe('per-row shares and taka input', () => {
     expect(toPoisha('12.345')).toBeNull();
     expect(toPoisha('abc')).toBeNull();
     expect(toPoisha('10000001')).toBeNull();   // over ৳1,00,00,000 is a typo
+  });
+});
+
+describe('corrections and settlement', () => {
+  const base = { opening: new Map<string, number>(), openingFund: 0, daysPresent: new Map([['A', 30], ['B', 30]]),
+    weightedMeals: new Map([['A', 1000], ['B', 1000]]), roomOf: new Map(), rooms: [] };
+  const row = (p: Partial<LedgerRow> & Pick<LedgerRow, 'id' | 'type' | 'amount'>): LedgerRow =>
+    ({ paidBy: null, memberId: null, split: null, selected: [], status: 'ok', ...p });
+
+  it('a correction bazar is split by its frozen weights, stays out of the meal rate, and leaves the fund alone', () => {
+    const r = monthBalances({ ...base, memberIds: ['A', 'B', 'C'], ledger: [
+      row({ id: 'x', type: 'bazar', amount: 30000, paidBy: 'A', weights: [['A', 100], ['C', 200]] }),
+    ] });
+    const by = Object.fromEntries(r.perMember.map(p => [p.id, p]));
+    expect(by.A.paidIn).toBe(30000);
+    expect([by.A.foodCost, by.C.foodCost, by.B.foodCost]).toEqual([10000, 20000, 0]);
+    expect(r.fund).toBe(0);
+    expect(r.mealRate).toBe(0);
+    expect(r.invariantOk).toBe(true);
+  });
+
+  it('an adjustment moves money between two people and keeps the invariant', () => {
+    const r = monthBalances({ ...base, memberIds: ['A', 'B'], ledger: [row({ id: 'm', type: 'adjustment', amount: 2500, memberId: 'A', moves: 'B' })] });
+    const by = Object.fromEntries(r.perMember.map(p => [p.id, p]));
+    expect([by.A.adjustments, by.B.adjustments, by.A.balance, by.B.balance, r.fund]).toEqual([-2500, 2500, -2500, 2500, 0]);
+    expect(r.invariantOk).toBe(true);
+  });
+
+  it('settlement lines are the balances themselves', () => {
+    const per = [{ id: 'N', balance: -1234 }, { id: 'A', balance: -85037 }, { id: 'B', balance: 86271 }, { id: 'C', balance: 0 }]
+      .map(p => ({ opening: 0, paidIn: 0, foodCost: 0, billShare: 0, payouts: 0, adjustments: 0, ...p }));
+    expect(settleLines(per, 'N')).toEqual([
+      { id: 'N', amount: 1234, kind: 'collectorAdds' }, { id: 'A', amount: 85037, kind: 'pays' }, { id: 'B', amount: 86271, kind: 'gets' },
+    ]);
   });
 });

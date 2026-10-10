@@ -226,7 +226,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       <li key={e.id} className="group py-3">
                         <div className="flex items-start justify-between gap-x-3">
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold">{x.types[e.type]} · {who(e)}</p>
+                          <p className="font-semibold">{x.types[e.type as keyof typeof x.types]} · {who(e)}</p>
                           {e.note && <p className="text-[15px]">{e.note}</p>}
                           <p className="text-[15px] text-muted">
                             {x.addedBy.replace('{name}', name(e.createdBy))}
@@ -237,7 +237,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                           <span className="font-bold tabular-nums">{fmtTaka(e.amount)}</span>
                           {(month === thisMonth || e.status === 'pending') && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
                             <details>
-                              <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtTaka(e.amount)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
+                              <summary aria-label={`${x.remove}: ${x.types[e.type as keyof typeof x.types]} ${fmtTaka(e.amount)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
                             </details>
                           )}
                         </div>
@@ -246,7 +246,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         <form action={removeAction} className="mt-2 hidden flex-wrap items-center justify-end gap-3 group-has-[details[open]]:flex">
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="id" value={e.id} />
-                          <span id={`rm-${e.id}`}>{x.confirmRemove.replace('{what}', `${x.types[e.type]} ${fmtTaka(e.amount)}`)}</span>
+                          <span id={`rm-${e.id}`}>{x.confirmRemove.replace('{what}', `${x.types[e.type as keyof typeof x.types]} ${fmtTaka(e.amount)}`)}</span>
                           <button aria-describedby={`rm-${e.id}`} className={`inline-flex min-h-11 items-center rounded-full border border-chili px-5 font-semibold text-chili hover:bg-paper ${focus}`}>{x.yesRemove}</button>
                         </form>
                       </li>
@@ -265,14 +265,14 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               <div className="text-[15px] text-muted">
               <LongList label={x.removedTitle.replace('{n}', String(mo.removed.length))} keep={5} more={t.app.showAll.replace('{n}', String(mo.removed.length))} less={t.app.showLess} items={mo.removed.map(rm => (
                   <li key={rm.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
-                    <span className="min-w-0 flex-1">{x.types[rm.type]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {x.removedBy.replace('{name}', rm.by)}</span>
+                    <span className="min-w-0 flex-1">{x.types[rm.type as keyof typeof x.types]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {x.removedBy.replace('{name}', rm.by)}</span>
                     <span className="flex items-center gap-2">
                       <s className="tabular-nums">{fmtTaka(rm.amount)}</s>
                       {month === thisMonth && (boss || rm.byId === me.memberId) && (
                         <form action={putBackAction}>
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="id" value={rm.id} />
-                          <button aria-label={`${x.putBack}: ${x.types[rm.type]} ${fmtTaka(rm.amount)}`} className={`min-h-11 px-2 ${link}`}>{x.putBack}</button>
+                          <button aria-label={`${x.putBack}: ${x.types[rm.type as keyof typeof x.types]} ${fmtTaka(rm.amount)}`} className={`min-h-11 px-2 ${link}`}>{x.putBack}</button>
                         </form>
                       )}
                     </span>
