@@ -320,16 +320,16 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(await putBack(db, flatId, ids.Zarif, id2, TODAY)).toBe(true);
   });
 
-  it('put back only in the open current month, by the Dhaka date passed in', async () => {
-    const { flatId, ids, nafis, month } = await flat();
-    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000 }));
-    const id = (await month()).entries[0].id;
-    await removeEntry(db, flatId, nafis, id, TODAY);
-    expect(await putBack(db, flatId, ids.Nafis, id, '2026-11-01')).toBe(false);   // next month: October is past
+  it('put back only in the open current month for whoever made the removal (the collector gets the wider window instead)', async () => {
+    const { flatId, ids, as } = await flat();
+    await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 50000, paidBy: ids.Tahsin }));
+    const [{ id }] = await db<{ id: string }>(`select id from ledger where flat_id = $1 and paid_by_member_id = $2`, [flatId, ids.Tahsin]);
+    await removeEntry(db, flatId, as('Tahsin'), id, TODAY);
+    expect(await putBack(db, flatId, ids.Tahsin, id, '2026-11-01')).toBe(false);   // next month: October is past
     await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-10-01'`, [flatId]);
-    expect(await putBack(db, flatId, ids.Nafis, id, '2026-10-20')).toBe(false);   // closed before the month ended
+    expect(await putBack(db, flatId, ids.Tahsin, id, '2026-10-20')).toBe(false);   // closed before the month ended
     await db(`update months set status = 'open' where flat_id = $1 and month = '2026-10-01'`, [flatId]);
-    expect(await putBack(db, flatId, ids.Nafis, id, '2026-10-31')).toBe(true);    // last day, open
+    expect(await putBack(db, flatId, ids.Tahsin, id, '2026-10-31')).toBe(true);    // last day, open
   });
 
   it('put back keeps entries added in between, refuses a broken record, and is all or nothing', async () => {
@@ -372,22 +372,30 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(total).toBe(3 * 9 * 250 + 200);
   });
 
-  it('nothing settled in a past month can be removed, whatever the page sent; a pending one can', async () => {
-    const { flatId, ids, nafis, as, month } = await flat();
+  it('the collector removes and puts back a settled entry from an earlier still-open month; forbidden once it closes; a non-collector still can\'t', async () => {
+    const { flatId, ids, nafis, as } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 40000, date: '2026-09-20', note: 'September' }));
-    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000 }));
     const sep = (await db<{ id: string }>(`select id from ledger where flat_id = $1 and note = 'September'`, [flatId]))[0].id;
-    expect(await removeEntry(db, flatId, nafis, sep, TODAY)).toBe(false);
+    const version = async () => (await db<{ v: number }>(`select version as v from months where flat_id = $1 and month = '2026-09-01'`, [flatId]))[0].v;
+    expect(await removeEntry(db, flatId, as('Tahsin'), sep, TODAY)).toBe(false);   // non-collector: this month only, still
+    const v0 = await version();
+    expect(await removeEntry(db, flatId, nafis, sep, TODAY)).toBe(true);          // collector: an earlier open month too
+    expect(await db(`select 1 from ledger where id = $1`, [sep])).toEqual([]);
+    expect(await db(`select 1 from audit_log where entity_id = $1 and after->>'removed' = 'true'`, [sep])).toHaveLength(1);
+    expect(await version()).toBeGreaterThan(v0);
+    expect(await putBack(db, flatId, ids.Nafis, sep, TODAY)).toBe(true);          // same window, puts it back
     expect(await db(`select 1 from ledger where id = $1`, [sep])).toHaveLength(1);
-    expect(await db(`select 1 from audit_log where entity_id = $1 and after->>'removed' = 'true'`, [sep])).toEqual([]);
-    const oct = (await month()).entries[0].id;
-    expect(await removeEntry(db, flatId, nafis, oct, '2026-11-01')).toBe(false);   // the first of next month, Dhaka date
-    // a wrong pending deposit from last month can still go: it counts nowhere and would otherwise wait forever
-    await db(`update ledger set status = 'pending', type = 'deposit', member_id = created_by where id = $1`, [sep]);
-    expect(await removeEntry(db, flatId, nafis, sep, TODAY)).toBe(true);
-    expect(await removeEntry(db, flatId, nafis, oct, '2026-10-31')).toBe(true);    // the last day of this month
-    // the person who sent it can take back their own pending deposit too, nobody else
-    expect(await addEntry(db, flatId, as('Tahsin'), e({ type: 'deposit', amount: 10000, memberId: ids.Tahsin, note: 'Tahsin September' }))).toBe('ok');
+    expect(await removeEntry(db, flatId, nafis, sep, TODAY)).toBe(true);          // remove it again, so there's something to try to undo once closed
+    await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-09-01'`, [flatId]);
+    expect(await putBack(db, flatId, ids.Nafis, sep, TODAY)).toBe(false);         // closed: forbidden, even for the collector
+    expect(await db(`select 1 from ledger where id = $1`, [sep])).toEqual([]);
+    expect(await removeEntry(db, flatId, nafis, sep, TODAY)).toBe(false);         // and a fresh removal is refused too
+  });
+
+  it('a pending entry still goes from any month, but only for whoever sent it or the collector', async () => {
+    const { flatId, ids, as } = await flat();
+    await openMonth(db, flatId, '2026-09-01');
+    await addEntry(db, flatId, as('Tahsin'), e({ type: 'deposit', amount: 10000, memberId: ids.Tahsin, note: 'Tahsin September' }));
     await db(`update ledger set date = '2026-09-20', month = '2026-09-01' where flat_id = $1 and note = 'Tahsin September'`, [flatId]);   // as if sent last month
     const mine = (await db<{ id: string; status: string }>(`select id, status from ledger where flat_id = $1 and note = 'Tahsin September'`, [flatId]))[0];
     expect(mine.status).toBe('pending');

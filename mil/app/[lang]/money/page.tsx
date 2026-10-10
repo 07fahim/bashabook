@@ -319,7 +319,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="font-bold tabular-nums">{fmtTaka(e.amount)}</span>
-                          {!closed && (month === thisMonth || e.status === 'pending') && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
+                          {!closed && (month === thisMonth || e.status === 'pending' || boss) && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
                             <details>
                               <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtTaka(e.amount)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
                             </details>
@@ -352,7 +352,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                     <span className="min-w-0 flex-1">{x.types[rm.type]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {x.removedBy.replace('{name}', rm.by)}</span>
                     <span className="flex items-center gap-2">
                       <s className="tabular-nums">{fmtTaka(rm.amount)}</s>
-                      {month === thisMonth && !closed && (boss || rm.byId === me.memberId) && (
+                      {!closed && (boss || (month === thisMonth && rm.byId === me.memberId)) && (
                         <form action={putBackAction}>
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="id" value={rm.id} />

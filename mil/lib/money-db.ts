@@ -202,12 +202,19 @@ export async function confirmEntry(db: Db, flatId: string, by: Actor, id: string
 }
 
 /** Whoever added it, or the collector, removes an entry. A confirmed deposit only the collector: the cash is with them.
- *  Only this month's entries (`today` is the Dhaka date): a past month is never changed, and its removal could not be put back.
+ *  A non-collector: only this month's entries (`today` is the Dhaka date) — a past month is never changed for them.
+ *  The collector: this month or any earlier month that is still open; once a month closes, removal is forbidden for anyone,
+ *  enforced here (not just a hidden button) by requiring the entry's month to have a `months` row with status 'open'.
  *  A pending entry can go from any month: it counts nowhere, and a wrong one must not wait forever for a tap.
  *  The removed row is kept in the history, so the entries list can show it. */
 export async function removeEntry(db: Db, flatId: string, by: Actor, id: string, today: string) {
   const r = await db(
-    `with l as (delete from ledger where flat_id = $1 and id = $2 and (month = $5::date or status = 'pending')
+    `with l as (delete from ledger where flat_id = $1 and id = $2
+       and (
+         status = 'pending'
+         or ($4::boolean and exists (select 1 from months mo where mo.flat_id = $1 and mo.month = ledger.month and mo.status = 'open'))
+         or (not $4::boolean and month = $5::date)
+       )
        and ($4::boolean or (created_by = $3 and (type <> 'deposit' or status = 'pending'))) returning *)
      insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
      select $1, 'ledger', l.id::text,
@@ -265,7 +272,9 @@ export const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_membe
 const PUT_BACK_COLUMNS = LEDGER_COLUMNS.replace(',for_month,moves', '');
 
 /** Brings a removed entry back exactly as it was (same id, status, people), rebuilt only from its latest removal record.
- *  Allowed for whoever made that removal or the current collector, only in this open month (`today` is the Dhaka date).
+ *  Whoever made that removal: only while it's still this month (`today` is the Dhaka date). The current collector: this
+ *  month or any earlier month that is still open — same window as removeEntry. Either way the entry's month must still
+ *  have a `months` row with status 'open'.
  *  One statement: the entry, its people and the history row land together; a second tap finds the entry back and writes nothing.
  *  Per entry, remove (delete … returning) and put back (insert … on conflict do nothing) can only succeed one after the other,
  *  each after the previous committed, so the highest audit id is the latest removal. */
@@ -274,10 +283,13 @@ export async function putBack(db: Db, flatId: string, by: string, id: string, to
     `with a as (select before, by_member from audit_log where flat_id = $1 and entity = 'ledger' and entity_id = $2 and after->>'removed' = 'true'
        order by id desc limit 1),
      ok as (select a.before from a
-       where (a.by_member = $3 or exists (select 1 from members where flat_id = $1 and id = $3 and role = 'manager'))
-         and a.before ?& string_to_array($5::text, ',')
-         and (a.before->>'flat_id')::uuid = $1 and (a.before->>'month')::date = $4::date
-         and exists (select 1 from months where flat_id = $1 and month = $4::date and status = 'open')),
+       where a.before ?& string_to_array($5::text, ',')
+         and (a.before->>'flat_id')::uuid = $1
+         and exists (select 1 from months where flat_id = $1 and month = (a.before->>'month')::date and status = 'open')
+         and (
+           (a.by_member = $3 and (a.before->>'month')::date = $4::date)
+           or exists (select 1 from members where flat_id = $1 and id = $3 and role = 'manager')
+         )),
      l as (insert into ledger select (jsonb_populate_record(null::ledger, ok.before)).* from ok on conflict do nothing returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id)
        select $1, l.id, x::uuid from l, ok, jsonb_array_elements_text(coalesce(ok.before->'selected', '[]'::jsonb)) x)
