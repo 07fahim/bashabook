@@ -8,7 +8,7 @@ import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
 import { awayAction, cancelAwayAction, guestAction, otherMealAction, removeGuestsAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { dhakaDate, fmtDay, fmtRange, fmtTime, fmtWhen } from '../format';
+import { dhakaDate, fmtDay, fmtExact, fmtMonth, fmtRange, fmtTime, fmtWhen } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { checkChip, field, Field, Fold, focus, link, LongList, primary, secondary, PageSkeleton } from '../ui';
@@ -61,6 +61,21 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     const actor = h.actor ?? '?', who = h.who ?? '?', a = h.after;
     const mealList = (x: string) => x.split(',').map(y => m.names[y as Meal]).join(', ');
     if (h.entity === 'cook') return `${actor} ${m.toldHistory} · ${fmtDay(a.told!, lang)}: ${MEALS.map(x => `${m.names[x]} ${a.plates?.[x] ?? 0}`).join(', ')}`;
+    // rooms and rent: old → new, the old value saved from the database at the change. A rent row with no old value is a new room
+    // (rent changes before this was saved exist only in test flats)
+    if (h.entity === 'rooms') {
+      const b = h.before, fixed = a.fixFor?.length ? ` · ${m.fixHistory.replace('{month}', a.fixFor.map(fmtMonth).join(', '))}` : '';
+      if ('roomId' in a) {
+        const room = (id: string | null | undefined, name: string | null | undefined) => (id ? name ?? '?' : m.noRoomHistory);
+        return `${actor} · ${who} · ${m.roomHistory}: ${b && 'roomId' in b ? `${room(b.roomId, b.room)} → ` : ''}${room(a.roomId, a.room)}${fixed}`;
+      }
+      if (b?.rent_share_poisha == null) return `${actor} · ${m.roomAddedHistory}: ${a.name} · ${m.rentHistory} ${fmtExact(a.rent_share_poisha ?? 0)}${fixed}`;
+      return `${actor} · ${a.name} · ${m.rentHistory}: ${fmtExact(b.rent_share_poisha)} → ${fmtExact(a.rent_share_poisha ?? 0)}${fixed}`;
+    }
+    if (h.entity === 'bill_templates') {
+      const x = a.removed ? h.before : a;
+      return `${actor} · ${a.removed ? m.repeatStopped : m.repeatStarted}: ${x?.name ?? '?'} · ${fmtExact(x?.amount_poisha ?? 0)}`;
+    }
     if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
     if (h.entity === 'members') {
       if (a.back) return `${actor} · ${who} · ${m.backHistory}: ${range(a.back)}`;
