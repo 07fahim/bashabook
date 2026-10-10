@@ -45,6 +45,13 @@ describe('money held across open months', { timeout: 30000 }, () => {
     expect((await loadMonth(db, flatId, '2026-10-01', OCT2)).result.fund).toBe(-50000);   // the flat owes the collector ৳500
   });
 
+  it('an entry still waiting in October blocks September’s close and says where it is', async () => {
+    const { flatId, nafis } = await flat(50000);
+    const [t] = await db<{ id: string }>(`select id from members where flat_id = $1 and name = 'Tahsin'`, [flatId]);
+    expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 50000, date: OCT2, memberId: t.id }))).toBe('ok');   // waits for Tahsin’s tap
+    expect(await closeInfo(db, flatId, OCT2)).toMatchObject({ month: '2026-09-01', pending: 1, pendingMonth: '2026-10-01' });
+  });
+
   it('item 3: while September is open, October’s own fund is −৳500 but the money held is ৳1,500', async () => {
     const { flatId } = await flat(50000);
     expect((await loadMonth(db, flatId, '2026-10-01', OCT2)).result.fund).toBe(-50000);   // what Home and Money showed before

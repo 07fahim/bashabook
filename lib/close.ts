@@ -36,9 +36,13 @@ export async function closeInfo(db: Db, flatId: string, today: string) {
   if (!month) return null;
   const mo = await loadMonth(db, flatId, month, today);
   const total = await flatMoney(db, flatId, today), fund = mo.result.fund;
+  // the count covers the later open months too, so an entry still waiting there (money handed over or received, not yet
+  // tapped) blocks it as well: it is in the hand but not in the books. `pendingMonth`: where to go and fix the first one
+  const [p] = await db<{ n: number; m: string | null }>(
+    `select count(*)::int as n, min(month)::text as m from ledger where flat_id = $1 and status = 'pending' and month >= $2::date`, [flatId, month]);
   // `later`: what the months after it added or spent since, so the card can say why the count differs from its own fund
-  return { month, fund, held: cashFrom(fund, total), later: total - fund,
-    pending: mo.entries.filter(x => x.status === 'pending').length, problems: mo.result.problems.length };
+  return { month, fund, held: cashFrom(fund, total), later: total - fund, pending: p.n, pendingMonth: p.m ?? month,
+    problems: mo.result.problems.length };
 }
 
 /** The cash the collector must count to close a month whose own fund is `fund`, when every open month together holds `total`
@@ -111,6 +115,7 @@ export async function closeMonth(db: Db, flatId: string, by: Actor, month: strin
   const held = cashFrom(expected, await flatMoney(db, flatId, today));
   if (actual !== held) return out('cash', held);
   await afterLoad?.();
+  // expected: the cash it was counted against (everything held then); closes before Plan 7 stored the month's own fund here
   const record = { ...cash, expected: held, actual, difference: actual - held, by: by.memberId };
   const rows = mo.result.perMember.map(p => ({ ...p, meals: mo.meals.get(p.id) ?? 0, days: mo.days.get(p.id) ?? 0 }));
   const r = await db(
