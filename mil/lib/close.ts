@@ -41,13 +41,14 @@ const gapId = (flatId: string, month: string, version: number) => {
 
 /** The collector spent more for the flat than flat money held (fund below 0): records their own deposit of exactly the gap,
  *  dated the month's last day, so the closable month's fund is 0 and the flat owes them that much. The amount is always
- *  recomputed here. The id comes from the month's state, so two tabs (or two taps) that saw the same state record once;
+ *  recomputed here: `shown` (what the collector confirmed) only has to match it, else 'changed' and nothing is recorded. The id comes from the month's state, so two tabs (or two taps) that saw the same state record once;
  *  with nothing left to cover it does nothing. */
-export async function coverGap(db: Db, flatId: string, by: Actor, today: string, note: string): Promise<'ok' | 'bad'> {
+export async function coverGap(db: Db, flatId: string, by: Actor, today: string, note: string, shown: number): Promise<'ok' | 'bad' | 'changed'> {
   const month = by.role === 'manager' ? await closableMonth(db, flatId, today) : null;
   if (!month) return 'bad';
   const mo = await loadMonth(db, flatId, month, today), fund = mo.result.fund;
   if (fund >= 0 || !mo.info) return 'ok';
+  if (-fund !== shown) return 'changed';
   return (await addEntry(db, flatId, by, { id: gapId(flatId, month, mo.info.version), type: 'deposit', amount: -fund,
     date: daysOfMonth(month).at(-1)!, note, paidBy: null, memberId: by.memberId, split: null, selected: [] })) === 'ok' ? 'ok' : 'bad';
 }

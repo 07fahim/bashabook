@@ -212,6 +212,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       <select name="forMonth" className={field}>{mo.closedMonths.map(m => <option key={m} value={m}>{fmtMonth(m)}</option>)}</select>
                     </label>
                     <fieldset>
+                      <legend className="font-semibold">{x.whatHappened}</legend>
                       {(['bazar', 'bill', 'move'] as const).map(k => (
                         <label key={k} className="flex min-h-11 items-center gap-3">
                           <input type="radio" name="kind" value={k} id={`fix-${k}`} defaultChecked={k === 'bazar'} className="size-5 shrink-0 accent-turmeric" />{x.correctKinds[k]}
@@ -219,8 +220,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       ))}
                     </fieldset>
                     <Field label={x.amount} name="amount" inputMode="decimal" required placeholder="2450" />
-                    <label className="block font-semibold group-has-[#fix-move:checked]/c:hidden">{x.whoPaidShop}
-                      <select name="who" className={field}>{mo.all.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+                    {/* no person preselected; not `required`: a hidden select would block the form, so the server answers an empty pick */}
+                    <label className="block font-semibold group-has-[#fix-move:checked]/c:hidden">{x.whoPaid}
+                      <select name="who" className={field} defaultValue=""><option value="" disabled>—</option>{mo.all.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
                     </label>
                     <fieldset className="hidden space-y-1 group-has-[#fix-bill:checked]/c:block">
                       <legend className="font-semibold">{x.whoShares}</legend>
@@ -236,7 +238,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                     <div className="hidden gap-3 group-has-[#fix-move:checked]/c:grid sm:grid-cols-2">
                       {(['from', 'to'] as const).map(k => (
                         <label key={k} className="block font-semibold">{k === 'from' ? x.moveFrom : x.moveTo}
-                          <select name={k} className={field}>{mo.all.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+                          <select name={k} className={field} defaultValue=""><option value="" disabled>—</option>{mo.all.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
                         </label>
                       ))}
                     </div>

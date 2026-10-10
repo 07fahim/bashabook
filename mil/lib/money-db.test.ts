@@ -393,7 +393,7 @@ describe('money storage', { timeout: 30000 }, () => {
   });
 
   it('a pending entry still goes from any month, but only for whoever sent it or the collector', async () => {
-    const { flatId, ids, as } = await flat();
+    const { flatId, ids, as, nafis } = await flat();
     await openMonth(db, flatId, '2026-09-01');
     await addEntry(db, flatId, as('Tahsin'), e({ type: 'deposit', amount: 10000, memberId: ids.Tahsin, note: 'Tahsin September' }));
     await db(`update ledger set date = '2026-09-20', month = '2026-09-01' where flat_id = $1 and note = 'Tahsin September'`, [flatId]);   // as if sent last month
@@ -401,5 +401,16 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(mine.status).toBe('pending');
     expect(await removeEntry(db, flatId, as('Zarif'), mine.id, TODAY)).toBe(false);
     expect(await removeEntry(db, flatId, as('Tahsin'), mine.id, TODAY)).toBe(true);
+    await addEntry(db, flatId, as('Tahsin'), e({ type: 'deposit', amount: 10000, memberId: ids.Tahsin, note: 'Tahsin again' }));
+    const again = (await db<{ id: string }>(`select id from ledger where flat_id = $1 and note = 'Tahsin again'`, [flatId]))[0].id;
+    expect(await removeEntry(db, flatId, nafis, again, TODAY)).toBe(true);   // the collector removes someone else's pending entry
+  });
+
+  it('a non-collector removes their own settled entry until the month ends, Dhaka date', async () => {
+    const { flatId, ids, as } = await flat();
+    await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 50000, paidBy: ids.Tahsin, note: 'Tahsin October' }));
+    const oct = (await db<{ id: string }>(`select id from ledger where flat_id = $1 and note = 'Tahsin October'`, [flatId]))[0].id;
+    expect(await removeEntry(db, flatId, as('Tahsin'), oct, '2026-11-01')).toBe(false);   // the first of next month
+    expect(await removeEntry(db, flatId, as('Tahsin'), oct, '2026-10-31')).toBe(true);    // the last day of this month
   });
 });

@@ -122,10 +122,11 @@ describe('closing a month', { timeout: 30000 }, () => {
     const before = await loadMonth(db, flatId, '2026-09-01', '2026-10-02');
     expect(before.result.fund).toBe(-50000);
     const bal = (m: typeof before) => m.result.perMember.find(p => p.id === nafis.memberId)!.balance;
-    expect(await coverGap(db, flatId, { ...nafis, role: 'member' }, '2026-10-02', 'x')).toBe('bad');
+    expect(await coverGap(db, flatId, { ...nafis, role: 'member' }, '2026-10-02', 'x', 50000)).toBe('bad');
+    expect(await coverGap(db, flatId, nafis, '2026-10-02', 'gap', 40000)).toBe('changed');   // the card showed another amount: nothing recorded
     // two tabs at once, no change in between: one deposit
-    expect(await Promise.all([coverGap(db, flatId, nafis, '2026-10-02', 'gap'), coverGap(db, flatId, nafis, '2026-10-02', 'gap')])).toEqual(['ok', 'ok']);
-    expect(await coverGap(db, flatId, nafis, '2026-10-02', 'gap')).toBe('ok');   // a later tap: nothing left to cover
+    expect(await Promise.all([coverGap(db, flatId, nafis, '2026-10-02', 'gap', 50000), coverGap(db, flatId, nafis, '2026-10-02', 'gap', 50000)])).toEqual(['ok', 'ok']);
+    expect(await coverGap(db, flatId, nafis, '2026-10-02', 'gap', 50000)).toBe('ok');   // a later tap: nothing left to cover
     const after = await loadMonth(db, flatId, '2026-09-01', '2026-10-02');
     expect([after.result.fund, bal(after) - bal(before)]).toEqual([0, 50000]);
     expect(await db(`select 1 from ledger where flat_id = $1 and type = 'deposit'`, [flatId])).toHaveLength(1);

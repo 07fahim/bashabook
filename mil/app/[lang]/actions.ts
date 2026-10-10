@@ -429,7 +429,11 @@ export async function coverGapAction(_: FormState, d: FormData): Promise<FormSta
   const lang = langOf(d), x = getDictionary(lang).money;
   const me = await requireManager(lang);
   // the one deliberate exception to entryAction's this-month-only dates: only this deposit, only into the month to close
-  const r = await unlessClosed(() => coverGap(db, me.flatId, me, todayDhaka(), x.coverNote));
+  // `shown`: the amount the card showed, in poisha; only compared, never recorded
+  const shown = Number(str(d, 'shown'));
+  if (!Number.isSafeInteger(shown)) return { error: x.errors.bad };
+  const r = await unlessClosed(() => coverGap(db, me.flatId, me, todayDhaka(), x.coverNote, shown));
+  if (r === 'changed') { refresh(); return { error: x.errors.changed }; }
   if (r !== 'ok') return { error: r === 'closed' ? x.errors.closed : x.errors.bad };
   refresh();
   return { done: x.saved };
@@ -455,7 +459,7 @@ export async function correctionAction(_: FormState, d: FormData): Promise<FormS
     : kind === 'bill' ? { ...base, kind, paidBy: str(d, 'who'), split: split!, selected: people }
     : { ...base, kind, paidBy: str(d, 'who') };
   const ids = kind === 'move' ? [str(d, 'from'), str(d, 'to')] : [str(d, 'who'), ...(split === 'selected' ? people : [])];
-  if (!ids.every(id => UUID.test(id))) return { error: x.errors.people };
+  if (!ids.every(id => UUID.test(id)) || (kind === 'move' && ids[0] === ids[1]) || (split === 'selected' && !people.length)) return { error: x.errors.people };
   const r = await addCorrection(db, me.flatId, me, c, todayDhaka());
   if (r !== 'ok') return { error: r === 'month' ? x.errors.month : x.errors.bad };
   refresh();
