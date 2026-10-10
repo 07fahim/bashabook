@@ -156,6 +156,7 @@ describe('closing a month', { timeout: 30000 }, () => {
     expect(parseCash({ cash: '1,200.50', bkash: '', nagad: '০', bank: '0' })).toEqual({ cash: 120050, bkash: 0, nagad: 0, bank: 0 });
     expect(parseCash({ cash: '-5', bkash: '', nagad: '', bank: '' })).toBeNull();
     expect(parseCash({ cash: 'abc', bkash: '', nagad: '', bank: '' })).toBeNull();
+    expect(parseCash({ cash: '৳0', bkash: '0,000', nagad: ' 0.00 ', bank: '' })).toEqual({ cash: 0, bkash: 0, nagad: 0, bank: 0 });
   });
 
   it('after a close, meals and money for that month are closed and the open window starts after it', async () => {

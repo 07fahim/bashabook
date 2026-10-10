@@ -13,7 +13,7 @@ const nextMonth = (month: string) => addDays(daysOfMonth(month).at(-1)!, 1);
 export function parseCash(raw: Record<keyof Cash, string>): Cash | null {
   const out = {} as Cash;
   for (const k of CASH_KEYS) {
-    const v = raw[k].trim().replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+    const v = (raw[k] ?? '').replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/[,\s৳]/g, '');
     const p = v === '' || /^0+(\.0+)?$/.test(v) ? 0 : toPoisha(v);
     if (p === null) return null;
     out[k] = p;
