@@ -76,6 +76,8 @@ try {
     const moved = await m;
     check('1 close holds, a ticked move waits; the close wins with the old rent and the move applies after',
       w && r.result === 'ok' && moved === true && (await f.frozen())?.rent === 50000, { w, r: r.result, moved, frozen: await f.frozen() });
+    const [h1] = await db<{ fixFor: unknown }>(`select after->'fixFor' as "fixFor" from audit_log where flat_id = $1 and entity = 'rooms' and entity_id = $2 order by id desc limit 1`, [f.flatId, f.ids.Tahsin]);
+    check('1 its history row claims no fix: September closed before it, so it applies from this month only', h1 && h1.fixFor === null, h1);
   }
   {
     // deterministic: the ticked move commits on its own connection after the close has read the month, before it writes
@@ -91,9 +93,9 @@ try {
     const r2 = await f.close();
     check('3 ticked meal weights commit between the close’s read and write: changed, and the retry closes with ৳2,250 food',
       r1.result === 'changed' && r2.result === 'ok' && (await f.frozen())?.food === 225000, { r1: r1.result, r2: r2.result, frozen: await f.frozen() });
-    const [a] = await db<{ t: string; fixFor: string | null }>(
-      `select jsonb_typeof(after) as t, after->>'fixFor' as "fixFor" from audit_log where flat_id = $1 and entity_id = 'flat|settings' order by id desc limit 1`, [f.flatId]);
-    check('3 the history row is a JSON object naming the corrected month (not a double-encoded string)', a?.t === 'object' && a.fixFor === SEP, a);
+    const [a] = await db<{ t: string; fixFor: unknown }>(
+      `select jsonb_typeof(after) as t, after->'fixFor' as "fixFor" from audit_log where flat_id = $1 and entity_id = 'flat|settings' order by id desc limit 1`, [f.flatId]);
+    check('3 the history row is a JSON object naming the corrected month (not a double-encoded string)', a?.t === 'object' && JSON.stringify(a.fixFor) === JSON.stringify([SEP]), a);
   }
   {
     // truly concurrent, no assumption about timing: whichever way it lands, the closed month carries the correction exactly once

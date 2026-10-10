@@ -230,11 +230,14 @@ export async function updateSettings(db: Db, flatId: string, by: string, s: { cu
   const [r] = await db<{ blocked: boolean }>(
     `with old as (select cutoff_time::text as cutoff, json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights,
          (weight_b, weight_l, weight_d) is distinct from ($3::int, $4::int, $5::int) as reweigh from flats where id = $1),
-     ended as (select min(month) as m from months where flat_id = $1 and status = 'open' and month < date_trunc('month', $9::text::date)),
-     g as (select (select reweigh from old) and not $10::boolean and (select m from ended) is not null as blocked),
+     -- the ended months still open, locked in month order so a close running now finishes first and drops out (see addRoom)
+     ended as (select month from months where flat_id = $1 and status = 'open' and month < date_trunc('month', $9::text::date)
+       order by month for no key update),
+     g as (select (select reweigh from old) and not $10::boolean and exists (select 1 from ended) as blocked),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
        select $1, 'flats', 'flat|settings', to_jsonb(old) - 'reweigh',
-         $6::text::jsonb || case when $10::boolean and old.reweigh and (select m from ended) is not null then jsonb_build_object('fixFor', (select m from ended)::text) else '{}'::jsonb end, $7
+         $6::text::jsonb || case when $10::boolean and old.reweigh and exists (select 1 from ended)
+           then jsonb_build_object('fixFor', (select jsonb_agg(month::text order by month) from ended)) else '{}'::jsonb end, $7
        from old where not (select blocked from g)),
      up as (update flats set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5,
        lock_date = case when $8::boolean then null else lock_date end, lock_count = case when $8::boolean then null else lock_count end

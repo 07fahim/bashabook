@@ -244,29 +244,34 @@ export async function removeEntry(db: Db, flatId: string, by: Actor, id: string,
 }
 
 /** Rooms and rent shares (collector only). Every change goes to the history: rent moves everyone's balance.
- *  `guard` (every form passes it): while a month that has ended is still open, a change that would change its bill (it has a
- *  bill split by room) is refused with 'earlier' unless `fix` says it deliberately corrects that month; the history row then
- *  names the month (`fixFor`). The check runs in the same statement as the change, so a close can't slip in between: if the
- *  close commits first the month is no longer open and the change applies from the next month only. */
+ *  `guard` (every form passes it): rooms, rent shares and meal weights are read as they are today by every open month. So while
+ *  a month that has ended is still open, a change that can move its bill is refused with 'earlier' unless `fix` says it
+ *  deliberately corrects it; the history row then lists the months it corrected (`fixFor`). It asks even when that month has
+ *  no rent bill yet: one can still be added or put back later. The ended months are locked first, in the same statement, so a
+ *  close running now finishes first and its month drops out: nothing is refused for, or claims to fix, a month already closed. */
 export type Guard = { today: string; fix: boolean };
 /** The oldest month that has ended (before today's month) and is still open, or null. */
 export async function endedOpenMonth(db: Db, flatId: string, today: string) {
   const [r] = await db<{ m: string | null }>(`select min(month)::text as m from months where flat_id = $1 and status = 'open' and month < $2::date`, [flatId, monthOf(today)]);
   return r.m;
 }
-/** SQL: the oldest month that has ended (before today's month, `t`) and is still open with a bill split by room; null if none. */
-const roomMonth = (t: string) => `(select min(e.month) from months e where e.flat_id = $1 and e.status = 'open'
-    and e.month < date_trunc('month', ${t}::text::date)
-    and exists (select 1 from ledger l where l.flat_id = $1 and l.month = e.month and l.split = 'room'))`;
-const fixFor = (f: string, t: string) => `case when ${f}::boolean then jsonb_build_object('fixFor', ${roomMonth(t)}::text) else '{}'::jsonb end`;
+/** SQL CTE `ended`: months that have ended (before the month of `t`) and are still open, locked in month order (the order the
+ *  month triggers lock them) with no key update, as the writers of 011 and 012 lock the flat row. */
+const ended = (t: string) => `ended as (select month from months where flat_id = $1 and status = 'open'
+    and month < date_trunc('month', ${t}::text::date) order by month for no key update)`;
+/** SQL: the history note for a ticked fix, naming every month it corrected (`m`: a set of months), or nothing. */
+const fixNote = (f: string, m: string) => `case when ${f}::boolean and exists (select 1 from ${m}) then jsonb_build_object('fixFor',
+    (select jsonb_agg(month::text order by month) from ${m})) else '{}'::jsonb end`;
 
 export async function addRoom(db: Db, flatId: string, by: Actor, name: string, rent: number, guard?: Guard): Promise<string | null | 'earlier'> {
   if (by.role !== 'manager' || !name.trim() || name.length > 40 || !Number.isInteger(rent) || rent < 0) return null;
-  // a new room with a rent share and nobody in it yet leaves that month's rent with an empty room: it can't close
+  // a room with a rent share and nobody in it leaves that month's rent with an empty room; a ৳0 room changes nothing
   const [r] = await db<{ id: string | null; blocked: boolean }>(
-    `with g as (select $5::text is not null and not $6::boolean and $3 > 0 and ${roomMonth('$5')} is not null as blocked),
+    `with ${ended('$5')},
+     g as (select $5::text is not null and not $6::boolean and $3 > 0 and exists (select 1 from ended) as blocked),
      r as (insert into rooms (flat_id, name, rent_share_poisha) select $1, $2, $3 where not (select blocked from g) returning *),
-     a as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'rooms', r.id::text, to_jsonb(r) || ${fixFor('$6', '$5')}, $4 from r)
+     a as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
+       select $1, 'rooms', r.id::text, to_jsonb(r) || case when $3 > 0 then ${fixNote('$6', 'ended')} else '{}'::jsonb end, $4 from r)
      select (select id from r) as id, (select blocked from g) as blocked`,
     [flatId, name, rent, by.memberId, guard?.today ?? null, guard?.fix ?? false]);
   return r.blocked ? 'earlier' : r.id;
@@ -275,10 +280,11 @@ export async function addRoom(db: Db, flatId: string, by: Actor, name: string, r
 export async function setRent(db: Db, flatId: string, by: Actor, roomId: string, rent: number, guard?: Guard): Promise<boolean | 'earlier'> {
   if (by.role !== 'manager' || !Number.isInteger(rent) || rent < 0) return false;
   const [r] = await db<{ n: number; blocked: boolean }>(
-    `with g as (select $5::text is not null and not $6::boolean and ${roomMonth('$5')} is not null
+    `with ${ended('$5')},
+     g as (select $5::text is not null and not $6::boolean and exists (select 1 from ended)
          and exists (select 1 from rooms where flat_id = $1 and id = $2 and rent_share_poisha <> $3) as blocked),
      r as (update rooms set rent_share_poisha = $3 where flat_id = $1 and id = $2 and not (select blocked from g) returning *),
-     a as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'rooms', r.id::text, to_jsonb(r) || ${fixFor('$6', '$5')}, $4 from r)
+     a as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'rooms', r.id::text, to_jsonb(r) || ${fixNote('$6', 'ended')}, $4 from r)
      select (select count(*) from r)::int as n, (select blocked from g) as blocked`,
     [flatId, roomId, rent, by.memberId, guard?.today ?? null, guard?.fix ?? false]);
   return r.blocked ? 'earlier' : r.n > 0;   // false: no such room in this flat
@@ -286,17 +292,16 @@ export async function setRent(db: Db, flatId: string, by: Actor, roomId: string,
 
 export async function setRoom(db: Db, flatId: string, by: Actor, memberId: string, roomId: string | null, guard?: Guard): Promise<boolean | 'earlier'> {
   if (by.role !== 'manager') return false;
-  // only someone who lived here in that month moves its rent; an October newcomer's room doesn't
+  // only the months this person lived in move; an October newcomer's room changes no ended month
   const [r] = await db<{ n: number; blocked: boolean }>(
-    `with g as (select $5::text is not null and not $6::boolean and exists (select 1 from members p, months e
-         where p.flat_id = $1 and p.id = $2 and p.room_id is distinct from $3::uuid
-           and e.flat_id = $1 and e.status = 'open' and e.month < date_trunc('month', $5::text::date)
-           and p.joined_on <= (e.month + interval '1 month' - interval '1 day')::date and (p.left_on is null or p.left_on >= e.month)
-           and exists (select 1 from ledger l where l.flat_id = $1 and l.month = e.month and l.split = 'room')) as blocked),
+    `with ${ended('$5')},
+     hit as (select e.month from ended e, members p where p.flat_id = $1 and p.id = $2 and p.room_id is distinct from $3::uuid
+       and p.joined_on <= (e.month + interval '1 month' - interval '1 day')::date and (p.left_on is null or p.left_on >= e.month)),
+     g as (select $5::text is not null and not $6::boolean and exists (select 1 from hit) as blocked),
      m as (update members set room_id = $3 where flat_id = $1 and id = $2 and not (select blocked from g)
        and ($3::uuid is null or exists (select 1 from rooms where flat_id = $1 and id = $3)) returning id, room_id),
      a as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
-       select $1, 'rooms', m.id::text, jsonb_build_object('roomId', m.room_id) || ${fixFor('$6', '$5')}, $4 from m)
+       select $1, 'rooms', m.id::text, jsonb_build_object('roomId', m.room_id) || ${fixNote('$6', 'hit')}, $4 from m)
      select (select count(*) from m)::int as n, (select blocked from g) as blocked`,
     [flatId, memberId, roomId, by.memberId, guard?.today ?? null, guard?.fix ?? false]);
   return r.blocked ? 'earlier' : r.n > 0;   // false: no such member, or no such room, in this flat

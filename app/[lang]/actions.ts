@@ -6,7 +6,7 @@ import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normal
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
-import { addDays, daysOfMonth, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOtherMeal, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
@@ -404,7 +404,7 @@ const guardOf = (d: FormData) => ({ today: todayDhaka(), fix: d.get('fix') === '
 /** The refusal: close that month first, or tick that this deliberately fixes it. */
 async function earlier(lang: Locale, flatId: string, today: string): Promise<FormState> {
   const x = getDictionary(lang).money, month = await endedOpenMonth(db, flatId, today) ?? monthOf(today);
-  const fill = (t: string) => t.replaceAll('{month}', fmtMonth(month)).replaceAll('{next}', fmtMonth(monthOf(addDays(daysOfMonth(month).at(-1)!, 1))));
+  const fill = (t: string) => t.replaceAll('{month}', fmtMonth(month)).replaceAll('{next}', fmtMonth(monthOf(today)));
   return { error: fill(x.earlierBlock), confirm: fill(x.earlierFix) };
 }
 

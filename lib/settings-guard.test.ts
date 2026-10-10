@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { setDefaults, updateSettings } from './meals-db';
-import { addEntry, addRoom, loadMonth, openMonth, setRent, setRoom, type NewEntry } from './money-db';
+import { addEntry, addRoom, loadMonth, openMonth, putBack, removeEntry, setRent, setRoom, type NewEntry } from './money-db';
 import { closeMonth } from './close';
 
 // Plan 7 item 1: on 2 October, September has ended but isn't closed. A room, rent or meal-weight change that would change
@@ -42,7 +42,7 @@ describe('settings changes while an ended month is still open', { timeout: 30000
     expect(await setRoom(db, flatId, nafis, ids.Tahsin, big, fix(true))).toBe(true);
     expect((await tahsin()).billShare).toBe(150000);
     const [a] = await db<{ after: { fixFor?: string } }>(`select after from audit_log where flat_id = $1 and entity = 'rooms' and entity_id = $2 order by id desc limit 1`, [flatId, ids.Tahsin]);
-    expect(a.after.fixFor).toBe(SEP);
+    expect(a.after.fixFor).toEqual([SEP]);
   });
 
   it('meal weights: refused without the tick (September food stays ৳2,571.43), a deliberate fix with it (৳2,250)', async () => {
@@ -62,14 +62,39 @@ describe('settings changes while an ended month is still open', { timeout: 30000
     expect((await loadMonth(db, flatId, SEP, OCT2)).rooms.map(r => r.name)).toEqual(['Big', 'Small']);
   });
 
-  it('not asked when September’s bill can’t change: an October newcomer’s room, a ৳0 room, the lock time alone, no room bill', async () => {
+  it('not asked when September’s bill can’t change: an October newcomer’s room, a ৳0 room, the lock time alone', async () => {
     const { flatId, ids, nafis, big } = await flat();
     const [rafi] = await db<{ id: string }>(`insert into members (flat_id, name, joined_on) values ($1, 'Rafi', '2026-10-03') returning id`, [flatId]);
     expect(await setRoom(db, flatId, nafis, rafi.id, big, fix(false))).toBe(true);
     expect(typeof await addRoom(db, flatId, nafis, 'Box', 0, fix(false))).toBe('string');
     expect(await updateSettings(db, flatId, ids.Nafis, { cutoff: '21:30', weights: W }, OCT2_NOW, false)).toBe('ok');
-    const other = await flat(false);   // a September with no bill split by room
-    expect(await setRoom(db, other.flatId, other.nafis, other.ids.Tahsin, other.big, fix(false))).toBe(true);
+  });
+
+  it('asked even with no rent bill in September yet: one can still be added later (backfill) or put back', async () => {
+    const backfill = await flat(false);
+    expect(await setRoom(db, backfill.flatId, backfill.nafis, backfill.ids.Tahsin, backfill.big, fix(false))).toBe('earlier');
+    expect(await addEntry(db, backfill.flatId, backfill.nafis, e({ type: 'bill', amount: 400000, note: 'Rent', split: 'room' }), OCT2)).toBe('ok');
+    expect((await backfill.tahsin()).billShare).toBe(50000);   // the late rent bill splits by the rooms September had
+    const putBackCase = await flat();
+    const [bill] = await db<{ id: string }>(`select id from ledger where flat_id = $1 and split = 'room'`, [putBackCase.flatId]);
+    expect(await removeEntry(db, putBackCase.flatId, putBackCase.nafis, bill.id, OCT2)).toBeTruthy();
+    expect(await setRoom(db, putBackCase.flatId, putBackCase.nafis, putBackCase.ids.Tahsin, putBackCase.big, fix(false))).toBe('earlier');
+    expect(await putBack(db, putBackCase.flatId, putBackCase.ids.Nafis, bill.id, OCT2)).toBeTruthy();
+    expect((await putBackCase.tahsin()).billShare).toBe(50000);
+  });
+
+  it('two ended months open (August and September): the fix records both, and he lived in both', async () => {
+    await migrate();
+    const f = await createFlat(db, { flatName: 'Two', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-08-01', lang: 'bn' });
+    const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const };
+    for (const m of ['2026-08-01', SEP, '2026-10-01']) await openMonth(db, f.flatId, m);
+    const big = (await addRoom(db, f.flatId, nafis, 'Big', 300000)) as string;
+    await setRoom(db, f.flatId, nafis, ids.Nafis, big);
+    expect(await setRoom(db, f.flatId, nafis, ids.Tahsin, big, fix(false))).toBe('earlier');
+    expect(await setRoom(db, f.flatId, nafis, ids.Tahsin, big, fix(true))).toBe(true);
+    const [a] = await db<{ after: { fixFor?: string[] } }>(`select after from audit_log where flat_id = $1 and entity = 'rooms' and entity_id = $2 order by id desc limit 1`, [f.flatId, ids.Tahsin]);
+    expect(a.after.fixFor).toEqual(['2026-08-01', SEP]);
   });
 
   it('after September closes the same changes go ahead without asking, and September stays as it closed', async () => {
