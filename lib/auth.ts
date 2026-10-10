@@ -98,7 +98,8 @@ export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: st
    from members where flat_id = $1 and ${STAYING} order by role = 'manager' desc, name`, [flatId]);
 
 export async function addMember(db: Db, flatId: string, name: string, today: string) {
-  const rows = await db(`insert into members (flat_id, name, joined_on) values ($1, $2, $3) on conflict do nothing returning id`, [flatId, name, today]);
+  // the target must be named: one_manager_per_flat is deferrable (011) and can't be an on conflict arbiter
+  const rows = await db(`insert into members (flat_id, name, joined_on) values ($1, $2, $3) on conflict on constraint one_name_per_stay do nothing returning id`, [flatId, name, today]);
   return rows.length > 0;
 }
 

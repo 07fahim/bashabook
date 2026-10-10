@@ -268,9 +268,10 @@ export async function stopRepeat(db: Db, flatId: string, by: Actor, id: string) 
 }
 
 /** Every ledger column: a removal record missing any of them is never put back. A test keeps this in step with the table. */
-export const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at,for_month,moves';
-/** What a removal record must hold to be put back: every column a row had before migration 009 added the two correction ones. */
-const PUT_BACK_COLUMNS = LEDGER_COLUMNS.replace(',for_month,moves', '');
+export const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at,for_month,moves,held_by';
+/** What a removal record must hold to be put back: every column a row had before migration 009 added the two correction ones
+ *  and 011 added held_by (an older record puts back with held_by null, so the insert trigger fills the current collector). */
+const PUT_BACK_COLUMNS = LEDGER_COLUMNS.replace(',for_month,moves,held_by', '');
 
 /** Brings a removed entry back exactly as it was (same id, status, people), rebuilt only from its latest removal record.
  *  Whoever made that removal: only while it's still this month (`today` is the Dhaka date). The current collector: this
