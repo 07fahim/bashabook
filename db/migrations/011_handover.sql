@@ -6,9 +6,10 @@ alter table flats add column offer_version int not null default 0;
 -- the ledger trigger from 009 also bumps the flat's offer_version (a pending entry is a ledger row too)
 create or replace function touch_ledger() returns trigger language plpgsql as $$
 begin
+  -- flats first, then months: one lock order everywhere, so it can't deadlock with set_leaving or a settings save
+  update flats set offer_version = offer_version + 1 where id = case when tg_op = 'DELETE' then old.flat_id else new.flat_id end;
   if tg_op <> 'INSERT' then perform month_touch(old.flat_id, old.month); end if;
   if tg_op <> 'DELETE' then perform month_touch(new.flat_id, new.month); end if;
-  update flats set offer_version = offer_version + 1 where id = case when tg_op = 'DELETE' then old.flat_id else new.flat_id end;
   return null;
 end $$;
 
@@ -22,10 +23,16 @@ alter table members add constraint one_manager_per_flat
 -- rewritten; labels use it, never the current collector
 alter table ledger add column held_by uuid, add foreign key (flat_id, held_by) references members (flat_id, id);
 -- backfill: before 011 nobody ever handed over, so the current collector held every one. The 009 trigger refuses any
--- change in a closed month, so it is off for this one update only.
+-- change in a closed month, so it is off for this one update only. Removal records get their holder too, so a later
+-- put back names who held the money, not whoever is collector then. (lib/handover.test.ts runs this block.)
+-- backfill start
 alter table ledger disable trigger ledger_month;
 update ledger l set held_by = m.id from members m where m.flat_id = l.flat_id and m.role = 'manager' and l.type in ('deposit','payout');
 alter table ledger enable trigger ledger_month;
+update audit_log a set before = a.before || jsonb_build_object('held_by', m.id) from members m
+  where a.entity = 'ledger' and a.after->>'removed' = 'true' and a.before->>'type' in ('deposit','payout')
+    and not (a.before ? 'held_by') and m.flat_id = a.flat_id and m.role = 'manager';
+-- backfill end
 create function ledger_held_by() returns trigger language plpgsql as $$
 begin
   if new.type in ('deposit','payout') and new.held_by is null then
@@ -70,7 +77,7 @@ begin
   if v is distinct from seen then return 'changed'; end if;
   if not exists (select 1 from members where flat_id = f and id = by and role = 'manager') then return 'notCollector'; end if;
   if to_m = by or not handover_eligible(f, to_m) then return 'recipient'; end if;
-  if total < 0 then return 'negative'; end if;
+  if total is null or total < 0 then return 'negative'; end if;
   if exists (select 1 from ledger where flat_id = f and status = 'pending') then return 'waiting'; end if;
   if exists (select 1 from handovers where flat_id = f and status = 'offered') then return 'already'; end if;
   update flats set offer_version = v + 1 where id = f;
@@ -115,9 +122,9 @@ begin
      or m = by or exists (select 1 from members where flat_id = f and id = m and role = 'manager') then return 'no'; end if;
   if not exists (select 1 from members where flat_id = f and id = m and (left_on is null or left_on >= today)
                    and (last_day is null or last_day >= greatest(today, joined_on))) then return 'no'; end if;
-  update flats set offer_version = offer_version + 1 where id = f;
   update members set left_on = last_day where flat_id = f and id = m and left_on is distinct from last_day;
-  if found then
+  if found then   -- only a real change moves the counter: a stale re-send must not cancel a valid offer
+    update flats set offer_version = offer_version + 1 where id = f;
     insert into audit_log (flat_id, entity, entity_id, after, by_member) values (f, 'members', m::text, jsonb_build_object('left', last_day), by);
   end if;
   return 'ok';

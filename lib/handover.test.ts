@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { db, migrate } from '../db/test-db';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal } from './meals-db';
 
@@ -12,6 +14,9 @@ async function flat() {
   const call = async (sql: string, p: unknown[]) => (await db<{ r: string }>(sql, p))[0].r;
   return { flatId: f.flatId, ids, v, collector, call };
 }
+
+// the backfill block of 011, read from the migration itself
+const backfill = () => pg.exec(readFileSync(join(__dirname, '../db/migrations/011_handover.sql'), 'utf8').split('-- backfill start')[1].split('-- backfill end')[0]);
 
 describe('handover database rules', { timeout: 30000 }, () => {
   it('every ledger write bumps offer_version, a meal write does not', async () => {
@@ -33,9 +38,9 @@ describe('handover database rules', { timeout: 30000 }, () => {
     const { flatId, ids, collector } = await flat();
     await db(`update members set role = case when id = $2 then 'manager' else 'member' end where flat_id = $1 and id in ($2, $3)`, [flatId, ids.Tahsin, ids.Nafis]);
     expect(await collector()).toEqual([ids.Tahsin]);
-    await db(`update members set role = case when id = $2 then 'manager' else 'member' end where flat_id = $1 and id in ($3, $2)`, [flatId, ids.Nafis, ids.Tahsin]);
+    await db(`update members set role = case when id = $2 then 'manager' else 'member' end where flat_id = $1 and id in ($3, $2)`, [flatId, ids.Nafis, ids.Tahsin]);   // the row order the old unique index rejected mid-statement
     expect(await collector()).toEqual([ids.Nafis]);
-    await expect(db(`update members set role = 'manager' where id = $1`, [ids.Zarif])).rejects.toThrow();
+    await expect(db(`update members set role = 'manager' where id = $1`, [ids.Zarif])).rejects.toThrow(/one_manager_per_flat/);
   });
 
   it('offer, wrong person, accept, second tap', async () => {
@@ -177,12 +182,17 @@ describe('handover database rules', { timeout: 30000 }, () => {
     await db(`alter table ledger disable trigger ledger_month`);
     await db(`update ledger set held_by = null where flat_id = $1`, [flatId]);
     await db(`alter table ledger enable trigger ledger_month`);
-    // the backfill from 011, verbatim
-    await db(`alter table ledger disable trigger ledger_month`);
-    await db(`update ledger l set held_by = m.id from members m where m.flat_id = l.flat_id and m.role = 'manager' and l.type in ('deposit','payout')`);
-    await db(`alter table ledger enable trigger ledger_month`);
+    await backfill();
     const rows = await db<{ type: string; h: string }>(`select type, held_by as h from ledger where flat_id = $1 order by type`, [flatId]);
     expect(rows).toEqual([{ type: 'deposit', h: ids.Nafis }, { type: 'payout', h: ids.Nafis }]);
     await expect(db(`update ledger set status = 'ok' where flat_id = $1 and month = '2026-09-01'`, [flatId])).rejects.toThrow('month_closed');
+  });
+
+  it('the 011 backfill gives a removal record from before 011 its holder', async () => {
+    const { flatId, ids } = await flat();
+    const [{ id }] = await db<{ id: string }>(`insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
+      values ($1, 'ledger', gen_random_uuid()::text, jsonb_build_object('type', 'deposit', 'amount_poisha', 1000), '{"removed":true}', $2) returning id::text`, [flatId, ids.Nafis]);
+    await backfill();
+    expect((await db<{ h: string }>(`select before->>'held_by' as h from audit_log where id = $1`, [id]))[0].h).toBe(ids.Nafis);
   });
 });
