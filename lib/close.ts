@@ -58,10 +58,6 @@ export async function coverGap(db: Db, flatId: string, by: Actor, today: string,
     date: daysOfMonth(month).at(-1)!, note, paidBy: null, memberId: by.memberId, split: null, selected: [] })) === 'ok' ? 'ok' : 'bad';
 }
 
-/** Closes a month. The version is read first (inside loadMonth), then the engine runs, then one statement closes the
- *  month only if nothing moved its version since: a write still running holds the month row, so this statement waits for
- *  it, re-checks, sees the new version and closes nothing. Two taps: the second finds 'closed'. `today` is the server's
- *  Dhaka date (todayDhaka() in the action); `afterLoad` exists only for tests. */
 /** Saves every missing meal row of an open `month` as the calendar shows it now: a saved row stays as it is, a no-cooking
  *  meal is 0, otherwise the person's usual meal, on the days they lived here. A closed month's days with no row would
  *  otherwise follow later usual-meals changes while its bill stays frozen (Plan 6c). It can't run inside the close statement:
@@ -83,6 +79,10 @@ export async function freezeMonth(db: Db, flatId: string, month: string): Promis
      returning 1`, [flatId, month, end])).length;
 }
 
+/** Closes a month. The version is read first (inside loadMonth), then the engine runs, then one statement closes the
+ *  month only if nothing moved its version since: a write still running holds the month row, so this statement waits for
+ *  it, re-checks, sees the new version and closes nothing. Two taps: the second finds 'closed'. `today` is the server's
+ *  Dhaka date (todayDhaka() in the action); `afterLoad` exists only for tests. */
 export async function closeMonth(db: Db, flatId: string, by: Actor, month: string, today: string, cash: Cash,
   afterLoad?: () => Promise<void>): Promise<{ result: CloseResult; expected: number; actual: number }> {
   const actual = cash.cash + cash.bkash + cash.nagad + cash.bank;

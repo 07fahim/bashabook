@@ -28,9 +28,9 @@ async function flat() {
   const billed = async () => new Map((await db<{ id: string; m: number }>(
     `select member_id as id, weighted_meals as m from month_balances where flat_id = $1 and month = $2::text::date`, [f.flatId, SEP])).map(r => [r.id, r.m]));
   /** Calendar and bill agree for everyone the bill covers. */
-  const agree = async () => {
+  const agree = async (people = 3) => {
     const [cal, bill] = [await calendar(), await billed()];
-    expect(bill.size).toBe(3);
+    expect(bill.size).toBe(people);
     for (const [id, m] of bill) expect(cal.get(id)).toBe(m);
   };
   const row = async (name: string, date: string, meal: Meal) => (await db<{ count: number; guests: number }>(
@@ -48,10 +48,15 @@ async function flat() {
 describe('freezing a month before it closes', { timeout: 30000 }, () => {
   it('gate 5: after a close, changing usual meals leaves the closed month’s calendar equal to its bill', async () => {
     const { flatId, ids, nafis, agree } = await flat();
+    // someone who moved out on 20 September and someone who moved in on 10 September: their days are frozen too, no more
+    await db(`update members set left_on = '2026-09-20' where id = $1`, [ids.Zarif]);
+    const [rafi] = await db<{ id: string }>(`insert into members (flat_id, name, joined_on) values ($1, 'Rafi', '2026-09-10') returning id`, [flatId]);
     expect((await closeMonth(db, flatId, nafis, SEP, CLOSE_DAY, cash(0))).result).toBe('ok');
-    await agree();
-    await setDefaults(db, flatId, ids.Tahsin, OFF, await openStart(db, flatId), CLOSE_DAY, false);
-    await agree();
+    await agree(4);
+    for (const id of [ids.Tahsin, ids.Zarif, rafi.id]) await setDefaults(db, flatId, id, OFF, await openStart(db, flatId), CLOSE_DAY, false);
+    await agree(4);
+    const days = async (id: string) => Number((await db<{ n: string }>(`select count(distinct date)::text as n from meal_changes where member_id = $1 and date <= '2026-09-30'`, [id]))[0].n);
+    expect([await days(ids.Zarif), await days(rafi.id)]).toEqual([20, 21]);
   });
 
   it('gates 1 and 2: fills only missing rows; no-cooking gives 0 to a missing row and leaves a saved one alone', async () => {
@@ -123,11 +128,13 @@ describe('freezing a month before it closes', { timeout: 30000 }, () => {
   }
 
   it('gate 7: the closed-month guard still refuses writes, and freezing a closed month writes nothing', async () => {
-    const { flatId, ids, nafis, version } = await flat();
+    const { flatId, ids, nafis, version, dropQuietly } = await flat();
     expect((await closeMonth(db, flatId, nafis, SEP, CLOSE_DAY, cash(0))).result).toBe('ok');
+    await dropQuietly('Tahsin', '2026-09-12', 'b');   // a closed month with a missing row, like months closed before Plan 6c
     const v = await version();
-    expect(await freezeMonth(db, flatId, SEP)).toBe(0);
+    expect(await freezeMonth(db, flatId, SEP)).toBe(0);   // skipped, no month_closed error
     expect(await version()).toBe(v);
+    expect((await closeMonth(db, flatId, nafis, SEP, CLOSE_DAY, cash(0))).result).toBe('closed');
     await expect(saveMeal(db, flatId, nafis.memberId, { memberId: ids.Tahsin, date: '2026-09-07', meal: 'l', count: 0, guests: 0 }, false)).rejects.toThrow('month_closed');
   });
 });
