@@ -94,12 +94,14 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
 
   // a fresh one-time id each render: a save calls refresh(), so the next entry never reuses it; a failed save keeps it
   const hidden = (type: Entry['type']) => (<><input type="hidden" name="lang" value={lang} /><input type="hidden" name="type" value={type} /><input type="hidden" name="key" value={randomUUID()} /></>);
+  // this month: from the 1st to today; an earlier month still open (the collector only): its own days, its last day first
+  const [dFrom, dTo] = month === thisMonth ? [thisMonth, today] : [month, daysOfMonth(month).at(-1)!];
   const amountDate = (<>
     <Field label={x.amount} name="amount" inputMode="decimal" required placeholder="2450" />
-    <DateField lang={lang} label={x.date} name="date" required min={monthOf(today)} max={today} defaultValue={today} />
+    <DateField lang={lang} label={x.date} name="date" required min={dFrom} max={dTo} defaultValue={dTo} />
   </>);
   const whoPaid = (label: string) => (
-    <PayerSelect label={label} fundLabel={x.flatMoney.replace('{name}', collector.name)} today={today} initial={boss ? 'fund' : me.memberId}
+    <PayerSelect label={label} fundLabel={x.flatMoney.replace('{name}', collector.name)} today={dTo} initial={boss ? 'fund' : me.memberId}
       people={mo.members.filter(p => p.id !== collector.id).map(p => ({ id: p.id, name: p.name, joinedOn: p.joinedOn, leftOn: p.leftOn }))} />
   );
   const balance = r && balanceText(x, r.balance, mo.info?.status === 'closed');
@@ -159,7 +161,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 </details>
               </>)}
             </section>
-            {month === thisMonth && !closed && (<>
+            {(month === thisMonth ? !closed : boss && mo.info?.status === 'open') && (<>
+              {month !== thisMonth && <p className="max-w-prose text-[15px] text-muted">{x.lateLead.replaceAll('{month}', fmtMonth(month))}</p>}
               <Fold title={x.addBazar} lead={x.bazarLead}>
                 <ActionForm action={entryAction} className="mt-4">
                   {hidden('bazar')}{amountDate}{whoPaid(x.whoPaidShop)}
@@ -191,7 +194,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       ))}
                     </div>
                   </fieldset>
-                  {boss && (
+                  {boss && month === thisMonth && (
                     <label className="flex items-start gap-3">
                       <input type="checkbox" name="repeat" value="1" className="mt-1 size-5 shrink-0 accent-turmeric" />
                       <span><span className="font-semibold">{x.repeat}</span><span className="block text-[15px] text-muted">{x.repeatHint}</span></span>
@@ -209,7 +212,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   <button className={primary}>{x.save}</button>
                 </ActionForm>
               </Fold>
-              {boss && mo.closedMonths.length > 0 && (
+              {boss && month === thisMonth && mo.closedMonths.length > 0 && (
                 <Fold title={x.correctTitle} lead={x.correctLead}>
                   <ActionForm action={correctionAction} className="group/c mt-4">
                     <input type="hidden" name="lang" value={lang} />
