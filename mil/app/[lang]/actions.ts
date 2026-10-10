@@ -3,7 +3,7 @@
 import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
-import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, parseCash, type Correction } from '@/lib/close';
+import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
@@ -139,7 +139,8 @@ export async function usualAction(_: FormState, d: FormData): Promise<FormState>
   // all three off = cooking for yourself; any on = back in shared meals
   const usual = { b: d.has('b'), l: d.has('l'), d: d.has('d') };
   const inMeals = usual.b || usual.l || usual.d, was = await isInMeals(db, me.flatId, me.memberId);
-  const open = await openFrom(db, me.flatId, todayDhaka()), locked = await lastLocked(me.flatId);
+  // every open month keeps the meals it had, however old: freeze from the oldest open month, not just the edit window
+  const open = await openStart(db, me.flatId), locked = await lastLocked(me.flatId);
   const r = await unlessClosed(() => setDefaults(db, me.flatId, me.memberId, usual, open, locked, inMeals === was ? null : inMeals));
   if (r === 'closed') return { error: m.errors.closed };
   if (inMeals !== was) { refresh(); return { done: inMeals ? m.savedShared : m.savedOwn }; }

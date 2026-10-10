@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
-import { saveMeal } from './meals-db';
+import { saveMeal, setDefaults } from './meals-db';
 import { addEntry, addRoom, loadMonth, openMonth, setRoom, type NewEntry } from './money-db';
-import { addCorrection, closeMonth, closeInfo, coverGap, openFrom, parseCash } from './close';
+import { addCorrection, closeMonth, closeInfo, coverGap, openFrom, openStart, parseCash } from './close';
 import { allocate } from './money';
 
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -133,6 +133,29 @@ describe('closing a month', { timeout: 30000 }, () => {
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-02', cash(0))).result).toBe('ok');
   });
 
+  it('pays no gap while the month has a pending entry', async () => {
+    const { flatId, ids, nafis } = await flat();
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000 }))).toBe('ok');   // fund −500
+    await addEntry(db, flatId, { memberId: ids.Tahsin, role: 'member' }, e({ type: 'deposit', amount: 5000, memberId: ids.Tahsin }));
+    expect(await coverGap(db, flatId, nafis, '2026-10-02', 'gap', 50000)).toBe('bad');
+    expect(await db(`select 1 from ledger where flat_id = $1 and type = 'deposit' and status = 'ok'`, [flatId])).toEqual([]);
+  });
+
+  it('changing usual meals leaves every open month as it was, however old', async () => {
+    await migrate();
+    const f = await createFlat(db, { flatName: 'Old', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-07-01', lang: 'bn' });
+    const [tahsin] = await db<{ id: string }>(`select id from members where flat_id = $1 and name = 'Tahsin'`, [f.flatId]);
+    const nafis = { memberId: (await db<{ id: string }>(`select id from members where flat_id = $1 and name = 'Nafis'`, [f.flatId]))[0].id, role: 'manager' as const };
+    await openMonth(db, f.flatId, '2026-07-01');
+    expect((await closeMonth(db, f.flatId, nafis, '2026-07-01', '2026-08-02', cash(0))).result).toBe('ok');
+    await openMonth(db, f.flatId, '2026-08-01');   // August is still open on 10 October
+    const aug = async () => (await loadMonth(db, f.flatId, '2026-08-01', '2026-10-10')).meals.get(tahsin.id);
+    const before = await aug();
+    expect(before).toBeGreaterThan(0);
+    await setDefaults(db, f.flatId, tahsin.id, { b: false, l: false, d: true }, await openStart(db, f.flatId), '2026-10-10');
+    expect(await aug()).toBe(before);
+  });
+
   it('refuses with a pending entry, and while an older month is open', async () => {
     const { flatId, ids, nafis } = await flat();
     await addEntry(db, flatId, { memberId: ids.Tahsin, role: 'member' }, e({ type: 'deposit', amount: 5000, memberId: ids.Tahsin }));
@@ -252,6 +275,46 @@ describe('corrections', { timeout: 30000 }, () => {
     expect([z.opening, z.foodCost, z.balance]).toEqual([225000, share, 145000 - share]);
     expect(oct.invariantOk).toBe(true);
     expect(sumBalances(oct)).toBe(oct.fund);
+  });
+
+  it('someone who moved out is paid in full, even while an earlier month is still open', async () => {
+    const { flatId, ids, nafis } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 300000, paidBy: ids.Zarif }));
+    await db(`update members set left_on = '2026-09-20' where id = $1`, [ids.Zarif]);
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(0))).result).toBe('ok');
+    await openMonth(db, flatId, '2026-10-01');   // October stays open into November
+    expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 225000, memberId: ids.Zarif, date: '2026-11-03' }))).toBe('ok');
+    expect((await loadMonth(db, flatId, '2026-11-01', '2026-11-03')).result.problems).toEqual([]);
+    expect((await closeMonth(db, flatId, nafis, '2026-10-01', '2026-11-03', cash(0))).result).toBe('ok');
+    const nov = (await loadMonth(db, flatId, '2026-11-01', '2026-11-03')).result;
+    expect(nov.perMember.find(p => p.id === ids.Zarif)!.balance).toBe(0);
+    expect(nov.invariantOk).toBe(true);
+    expect(sumBalances(nov)).toBe(nov.fund);
+  });
+
+  it('a bill split equally is charged by the closed month’s frozen days', async () => {
+    const { flatId, ids, nafis } = await flat();
+    await openMonth(db, flatId, '2026-09-01');
+    await db(`update members set left_on = '2026-09-20' where id = $1`, [ids.Zarif]);   // 20 days; Nafis and Tahsin 30
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(0))).result).toBe('ok');
+    expect(await addCorrection(db, flatId, nafis, { id: randomUUID(), kind: 'bill', split: 'equal', selected: [], forMonth: '2026-09-01', amount: 8000, paidBy: ids.Tahsin, note: 'gas' }, '2026-10-02')).toBe('ok');
+    const oct = (await loadMonth(db, flatId, '2026-10-01', '2026-10-02')).result;
+    const share = (n: string) => oct.perMember.find(p => p.id === ids[n])!.billShare;
+    expect([share('Nafis'), share('Tahsin'), share('Zarif')]).toEqual([3000, 3000, 2000]);
+    expect(oct.invariantOk).toBe(true);
+    expect(sumBalances(oct)).toBe(oct.fund);
+  });
+
+  it('a correction is refused when nobody in that month has meals to split it by', async () => {
+    const { flatId, ids, nafis } = await flat();
+    await openMonth(db, flatId, '2026-09-01');
+    await db(`update members set in_meals = false, default_b = false, default_l = false, default_d = false where flat_id = $1`, [flatId]);
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(0))).result).toBe('ok');
+    expect(await addCorrection(db, flatId, nafis, { id: randomUUID(), kind: 'bazar', forMonth: '2026-09-01', amount: 5000, paidBy: ids.Tahsin, note: 'rice' }, '2026-10-02')).toBe('month');
+    expect(await addCorrection(db, flatId, nafis, { id: randomUUID(), kind: 'bill', split: 'meals', selected: [], forMonth: '2026-09-01', amount: 5000, paidBy: ids.Tahsin, note: 'gas' }, '2026-10-02')).toBe('month');
+    // days still count: an equal bill is fine
+    expect(await addCorrection(db, flatId, nafis, { id: randomUUID(), kind: 'bill', split: 'equal', selected: [], forMonth: '2026-09-01', amount: 5000, paidBy: ids.Tahsin, note: 'gas' }, '2026-10-02')).toBe('ok');
+    expect((await loadMonth(db, flatId, '2026-10-01', '2026-10-02')).result.invariantOk).toBe(true);
   });
 
   it('a retried money entry with the same one-time id is recorded once', async () => {

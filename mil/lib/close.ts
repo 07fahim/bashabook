@@ -10,10 +10,15 @@ export type CloseResult = 'ok' | 'closed' | 'early' | 'order' | 'pending' | 'pro
 
 const nextMonth = (month: string) => addDays(daysOfMonth(month).at(-1)!, 1);
 
+/** First day of the oldest open month: the day after the latest closed month; null when none has closed (all are open). */
+export async function openStart(db: Db, flatId: string) {
+  const [r] = await db<{ m: string | null }>(`select max(month)::text as m from months where flat_id = $1 and status = 'closed'`, [flatId]);
+  return r.m ? nextMonth(r.m) : null;
+}
+
 /** First day meals and money may still change: never before last month (editFrom), never inside a closed month. */
 export async function openFrom(db: Db, flatId: string, today: string) {
-  const [r] = await db<{ m: string | null }>(`select max(month)::text as m from months where flat_id = $1 and status = 'closed'`, [flatId]);
-  const after = r.m ? nextMonth(r.m) : null, from = editFrom(today);
+  const after = await openStart(db, flatId), from = editFrom(today);
   return after && after > from ? after : from;
 }
 
@@ -29,8 +34,7 @@ export async function closeInfo(db: Db, flatId: string, today: string) {
   const month = await closableMonth(db, flatId, today);
   if (!month) return null;
   const mo = await loadMonth(db, flatId, month, today);
-  return { month, fund: mo.result.fund, pending: mo.entries.filter(x => x.status === 'pending').length,
-    problems: mo.result.problems.length, earlierOpen: mo.earlierOpen };
+  return { month, fund: mo.result.fund, pending: mo.entries.filter(x => x.status === 'pending').length, problems: mo.result.problems.length };
 }
 
 /** The same id for the same month state: sha256 of (flat, month, version) shaped as a version-5 style UUID. */
@@ -48,6 +52,7 @@ export async function coverGap(db: Db, flatId: string, by: Actor, today: string,
   if (!month) return 'bad';
   const mo = await loadMonth(db, flatId, month, today), fund = mo.result.fund;
   if (fund >= 0 || !mo.info) return 'ok';
+  if (mo.entries.some(x => x.status === 'pending') || !mo.result.invariantOk) return 'bad';   // same blockers as the close card
   if (-fund !== shown) return 'changed';
   return (await addEntry(db, flatId, by, { id: gapId(flatId, month, mo.info.version), type: 'deposit', amount: -fund,
     date: daysOfMonth(month).at(-1)!, note, paidBy: null, memberId: by.memberId, split: null, selected: [] })) === 'ok' ? 'ok' : 'bad';
@@ -108,18 +113,22 @@ export async function addCorrection(db: Db, flatId: string, by: Actor, c: Correc
   const selected = c.kind === 'bill' && c.split === 'selected' ? c.selected : [];
   const people = move ? [c.from, c.to] : [c.paidBy, ...selected];
   if (people.some(p => !p)) return 'bad';   // a cost with no payer would come out of flat money
+  // the frozen weights the cost is split by must not all be 0, else nobody would pay it ('selected': the people are checked below)
+  const weigh = move || selected.length ? null : c.kind === 'bill' && c.split === 'equal' ? 'days' : 'meals';
   await openMonth(db, flatId, monthOf(today));   // the correction is booked in this month
   const r = await db(
     `with ok as (select 1 from months where flat_id = $1 and month = $2::date and status = 'closed'
          and (select count(distinct member_id) from month_balances where flat_id = $1 and month = $2::date and days_present > 0
-              and member_id in (select json_array_elements_text($3::text::json)::uuid)) = (select count(distinct x) from json_array_elements_text($3::text::json) x)),
+              and member_id in (select json_array_elements_text($3::text::json)::uuid)) = (select count(distinct x) from json_array_elements_text($3::text::json) x)
+         and ($15::text is null or (select sum(case when $15::text = 'days' then days_present else weighted_meals end) from month_balances
+              where flat_id = $1 and month = $2::date) > 0)),
        l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, moves, split, date, note, status, created_by, for_month)
          select $4::uuid, $1, date_trunc('month', $5::date)::date, $6, $7, $8::uuid, $9::uuid, $10::uuid, $11, $5::date, $12, 'ok', $13, $2::date from ok
          on conflict (id) do nothing returning *),
        s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, l.id, x::uuid from l, json_array_elements_text($14::text::json) x)
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), $13 from l returning 1`,
     [flatId, c.forMonth, JSON.stringify(people), c.id, today, move ? 'adjustment' : c.kind, c.amount,
-     move ? null : c.paidBy, move ? c.from : null, move ? c.to : null, c.kind === 'bill' ? c.split : null, note, by.memberId, JSON.stringify(selected)]);
+     move ? null : c.paidBy, move ? c.from : null, move ? c.to : null, c.kind === 'bill' ? c.split : null, note, by.memberId, JSON.stringify(selected), weigh]);
   if (r.length) return 'ok';
   // a retry finds its own row; anything else means the month or the people were wrong
   return (await db(`select 1 from ledger where flat_id = $1 and id = $2`, [flatId, c.id])).length ? 'ok' : 'month';

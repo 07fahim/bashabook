@@ -114,7 +114,8 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
   const carried = lastClosed ? await snapshot(db, flatId, lastClosed.month) : [];
   const ids = new Set(members.map(m => m.id));
   for (const c of carried) if (c.balance !== 0) ids.add(c.id);   // someone who moved out keeps a row until settled
-  for (const x of entries) if (x.forMonth) for (const id of [x.paidBy, x.memberId, x.moves, ...(x.weights ?? []).map(w => w[0])]) if (id) ids.add(id);
+  // everyone an entry names: a correction's people, or money to someone who moved out while an earlier month is still open
+  for (const x of entries) for (const id of [x.paidBy, x.memberId, x.moves, ...(x.weights ?? []).map(w => w[0])]) if (id) ids.add(id);
 
   const meals = weightedMeals(members, changes, month, flat.weights, upTo);
   const guestMeals = new Map(members.map(m => [m.id, changes
