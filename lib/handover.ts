@@ -65,13 +65,14 @@ export const handoverHistory = (db: Db, flatId: string) => db<{ status: 'accepte
    from handovers h join members f on f.id = h.from_member join members t on t.id = h.to_member
    where h.flat_id = $1 and h.status in ('accepted', 'overridden') order by h.decided_at desc`, [flatId]);
 
-/** My latest offer, if it ended without a handover and nothing newer happened: the Flat tab says why. */
+/** My latest offer, if it ended without a handover and nothing newer happened: the Flat tab says why.
+ *  `stale` = cancelled by nobody (no decided_by): the money changed, someone's move-out changed, or the offerer was replaced. */
 export async function lastOutcome(db: Db, flatId: string, me: string) {
-  const [o] = await db<{ status: string; to: string; byMoney: boolean; fromMe: boolean }>(
-    `select h.status, t.name as "to", (h.status = 'cancelled' and h.decided_by is null) as "byMoney", h.from_member = $2 as "fromMe"
+  const [o] = await db<{ status: string; to: string; stale: boolean; fromMe: boolean }>(
+    `select h.status, t.name as "to", (h.status = 'cancelled' and h.decided_by is null) as "stale", h.from_member = $2 as "fromMe"
      from handovers h join members t on t.id = h.to_member where h.flat_id = $1 order by h.created_at desc limit 1`, [flatId, me]);
   return o && o.fromMe && (o.status === 'declined' || o.status === 'cancelled')
-    ? { status: o.status as 'declined' | 'cancelled', to: o.to, byMoney: o.byMoney } : null;
+    ? { status: o.status as 'declined' | 'cancelled', to: o.to, stale: o.stale } : null;
 }
 
 export async function pendingCount(db: Db, flatId: string) {

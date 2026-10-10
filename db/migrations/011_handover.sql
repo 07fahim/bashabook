@@ -91,7 +91,9 @@ create function accept_handover(f uuid, h_id uuid, me uuid) returns text languag
 declare h handovers; v int;
 begin
   select offer_version into v from flats where id = f for update;
-  select * into h from handovers where id = h_id and flat_id = f;
+  -- row lock: decline/cancel skip the flat lock, so a decline that started first makes this wait and read 'declined';
+  -- one arriving later waits, then finds 'accepted'. Without it a decline could land between this read and the update.
+  select * into h from handovers where id = h_id and flat_id = f for update;
   if not found then return 'gone'; end if;
   if h.status = 'accepted' and h.to_member = me then return 'ok'; end if;   -- second tap: same answer
   if h.status <> 'offered' then return h.status; end if;
@@ -99,10 +101,11 @@ begin
   if v <> h.offer_version
      or not exists (select 1 from members where flat_id = f and id = h.from_member and role = 'manager')
      or not handover_eligible(f, me) then
-    update handovers set status = 'cancelled', decided_at = now() where id = h_id;
+    update handovers set status = 'cancelled', decided_at = now() where id = h_id and status = 'offered';
     return 'changed';
   end if;
-  update handovers set status = 'accepted', cash_confirmed = true, decided_by = me, decided_at = now() where id = h_id;
+  update handovers set status = 'accepted', cash_confirmed = true, decided_by = me, decided_at = now() where id = h_id and status = 'offered';
+  if not found then raise exception 'handover invariant broken'; end if;
   update members set role = case when id = me then 'manager' else 'member' end where flat_id = f and id in (h.from_member, me);
   update flats set offer_version = v + 1 where id = f;
   if (select count(*) from members where flat_id = f and role = 'manager') <> 1

@@ -129,6 +129,15 @@ describe('handover database rules', { timeout: 30000 }, () => {
     expect(await collector()).toEqual([ids.Nafis]);
   });
 
+  it('cancel then accept: accept reports cancelled, roles never change', async () => {
+    const { flatId, ids, v, collector, call } = await flat();
+    expect(await call(`select offer_handover($1, $2, $3, $4, $5) as r`, [flatId, ids.Nafis, ids.Tahsin, await v(), 1000])).toBe('ok');
+    const [{ id }] = await db<{ id: string }>(`select id from handovers where flat_id = $1`, [flatId]);
+    expect(await cancelHandover(db, flatId, ids.Nafis, id)).toBe('ok');
+    expect(await call(`select accept_handover($1, $2, $3) as r`, [flatId, id, ids.Tahsin])).toBe('cancelled');
+    expect(await collector()).toEqual([ids.Nafis]);
+  });
+
   it('held_by: filled from the collector at insert, kept after the role moves', async () => {
     const { flatId, ids, call } = await flat();
     await db(`insert into months (flat_id, month) values ($1, '2026-09-01') on conflict do nothing`, [flatId]);
@@ -255,13 +264,13 @@ describe('handover in the app', { timeout: 30000 }, () => {
     expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 0, '2026-09-10')).toBe('ok');
     expect(await setLeaving(db, flatId, ids.Nafis, ids.Tahsin, '2026-12-31', '2026-09-10')).toBe('ok');
     expect(await acceptHandover(db, flatId, ids.Tahsin, (await db<{ id: string }>(`select id from handovers where flat_id = $1`, [flatId]))[0].id)).toBe('changed');
-    expect(await lastOutcome(db, flatId, ids.Nafis)).toEqual({ status: 'cancelled', to: 'Tahsin', byMoney: true });
+    expect(await lastOutcome(db, flatId, ids.Nafis)).toEqual({ status: 'cancelled', to: 'Tahsin', stale: true });
     expect(await offerHandover(db, flatId, nafis, ids.Zarif, 0, '2026-09-10')).toBe('ok');
     const id = (await currentOffer(db, flatId))!.id;
     expect(await declineHandover(db, flatId, ids.Tahsin, id)).toBe('offered');     // not addressed to Tahsin: nothing changes
     expect(await declineHandover(db, flatId, ids.Zarif, id)).toBe('ok');
     expect(await cancelHandover(db, flatId, ids.Nafis, id)).toBe('declined');      // the first decision stands
-    expect(await lastOutcome(db, flatId, ids.Nafis)).toEqual({ status: 'declined', to: 'Zarif', byMoney: false });
+    expect(await lastOutcome(db, flatId, ids.Nafis)).toEqual({ status: 'declined', to: 'Zarif', stale: false });
     expect(await collector()).toEqual([ids.Nafis]);
   });
 
