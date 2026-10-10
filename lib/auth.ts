@@ -187,11 +187,24 @@ export async function bringBack(db: Db, flatId: string, by: string, memberId: st
   }
 }
 
-export async function resetPin(db: Db, flatId: string, memberId: string, pin: string) {
+/** Sets a one-time PIN: the next sign-in must choose a new one. Every phone is signed out and the flat's history says so.
+ *  `by`: the collector resetting a flatmate in the app, or the app team (scripts/reset-collector-pin.mts), which may reset
+ *  only the collector living here now and must give a reason. In the app only the collector, never their own PIN, and only
+ *  someone living here now. Only PIN fields change: never the role, money or meals. */
+export async function resetPin(db: Db, flatId: string, memberId: string, pin: string, by: { memberId: string } | { admin: string; reason: string }) {
   if (!UUID.test(memberId)) return false;
-  const rows = await db(
-    `update members set pin_hash = $3, must_change_pin = true, failed_pin_count = 0, locked_until = null where flat_id = $1 and id = $2 returning id`,
-    [flatId, memberId, await hashPin(pin)]);
-  if (rows.length) await db(`delete from sessions where member_id = $1`, [memberId]);
-  return rows.length > 0;
+  const team = 'admin' in by ? by : null;
+  if (team && (!team.admin.trim() || !team.reason.trim())) return false;
+  const [r] = await db<{ n: number }>(
+    `with m as (update members set pin_hash = $3, must_change_pin = true, failed_pin_count = 0, locked_until = null
+       where flat_id = $1 and id = $2 and ${STAYING} and case when $5::text is null
+         then id <> $4::uuid and exists (select 1 from members c where c.flat_id = $1 and c.id = $4::uuid and c.role = 'manager')
+         else role = 'manager' end returning id),
+     s as (delete from sessions where member_id in (select id from m)),
+     a as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
+       select $1, 'members', m.id::text, case when $5::text is null then '{"pinReset": true}'::jsonb
+         else jsonb_build_object('pinReset', true, 'admin', $5::text, 'reason', $6::text) end, $4::uuid from m)
+     select count(*)::int as n from m`,
+    [flatId, memberId, await hashPin(pin), team ? null : (by as { memberId: string }).memberId, team?.admin ?? null, team?.reason ?? null]);
+  return r.n > 0;
 }

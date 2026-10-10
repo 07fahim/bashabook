@@ -13,7 +13,7 @@ describe('flat isolation', { timeout: 30000 }, () => {
     const me = (await memberBySession(db, await createSession(db, a.memberId)))!;
     expect(me.flatId).toBe(a.flatId);
     expect((await listMembers(db, me.flatId)).map(m => m.name)).toEqual(['Nafis', 'Tahsin']);
-    expect(await resetPin(db, me.flatId, b.memberId, '0000')).toBe(false);
+    expect(await resetPin(db, me.flatId, b.memberId, '0000', { memberId: me.memberId })).toBe(false);
     expect(await addMember(db, me.flatId, 'Zarif', today)).toBe(true);
     expect((await listMembers(db, b.flatId)).map(m => m.name)).toEqual(['Zarif', 'Rafi']);
 
