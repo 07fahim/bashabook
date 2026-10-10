@@ -11,7 +11,7 @@ import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOtherMeal, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
-import { addEntry, addRoom, confirmEntry, monthOf, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
+import { addEntry, addRoom, confirmEntry, entryFrom, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -351,8 +351,8 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
   const type = pick(TYPES, str(d, 'type')), amount = toPoisha(str(d, 'amount')), date = str(d, 'date'), today = todayDhaka();
   if (!type) return { error: x.errors.bad };
   if (amount === null) return { error: x.errors.amount };
-  // this month only: last month's numbers change only through Plan 6's dated corrections
-  if (!isDate(date) || date < monthOf(today) || date > today) return { error: x.errors.date };
+  // flatmates: this month; the collector: any month still open, for something found after the 1st (closed months: corrections)
+  if (!isDate(date) || date < await entryFrom(db, me.flatId, me, today) || date > today) return { error: x.errors.date };
   const note = str(d, 'note').trim().slice(0, 100) || null, who = str(d, 'who');
   const split = type === 'bill' ? pick(SPLITS, str(d, 'split')) : null, selected = [...new Set(d.getAll('people').map(String))];
   if (type === 'bill' && !split) return { error: x.errors.bad };

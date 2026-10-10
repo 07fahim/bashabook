@@ -154,6 +154,14 @@ export type NewEntry = {
 };
 
 /** Adds an entry if the rules allow it. 'rooms' = rent by room asked before rooms and rents are set. */
+/** The first date an entry may have. Flatmates: this month. The collector: the oldest month still open, so a bazar found after
+ *  the 1st can be added with its real date before last month closes (closed months refuse writes in the database anyway). */
+export async function entryFrom(db: Db, flatId: string, by: Actor, today: string) {
+  if (by.role !== 'manager') return monthOf(today);
+  const [r] = await db<{ m: string | null }>(`select min(month)::text as m from months where flat_id = $1 and status = 'open'`, [flatId]);
+  return r.m && r.m < monthOf(today) ? r.m : monthOf(today);
+}
+
 export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): Promise<'ok' | 'bad' | 'rooms' | 'gone'> {
   const boss = by.role === 'manager', moving = e.type === 'deposit' || e.type === 'payout';
   if (!Number.isInteger(e.amount) || e.amount <= 0) return 'bad';
