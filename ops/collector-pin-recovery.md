@@ -13,7 +13,8 @@ Recovery is only as safe as the numbers it calls back. When a flat starts:
    no SMS code is needed. A saved number is not yet a verified one.
 2. Verify two of them yourself: call the collector's saved number and one other flatmate's saved number, and confirm each
    person's name and flat.
-3. Write both verified numbers, with the date, in the app-team log. These are the flat's **verified numbers**.
+3. Record each one in the app-team log as a **verified number**: flat, name, number, date, and who called. A number saved
+   in the app is only *saved*; it becomes *verified* only by this call, and only the log says which numbers are.
 
 Any flatmate can change their own saved number later, and the app doesn't record it. So during a recovery the numbers in the
 app are checked against the verified numbers in the log, never trusted on their own.
@@ -24,7 +25,7 @@ app are checked against the verified numbers in the log, never trusted on their 
 - Never reset because a chat message says "I'm the collector". A WhatsApp name or profile proves nothing.
 - Never send the one-time PIN as a chat message.
 - Never change the collector, money, meals or history to fix an access problem. The script changes only the PIN.
-- If you can't verify, don't reset. Wait, and verify another way.
+- If you can't verify both numbers, don't reset remotely: meet in person (step 4b), or wait.
 
 ## Not this procedure
 
@@ -47,24 +48,29 @@ app are checked against the verified numbers in the log, never trusted on their 
 
    Check the first line says the production database (`ep-noisy-forest-…`), and that the name asking is the collector shown.
 
-3. **Stop and verify in person instead** (step 4b) if any of these is true:
-   - a saved number for the collector or the flatmate you'd call differs from its verified number in the log;
-   - the flat has no verified numbers (onboarding skipped);
+3. **Stop remote recovery and verify in person** (step 4b) if any of these is true:
+   - the collector or the flatmate you'd call has no verified number in the log, or can't be reached on it;
+   - a saved number in the app differs from its verified number in the log;
+   - the person asking offers a new number to call;
    - the collector says they lost the phone or changed number;
    - the dry run shows the collector still signed in on a phone they say they don't have;
    - the dry run shows a handover offer the collector says they didn't make.
 
 4. **Verify identity.**
 
-   **a. Normal case: two calls, both needed,** to verified numbers only, never a number the person asking gives you.
+   **a. Normal case: two calls, both needed; one never replaces the other.** Verified numbers only, never a number the
+   person asking gives you.
    - **The collector:** call their verified number. They answer and confirm the flat, their name and the request.
    - **A flatmate you choose** (never one the person asking suggests): call their verified number. Ask them to read out
      the collector's number from their own phone's contacts; it must match the verified number. They confirm this person
      is their collector, still lives there, and asked for help.
 
-   **b. In person.** Meet the collector with at least one flatmate there, or a video call with the collector and two
-   flatmates whose faces you can match to an earlier verified contact (for example from onboarding). If none of that is
-   possible, wait.
+   **b. In person.** Meet the collector with at least one flatmate there who confirms who they are. If a meeting isn't
+   possible yet, wait: don't reset.
+
+   No video call instead, by choice for the pilot: someone holding the lost phone can join a call too, and seeing faces
+   proves little without something to match them against. If a pilot flat ever needs remote recovery, write a video
+   procedure with a reliable check first, then allow it here.
 
 5. **Reset.** Run the same command with `--apply` at the end. The reason says what you verified and how, without phone
    numbers, for example `forgot PIN; called collector and Tahsin on verified numbers`. The script prints the one-time PIN
@@ -75,7 +81,7 @@ app are checked against the verified numbers in the log, never trusted on their 
    changed and says so. A `NO` can also mean a flatmate saved an entry at that same moment: look at the flat's history
    before anything else.
 
-6. **Give the PIN by voice**: on a call to the collector's verified number, or in person / on the verified video call.
+6. **Give the PIN by voice**: on a call to the collector's verified number, or in person.
    Never in chat. They sign in, choose a new PIN at once, and check that Home and Money show what they expect.
 
 7. **A handover offer the collector didn't make**: the collector cancels it on the Flat tab as soon as they are signed in.
