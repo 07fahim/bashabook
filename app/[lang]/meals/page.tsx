@@ -209,18 +209,21 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                       return (
                         <li key={meal} className="py-3">
                           {blocked ? <p><span className="font-semibold">{m.names[meal]}</span> · {m.noCook}</p> : (
-                            <ActionForm action={otherMealAction} className="flex flex-wrap items-center justify-between gap-3">
+                            <ActionForm action={otherMealAction}>
                               <input type="hidden" name="lang" value={lang} />
                               <input type="hidden" name="target" value={pick.id} />
                               <input type="hidden" name="date" value={pickDay} />
                               <input type="hidden" name="meal" value={meal} />
                               <input type="hidden" name="own" value={own ? 0 : 1} />
                               <input type="hidden" name="seen" value={own} />
+                              {/* ActionForm wraps its children in a fieldset, so the row's layout lives in this div */}
+                              <div className="flex flex-wrap items-center justify-between gap-3">
                               <span className="font-semibold">{m.names[meal]}</span>
                               <button aria-pressed={own > 0} aria-label={`${own ? m.onOther : m.offOther}: ${pick.name}, ${m.names[meal]}`}
                                 className={`min-h-11 rounded-full px-4 font-semibold ${own ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
                                 {own ? m.onOther : m.offOther}
                               </button>
+                              </div>
                             </ActionForm>
                           )}
                         </li>
