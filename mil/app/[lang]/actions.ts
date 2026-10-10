@@ -435,7 +435,7 @@ export async function coverGapAction(_: FormState, d: FormData): Promise<FormSta
   if (!Number.isSafeInteger(shown)) return { error: x.errors.bad };
   const r = await unlessClosed(() => coverGap(db, me.flatId, me, todayDhaka(), x.coverNote, shown));
   if (r === 'changed') { refresh(); return { error: x.errors.coverChanged }; }
-  if (r !== 'ok') return { error: r === 'closed' ? x.errors.closed : x.errors.bad };
+  if (r !== 'ok') { refresh(); return { error: r === 'closed' ? x.errors.closed : x.errors.bad }; }   // a stale card redraws
   refresh();
   return { done: x.saved };
 }
