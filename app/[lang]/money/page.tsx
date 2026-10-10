@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { closeInfo } from '@/lib/close';
 import { db } from '@/lib/db';
+import { handoverHistory } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
 import { foodSplit, settleLines } from '@/lib/money';
 import { loadMonth, monthOf, toConfirm, type Entry } from '@/lib/money-db';
@@ -13,7 +14,7 @@ import { correctionAction, entryAction, putBackAction, removeAction } from '../a
 import { CloseCard } from '../close-card';
 import { DateField } from '../date-field';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { dhakaDate, fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
+import { dhakaDate, fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka, fmtTaka2 } from '../format';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { PayerSelect } from '../payer-select';
@@ -39,8 +40,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   // ?m=2026-09 picks a month; never later than this month
   const asked = typeof sp.m === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m) ? `${sp.m}-01` : thisMonth;
   const month = asked > thisMonth ? thisMonth : asked, mine = sp.mine === '1';
-  const [mo, waiting, closing] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss),
-    boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null]);   // the card only shows on the month to close
+  const [mo, waiting, closing, history] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss),
+    boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null, handoverHistory(db, me.flatId)]);   // the card only shows on the month to close
   const closed = mo.info?.status === 'closed';
   const name = (id: string | null) => mo.all.find(p => p.id === id)?.name ?? '?';
   const collector = mo.all.find(p => p.role === 'manager')!;
@@ -279,6 +280,19 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 </div>
               ))}
             </dl>
+            {/* who holds the money now and how they got it; the newest row explains today's collector, older ones fold away */}
+            {history.length > 0 && (() => {
+              const [h, ...older] = history;
+              const line = (r: typeof h) => (r.status === 'accepted' ? x.holds : x.holdsOverride)
+                .replace('{name}', r.to).replace('{from}', r.from).replace('{d}', fmtDay(dhakaDate(r.at), lang)).replace('{t}', fmtTaka2(r.amount ?? 0));
+              return (
+                <div className="mt-3 text-[15px]">
+                  <p>{line(h)}</p>
+                  {older.length > 0 && <details className="mt-1"><summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.earlierHandovers}</summary>
+                    <ul className="mt-1 space-y-1 text-muted">{older.map(r => <li key={r.at}>{line(r)}</li>)}</ul></details>}
+                </div>
+              );
+            })()}
             {mo.result.fund < 0 && <p className="mt-3 font-semibold">{x.flatOwes.replace('{name}', holder).replace('{t}', fmtTaka(mo.result.fund))}</p>}
             {!mo.result.invariantOk && <p className="mt-3 font-semibold text-chili">{x.problem}</p>}
             {closed ? (() => {

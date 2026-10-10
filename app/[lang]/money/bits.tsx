@@ -26,7 +26,8 @@ export function ConfirmList({ lang, x, a, items, collector }: {
           <li key={w.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <span>
               {/* paidTo: who actually handed it out, never relabelled to the current collector after a handover */}
-              {(w.type === 'payout' ? x.confirmGot.replace('{name}', w.paidTo ?? collector) : x.confirmDeposit.replace('{name}', w.name)).replace('{t}', fmtTaka(w.amount))}
+              {(w.type === 'payout' ? x.confirmGot.replace('{name}', w.paidTo ?? collector)
+                : w.paidTo ? x.confirmDepositTo.replace('{name}', w.name).replace('{to}', w.paidTo) : x.confirmDeposit.replace('{name}', w.name)).replace('{t}', fmtTaka(w.amount))}
               <span className="block text-[15px] text-muted">{fmtDay(w.date, lang)}{w.note ? ` · ${w.note}` : ''}</span>
             </span>
             <form action={confirmAction}>

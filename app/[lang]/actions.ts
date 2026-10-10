@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
+import { acceptHandover, cancelHandover, declineHandover, offerHandover } from '@/lib/handover';
 import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
@@ -466,4 +467,50 @@ export async function correctionAction(_: FormState, d: FormData): Promise<FormS
   if (r !== 'ok') return { error: r === 'month' ? x.errors.month : x.errors.bad };
   refresh();
   return { done: x.saved };
+}
+
+/** The collector offers the flat money; the role moves only when the recipient accepts. */
+export async function offerHandoverAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireManager(lang);
+  const to = str(d, 'to'), shown = Number(str(d, 'shown'));
+  if (!UUID.test(to) || !Number.isSafeInteger(shown)) return { error: x.errors.people };
+  const r = await offerHandover(db, me.flatId, me, to, shown, todayDhaka());
+  refresh();
+  if (r === 'ok') return { done: x.saved };
+  const errors = { changed: x.errors.handChanged, already: x.errors.handAlready, recipient: x.errors.handRecipient,
+    waiting: x.handBlockedOne, negative: x.handNegative, notCollector: x.errors.bad } as const;
+  return { error: errors[r] };
+}
+
+export async function cancelHandoverAction(d: FormData) {
+  const me = await requireManager(langOf(d)), id = str(d, 'id');
+  if (UUID.test(id)) await cancelHandover(db, me.flatId, me.memberId, id);
+  refresh();
+}
+
+/** `from` is the offerer's name, posted only for the message; never trusted for anything else. */
+export async function acceptHandoverAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireMember(lang);
+  const id = str(d, 'id'), from = str(d, 'from');
+  if (!UUID.test(id)) return { error: x.errors.bad };
+  const r = await acceptHandover(db, me.flatId, me.memberId, id);
+  refresh();
+  if (r === 'ok') return { done: x.takeDone };
+  if (r === 'changed' || r === 'cancelled') return { error: x.takeStale.replace('{name}', from) };
+  if (r === 'declined') return { error: x.takeDeclined.replace('{name}', from) };
+  return { error: x.errors.bad };
+}
+
+export async function declineHandoverAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireMember(lang);
+  const id = str(d, 'id'), from = str(d, 'from');
+  if (!UUID.test(id)) return { error: x.errors.bad };
+  const r = await declineHandover(db, me.flatId, me.memberId, id);
+  refresh();
+  if (r === 'ok' || r === 'declined') return { done: x.takeDeclined.replace('{name}', from) };
+  if (r === 'accepted') return { done: x.takeDone };
+  return { error: x.takeStale.replace('{name}', from) };
 }
