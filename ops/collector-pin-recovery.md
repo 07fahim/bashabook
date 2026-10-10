@@ -4,11 +4,25 @@ The collector forgot their PIN. There is no self-service recovery: the app team 
 one-time PIN with `scripts/reset-collector-pin.mts`. A flatmate who forgot their PIN doesn't need this: the collector resets
 it on the Flat tab.
 
+## Before the pilot: phone numbers at onboarding
+
+Recovery is only as safe as the numbers it calls back. When a flat starts:
+
+1. Ask every flatmate to save their own mobile number in the app (Home, Mobile number), and say why: it is how the app team
+   checks it's really you if the collector's PIN ever needs a reset, and how flatmates reach each other. It stays optional;
+   no SMS code is needed. A saved number is not yet a verified one.
+2. Verify two of them yourself: call the collector's saved number and one other flatmate's saved number, and confirm each
+   person's name and flat.
+3. Write both verified numbers, with the date, in the app-team log. These are the flat's **verified numbers**.
+
+Any flatmate can change their own saved number later, and the app doesn't record it. So during a recovery the numbers in the
+app are checked against the verified numbers in the log, never trusted on their own.
+
 ## Never
 
 - Never ask for, or accept, the old PIN. Nobody can read it; it is stored only as a hash.
 - Never reset because a chat message says "I'm the collector". A WhatsApp name or profile proves nothing.
-- Never send the one-time PIN as a chat message. Tell it on a call.
+- Never send the one-time PIN as a chat message.
 - Never change the collector, money, meals or history to fix an access problem. The script changes only the PIN.
 - If you can't verify, don't reset. Wait, and verify another way.
 
@@ -21,9 +35,11 @@ it on the Flat tab.
 ## Steps
 
 1. **Request.** The collector writes to the published BashaBook WhatsApp (or email) with the flat's name and join code
-   (every flatmate can see the code on the Flat tab). Note who asked, from which number, and when.
+   (every flatmate can see the code on the Flat tab). Note who asked, from which number, and when. If that number is not
+   the collector's verified number, treat it as a warning: the checks below decide, not the message.
 
-2. **Dry run.** It changes nothing and shows the flat, the collector's name, and the phone numbers the flat saved in the app:
+2. **Dry run.** It changes nothing and shows the flat, the collector's name, how many phones they are signed in on, the
+   phone numbers saved in the app, and any handover offer still waiting:
 
    ```
    node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/reset-collector-pin.mts <join code> "<collector name>" "<reason>" "<your name>"
@@ -31,29 +47,41 @@ it on the Flat tab.
 
    Check the first line says the production database (`ep-noisy-forest-…`), and that the name asking is the collector shown.
 
-3. **Verify identity: two independent checks, both needed.** Use only numbers saved in the app (shown by the dry run),
-   never a number the person asking gives you.
-   - **The collector:** call the collector's saved number. They answer, and confirm the flat, their name and the request.
-   - **A flatmate:** call one other flatmate's saved number. They confirm this person is their collector, still lives
-     there, and asked for help.
+3. **Stop and verify in person instead** (step 4b) if any of these is true:
+   - a saved number for the collector or the flatmate you'd call differs from its verified number in the log;
+   - the flat has no verified numbers (onboarding skipped);
+   - the collector says they lost the phone or changed number;
+   - the dry run shows the collector still signed in on a phone they say they don't have;
+   - the dry run shows a handover offer the collector says they didn't make.
 
-   **If the collector or every flatmate has no saved number**, or the collector lost the phone or changed number: do not
-   reset from chat. Use another verified way instead: meet the collector in person with at least one flatmate there, or a
-   video call with the collector and two flatmates you can recognise from an earlier verified contact (for example from
-   setting the flat up). If none of that is possible, wait.
+4. **Verify identity.**
 
-4. **Reset.** Run the same command with `--apply` at the end. The reason says what you verified and how, without phone
-   numbers, for example `forgot PIN; called collector and Tahsin on saved numbers`. The script prints the one-time PIN once.
+   **a. Normal case: two calls, both needed,** to verified numbers only, never a number the person asking gives you.
+   - **The collector:** call their verified number. They answer and confirm the flat, their name and the request.
+   - **A flatmate you choose** (never one the person asking suggests): call their verified number. Ask them to read out
+     the collector's number from their own phone's contacts; it must match the verified number. They confirm this person
+     is their collector, still lives there, and asked for help.
+
+   **b. In person.** Meet the collector with at least one flatmate there, or a video call with the collector and two
+   flatmates whose faces you can match to an earlier verified contact (for example from onboarding). If none of that is
+   possible, wait.
+
+5. **Reset.** Run the same command with `--apply` at the end. The reason says what you verified and how, without phone
+   numbers, for example `forgot PIN; called collector and Tahsin on verified numbers`. The script prints the one-time PIN
+   once.
 
    It signs the collector out on every phone, forces a new PIN at the next sign-in, and writes "PIN reset by the
    BashaBook team" in the flat's history (with your name and the reason stored, not shown). It checks that no month
-   changed and says so.
+   changed and says so. A `NO` can also mean a flatmate saved an entry at that same moment: look at the flat's history
+   before anything else.
 
-5. **Hand over the PIN on a call** to the collector's saved number. They sign in, choose a new PIN at once, and check that
-   Home and Money show what they expect.
+6. **Give the PIN by voice**: on a call to the collector's verified number, or in person / on the verified video call.
+   Never in chat. They sign in, choose a new PIN at once, and check that Home and Money show what they expect.
 
-6. **Record it** in the app-team log: date and time, flat, who asked, how both checks were done, who ran the script, and
-   the script's last line. If the money check said `NO`, stop and look before anything else.
+7. **A handover offer the collector didn't make**: the collector cancels it on the Flat tab as soon as they are signed in.
+
+8. **Record it** in the app-team log: date and time, flat, who asked and from which number, how identity was verified,
+   who ran the script, and the script's last line.
 
 ## Tested
 

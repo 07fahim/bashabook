@@ -68,6 +68,10 @@ describe('auth', { timeout: 30000 }, () => {
     expect(await resetPin(db, flatId, id('Tahsin'), '9999', { memberId: id('Nafis') })).toBe(true);
     const rows = await db<{ after: unknown; by: string | null }>(`select after, by_member as by from audit_log where flat_id = $1 and entity_id = $2`, [flatId, id('Tahsin')]);
     expect(rows).toEqual([{ after: { pinReset: true }, by: id('Nafis') }]);
+    expect(await resetPin(db, flatId, id('Nafis'), '9999', { memberId: id('Nafis') })).toBe(false);   // not my own
+    expect(await resetPin(db, flatId, id('Zarif'), '9999', { memberId: id('Tahsin') })).toBe(false);  // only the collector
+    await db(`update members set left_on = '2026-10-10' where id = $1`, [id('Zarif')]);
+    expect(await resetPin(db, flatId, id('Zarif'), '9999', { memberId: id('Nafis') })).toBe(false);   // moved out
   });
 
   it('the app team resets only the collector living here, with a reason; nothing but the PIN changes', async () => {

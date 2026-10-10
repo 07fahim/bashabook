@@ -31,6 +31,11 @@ const people = await db<{ name: string; phone: string | null }>(
   `select name, phone from members where flat_id = $1 and (left_on is null or left_on >= (now() at time zone 'Asia/Dhaka')::date)
    order by role = 'manager' desc, name`, [f.id]);
 console.log('saved numbers:\n' + people.map(p => `  ${p.name}: ${p.phone ?? 'none saved'}`).join('\n'));
+// a handover offer the collector didn't make survives a PIN reset: the procedure says what to do
+const [offer] = await db<{ to: string; at: string }>(
+  `select m.name as to, h.created_at::text as at from handovers h join members m on m.flat_id = h.flat_id and m.id = h.to_member
+   where h.flat_id = $1 and h.status = 'offered'`, [f.id]);
+if (offer) console.log(`WARNING: a handover to ${offer.to} is waiting (offered ${offer.at}). Ask the collector if they made it.`);
 if (!apply) { console.log('dry run: nothing changed. Add --apply to reset.'); process.exit(0); }
 
 const pin = String(randomInt(10000)).padStart(4, '0');
