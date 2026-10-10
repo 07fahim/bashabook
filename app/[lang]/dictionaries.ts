@@ -31,7 +31,7 @@ const bn = {
   stepsTitle: 'যেভাবে চলে',
   steps: [
     { title: 'সবাই মিল মার্ক করে', body: 'ফ্ল্যাটের ঠিক করা সময়ের আগে এক ট্যাপে জানিয়ে দেয় কাল কে খাবে না।', stat: 'এ পর্যন্ত 206.5 মিল' },
-    { title: 'রাঁধুনি সংখ্যা পেয়ে যান', body: 'রাঁধুনি নিজের লিংকটা খুললেই কালকের সংখ্যা দেখে।', stat: 'সকাল 7 · দুপুর 8 · রাত 9' },
+    { title: 'রাঁধুনি সংখ্যা পেয়ে যান', body: 'বাসায় যে-ই থাকুক, হোমে আজ আর কালকের প্লেট দেখে রাঁধুনিকে বলে দেয়, বা এক ট্যাপে পাঠিয়ে দেয়।', stat: 'সকাল 7 · দুপুর 8 · রাত 9' },
     { title: 'মাস শেষে হিসাব তৈরি', body: 'বাজার আর বিল মিল আর দিন অনুযায়ী ভাগ হয়। কে কত দেবে, সবাই দেখে।', stat: 'মিল রেট ৳31.72' },
   ],
   chat: { group: 'ফ্ল্যাট 4B · গ্রুপ', sender: 'বাসাবুক', time: '31 October, 9:15 pm', askBy: 'তাহসিন', ask: 'এই মাসের হিসাব কবে আসবে?', reply: 'ঠিক আছে, আজই দিচ্ছি' },
@@ -43,7 +43,7 @@ const bn = {
     lead: 'মিল থেকে মাস শেষের হিসাব পর্যন্ত, ফ্ল্যাটের প্রতিটা কাজের জন্য আলাদা জায়গা।',
     items: [
       { icon: 'meal', title: 'মিল', body: 'সবাই নিজের মিল নিজেই চালু-বন্ধ করে। মাস শেষে কে কত মিল খেল, গুনতে হয় না।', points: ['কালকের মিল ফ্ল্যাটের ঠিক করা সময় পর্যন্ত', 'অতিথি আর ছুটির দিন', 'দেরিতে বদল সবাই দেখে'] },
-      { icon: 'cook', title: 'রাঁধুনির জন্য', body: 'রাঁধুনি নিজের ফোনেই দেখে কাল কতজন খাবে। কাউকে ফোন করে জিজ্ঞেস করতে হয় না।', points: ['একটা লিংকে কালকের সংখ্যা', 'রান্না বন্ধের দিন', 'লগইন লাগে না'] },
+      { icon: 'cook', title: 'রাঁধুনির জন্য', body: 'রাঁধুনি ফোন করুক বা বাসায় এসে জিজ্ঞেস করুক, যে-ই থাকুক হোম খুলেই সংখ্যাটা বলে দিতে পারে।', points: ['আজ আর কালকের প্লেট', 'রান্না বন্ধের দিন', 'এক ট্যাপে শেয়ার'] },
       { icon: 'bazar', title: 'বাজার', body: 'যে বাজার করে সে খরচ লিখে দেয়। মিল রেট নিজে থেকেই হিসাব হয়।', points: ['কে কবে কত টাকার বাজার করল', 'মিল রেট সবসময় হালনাগাদ', 'সবাই একই খাতা দেখে'] },
       { icon: 'bill', title: 'ভাড়া আর বিল', body: 'ভাড়া, বিদ্যুৎ, গ্যাস, ইন্টারনেট, বুয়ার বেতন। যার যতটুকু ভাগ, ততটুকুই।', points: ['রুম অনুযায়ী ভাড়া', 'বিল সবার মধ্যে ভাগ', 'নিজে রান্না করলেও বিলের ভাগে'] },
       { icon: 'wallet', title: 'জমা আর ব্যালেন্স', body: 'কে কত টাকা জমা দিল আর এখন কার কত পাওনা, সবসময় দেখা যায়।', points: ['বিকাশ, নগদ বা ক্যাশ', 'সবার ব্যালেন্স এক নজরে', 'প্রতিটা এন্ট্রিতে নাম আর সময়'] },
@@ -523,7 +523,7 @@ const en: Dict = {
   stepsTitle: 'How it works',
   steps: [
     { title: 'Everyone marks meals', body: 'Before your flat’s deadline, one tap says who’s skipping tomorrow.', stat: '206.5 meals so far' },
-    { title: 'The cook gets the count', body: 'The cook opens their link and sees tomorrow’s count.', stat: 'Breakfast 7 · Lunch 8 · Dinner 9' },
+    { title: 'The cook gets the count', body: 'Whoever is home sees today’s and tomorrow’s plates on Home and tells the cook, or sends them in one tap.', stat: 'Breakfast 7 · Lunch 8 · Dinner 9' },
     { title: 'The month settles itself', body: 'Bazar and bills split by meals and days. Everyone sees what they owe.', stat: 'Meal rate ৳31.72' },
   ],
   chat: { group: 'Flat 4B · group', sender: 'BashaBook', time: '31 October, 9:15 pm', askBy: 'Tahsin', ask: 'When is this month’s bill coming?', reply: 'OK, sending it today' },
@@ -535,7 +535,7 @@ const en: Dict = {
     lead: 'From daily meals to the month-end split, every part of running a flat has its place.',
     items: [
       { icon: 'meal', title: 'Meals', body: 'Everyone switches their own meals on or off. Nobody counts meals at the end of the month.', points: ['Tomorrow’s meals until your flat’s deadline', 'Guests and days away', 'Late changes are visible to all'] },
-      { icon: 'cook', title: 'For the cook', body: 'The cook sees tomorrow’s count on their own phone. No calls to ask how many.', points: ['Tomorrow’s count in one link', 'No-cooking days', 'No login needed'] },
+      { icon: 'cook', title: 'For the cook', body: 'When the cook calls or arrives and asks how many, whoever is there reads it straight from Home.', points: ['Today’s and tomorrow’s plates', 'No-cooking days', 'Share in one tap'] },
       { icon: 'bazar', title: 'Bazar', body: 'Whoever shops adds the cost. The meal rate works itself out.', points: ['Who shopped, when and for how much', 'Meal rate always up to date', 'Everyone sees the same book'] },
       { icon: 'bill', title: 'Rent and bills', body: 'Rent, electricity, gas, internet, the helper’s pay. Everyone pays their own share.', points: ['Rent by room', 'Bills shared by everyone', 'Bill share even if you cook for yourself'] },
       { icon: 'wallet', title: 'Deposits and balance', body: 'Who paid in and who is owed what, visible at any time.', points: ['bKash, Nagad or cash', 'Everyone’s balance at a glance', 'Every entry shows who and when'] },
