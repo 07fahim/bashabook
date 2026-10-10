@@ -242,7 +242,7 @@ describe('final review fixes', { timeout: 30000 }, () => {
   const racing = (between: () => Promise<unknown>): Db => {
     let done = false;
     return (async (text: string, params?: unknown[]) => {
-      if (!done && text.startsWith('with up as')) { done = true; await between(); }
+      if (!done && text.startsWith('select locked_own_write')) { done = true; await between(); }
       return db(text, params);
     }) as Db;
   };

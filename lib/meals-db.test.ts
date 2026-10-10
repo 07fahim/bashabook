@@ -172,6 +172,15 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await count('2026-10-20', 'd')).toBe(0);   // away untouched
   });
 
+  it('away set on a no-cooking day stays off when cooking starts again', async () => {
+    const { flatId, memberId, tahsin, count } = await flat();
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-15', meal: 'd', count: 1, guests: 0 }, false);
+    await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-15', ['d'], '2026-10-09');
+    await setAway(db, flatId, tahsin, '2026-10-14', '2026-10-16');
+    await cookAgain(db, flatId, memberId, '2026-10-15', '2026-10-15', ['d'], '2026-10-10');
+    expect(await count('2026-10-15', 'd')).toBe(0);
+  });
+
   it('overlapping away ranges are listed as one; cooking for yourself and back keeps away', async () => {
     const { flatId, tahsin, count } = await flat();
     await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');

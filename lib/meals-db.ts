@@ -79,13 +79,15 @@ const decide = async (db: Db, flatId: string, date: string, meal: Meal, now: str
 
 /** My own write, relative to the saved row, so it never undoes a flatmate's change made after my screen loaded.
  *  `up` writes only when something changes and returns count, guests, late and `b`, the plates before (null for a new
- *  row) rebuilt from the written row; the history row goes in the same statement, only when `up` wrote. $6 = `n`. */
+ *  row) rebuilt from the written row; the history row goes in the same statement, only when `up` wrote. $6 = `n`.
+ *  It runs inside locked_own_write (migration 012), behind the flat row, so its no-cooking guard sees a no-cooking
+ *  save that got there first. */
 const writeMine = async (db: Db, flatId: string, memberId: string, date: string, meal: Meal, late: boolean, n: number, up: string) =>
-  (await db(
-    `with up as (${up})
+  (await db<{ ok: boolean }>(`select locked_own_write($1, $2, $3::text::date, $4, $5, $6, $7, $8) as ok`,
+    [flatId, memberId, date, meal, late, n, `${memberId}|${date}|${meal}`,
+     `with up as (${up})
      insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
-     select $1, 'meal_changes', $7, b, jsonb_build_object('count', count, 'guests', guests, 'late', late), $2 from up returning 1`,
-    [flatId, memberId, date, meal, late, n, `${memberId}|${date}|${meal}`])).length > 0;
+     select $1, 'meal_changes', $7, b, jsonb_build_object('count', count, 'guests', guests, 'late', late), $2 from up`]))[0].ok;
 
 /** A meal chip: switches only my own plate; my guests stay. */
 export async function setOwn(db: Db, flatId: string, memberId: string, date: string, meal: Meal, own: 0 | 1, now: string): Promise<Decision> {

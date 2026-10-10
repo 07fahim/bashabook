@@ -82,7 +82,8 @@ create index audit_log_flat_entity on audit_log (flat_id, entity_id text_pattern
 
 -- No cooking and cook-again save or read the old plates (`old`, the no-cooking snapshot) from the start of their statement.
 -- Locked behind the flat row first (as set_usual_meals), they run after any set_other_meal that got there first and see
--- its change, so cook-again never restores a value from before it. Each statement is today's TS statement unchanged.
+-- its change, so cook-again never restores a value from before it. Each statement is today's TS statement, except that
+-- cook-again leaves a day off for anyone who went away while no-cooking was on (is_away), instead of restoring it.
 create function set_no_cook(f uuid, d_from date, d_to date, meals text, log_val jsonb, actor uuid, last_locked date) returns void language plpgsql as $$
 begin
   perform 1 from flats where id = f for no key update;
@@ -112,9 +113,25 @@ begin
      order by e->>'m', e->>'d', e->>'x', a.id desc),
    back as (update meal_changes mc set count = s.c, guests = s.g, updated_at = now() from unblocked u, snap s
      where mc.flat_id = $1 and mc.date = u.date and mc.meal = u.meal and mc.date >= $7::date and mc.count = 0
-       and s.m = mc.member_id and s.d = mc.date and s.x = mc.meal),
+       and s.m = mc.member_id and s.d = mc.date and s.x = mc.meal and not is_away($1, mc.member_id, mc.date)),
    plain as (delete from meal_changes mc using unblocked u
      where mc.flat_id = $1 and mc.date = u.date and mc.meal = u.meal and mc.date >= $7::date and mc.count = 0
-       and not exists (select 1 from snap s where s.m = mc.member_id and s.d = mc.date and s.x = mc.meal))
+       and not exists (select 1 from snap s where s.m = mc.member_id and s.d = mc.date and s.x = mc.meal)
+       and not is_away($1, mc.member_id, mc.date))
   insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', 'flat|nocook', $5, $6);
+end $$;
+
+-- A flatmate's own-meal writes (setOwn, addGuests, removeGuests in lib/meals-db.ts) guard against a no-cooking row,
+-- but one statement reads its snapshot before any lock wait, so it can't see a no-cooking save still in flight and
+-- would switch the meal back on just as no-cooking commits. The flat row first (as set_no_cook), then the caller's
+-- statement, run here so it reads after the lock: no-cooking that got there first is seen and the write is skipped.
+-- `q` is the app's own fixed statement, never user text (every user value is bound as $1..$7 = f, m, d, ml, late, n, eid).
+-- True when it wrote a history row.
+create function locked_own_write(f uuid, m uuid, d date, ml text, late boolean, n int, eid text, q text) returns boolean language plpgsql as $$
+declare k int;
+begin
+  perform 1 from flats where id = f for no key update;
+  execute q using f, m, d, ml, late, n, eid;
+  get diagnostics k = row_count;
+  return k > 0;
 end $$;
