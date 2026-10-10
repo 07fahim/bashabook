@@ -103,7 +103,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </div>
           <div>
             <h2 className={groupLabel}>{mn.groupMoney}</h2>
-            {closing && <div className="mt-3"><CloseCard lang={lang} x={mn} c={closing} /></div>}
+            {closing && <div className="mt-3"><CloseCard lang={lang} x={mn} c={closing} collector={me.name} /></div>}
             <div className="mt-3">
               {waiting.length ? <ConfirmList lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /> : <p className="text-muted">{mn.noPending}</p>}
             </div>

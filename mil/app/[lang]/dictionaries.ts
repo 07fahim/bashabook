@@ -436,6 +436,11 @@ const bn = {
     short: '{d} কম',
     over: '{d} বেশি',
     matches: 'মিলে গেছে',
+    coverLead: 'ফ্ল্যাটের টাকা 0 এর চেয়ে {t} কম। {name} যদি ফ্ল্যাটের খরচটা নিজের টাকা থেকে দিয়ে থাকে, শুধু তাহলেই এটা চাপুন: {t} {name} এর জমা হিসেবে লেখা হবে, আর ফ্ল্যাট {name} কে {t} দেবে। টাকা হারিয়ে গেলে বা কোনো লেনদেন ভুল লেখা হলে এটা চাপবেন না, লেনদেনটা ঠিক করুন।',
+    coverBtn: 'ঘাটতি মেটান · {t}',
+    coverAsk: '{t} কি {name} এর জমা হিসেবে লিখবেন?',
+    coverYes: 'হ্যাঁ, লিখুন',
+    coverNote: 'মাস বন্ধের সময় ঘাটতি মেটানো',
     errors: {
       amount: 'টাকার অঙ্কটা ঠিক করে লিখুন, যেমন 2450।',
       date: 'তারিখ হবে এই মাসের 1 তারিখ থেকে আজকের মধ্যে।',
@@ -896,6 +901,11 @@ const en: Dict = {
     short: '{d} short',
     over: '{d} too much',
     matches: 'It matches',
+    coverLead: 'Flat money is {t} below zero. Use this only if {name} paid that much for flat costs from their own money: it records {t} as a deposit from {name}, and the flat owes {name} {t}. If cash went missing or an entry is wrong, don’t use this: fix the entry instead.',
+    coverBtn: 'Pay the gap · {t}',
+    coverAsk: 'Record {t} as a deposit from {name}?',
+    coverYes: 'Yes, record it',
+    coverNote: 'Paid the gap at month close',
     errors: {
       amount: 'Enter the amount in taka, e.g. 2450.',
       date: 'Pick a date from the 1st of this month to today.',

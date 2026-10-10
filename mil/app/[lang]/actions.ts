@@ -3,7 +3,7 @@
 import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
-import { addCorrection, CASH_KEYS, closeMonth, openFrom, parseCash, type Correction } from '@/lib/close';
+import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
@@ -422,6 +422,19 @@ export async function closeAction(_: FormState, d: FormData): Promise<FormState>
   }
   if (r.result !== 'ok' && r.result !== 'closed') return { error: r.result === 'notCollector' ? x.errors.bad : x.errors[r.result] };
   redirect(`/${lang}/money?m=${month.slice(0, 7)}`);   // the closed month, with its settlement to share; 'closed' means a second tap already got it there
+}
+
+/** The collector paid more than flat money held: records their own deposit of the gap into the month to close (amount from the server). */
+export async function coverGapAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireManager(lang);
+  const key = str(d, 'key');
+  if (!UUID.test(key)) return { error: x.errors.bad };
+  // the one deliberate exception to entryAction's this-month-only dates: only this deposit, only into the month to close
+  const r = await unlessClosed(() => coverGap(db, me.flatId, me, key, todayDhaka(), x.coverNote));
+  if (r !== 'ok') return { error: r === 'closed' ? x.errors.closed : x.errors.bad };
+  refresh();
+  return { done: x.saved };
 }
 
 const KINDS = ['bazar', 'bill', 'move'] as const;

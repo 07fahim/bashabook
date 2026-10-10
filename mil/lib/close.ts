@@ -1,7 +1,7 @@
 import type { Db } from './db';
 import { addDays, daysOfMonth, editFrom } from './meals';
 import { CASH_KEYS, parseCash, type Cash } from './money';
-import { loadMonth, monthOf, openMonth, type Actor } from './money-db';
+import { addEntry, loadMonth, monthOf, openMonth, type Actor } from './money-db';
 
 export { CASH_KEYS, parseCash, type Cash };   // pure, in money.ts so the close card can use them in the browser
 
@@ -30,6 +30,18 @@ export async function closeInfo(db: Db, flatId: string, today: string) {
   const mo = await loadMonth(db, flatId, month, today);
   return { month, fund: mo.result.fund, pending: mo.entries.filter(x => x.status === 'pending').length,
     problems: mo.result.problems.length, earlierOpen: mo.earlierOpen };
+}
+
+/** The collector spent more for the flat than flat money held (fund below 0): records their own deposit of exactly the gap,
+ *  dated the month's last day, so the closable month's fund is 0 and the flat owes them that much. The amount is always
+ *  recomputed here. `id` is the form's one-time id: a retry after it landed finds fund 0 and its own row, and records nothing. */
+export async function coverGap(db: Db, flatId: string, by: Actor, id: string, today: string, note: string): Promise<'ok' | 'bad'> {
+  const month = by.role === 'manager' ? await closableMonth(db, flatId, today) : null;
+  if (!month) return 'bad';
+  const fund = (await loadMonth(db, flatId, month, today)).result.fund;
+  if (fund >= 0) return (await db(`select 1 from ledger where flat_id = $1 and id = $2`, [flatId, id])).length ? 'ok' : 'bad';
+  return (await addEntry(db, flatId, by, { id, type: 'deposit', amount: -fund, date: daysOfMonth(month).at(-1)!, note,
+    paidBy: null, memberId: by.memberId, split: null, selected: [] })) === 'ok' ? 'ok' : 'bad';
 }
 
 /** Closes a month. The version is read first (inside loadMonth), then the engine runs, then one statement closes the

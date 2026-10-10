@@ -4,7 +4,7 @@ import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal } from './meals-db';
 import { addEntry, addRoom, loadMonth, openMonth, setRoom, type NewEntry } from './money-db';
-import { addCorrection, closeMonth, closeInfo, openFrom, parseCash } from './close';
+import { addCorrection, closeMonth, closeInfo, coverGap, openFrom, parseCash } from './close';
 import { allocate } from './money';
 
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -114,6 +114,23 @@ describe('closing a month', { timeout: 30000 }, () => {
     expect(Number(bal[0].s)).toBe(180000);   // Σ balances = frozen fund
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(180000))).result).toBe('closed');
     expect(await db(`select 1 from audit_log where flat_id = $1 and entity = 'months'`, [flatId])).toHaveLength(1);
+  });
+
+  it('covers a negative fund with the collector’s own deposit, once per id', async () => {
+    const { flatId, nafis } = await flat();
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000 }))).toBe('ok');   // flat money, none held: fund −500
+    const before = await loadMonth(db, flatId, '2026-09-01', '2026-10-02');
+    expect(before.result.fund).toBe(-50000);
+    const bal = (m: typeof before) => m.result.perMember.find(p => p.id === nafis.memberId)!.balance;
+    const id = randomUUID();
+    expect(await coverGap(db, flatId, { ...nafis, role: 'member' }, id, '2026-10-02', 'x')).toBe('bad');
+    expect(await coverGap(db, flatId, nafis, id, '2026-10-02', 'own pocket')).toBe('ok');
+    const after = await loadMonth(db, flatId, '2026-09-01', '2026-10-02');
+    expect([after.result.fund, bal(after) - bal(before)]).toEqual([0, 50000]);
+    expect(await coverGap(db, flatId, nafis, id, '2026-10-02', 'own pocket')).toBe('ok');   // a double tap
+    expect(await coverGap(db, flatId, nafis, randomUUID(), '2026-10-02', 'own pocket')).toBe('bad');   // nothing left to cover
+    expect(await db(`select 1 from ledger where flat_id = $1 and type = 'deposit'`, [flatId])).toHaveLength(1);
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-02', cash(0))).result).toBe('ok');
   });
 
   it('refuses with a pending entry, and while an older month is open', async () => {
