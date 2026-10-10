@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
-import { changedByOthers, loadMeals, setOtherMeal } from './meals-db';
+import { changedByOthers, loadMeals, setDefaults, setOtherMeal } from './meals-db';
 import { headcount } from './meals';
 import { loadMonth } from './money-db';
 
@@ -30,7 +30,9 @@ describe('changing a flatmate’s meals', { timeout: 30000 }, () => {
     expect(await row(ids.Fahim, t)).toEqual({ count: 0, guests: 0 });
     const [a] = await db<{ by: string; id: string; before: unknown; after: { count: number } }>(
       `select by_member as by, entity_id as id, before, after from audit_log where flat_id = $1 and entity = 'meal_changes' order by id desc limit 1`, [flatId]);
-    expect([a.by, a.id, a.before, a.after.count]).toEqual([ids.Tahsin, `${ids.Fahim}|${t}|l`, null, 0]);
+    // `before` is built from the guard, not a second read of the row: the own plate just before the write was exactly
+    // `seen` (1, Fahim's usual lunch default), and the write touched no guests (0), so before.count = seen + guests = 1.
+    expect([a.by, a.id, a.before, a.after.count]).toEqual([ids.Tahsin, `${ids.Fahim}|${t}|l`, { count: 1, guests: 0 }, 0]);
     expect(await set(ids.Tahsin, ids.Fahim, await day(1), 0, 1)).toBe('ok');   // tomorrow, before the cutoff
   });
 
@@ -129,7 +131,74 @@ describe('the Home notice', { timeout: 30000 }, () => {
     expect(await changedByOthers(db, flatId, ids.Fahim, await day(4))).toEqual([]);   // the day has passed
     await db(`update meal_changes set count = 1 where member_id = $1 and date = $2::date and meal = 'l'`, [ids.Fahim, t]);
     expect(await changedByOthers(db, flatId, ids.Fahim, today)).toEqual([]);          // no longer what Tahsin set
-    expect(await set(ids.Zarif, ids.Fahim, t, 0, 0)).toBe('changed');                 // refused attempt
+    // actual own is 1 (just set above); Zarif's seen (0) is stale, and asking to turn it on (1) isn't a no-op either
+    expect(await set(ids.Zarif, ids.Fahim, t, 1, 0)).toBe('changed');                 // refused attempt
     expect((await changedByOthers(db, flatId, ids.Fahim, today)).some(x => x.actor === 'Zarif')).toBe(false);
+  });
+});
+
+describe('fix round 1', { timeout: 30000 }, () => {
+  it('an error other than the re-check is passed on, not turned into closed', async () => {
+    const { flatId, ids, day, set } = await flat();
+    const t = await day(3);
+    const month = `${t.slice(0, 7)}-01`;
+    await db(`insert into months (flat_id, month, status) values ($1, $2::date, 'closed')`, [flatId, month]);
+    await expect(set(ids.Tahsin, ids.Fahim, t, 0, 1)).rejects.toThrow();
+  });
+
+  it('the re-check also catches in_meals turning off mid-write, rolling back the change and its history row', async () => {
+    const { ids, day, set, row, audits } = await flat();
+    const t = await day(3);
+    await db(`create function sneak_in_meals() returns trigger language plpgsql as $$ begin
+        update members set in_meals = false where id = new.member_id; return null; end $$`);
+    await db(`create trigger sneak_in_meals after insert on meal_changes for each row execute function sneak_in_meals()`);
+    try {
+      expect(await set(ids.Tahsin, ids.Fahim, t, 0, 1)).toBe('closed');
+      expect([await row(ids.Fahim, t), await audits(ids.Tahsin)]).toEqual([undefined, 0]);
+    } finally {
+      await db(`drop trigger sneak_in_meals on meal_changes`);
+      await db(`drop function sneak_in_meals()`);
+    }
+  });
+
+  it('forged values are closed with nothing written', async () => {
+    const { flatId, ids, day, row, audits } = await flat();
+    const t = await day(3);
+    const raw = async (f: string | null, actor: string | null, target: string | null, date: string | null, meal: string | null, own: number | null, seen: number | null) =>
+      (await db<{ r: string }>(`select set_other_meal($1, $2, $3, $4::date, $5, $6, $7) as r`, [f, actor, target, date, meal, own, seen]))[0].r;
+    expect(await raw(flatId, ids.Tahsin, ids.Fahim, t, 'x', 0, 1)).toBe('closed');     // bad meal code
+    expect(await raw(flatId, ids.Tahsin, ids.Fahim, t, 'l', 2, 2)).toBe('closed');     // own, seen both out of range
+    expect(await raw(flatId, ids.Tahsin, ids.Fahim, null, 'l', 0, 1)).toBe('closed');  // a null argument
+    expect([await row(ids.Fahim, t), await audits(ids.Tahsin)]).toEqual([undefined, 0]);
+  });
+
+  it('day 60 is still open, day 61 is already refused', async () => {
+    const { ids, day, set } = await flat();
+    expect(await set(ids.Tahsin, ids.Fahim, await day(60), 0, 1)).toBe('ok');
+    expect(await set(ids.Tahsin, ids.Fahim, await day(61), 0, 1)).toBe('closed');
+  });
+
+  it('no-op: asking for the value already seen writes nothing and raises no notice', async () => {
+    const { flatId, ids, today, day, set, row, audits } = await flat();
+    const t = await day(3);
+    expect(await set(ids.Tahsin, ids.Fahim, t, 1, 1)).toBe('closed');
+    expect([await row(ids.Fahim, t), await audits(ids.Tahsin)]).toEqual([undefined, 0]);
+    expect(await changedByOthers(db, flatId, ids.Fahim, today)).toEqual([]);
+  });
+
+  it('setDefaults and setOtherMeal are serialized (run one after another here: PGlite cannot hold two transactions open at once, so this proves the ordering is correct, not the lock itself)', async () => {
+    const { flatId, ids, day, set, row } = await flat();
+    const t = await day(3);
+    // Fahim turns lunch off in their usual meals and starts cooking for themselves
+    await setDefaults(db, flatId, ids.Fahim, { b: true, l: false, d: true }, await day(-2), await day(-1), false);
+    expect(await set(ids.Tahsin, ids.Fahim, t, 0, 1)).toBe('closed');   // the in_meals rule refuses it, whichever order the two writes land in
+
+    // the other way round: setOtherMeal writes a plain row first, then leaving shared meals must see and clear it
+    const u = await day(5);
+    await setDefaults(db, flatId, ids.Zarif, { b: true, l: false, d: true }, await day(-2), await day(-1), true);   // lunch default off, still in shared meals
+    expect(await set(ids.Tahsin, ids.Zarif, u, 1, 0)).toBe('ok');       // turns lunch on: a plain row, count 1, no guests
+    expect(await row(ids.Zarif, u)).toEqual({ count: 1, guests: 0 });
+    await setDefaults(db, flatId, ids.Zarif, { b: true, l: false, d: true }, await day(-2), await day(-1), false);   // now leaves shared meals
+    expect(await row(ids.Zarif, u)).toBeUndefined();   // cleared: set_usual_meals locked the flat row first, so it saw the row set_other_meal just wrote
   });
 });

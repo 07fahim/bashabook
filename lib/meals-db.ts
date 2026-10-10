@@ -165,21 +165,11 @@ export async function upcomingAway(db: Db, flatId: string, memberId: string, tod
  *  lock them in date order: two such writes at once could rarely deadlock. If it ever shows, a new migration makes
  *  touch_open_months lock them `order by month` (select ... for update) first. */
 export async function setDefaults(db: Db, flatId: string, memberId: string, d: Record<Meal, boolean>, freezeFrom: string | null, freezeTo: string, inMeals: boolean | null = null) {
+  // set_usual_meals (migration 012) locks the flat row first, so this always runs after any set_other_meal that got
+  // there first (and before any that starts after): leaving shared meals never misses a row set_other_meal just wrote.
   await db(
-    `with frozen as (insert into meal_changes (flat_id, member_id, date, meal, count)
-       select m.flat_id, m.id, day::date, x.meal, (case x.meal when 'b' then m.default_b when 'l' then m.default_l else m.default_d end)::int
-       from members m, generate_series(greatest(m.joined_on, $3::date)::timestamp, $4::text::timestamp, interval '1 day') day, unnest(array['b','l','d']) x(meal)
-       where m.flat_id = $1 and m.id = $2
-       on conflict (member_id, date, meal) do nothing),
-     cleared as (delete from meal_changes where flat_id = $1 and member_id = $2 and date > $4::date and count = 1 and guests = 0 and $10::boolean = false),
-     own_off as (update meal_changes set count = guests, updated_at = now()
-       where flat_id = $1 and member_id = $2 and date > $4::date and guests > 0 and count > guests and $10::boolean = false),
-     log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
-       select flat_id, 'members', $5, jsonb_build_object('b', default_b, 'l', default_l, 'd', default_d, 'inMeals', in_meals), $6, id
-       from members where flat_id = $1 and id = $2)
-     update members set default_b = $7, default_l = $8, default_d = $9, in_meals = coalesce($10::boolean, in_meals)
-     where flat_id = $1 and id = $2`,
-    [flatId, memberId, freezeFrom, freezeTo, `${memberId}|defaults`, inMeals === null ? d : { ...d, inMeals }, d.b, d.l, d.d, inMeals]);
+    `select set_usual_meals($1, $2, $3::date, $4::date, $5, $6::text::jsonb, $7, $8, $9, $10)`,
+    [flatId, memberId, freezeFrom, freezeTo, `${memberId}|defaults`, JSON.stringify(inMeals === null ? d : { ...d, inMeals }), d.b, d.l, d.d, inMeals]);
 }
 
 export const isInMeals = async (db: Db, flatId: string, memberId: string) =>
