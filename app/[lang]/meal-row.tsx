@@ -38,7 +38,7 @@ export function MealRow({ lang, m, meId, date, decision, flat, members, changes,
               <span className={`font-semibold max-[359px]:text-[15px] ${chart ? 'md:sr-only' : ''}`}>{m.names[meal]}</span>
               <span aria-hidden="true" className={`text-[15px] ${chart ? 'md:font-semibold' : ''}`}>{own ? m.on : m.off}</span>
               {guests > 0 && <span className="text-[15px]">{guests === 1 ? m.guestOne : m.guestMany.replace('{n}', String(guests))}</span>}
-              {badge && <span className="mt-1 rounded-full bg-paper px-2 text-[15px] text-ink md:basis-full md:text-center">{badge}</span>}
+              {badge && <span className="mt-1 rounded-full bg-paper px-2 text-[15px] text-ink max-[359px]:px-1 md:basis-full md:text-center">{badge}</span>}
             </ChipButton>
           </form>
         );
