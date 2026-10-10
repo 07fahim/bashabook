@@ -7,9 +7,9 @@ import { Header } from './header';
 import { focus } from './ui';
 
 const h2 = 'font-display text-3xl font-bold';
-// contact links show only once real ones are set: no placeholder that looks like a real number or address
-const WHATSAPP: string | null = null;   // e.g. 'https://wa.me/8801XXXXXXXXX'
-const EMAIL: string | null = null;      // e.g. 'mailto:name@example.com'
+// contact links: a link shows only when it is set (null hides it), so a placeholder never looks like a real address
+const WHATSAPP: string | null = 'https://wa.me/8801852153575';
+const EMAIL: string | null = 'mailto:faiyazfahim743@gmail.com';
 
 /** Line icons for the feature cards (24px grid). */
 const ICONS = {
