@@ -47,7 +47,7 @@ export function Fold({ id, title, lead, level = 2, open, row, children }: { id?:
 /** A list that can grow long. Wider screens: every row, scrolling inside the card so the card's title and the page around
  *  it stay put. Phones (a scroll box inside a scrolling page is a trap there): the first `keep` rows, then Show all.
  *  `fill`: on wider screens the box takes exactly the height left in a stretched card, so the card ends level with the
- *  column beside it; the absolute box adds no height of its own (24rem at least). `short`: about three rows, for a list
+ *  column beside it; the absolute box adds no height of its own (at least 24rem, 16rem when `short`). `short`: about three rows, for a list
  *  that sits above a page's main content. Otherwise it stops at 70% of the screen.
  *  No tabIndex: browsers make a scroll box keyboard-focusable themselves, and on phones nothing here scrolls. */
 export function LongList({ items, keep, label, more, less, fill, short }: { items: ReactNode[]; keep: number; label: string; more: string; less: string; fill?: boolean; short?: boolean }) {
