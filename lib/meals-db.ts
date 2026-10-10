@@ -222,16 +222,31 @@ export const isInMeals = async (db: Db, flatId: string, memberId: string) =>
 
 /** Weights are hundredths of a meal (breakfast 50 = 0.5) and apply to every day of the open month. Audited with the old values. */
 /** `now` = nowDhaka(). If the new lock time opens tomorrow again, tomorrow's after-the-lock tracking starts over;
- *  if tomorrow stays locked, the baseline stays (the cook may already have been told). */
-export async function updateSettings(db: Db, flatId: string, by: string, s: { cutoff: string; weights: Record<Meal, number> }, now: string) {
+ *  if tomorrow stays locked, the baseline stays (the cook may already have been told).
+ *  New meal weights re-price every open month, so while a month that has ended is still open they are refused ('earlier')
+ *  unless `fix` says they deliberately correct it; the history row then names that month. In the same statement as the change. */
+export async function updateSettings(db: Db, flatId: string, by: string, s: { cutoff: string; weights: Record<Meal, number> }, now: string, fix = false): Promise<'ok' | 'earlier'> {
   const reopened = !isLocked(addDays(now.slice(0, 10), 1), now, s.cutoff);
-  await db(
-    `with old as (select cutoff_time::text as cutoff, json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights from flats where id = $1),
-     log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member) select $1, 'flats', 'flat|settings', to_jsonb(old), $6, $7 from old)
-     update flats set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5,
+  const [r] = await db<{ blocked: boolean }>(
+    `with old as (select cutoff_time::text as cutoff, json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights,
+         (weight_b, weight_l, weight_d) is distinct from ($3::int, $4::int, $5::int) as reweigh from flats where id = $1),
+     -- the ended months still open, locked so a close running now finishes first and its month drops out (see addRoom). No lock
+     -- on old: it may run after up changed the flat row, and a locking read skips a row its own statement changed (the
+     -- history row would vanish). up locks the flat row itself; a rare deadlock with the month triggers is retried (db.ts)
+     ended as (select month from months where flat_id = $1 and status = 'open' and month < date_trunc('month', $9::text::date)
+       order by month for no key update),
+     g as (select (select reweigh from old) and not $10::boolean and exists (select 1 from ended) as blocked),
+     log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
+       select $1, 'flats', 'flat|settings', to_jsonb(old) - 'reweigh',
+         $6::text::jsonb || case when $10::boolean and old.reweigh and exists (select 1 from ended)
+           then jsonb_build_object('fixFor', (select jsonb_agg(month::text order by month) from ended)) else '{}'::jsonb end, $7
+       from old where not (select blocked from g)),
+     up as (update flats set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5,
        lock_date = case when $8::boolean then null else lock_date end, lock_count = case when $8::boolean then null else lock_count end
-     where id = $1`,
-    [flatId, s.cutoff, s.weights.b, s.weights.l, s.weights.d, s, by, reopened]);
+     where id = $1 and not (select blocked from g))
+     select (select blocked from g) as blocked`,
+    [flatId, s.cutoff, s.weights.b, s.weights.l, s.weights.d, JSON.stringify(s), by, reopened, now.slice(0, 10), fix]);
+  return r.blocked ? 'earlier' : 'ok';
 }
 
 /** No cooking: the chosen meals are off for everyone living in the flat from..to, and members can't switch them on.

@@ -11,12 +11,12 @@ import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOtherMeal, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
-import { addEntry, addRoom, confirmEntry, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
+import { addEntry, addRoom, confirmEntry, endedOpenMonth, monthOf, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
-import { fmtDay, fmtExact, fmtSigned } from './format';
+import { fmtDay, fmtExact, fmtMonth, fmtSigned } from './format';
 
 const str = (d: FormData, k: string) => String(d.get(k) ?? '');
 const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLocale(l) ? l : 'bn'; };
@@ -157,7 +157,8 @@ export async function settingsAction(_: FormState, d: FormData): Promise<FormSta
   const weightsOk = [b, l, dd].every(w => w >= 0 && w <= 1000) && b + l + dd > 0;
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff) || !weightsOk) return { error: m.errors.bad };
   const now = nowDhaka(), tomorrow = addDays(now.slice(0, 10), 1), was = await mealRules(db, me.flatId);
-  await updateSettings(db, me.flatId, me.memberId, { cutoff, weights: { b, l, d: dd } }, now);
+  const set = await updateSettings(db, me.flatId, me.memberId, { cutoff, weights: { b, l, d: dd } }, now, d.get('fix') === '1');
+  if (set === 'earlier') return await earlier(lang, me.flatId, now.slice(0, 10));
   refresh();
   // a lock time already past locks tomorrow from now: give the count to tell the cook (earlier changes were on time)
   if (isLocked(tomorrow, now, cutoff) && !isLocked(tomorrow, now, was.cutoff)) {
@@ -393,21 +394,34 @@ export async function addRoomAction(_: FormState, d: FormData): Promise<FormStat
   const name = cleanName(d.get('name')), rent = rentOf(str(d, 'rent'));
   if (!name) return { error: x.errors.roomName };
   if (rent === null) return { error: x.errors.amount };
-  await addRoom(db, me.flatId, me, name, rent);
+  if (await addRoom(db, me.flatId, me, name, rent, guardOf(d)) === 'earlier') return await earlier(lang, me.flatId, todayDhaka());
   refresh();
   return { done: x.saved };
 }
 
-export async function rentAction(d: FormData) {
-  const me = await requireManager(langOf(d)), id = str(d, 'roomId'), rent = rentOf(str(d, 'rent'));
-  if (UUID.test(id) && rent !== null) await setRent(db, me.flatId, me, id, rent);
-  refresh();
+/** A room, rent or weight change while a month that has ended is still open: forms post fix=1 once the person ticks the box. */
+const guardOf = (d: FormData) => ({ today: todayDhaka(), fix: d.get('fix') === '1' });
+/** The refusal: close that month first, or tick that this deliberately fixes it. */
+async function earlier(lang: Locale, flatId: string, today: string): Promise<FormState> {
+  const x = getDictionary(lang).money, month = await endedOpenMonth(db, flatId, today) ?? monthOf(today);
+  const fill = (t: string) => t.replaceAll('{month}', fmtMonth(month)).replaceAll('{next}', fmtMonth(monthOf(today)));
+  return { error: fill(x.earlierBlock), confirm: fill(x.earlierFix) };
 }
 
-export async function setRoomAction(d: FormData) {
-  const me = await requireManager(langOf(d)), memberId = str(d, 'memberId'), roomId = str(d, 'roomId');
-  if (UUID.test(memberId) && (roomId === '' || UUID.test(roomId))) await setRoom(db, me.flatId, me, memberId, roomId || null);
+export async function rentAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), me = await requireManager(lang), id = str(d, 'roomId'), rent = rentOf(str(d, 'rent'));
+  if (!UUID.test(id) || rent === null) return { error: getDictionary(lang).money.errors.amount };
+  if (await setRent(db, me.flatId, me, id, rent, guardOf(d)) === 'earlier') return await earlier(lang, me.flatId, todayDhaka());
   refresh();
+  return { done: getDictionary(lang).money.saved };
+}
+
+export async function setRoomAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), me = await requireManager(lang), memberId = str(d, 'memberId'), roomId = str(d, 'roomId');
+  if (!UUID.test(memberId) || (roomId !== '' && !UUID.test(roomId))) return null;
+  if (await setRoom(db, me.flatId, me, memberId, roomId || null, guardOf(d)) === 'earlier') return await earlier(lang, me.flatId, todayDhaka());
+  refresh();
+  return { done: getDictionary(lang).money.saved };
 }
 
 export async function stopRepeatAction(d: FormData) {

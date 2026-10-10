@@ -263,15 +263,17 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <ul className="mt-4 divide-y divide-line">
                   {mo.rooms.map(room => (
                     <li key={room.id} className="py-3">
-                      <form action={rentAction} className="flex flex-wrap items-end gap-3">
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="roomId" value={room.id} />
-                        <span className="min-w-24 flex-1 self-center font-semibold">{room.name}</span>
-                        <label className="text-[15px] font-semibold">{mn.rent}
-                          <input name="rent" inputMode="decimal" defaultValue={room.rentShare / 100} className={`${field} w-32`} />
-                        </label>
-                        <button className={`${secondary} w-auto`}>{mn.save}</button>
-                      </form>
+                      <ActionForm action={rentAction}>
+                        <div className="flex flex-wrap items-end gap-3">
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="roomId" value={room.id} />
+                          <span className="min-w-24 flex-1 self-center font-semibold">{room.name}</span>
+                          <label className="text-[15px] font-semibold">{mn.rent}
+                            <input name="rent" inputMode="decimal" defaultValue={room.rentShare / 100} className={`${field} w-32`} />
+                          </label>
+                          <button className={`${secondary} w-auto`}>{mn.save}</button>
+                        </div>
+                      </ActionForm>
                     </li>
                   ))}
                 </ul>
@@ -286,16 +288,18 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <ul className="mt-6 divide-y divide-line">
                   {mo.members.map(p => (
                     <li key={p.id} className="py-2">
-                      <form action={setRoomAction} className="flex flex-wrap items-center gap-3">
-                        <input type="hidden" name="lang" value={lang} />
-                        <input type="hidden" name="memberId" value={p.id} />
-                        <span className="min-w-24 flex-1">{p.name}</span>
-                        <select name="roomId" defaultValue={p.roomId ?? ''} aria-label={`${p.name}: ${mn.roomName}`} className={`${field} mt-0 w-40`}>
-                          <option value="">{mn.noRoom}</option>
-                          {mo.rooms.map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
-                        </select>
-                        <button className={`${secondary} w-auto`}>{mn.save}</button>
-                      </form>
+                      <ActionForm action={setRoomAction}>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="memberId" value={p.id} />
+                          <span className="min-w-24 flex-1">{p.name}</span>
+                          <select name="roomId" defaultValue={p.roomId ?? ''} aria-label={`${p.name}: ${mn.roomName}`} className={`${field} mt-0 w-40`}>
+                            <option value="">{mn.noRoom}</option>
+                            {mo.rooms.map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
+                          </select>
+                          <button className={`${secondary} w-auto`}>{mn.save}</button>
+                        </div>
+                      </ActionForm>
                     </li>
                   ))}
                 </ul>
