@@ -248,9 +248,10 @@ export async function removeEntry(db: Db, flatId: string, by: Actor, id: string,
  *  `guard` (every form passes it): rooms, rent shares and meal weights are read as they are today by every open month. So while
  *  a month that has ended is still open, a change that can move its bill is refused with 'earlier' unless `fix` says it
  *  deliberately corrects it; the history row then lists the months it corrected (`fixFor`). It asks even when that month has
- *  no rent bill yet: one can still be added or put back later. In the same statement the ended months are locked too (after
- *  the room or member row), so a close running now finishes first and its month drops out: nothing is refused for, or claims
- *  to fix, a month already closed. */
+ *  no rent bill yet: one can still be added or put back later. In the same statement the ended months are locked too, so a
+ *  close running now finishes first and its month drops out: nothing is refused for, or claims to fix, a month already closed.
+ *  The ask and the "did it change" check are made on the updated row, which Postgres checks again against the newest version
+ *  after waiting, so a change saved at the same moment from another tab is asked or applied, never skipped. */
 export type Guard = { today: string; fix: boolean };
 /** The oldest month that has ended (before today's month) and is still open, or null. */
 export async function endedOpenMonth(db: Db, flatId: string, today: string) {
@@ -261,10 +262,12 @@ export async function endedOpenMonth(db: Db, flatId: string, today: string) {
  *  order, the order the month triggers lock them in (migration 014). */
 const ended = (t: string) => `ended as (select month from months where flat_id = $1 and status = 'open'
     and month < date_trunc('month', ${t}::text::date) order by month for no key update)`;
-/** SQL: the history note for a ticked fix, naming every month it corrected (`m`: a set of months), or nothing. */
-/** SQL comment on the gate: `(select ask from g) is not null` is always true and names no row, so Postgres checks it once
- *  before reading any row: the ended months lock before the row, the order every writer locks in. */
+/** SQL comment on the gate: `(select ask from g) is not null` is always true and names no row, so Postgres works out `g` once,
+ *  before reading the row. For an unticked save that locks the oldest ended month before the row (as before Plan 7); the other
+ *  open months lock after it, through fixNote and the month triggers. Writers don't share one lock order (the trigger writers
+ *  lock the row first), so a rare deadlock is possible; lib/db.ts runs the statement once more. */
 const GATE = '-- (select ask from g) is not null: see GATE.';
+/** SQL: the history note for a ticked fix, naming every month it corrected (`m`: a set of months), or nothing. */
 const fixNote = (f: string, m: string) => `case when ${f}::boolean and exists (select 1 from ${m}) then jsonb_build_object('fixFor',
     (select jsonb_agg(month::text order by month) from ${m})) else '{}'::jsonb end`;
 

@@ -233,11 +233,14 @@ export async function updateSettings(db: Db, flatId: string, by: string, s: { cu
      -- the ended months still open, locked so a close running now finishes first and its month drops out (see addRoom)
      ended as (select month from months where flat_id = $1 and status = 'open' and month < date_trunc('month', $9::text::date)
        order by month for no key update),
-     g as (select not $10::boolean and exists (select 1 from ended) as ask),
+     -- the flat row first, then the months, the order the ledger writers of 011 and 012 take (otherwise a lock-time save and a
+     -- September entry at the same moment deadlock). fl runs inside g, before up, so it never meets a row up already changed.
+     fl as (select 1 from flats where id = $1 for no key update),
+     g as (select exists (select 1 from fl) and not $10::boolean and exists (select 1 from ended) as ask),
      -- The old values come from the flat row this update locks (never a separate locking read: it may run after up and skip
      -- the row up changed). Whether the weights change is checked on the updated row itself, which Postgres checks again
      -- against the newest version after waiting: this statement's snapshot may predate a change saved at the same moment.
-     -- (select ask from g) is not null is always true and names no row: checked once first, so the months lock before the flat.
+     -- (select ask from g) is not null is always true and names no row: Postgres works out g once, before reading the flat row.
      up as (update flats f set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5,
        lock_date = case when $8::boolean then null else f.lock_date end, lock_count = case when $8::boolean then null else f.lock_count end
        from (select id, cutoff_time, weight_b, weight_l, weight_d from flats where id = $1 for no key update) o

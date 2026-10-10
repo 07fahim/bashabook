@@ -101,6 +101,22 @@ try {
     check('rent: the same change made afterwards is asked', await setRent(db, f.flatId, f.nafis, f.small, 100000, fix(false)) === 'earlier');
     check('rent: saving the rent it already has is not asked and writes nothing', await setRent(db, f.flatId, f.nafis, f.small, 150000, fix(false)) === false);
   }
+  {
+    // lock order: a ledger write dated September locks the flat, then September (migration 011). A lock-time-only save at
+    // the same moment must take the flat first too, or the two deadlock.
+    const f = await flat();
+    let step!: () => void; const go = new Promise<void>(r => (step = r)); let locked!: () => void; const has = new Promise<void>(r => (locked = r));
+    const ledger = sql.begin(async tx => {
+      await tx.unsafe(`select 1 from flats where id = $1 for no key update`, [f.flatId]); locked(); await go;
+      await tx.unsafe(`select 1 from months where flat_id = $1 and month = $2::date for no key update`, [f.flatId, SEP]);
+    }).then(() => 'ok', x => String((x as { code?: string }).code ?? x));
+    await has;
+    const save = updateSettings(db, f.flatId, f.ids.Nafis, { cutoff: '21:30', weights: { b: f.w.b, l: f.w.l, d: f.w.d } }, NOW, false)
+      .then(r => r, x => String((x as { code?: string }).code ?? x));
+    await new Promise(r => setTimeout(r, 800)); step();
+    const [l, s] = await Promise.all([ledger, save]);
+    check('lock order: a lock-time-only save and a September ledger write at the same moment both finish (no deadlock)', l === 'ok' && s === 'ok', { l, s });
+  }
 } catch (x) {
   check('no errors', false, String(x));
 }
