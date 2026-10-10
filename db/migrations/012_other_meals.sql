@@ -66,3 +66,45 @@ begin
   update members set default_b = d_b, default_l = d_l, default_d = d_d, in_meals = coalesce(p_in_meals, in_meals)
   where flat_id = f and id = mem;
 end $$;
+
+-- The Home notice looks up one person's meal history rows by entity_id prefix.
+create index audit_log_flat_entity on audit_log (flat_id, entity_id text_pattern_ops);
+
+-- No cooking and cook-again save or read the old plates (`old`, the no-cooking snapshot) from the start of their statement.
+-- Locked behind the flat row first (as set_usual_meals), they run after any set_other_meal that got there first and see
+-- its change, so cook-again never restores a value from before it. Each statement is today's TS statement unchanged.
+create function set_no_cook(f uuid, d_from date, d_to date, meals text, log_val jsonb, actor uuid, last_locked date) returns void language plpgsql as $$
+begin
+  perform 1 from flats where id = f for no key update;
+  with old as (select member_id as m, date::text as d, meal as x, count as c, guests as g from meal_changes
+     where flat_id = $1 and date between $2::date and $3::date and meal = any(string_to_array($4::text, ','))),
+   up as (insert into meal_changes (flat_id, member_id, date, meal, count, late)
+     select m.flat_id, m.id, d::date, x, 0, d::date <= $7::date
+     from members m, generate_series($2::text::timestamp, $3::text::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
+     where m.flat_id = $1 and m.joined_on <= d::date and (m.left_on is null or d::date <= m.left_on)
+     on conflict (member_id, date, meal) do update set count = 0, guests = 0, late = excluded.late, updated_at = now()),
+   blocked as (insert into no_cook (flat_id, date, meal)
+     select $1, d::date, x from generate_series($2::text::timestamp, $3::text::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
+     on conflict do nothing)
+  insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
+  values ($1, 'meal_changes', 'flat|nocook', (select coalesce(jsonb_agg(old), '[]') from old), $5, $6);
+end $$;
+
+create function set_cook_again(f uuid, d_from date, d_to date, meals text, log_val jsonb, actor uuid, first_open date) returns void language plpgsql as $$
+begin
+  perform 1 from flats where id = f for no key update;
+  with unblocked as (delete from no_cook where flat_id = $1 and date between $2::date and $3::date
+     and meal = any(string_to_array($4::text, ',')) returning date, meal),
+   snap as (select distinct on (e->>'m', e->>'d', e->>'x') (e->>'m')::uuid as m, (e->>'d')::date as d, e->>'x' as x, (e->>'c')::int as c,
+       coalesce((e->>'g')::int, greatest((e->>'c')::int - 1, 0)) as g   -- snapshots from before 004 had no guests
+     from audit_log a, jsonb_array_elements(a.before) e
+     where a.flat_id = $1 and a.entity_id = 'flat|nocook' and jsonb_typeof(a.before) = 'array'
+     order by e->>'m', e->>'d', e->>'x', a.id desc),
+   back as (update meal_changes mc set count = s.c, guests = s.g, updated_at = now() from unblocked u, snap s
+     where mc.flat_id = $1 and mc.date = u.date and mc.meal = u.meal and mc.date >= $7::date and mc.count = 0
+       and s.m = mc.member_id and s.d = mc.date and s.x = mc.meal),
+   plain as (delete from meal_changes mc using unblocked u
+     where mc.flat_id = $1 and mc.date = u.date and mc.meal = u.meal and mc.date >= $7::date and mc.count = 0
+       and not exists (select 1 from snap s where s.m = mc.member_id and s.d = mc.date and s.x = mc.meal))
+  insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', 'flat|nocook', $5, $6);
+end $$;

@@ -225,6 +225,7 @@ export async function otherMealAction(_: FormState, d: FormData): Promise<FormSt
   const target = str(d, 'target'), date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own'), seen = str(d, 'seen');
   if (!UUID.test(target) || !isDate(date) || !isMeal(meal) || !/^[01]$/.test(own) || !/^[01]$/.test(seen)) return { error: m.errors.bad };
   const r = await setOtherMeal(db, me.flatId, me.memberId, target, date, meal, Number(own) as 0 | 1, Number(seen) as 0 | 1);
+  if (r !== 'ok') refresh();   // the fold redraws with the current plate, so a retry doesn't send a stale seen again
   if (r === 'changed') return { error: m.otherChanged };
   if (r === 'closed') {
     const [c] = await db<{ name: string }>(`select name from members where flat_id = $1 and role = 'manager'`, [me.flatId]);

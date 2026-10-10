@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { addDays, firstWeek, indexChanges, isPresent, mealCount, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
+import { addDays, firstWeek, indexChanges, isDate, isPresent, mealCount, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
 import { flatStart, loadHistory, loadMeals, myGuests, upcomingAway, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
@@ -46,7 +46,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const firstOpen = [1, 2].map(n => addDays(today, n)).find(d => decide(d) === 'open')!;   // tomorrow or the day after
   // "Someone else's meals": the person and day come from ?who=&day=, like the collector's fold on the Flat tab
   const others = meals.members.filter(x => x.id !== me.memberId && x.inMeals && (!x.leftOn || x.leftOn >= firstOpen));
-  const pickDay = typeof sp.day === 'string' && sp.day >= firstOpen && sp.day <= addDays(today, 60) ? sp.day : firstOpen;
+  const pickDay = isDate(sp.day) && sp.day >= firstOpen && sp.day <= addDays(today, 60) ? sp.day : firstOpen;
   const pick = others.find(x => x.id === sp.who) ?? others[0];
   const pickData = pick ? await loadMeals(db, me.flatId, pickDay, pickDay) : null;
   const guestDays = week.filter(d => d === today || decide(d) !== 'closed');   // today too: a host may add surprise guests
@@ -215,7 +215,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                               <input type="hidden" name="own" value={own ? 0 : 1} />
                               <input type="hidden" name="seen" value={own} />
                               <span className="font-semibold">{m.names[meal]}</span>
-                              <button aria-pressed={own > 0} aria-label={`${pick.name}, ${m.names[meal]}`}
+                              <button aria-pressed={own > 0} aria-label={`${own ? m.onOther : m.offOther}: ${pick.name}, ${m.names[meal]}`}
                                 className={`min-h-11 rounded-full px-4 font-semibold ${own ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
                                 {own ? m.onOther : m.offOther}
                               </button>

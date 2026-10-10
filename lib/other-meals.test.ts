@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
-import { changedByOthers, loadMeals, setDefaults, setOtherMeal } from './meals-db';
+import { addGuests, changedByOthers, cookAgain, loadMeals, noCooking, removeGuests, saveMeal, setAway, setDefaults, setOtherMeal, setOwn } from './meals-db';
+import type { Db } from './db';
 import { headcount } from './meals';
 import { loadMonth } from './money-db';
 
@@ -201,5 +202,76 @@ describe('fix round 1', { timeout: 30000 }, () => {
     expect(await row(ids.Zarif, u)).toEqual({ count: 1, guests: 0 });
     await setDefaults(db, flatId, ids.Zarif, { b: true, l: false, d: true }, await day(-2), await day(-1), false);   // now leaves shared meals
     expect(await row(ids.Zarif, u)).toBeUndefined();   // cleared: set_usual_meals locked the flat row first, so it saw the row set_other_meal just wrote
+  });
+});
+
+describe('final review fixes', { timeout: 30000 }, () => {
+  // runs `between` once, right before the first relative write: my read is done, a flatmate's change lands, then my write
+  const racing = (between: () => Promise<unknown>): Db => {
+    let done = false;
+    return (async (text: string, params?: unknown[]) => {
+      if (!done && text.startsWith('with up as')) { done = true; await between(); }
+      return db(text, params);
+    }) as Db;
+  };
+
+  it('my own writes are relative: a flatmate’s change between my read and my write stays', async () => {
+    const { flatId, ids, today, day, set, row } = await flat();
+    const t = await day(3), now = `${today}T10:00`;
+    // Tahsin switches Fahim's lunch off after Fahim's screen read it; Fahim then adds a guest
+    expect(await addGuests(racing(() => set(ids.Tahsin, ids.Fahim, t, 0, 1)), flatId, ids.Fahim, t, 'l', 1, now)).toBe('open');
+    expect(await row(ids.Fahim, t)).toEqual({ count: 1, guests: 1 });          // own stays off, one guest
+    const [h] = await db<{ before: unknown }>(`select before from audit_log where by_member = $1 and entity_id = $2 order by id desc limit 1`, [ids.Fahim, `${ids.Fahim}|${t}|l`]);
+    expect(h.before).toEqual({ count: 0, guests: 0 });                          // history says what was really there
+    expect(await removeGuests(db, flatId, ids.Fahim, t, 'l', now)).toBe('open');
+    expect(await row(ids.Fahim, t)).toEqual({ count: 0, guests: 0 });          // own still off
+    // Fahim's own tap sets only his own plate: guests the collector set meanwhile stay
+    await addGuests(db, flatId, ids.Fahim, t, 'l', 2, now);
+    const collector = () => saveMeal(db, flatId, ids.Nafis, { memberId: ids.Fahim, date: t, meal: 'l', count: 3, guests: 3 }, false);
+    expect(await setOwn(racing(collector), flatId, ids.Fahim, t, 'l', 1, now)).toBe('open');
+    expect(await row(ids.Fahim, t)).toEqual({ count: 4, guests: 3 });
+    // a repeated tap writes nothing and no second history line
+    const n = async () => (await db<{ n: number }>(`select count(*)::int as n from audit_log where entity_id = $1`, [`${ids.Fahim}|${t}|l`]))[0].n;
+    const before = await n();
+    await setOwn(db, flatId, ids.Fahim, t, 'l', 1, now);
+    expect(await n()).toBe(before);
+  });
+
+  it('a guest add over the limit is still full, even on a saved row', async () => {
+    const { flatId, ids, today, day, row } = await flat();
+    const t = await day(3), now = `${today}T10:00`;
+    expect(await addGuests(db, flatId, ids.Fahim, t, 'l', 10, now)).toBe('full');  // a new row: 10 guests at once
+    expect(await row(ids.Fahim, t)).toBeUndefined();
+    expect(await addGuests(db, flatId, ids.Fahim, t, 'l', 9, now)).toBe('open');
+    expect(await row(ids.Fahim, t)).toEqual({ count: 10, guests: 9 });
+    expect(await addGuests(db, flatId, ids.Fahim, t, 'l', 1, now)).toBe('full');
+    expect(await row(ids.Fahim, t)).toEqual({ count: 10, guests: 9 });
+  });
+
+  it('no false notice: the collector’s guest-only change to a meal with nothing saved', async () => {
+    const { flatId, ids, today, day } = await flat();
+    const t = await day(3);
+    await saveMeal(db, flatId, ids.Nafis, { memberId: ids.Fahim, date: t, meal: 'l', count: 2, guests: 1 }, false);   // own stays the usual 1
+    expect(await changedByOthers(db, flatId, ids.Fahim, today)).toEqual([]);
+  });
+
+  it('the notice goes once I set away over that day', async () => {
+    const { flatId, ids, today, day, set } = await flat();
+    const t = await day(3);
+    await set(ids.Tahsin, ids.Fahim, t, 0, 1);
+    expect(await changedByOthers(db, flatId, ids.Fahim, today)).toHaveLength(1);
+    await setAway(db, flatId, ids.Fahim, await day(2), await day(4));
+    expect(await changedByOthers(db, flatId, ids.Fahim, today)).toEqual([]);
+  });
+
+  it('cook-again restores what was there when no cooking started, a flatmate’s change included (one after the other)', async () => {
+    const { flatId, ids, today, day, set, row } = await flat();
+    const t = await day(3);
+    await set(ids.Tahsin, ids.Fahim, t, 0, 1);                                   // Fahim's lunch off, by Tahsin
+    await noCooking(db, flatId, ids.Nafis, t, t, ['l'], today);
+    expect(await row(ids.Zarif, t)).toEqual({ count: 0, guests: 0 });
+    await cookAgain(db, flatId, ids.Nafis, t, t, ['l'], t);
+    expect(await row(ids.Fahim, t)).toEqual({ count: 0, guests: 0 });          // Tahsin's Off is back, not the usual lunch
+    expect(await row(ids.Zarif, t)).toBeUndefined();                             // nothing saved before: the usual meal again
   });
 });

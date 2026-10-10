@@ -54,10 +54,10 @@ export async function saveMeal(db: Db, flatId: string, by: string, c: MealChange
     `with old as (select count, guests, late from meal_changes where member_id = $2 and date = $3 and meal = $4),
      up as (insert into meal_changes (flat_id, member_id, date, meal, count, guests, late) values ($1, $2, $3, $4, $5, $9, $6)
        on conflict (member_id, date, meal) do update set count = excluded.count, guests = excluded.guests, late = excluded.late, updated_at = now()
+         where (meal_changes.count, meal_changes.guests) <> (excluded.count, excluded.guests)
        returning count, guests, late)
      insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
-     select $1, 'meal_changes', $7, (select to_jsonb(old) from old), to_jsonb(up), $8 from up
-     where not exists (select 1 from old where old.count = up.count and old.guests = up.guests)`,   // a repeated tap writes no second history line
+     select $1, 'meal_changes', $7, (select to_jsonb(old) from old), to_jsonb(up), $8 from up`,   // a repeated tap writes nothing, no second history line
     [flatId, c.memberId, c.date, c.meal, c.count, late, cell(c), by, c.guests]);
 }
 
@@ -70,27 +70,53 @@ export async function currentPlates(db: Db, flatId: string, memberId: string, da
   return { own: mealCount(self, indexChanges(changes), date, meal) - guests, guests };
 }
 
-/** Applies the lock rule to one of my changes. `now` = nowDhaka(). No-cooking meals are closed to members. */
+const blocked = async (db: Db, flatId: string, date: string, meal: Meal) =>
+  (await db(`select 1 from no_cook where flat_id = $1 and date = $2::text::date and meal = $3`, [flatId, date, meal])).length > 0;
+
+/** The lock rule for one of my changes. `now` = nowDhaka(). No-cooking meals are closed to members. */
+const decide = async (db: Db, flatId: string, date: string, meal: Meal, now: string): Promise<Decision> =>
+  (await blocked(db, flatId, date, meal)) ? 'closed' : mealDecision(date, now, (await mealRules(db, flatId)).cutoff);
+
+/** Applies the lock rule to one of my changes and saves it. */
 export async function changeMeal(db: Db, flatId: string, c: MealChange, now: string): Promise<Decision> {
-  const r = await mealRules(db, flatId);
-  const blocked = (await db(`select 1 from no_cook where flat_id = $1 and date = $2 and meal = $3`, [flatId, c.date, c.meal])).length > 0;
-  const decision = blocked ? 'closed' : mealDecision(c.date, now, r.cutoff);
+  const decision = await decide(db, flatId, c.date, c.meal, now);
   if (decision !== 'closed') await saveMeal(db, flatId, c.memberId, { ...c, guests: c.guests ?? 0 }, decision === 'late');
   return decision;
 }
 
-/** A meal chip: switches only my own plate; my guests stay. Same read-then-write note as addGuests. */
+/** My own write, relative to the saved row, so it never undoes a flatmate's change made after my screen loaded.
+ *  `up` writes only when something changes and returns count, guests, late and `b`, the plates before (null for a new
+ *  row) rebuilt from the written row; the history row goes in the same statement, only when `up` wrote. $6 = `n`. */
+const writeMine = async (db: Db, flatId: string, memberId: string, date: string, meal: Meal, late: boolean, n: number, up: string) =>
+  (await db(
+    `with up as (${up})
+     insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
+     select $1, 'meal_changes', $7, b, jsonb_build_object('count', count, 'guests', guests, 'late', late), $2 from up returning 1`,
+    [flatId, memberId, date, meal, late, n, `${memberId}|${date}|${meal}`])).length > 0;
+
+/** A meal chip: switches only my own plate; my guests stay. */
 export async function setOwn(db: Db, flatId: string, memberId: string, date: string, meal: Meal, own: 0 | 1, now: string): Promise<Decision> {
-  const p = await currentPlates(db, flatId, memberId, date, meal);
-  if (!p) return 'closed';
-  return changeMeal(db, flatId, { memberId, date, meal, count: own + p.guests, guests: p.guests }, now);
+  if (!(await currentPlates(db, flatId, memberId, date, meal))) return 'closed';
+  const decision = await decide(db, flatId, date, meal, now);
+  if (decision !== 'closed') await writeMine(db, flatId, memberId, date, meal, decision === 'late', own,
+    `insert into meal_changes (flat_id, member_id, date, meal, count, guests, late) values ($1, $2, $3::text::date, $4, $6, 0, $5)
+     on conflict (member_id, date, meal) do update set count = $6 + meal_changes.guests, late = $5, updated_at = now()
+       where meal_changes.count - meal_changes.guests <> $6
+     returning count, guests, late, case when xmax = 0 then null else jsonb_build_object('count', guests + 1 - $6, 'guests', guests) end as b`);
+  return decision;
 }
 
-/** Removes all my guests from one meal; my own plate stays. Today and earlier are closed to members (the flat's starter can). */
+/** Removes all my guests from one meal; my own plate stays. Today and earlier are closed to members (the flat's starter can).
+ *  Only the guests my read saw (so history says how many went): if they changed meanwhile, nothing is written. */
 export async function removeGuests(db: Db, flatId: string, memberId: string, date: string, meal: Meal, now: string): Promise<Decision> {
   const p = await currentPlates(db, flatId, memberId, date, meal);
   if (!p || p.guests === 0) return 'closed';
-  return changeMeal(db, flatId, { memberId, date, meal, count: p.own, guests: 0 }, now);
+  const decision = await decide(db, flatId, date, meal, now);
+  if (decision !== 'closed') await writeMine(db, flatId, memberId, date, meal, decision === 'late', p.guests,
+    `update meal_changes set count = count - guests, guests = 0, late = $5, updated_at = now()
+     where flat_id = $1 and member_id = $2 and date = $3::text::date and meal = $4 and guests = $6
+     returning count, guests, late, jsonb_build_object('count', count + $6, 'guests', $6) as b`);
+  return decision;
 }
 
 /** My meals with guests from `from` on, for the guest list. */
@@ -102,15 +128,18 @@ export const myGuests = (db: Db, flatId: string, memberId: string, from: string)
  *  Later days follow the usual lock rule. Today (surprise guests) is allowed too, saved as late so it shows in history. */
 export async function addGuests(db: Db, flatId: string, memberId: string, date: string, meal: Meal, guests: number, now: string): Promise<Decision | 'full'> {
   if (guests < 1 || date < now.slice(0, 10)) return 'closed';
-  if ((await db(`select 1 from no_cook where flat_id = $1 and date = $2 and meal = $3`, [flatId, date, meal])).length) return 'closed';
-  const p = await currentPlates(db, flatId, memberId, date, meal);
-  if (!p) return 'closed';
-  if (p.guests + guests > 9) return 'full';   // at most 9 guests, so a meal never passes 10 plates
-  // ponytail: read then write, so two taps at the same moment can lose one guest; both still leave a history row
-  const c = { memberId, date, meal, count: p.own + p.guests + guests, guests: p.guests + guests };
-  if (date !== now.slice(0, 10)) return changeMeal(db, flatId, c, now);
-  await saveMeal(db, flatId, memberId, c, true);
-  return 'late';
+  if (!(await currentPlates(db, flatId, memberId, date, meal))) return 'closed';
+  const decision = date !== now.slice(0, 10) ? await decide(db, flatId, date, meal, now) : (await blocked(db, flatId, date, meal)) ? 'closed' : 'late';
+  if (decision === 'closed') return decision;
+  // at most 9 guests, so a meal never passes 10 plates; a new row starts from my usual meal
+  const wrote = await writeMine(db, flatId, memberId, date, meal, decision === 'late', guests,
+    `insert into meal_changes (flat_id, member_id, date, meal, count, guests, late)
+     select $1, $2, $3::text::date, $4::text, (case $4::text when 'b' then default_b when 'l' then default_l else default_d end)::int + $6, $6, $5
+     from members where id = $2 and $6 <= 9
+     on conflict (member_id, date, meal) do update set count = meal_changes.count + $6, guests = meal_changes.guests + $6, late = $5, updated_at = now()
+       where meal_changes.guests + $6 <= 9
+     returning count, guests, late, case when xmax = 0 then null else jsonb_build_object('count', count - $6, 'guests', guests - $6) end as b`);
+  return wrote ? decision : 'full';
 }
 
 /** Away: every meal off from..to, one audit row for the range. */
@@ -168,7 +197,7 @@ export async function setDefaults(db: Db, flatId: string, memberId: string, d: R
   // set_usual_meals (migration 012) locks the flat row first, so this always runs after any set_other_meal that got
   // there first (and before any that starts after): leaving shared meals never misses a row set_other_meal just wrote.
   await db(
-    `select set_usual_meals($1, $2, $3::date, $4::date, $5, $6::text::jsonb, $7, $8, $9, $10)`,
+    `select set_usual_meals($1, $2, $3::text::date, $4::text::date, $5, $6::text::jsonb, $7, $8, $9, $10)`,
     [flatId, memberId, freezeFrom, freezeTo, `${memberId}|defaults`, JSON.stringify(inMeals === null ? d : { ...d, inMeals }), d.b, d.l, d.d, inMeals]);
 }
 
@@ -192,20 +221,9 @@ export async function updateSettings(db: Db, flatId: string, by: string, s: { cu
 /** No cooking: the chosen meals are off for everyone living in the flat from..to, and members can't switch them on.
  *  One audit row keeps the old saved values. Days up to `lastLocked` are marked late. */
 export async function noCooking(db: Db, flatId: string, by: string, from: string, to: string, meals: Meal[], lastLocked: string) {
-  await db(
-    `with old as (select member_id as m, date::text as d, meal as x, count as c, guests as g from meal_changes
-       where flat_id = $1 and date between $2::date and $3::date and meal = any(string_to_array($4::text, ','))),
-     up as (insert into meal_changes (flat_id, member_id, date, meal, count, late)
-       select m.flat_id, m.id, d::date, x, 0, d::date <= $7::date
-       from members m, generate_series($2::text::timestamp, $3::text::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
-       where m.flat_id = $1 and m.joined_on <= d::date and (m.left_on is null or d::date <= m.left_on)
-       on conflict (member_id, date, meal) do update set count = 0, guests = 0, late = excluded.late, updated_at = now()),
-     blocked as (insert into no_cook (flat_id, date, meal)
-       select $1, d::date, x from generate_series($2::text::timestamp, $3::text::timestamp, interval '1 day') d, unnest(string_to_array($4::text, ',')) x
-       on conflict do nothing)
-     insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
-     values ($1, 'meal_changes', 'flat|nocook', (select coalesce(jsonb_agg(old), '[]') from old), $5, $6)`,
-    [flatId, from, to, meals.join(','), { nocook: [from, to], meals: meals.join(',') }, by, lastLocked]);
+  // set_no_cook (migration 012) locks the flat row first, so its snapshot of the old plates includes any flatmate's change that got there first
+  await db(`select set_no_cook($1, $2::text::date, $3::text::date, $4, $5::text::jsonb, $6, $7::text::date)`,
+    [flatId, from, to, meals.join(','), JSON.stringify({ nocook: [from, to], meals: meals.join(',') }), by, lastLocked]);
 }
 
 /** The cook is back early: unblock from..to. From `firstOpen` on, each blocked meal still at the no-cooking 0 goes back to
@@ -213,22 +231,9 @@ export async function noCooking(db: Db, flatId: string, by: string, from: string
  *  ponytail: takes the newest no-cooking snapshot per meal; two overlapping no-cooking ranges without a cook-again between
  *  would restore the first one's zeros. */
 export async function cookAgain(db: Db, flatId: string, by: string, from: string, to: string, meals: Meal[], firstOpen: string) {
-  await db(
-    `with unblocked as (delete from no_cook where flat_id = $1 and date between $2::date and $3::date
-       and meal = any(string_to_array($4::text, ',')) returning date, meal),
-     snap as (select distinct on (e->>'m', e->>'d', e->>'x') (e->>'m')::uuid as m, (e->>'d')::date as d, e->>'x' as x, (e->>'c')::int as c,
-         coalesce((e->>'g')::int, greatest((e->>'c')::int - 1, 0)) as g   -- snapshots from before 004 had no guests
-       from audit_log a, jsonb_array_elements(a.before) e
-       where a.flat_id = $1 and a.entity_id = 'flat|nocook' and jsonb_typeof(a.before) = 'array'
-       order by e->>'m', e->>'d', e->>'x', a.id desc),
-     back as (update meal_changes mc set count = s.c, guests = s.g, updated_at = now() from unblocked u, snap s
-       where mc.flat_id = $1 and mc.date = u.date and mc.meal = u.meal and mc.date >= $7::date and mc.count = 0
-         and s.m = mc.member_id and s.d = mc.date and s.x = mc.meal),
-     plain as (delete from meal_changes mc using unblocked u
-       where mc.flat_id = $1 and mc.date = u.date and mc.meal = u.meal and mc.date >= $7::date and mc.count = 0
-         and not exists (select 1 from snap s where s.m = mc.member_id and s.d = mc.date and s.x = mc.meal))
-     insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', 'flat|nocook', $5, $6)`,
-    [flatId, from, to, meals.join(','), { cookAgain: [from, to], meals: meals.join(',') }, by, firstOpen]);
+  // set_cook_again (migration 012): the same flat lock first, then the statement with a fresh snapshot
+  await db(`select set_cook_again($1, $2::text::date, $3::text::date, $4, $5::text::jsonb, $6, $7::text::date)`,
+    [flatId, from, to, meals.join(','), JSON.stringify({ cookAgain: [from, to], meals: meals.join(',') }), by, firstOpen]);
 }
 
 /** The flat's first move-in day: meals start there. */
@@ -298,23 +303,29 @@ export async function toldCook(db: Db, flatId: string, by: string, date: string,
 /** Another flatmate switches someone's own plate (guests stay). Every rule, the lock and the stale check are inside the
  *  database function (migration 012), so a forged request can't get round them. `seen` = the own plate the screen showed. */
 export async function setOtherMeal(db: Db, flatId: string, actor: string, target: string, date: string, meal: Meal, own: 0 | 1, seen: 0 | 1) {
-  const [r] = await db<{ r: 'ok' | 'changed' | 'closed' }>(`select set_other_meal($1, $2, $3, $4::date, $5, $6, $7) as r`, [flatId, actor, target, date, meal, own, seen]);
+  const [r] = await db<{ r: 'ok' | 'changed' | 'closed' }>(`select set_other_meal($1, $2, $3, $4::text::date, $5, $6, $7) as r`, [flatId, actor, target, date, meal, own, seen]);
   return r.r;
 }
 
 /** My upcoming meals (from `today`) whose latest change was made by someone else and still stands: the Home notice.
- *  Only own-plate changes (a guest-only fix by the collector isn't listed). */
+ *  Only own-plate changes: the own plate before (my usual meal when no row was saved) must differ from the one set, so a
+ *  guest-only fix by the collector isn't listed. A later away of mine covering the day hides it. */
 export const changedByOthers = (db: Db, flatId: string, me: string, today: string) => db<{ actor: string; date: string; meal: Meal; own: number }>(
   `select actor.name as actor, split_part(a.entity_id, '|', 2) as date, split_part(a.entity_id, '|', 3) as meal,
      (a.after->>'count')::int - coalesce((a.after->>'guests')::int, 0) as own
    from (select distinct on (split_part(entity_id, '|', 2), split_part(entity_id, '|', 3)) id, entity_id, by_member, before, after
          from audit_log
-         where flat_id = $1 and entity = 'meal_changes' and split_part(entity_id, '|', 1) = $2::text
+         where flat_id = $1 and entity = 'meal_changes' and entity_id like $2::text || '|%' and split_part(entity_id, '|', 1) = $2::text
            and entity_id ~ '^[^|]+\\|\\d{4}-\\d{2}-\\d{2}\\|[bld]$' and split_part(entity_id, '|', 2) >= $3
          order by split_part(entity_id, '|', 2), split_part(entity_id, '|', 3), id desc) a
    join members actor on actor.id = a.by_member
+   join members self on self.id = $2::uuid
    join meal_changes mc on mc.member_id = $2::uuid and mc.date = split_part(a.entity_id, '|', 2)::date and mc.meal = split_part(a.entity_id, '|', 3)
    where a.by_member <> $2::uuid
      and mc.count - mc.guests = (a.after->>'count')::int - coalesce((a.after->>'guests')::int, 0)
-     and (a.before is null or (a.before->>'count')::int - coalesce((a.before->>'guests')::int, 0) <> (a.after->>'count')::int - coalesce((a.after->>'guests')::int, 0))
+     and coalesce((a.before->>'count')::int - coalesce((a.before->>'guests')::int, 0),
+           (case split_part(a.entity_id, '|', 3) when 'b' then self.default_b when 'l' then self.default_l else self.default_d end)::int)
+         <> (a.after->>'count')::int - coalesce((a.after->>'guests')::int, 0)
+     and not exists (select 1 from audit_log w where w.flat_id = $1 and w.entity_id = $2::text || '|away' and w.id > a.id
+           and split_part(a.entity_id, '|', 2) between w.after->'away'->>0 and w.after->'away'->>1)
    order by 2, position(split_part(a.entity_id, '|', 3) in 'bld')`, [flatId, me, today]);
