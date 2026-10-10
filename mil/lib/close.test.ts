@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal } from './meals-db';
-import { addEntry, addRoom, openMonth, setRoom, type NewEntry } from './money-db';
+import { addEntry, addRoom, loadMonth, openMonth, setRoom, type NewEntry } from './money-db';
 
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
   ({ date: '2026-09-05', note: null, paidBy: null, memberId: null, split: null, selected: [], ...p });
@@ -56,5 +56,38 @@ describe('month triggers', { timeout: 30000 }, () => {
       [flatId, ids.Tahsin, ids.Zarif, nafis.memberId]);
     expect(await version('2026-10-01')).toBe(vOpen + 1);
     expect(await version('2026-09-01')).toBe(vClosed);
+  });
+});
+
+describe('loading months', { timeout: 30000 }, () => {
+  it('a closed month comes from its snapshot; the next month opens with it, applied once', async () => {
+    const { flatId, ids } = await flat();
+    await openMonth(db, flatId, '2026-09-01');
+    await db(`update months set status = 'closed', closing_fund = 5000, meal_rate = 4000 where flat_id = $1 and month = '2026-09-01'`, [flatId]);
+    for (const [name, bal] of [['Nafis', 7000], ['Tahsin', -3000], ['Zarif', 1000]] as const) {
+      await db(`insert into month_balances (flat_id, month, member_id, weighted_meals, days_present, opening, paid_in, food_cost, bill_share, payouts, adjustments, balance)
+        values ($1, '2026-09-01', $2, 100, 30, 0, 0, 0, 0, 0, 0, $3)`, [flatId, ids[name], bal]);
+    }
+    const sep = await loadMonth(db, flatId, '2026-09-01', '2026-10-05');
+    expect(sep.info?.status).toBe('closed');
+    expect(sep.result.fund).toBe(5000);
+    expect(sep.result.perMember.find(p => p.id === ids.Tahsin)!.balance).toBe(-3000);
+    const oct = await loadMonth(db, flatId, '2026-10-01', '2026-10-05');
+    expect(oct.carriedFrom).toBe('2026-09-01');
+    expect(oct.earlierOpen).toBeNull();
+    expect(oct.result.perMember.find(p => p.id === ids.Tahsin)!.opening).toBe(-3000);
+    expect(oct.result.fund).toBe(5000);
+    expect(oct.result.invariantOk).toBe(true);
+    // loading again changes nothing: the opening is read, never copied
+    expect((await loadMonth(db, flatId, '2026-10-01', '2026-10-05')).result.fund).toBe(5000);
+  });
+
+  it('while an earlier month is open the new month has no opening', async () => {
+    const { flatId } = await flat();
+    await openMonth(db, flatId, '2026-09-01');
+    const oct = await loadMonth(db, flatId, '2026-10-01', '2026-10-05');
+    expect(oct.earlierOpen).toBe('2026-09-01');
+    expect(oct.carriedFrom).toBeNull();
+    expect(oct.result.fund).toBe(0);
   });
 });

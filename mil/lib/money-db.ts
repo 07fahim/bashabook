@@ -1,9 +1,15 @@
 import type { Db } from './db';
 import { daysOfMonth, daysPresent, isPresent, weightedMeals } from './meals';
 import { loadMeals } from './meals-db';
-import { monthBalances, type LedgerRow, type Split } from './money';
+import { monthBalances, type LedgerRow, type MonthResult, type Split } from './money';
 
-export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string };
+export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string; forMonth: string | null; moves: string | null };
+export type CashRecord = { cash: number; bkash: number; nagad: number; bank: number; expected: number; actual: number; difference: number; by: string };
+type Snap = { id: string; meals: number; days: number; opening: number; paidIn: number; foodCost: number; billShare: number; payouts: number; adjustments: number; balance: number };
+const snapshot = (db: Db, flatId: string, month: string) => db<Snap>(
+  `select member_id as id, weighted_meals as meals, days_present as days, opening::int, paid_in::int as "paidIn", food_cost::int as "foodCost",
+     bill_share::int as "billShare", payouts::int, adjustments::int, balance::int
+   from month_balances where flat_id = $1 and month = $2`, [flatId, month]);
 export type Room = { id: string; name: string; rentShare: number };
 export type Removed = { id: string; at: string; by: string; byId: string; type: LedgerRow['type']; amount: number; date: string; note: string | null };
 
@@ -46,9 +52,21 @@ async function insertEntry(db: Db, flatId: string, by: string,
      repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null]);
 }
 
-/** Everything the money screens need for one month. Numbers so far: meals up to today, no carry-over until Plan 6 closes months. */
+/** Everything the money screens need for one month. The version is read first: closeMonth freezes only results computed
+ *  from inputs no newer than it. A closed month comes from its snapshot, never recalculated. An open month starts from the
+ *  latest closed month's snapshot, unless an earlier month is still open (then nothing is carried: the banner says so). */
 export async function loadMonth(db: Db, flatId: string, month: string, today: string) {
   if (month === monthOf(today)) await openMonth(db, flatId, month);
+  const [info = null] = await db<{ status: 'open' | 'closed'; version: number; closedAt: string | null; cash: CashRecord | null; fund: number | null; rate: number | null }>(
+    `select status, version, closed_at::text as "closedAt", cash, closing_fund::int as fund, meal_rate::int as rate
+     from months where flat_id = $1 and month = $2`, [flatId, month]);
+  const earlier = await db<{ month: string; status: string; fund: number | null }>(
+    `select month::text as month, status, closing_fund::int as fund from months where flat_id = $1 and month < $2 order by month`, [flatId, month]);
+  const earlierOpen = earlier.find(x => x.status === 'open')?.month ?? null;
+  const lastClosed = earlierOpen ? null : earlier.filter(x => x.status === 'closed').at(-1) ?? null;
+  const closedMonths = [...earlier, ...(info?.status === 'closed' ? [{ month, status: 'closed', fund: null }] : [])]
+    .filter(x => x.status === 'closed').map(x => x.month).reverse();
+
   const end = daysOfMonth(month).at(-1)!, upTo = today < end ? today : end;
   const { flat, members: everyone, changes } = await loadMeals(db, flatId, month, end);   // meals must come through loadMeals (no cooking)
   const roomOf = new Map((await db<{ id: string; roomId: string | null }>(
@@ -56,11 +74,12 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
   const all = everyone.map(m => ({ ...m, roomId: roomOf.get(m.id) ?? null }));
   const members = all.filter(m => m.joinedOn <= end && (m.leftOn === null || m.leftOn >= month));
   const rooms = await db<Room>(`select id, name, rent_share_poisha::int as "rentShare" from rooms where flat_id = $1 order by name`, [flatId]);
-  const entries = await db<Entry>(
-    `select l.id, l.type, l.amount_poisha::int as amount, l.paid_by_member_id as "paidBy", l.member_id as "memberId", l.split, l.status,
-       l.date::text as date, l.note, l.created_by as "createdBy",
+  const select = `select l.id, l.type, l.amount_poisha::int as amount, l.paid_by_member_id as "paidBy", l.member_id as "memberId", l.split, l.status,
+       l.date::text as date, l.note, l.created_by as "createdBy", l.for_month::text as "forMonth", l.moves,
        (select coalesce(json_agg(s.member_id), '[]'::json) from bill_split_members s where s.ledger_id = l.id) as selected
-     from ledger l where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
+     from ledger l`;
+  const entries = await db<Entry>(`${select} where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
+  const corrections = await db<Entry>(`${select} where l.flat_id = $1 and l.for_month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
   // per entry only its latest removal (audit ids follow commit order per entry: see putBack), and only while it is still gone
   const removed = await db<Removed>(
     `select id, at, by, "byId", type, amount, date, note from (select distinct on (a.entity_id) a.entity_id as id, a.at, m.name as by, a.by_member as "byId",
@@ -69,16 +88,43 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
        where a.flat_id = $1 and a.entity = 'ledger' and a.after->>'removed' = 'true' and a.before->>'month' = $2
          and not exists (select 1 from ledger l where l.flat_id = a.flat_id and l.id = a.entity_id::uuid)
        order by a.entity_id, a.id desc) r order by seq desc`, [flatId, month]);
+  const first = monthOf(all.reduce((a, m) => (m.joinedOn < a ? m.joinedOn : a), month));
+  const days = daysPresent(members, month);
+
+  if (info?.status === 'closed') {
+    const snap = await snapshot(db, flatId, month);
+    const result: MonthResult = {
+      mealRate: info.rate ?? 0, fund: info.fund ?? 0, invariantOk: true, problems: [], lines: [],
+      perMember: snap.map(s => ({ id: s.id, opening: s.opening, paidIn: s.paidIn, foodCost: s.foodCost, billShare: s.billShare, payouts: s.payouts, adjustments: s.adjustments, balance: s.balance })),
+    };
+    return { flat, all, members, rooms, entries, removed, meals: new Map(snap.map(s => [s.id, s.meals])), guestMeals: new Map<string, number>(),
+      result, first, info, earlierOpen, carriedFrom: null, closedMonths, days: new Map(snap.map(s => [s.id, s.days])), corrections };
+  }
+
+  // corrections for a closed month carry that month's frozen split
+  const frozen = new Map<string, Snap[]>();
+  for (const fm of new Set(entries.map(x => x.forMonth).filter((x): x is string => !!x))) frozen.set(fm, await snapshot(db, flatId, fm));
+  for (const x of entries) {
+    if (!x.forMonth || (x.type !== 'bazar' && x.type !== 'bill')) continue;
+    const s = frozen.get(x.forMonth) ?? [], byMeals = x.type === 'bazar' || x.split === 'meals';
+    x.weights = x.split === 'selected' ? x.selected.map((id): [string, number] => [id, 1])
+      : s.map((p): [string, number] => [p.id, byMeals ? p.meals : p.days]).filter(w => w[1] > 0);
+  }
+  const carried = lastClosed ? await snapshot(db, flatId, lastClosed.month) : [];
+  const ids = new Set(members.map(m => m.id));
+  for (const c of carried) if (c.balance !== 0) ids.add(c.id);   // someone who moved out keeps a row until settled
+  for (const x of entries) if (x.forMonth) for (const id of [x.paidBy, x.memberId, x.moves, ...(x.weights ?? []).map(w => w[0])]) if (id) ids.add(id);
+
   const meals = weightedMeals(members, changes, month, flat.weights, upTo);
   const guestMeals = new Map(members.map(m => [m.id, changes
     .filter(c => c.memberId === m.id && c.date <= upTo && isPresent(m, c.date))
     .reduce((s, c) => s + c.guests * flat.weights[c.meal], 0)]));
   const result = monthBalances({
-    memberIds: members.map(m => m.id), opening: new Map(), openingFund: 0,
-    weightedMeals: meals, daysPresent: daysPresent(members, month), roomOf, rooms, ledger: entries,
+    memberIds: [...ids], opening: new Map(carried.map(c => [c.id, c.balance])), openingFund: lastClosed?.fund ?? 0,
+    weightedMeals: meals, daysPresent: days, roomOf, rooms, ledger: entries,
   });
-  const first = monthOf(all.reduce((a, m) => (m.joinedOn < a ? m.joinedOn : a), month));
-  return { flat, all, members, rooms, entries, removed, meals, guestMeals, result, first };
+  return { flat, all, members, rooms, entries, removed, meals, guestMeals, result, first, info, earlierOpen,
+    carriedFrom: lastClosed?.month ?? null, closedMonths, days, corrections };
 }
 
 /** Rows waiting for this person's tap: deposits for the collector, money handed to me for me. `name` = who the row is for. */
