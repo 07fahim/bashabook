@@ -247,16 +247,17 @@ export async function removeEntry(db: Db, flatId: string, by: Actor, id: string,
  *  `guard` (every form passes it): rooms, rent shares and meal weights are read as they are today by every open month. So while
  *  a month that has ended is still open, a change that can move its bill is refused with 'earlier' unless `fix` says it
  *  deliberately corrects it; the history row then lists the months it corrected (`fixFor`). It asks even when that month has
- *  no rent bill yet: one can still be added or put back later. The ended months are locked first, in the same statement, so a
- *  close running now finishes first and its month drops out: nothing is refused for, or claims to fix, a month already closed. */
+ *  no rent bill yet: one can still be added or put back later. In the same statement the ended months are locked too (after
+ *  the room or member row), so a close running now finishes first and its month drops out: nothing is refused for, or claims
+ *  to fix, a month already closed. */
 export type Guard = { today: string; fix: boolean };
 /** The oldest month that has ended (before today's month) and is still open, or null. */
 export async function endedOpenMonth(db: Db, flatId: string, today: string) {
   const [r] = await db<{ m: string | null }>(`select min(month)::text as m from months where flat_id = $1 and status = 'open' and month < $2::date`, [flatId, monthOf(today)]);
   return r.m;
 }
-/** SQL CTE `ended`: months that have ended (before the month of `t`) and are still open, locked in month order (the order the
- *  month triggers lock them) with no key update, as the writers of 011 and 012 lock the flat row. */
+/** SQL CTE `ended`: months that have ended (before the month of `t`) and are still open, locked with no key update in month
+ *  order. The month triggers (009) lock in no fixed order, a known gap (see setDefaults); db.ts retries a deadlock once. */
 const ended = (t: string) => `ended as (select month from months where flat_id = $1 and status = 'open'
     and month < date_trunc('month', ${t}::text::date) order by month for no key update)`;
 /** SQL: the history note for a ticked fix, naming every month it corrected (`m`: a set of months), or nothing. */

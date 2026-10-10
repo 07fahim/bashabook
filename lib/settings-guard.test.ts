@@ -52,6 +52,9 @@ describe('settings changes while an ended month is still open', { timeout: 30000
     expect((await tahsin()).foodCost).toBe(257143);
     expect(await updateSettings(db, flatId, ids.Nafis, { cutoff: '22:00', weights: W1 }, OCT2_NOW, true)).toBe('ok');
     expect((await tahsin()).foodCost).toBe(225000);
+    const [h] = await db<{ before: { weights: unknown }; after: { weights: unknown; fixFor?: string[] } }>(
+      `select before, after from audit_log where flat_id = $1 and entity_id = 'flat|settings' order by id desc limit 1`, [flatId]);
+    expect([h?.before.weights, h?.after.weights, h?.after.fixFor]).toEqual([W, W1, [SEP]]);   // the history row is written, with what changed
   });
 
   it('rent shares and a new paying room are asked about too; nothing changes without the tick', async () => {
@@ -95,6 +98,11 @@ describe('settings changes while an ended month is still open', { timeout: 30000
     expect(await setRoom(db, f.flatId, nafis, ids.Tahsin, big, fix(true))).toBe(true);
     const [a] = await db<{ after: { fixFor?: string[] } }>(`select after from audit_log where flat_id = $1 and entity = 'rooms' and entity_id = $2 order by id desc limit 1`, [f.flatId, ids.Tahsin]);
     expect(a.after.fixFor).toEqual(['2026-08-01', SEP]);
+    // someone who moved in on 10 September: only September is his to fix
+    const [rafi] = await db<{ id: string }>(`insert into members (flat_id, name, joined_on) values ($1, 'Rafi', '2026-09-10') returning id`, [f.flatId]);
+    expect(await setRoom(db, f.flatId, nafis, rafi.id, big, fix(true))).toBe(true);
+    const [r] = await db<{ after: { fixFor?: string[] } }>(`select after from audit_log where flat_id = $1 and entity = 'rooms' and entity_id = $2 order by id desc limit 1`, [f.flatId, rafi.id]);
+    expect(r.after.fixFor).toEqual([SEP]);
   });
 
   it('after September closes the same changes go ahead without asking, and September stays as it closed', async () => {
