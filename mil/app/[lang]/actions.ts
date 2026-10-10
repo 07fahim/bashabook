@@ -428,10 +428,8 @@ export async function closeAction(_: FormState, d: FormData): Promise<FormState>
 export async function coverGapAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
   const me = await requireManager(lang);
-  const key = str(d, 'key');
-  if (!UUID.test(key)) return { error: x.errors.bad };
   // the one deliberate exception to entryAction's this-month-only dates: only this deposit, only into the month to close
-  const r = await unlessClosed(() => coverGap(db, me.flatId, me, key, todayDhaka(), x.coverNote));
+  const r = await unlessClosed(() => coverGap(db, me.flatId, me, todayDhaka(), x.coverNote));
   if (r !== 'ok') return { error: r === 'closed' ? x.errors.closed : x.errors.bad };
   refresh();
   return { done: x.saved };

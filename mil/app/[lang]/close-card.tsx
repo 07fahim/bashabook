@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { ActionForm } from './action-form';
 import { closeAction, coverGapAction } from './actions';
@@ -37,7 +36,6 @@ export function CloseCard({ lang, x, c, collector }: { lang: Locale; x: Dict['mo
             <summary className={`${secondary} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}>{x.coverBtn.replace('{t}', gap)}</summary>
             <ActionForm action={coverGapAction} className="mt-4">
               <input type="hidden" name="lang" value={lang} />
-              <input type="hidden" name="key" value={randomUUID()} />
               <p>{x.coverAsk.replace('{t}', gap).replace('{name}', collector)}</p>
               <button className={primary}>{x.coverYes}</button>
             </ActionForm>

@@ -116,19 +116,18 @@ describe('closing a month', { timeout: 30000 }, () => {
     expect(await db(`select 1 from audit_log where flat_id = $1 and entity = 'months'`, [flatId])).toHaveLength(1);
   });
 
-  it('covers a negative fund with the collector’s own deposit, once per id', async () => {
+  it('covers a negative fund with the collector’s own deposit, once for the same month state', async () => {
     const { flatId, nafis } = await flat();
     expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000 }))).toBe('ok');   // flat money, none held: fund −500
     const before = await loadMonth(db, flatId, '2026-09-01', '2026-10-02');
     expect(before.result.fund).toBe(-50000);
     const bal = (m: typeof before) => m.result.perMember.find(p => p.id === nafis.memberId)!.balance;
-    const id = randomUUID();
-    expect(await coverGap(db, flatId, { ...nafis, role: 'member' }, id, '2026-10-02', 'x')).toBe('bad');
-    expect(await coverGap(db, flatId, nafis, id, '2026-10-02', 'own pocket')).toBe('ok');
+    expect(await coverGap(db, flatId, { ...nafis, role: 'member' }, '2026-10-02', 'x')).toBe('bad');
+    // two tabs at once, no change in between: one deposit
+    expect(await Promise.all([coverGap(db, flatId, nafis, '2026-10-02', 'gap'), coverGap(db, flatId, nafis, '2026-10-02', 'gap')])).toEqual(['ok', 'ok']);
+    expect(await coverGap(db, flatId, nafis, '2026-10-02', 'gap')).toBe('ok');   // a later tap: nothing left to cover
     const after = await loadMonth(db, flatId, '2026-09-01', '2026-10-02');
     expect([after.result.fund, bal(after) - bal(before)]).toEqual([0, 50000]);
-    expect(await coverGap(db, flatId, nafis, id, '2026-10-02', 'own pocket')).toBe('ok');   // a double tap
-    expect(await coverGap(db, flatId, nafis, randomUUID(), '2026-10-02', 'own pocket')).toBe('bad');   // nothing left to cover
     expect(await db(`select 1 from ledger where flat_id = $1 and type = 'deposit'`, [flatId])).toHaveLength(1);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-02', cash(0))).result).toBe('ok');
   });

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Db } from './db';
 import { addDays, daysOfMonth, editFrom } from './meals';
 import { CASH_KEYS, parseCash, type Cash } from './money';
@@ -32,16 +33,23 @@ export async function closeInfo(db: Db, flatId: string, today: string) {
     problems: mo.result.problems.length, earlierOpen: mo.earlierOpen };
 }
 
+/** The same id for the same month state: sha256 of (flat, month, version) shaped as a version-5 style UUID. */
+const gapId = (flatId: string, month: string, version: number) => {
+  const h = createHash('sha256').update(`${flatId}:${month}:${version}`).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${((parseInt(h[16], 16) & 3) | 8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+};
+
 /** The collector spent more for the flat than flat money held (fund below 0): records their own deposit of exactly the gap,
  *  dated the month's last day, so the closable month's fund is 0 and the flat owes them that much. The amount is always
- *  recomputed here. `id` is the form's one-time id: a retry after it landed finds fund 0 and its own row, and records nothing. */
-export async function coverGap(db: Db, flatId: string, by: Actor, id: string, today: string, note: string): Promise<'ok' | 'bad'> {
+ *  recomputed here. The id comes from the month's state, so two tabs (or two taps) that saw the same state record once;
+ *  with nothing left to cover it does nothing. */
+export async function coverGap(db: Db, flatId: string, by: Actor, today: string, note: string): Promise<'ok' | 'bad'> {
   const month = by.role === 'manager' ? await closableMonth(db, flatId, today) : null;
   if (!month) return 'bad';
-  const fund = (await loadMonth(db, flatId, month, today)).result.fund;
-  if (fund >= 0) return (await db(`select 1 from ledger where flat_id = $1 and id = $2`, [flatId, id])).length ? 'ok' : 'bad';
-  return (await addEntry(db, flatId, by, { id, type: 'deposit', amount: -fund, date: daysOfMonth(month).at(-1)!, note,
-    paidBy: null, memberId: by.memberId, split: null, selected: [] })) === 'ok' ? 'ok' : 'bad';
+  const mo = await loadMonth(db, flatId, month, today), fund = mo.result.fund;
+  if (fund >= 0 || !mo.info) return 'ok';
+  return (await addEntry(db, flatId, by, { id: gapId(flatId, month, mo.info.version), type: 'deposit', amount: -fund,
+    date: daysOfMonth(month).at(-1)!, note, paidBy: null, memberId: by.memberId, split: null, selected: [] })) === 'ok' ? 'ok' : 'bad';
 }
 
 /** Closes a month. The version is read first (inside loadMonth), then the engine runs, then one statement closes the
