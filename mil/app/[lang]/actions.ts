@@ -3,8 +3,9 @@
 import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
-import { addDays, editFrom, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setCookLink, setDefaults, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
@@ -14,7 +15,7 @@ import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
-import { fmtDay } from './format';
+import { fmtDay, fmtExact, fmtSigned } from './format';
 
 const str = (d: FormData, k: string) => String(d.get(k) ?? '');
 const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLocale(l) ? l : 'bn'; };
@@ -58,7 +59,7 @@ export async function addMemberAction(_: FormState, d: FormData): Promise<FormSt
   await seedLock(db, me.flatId, nowDhaka());
   const name = cleanName(d.get('name')), joinedOn = str(d, 'joinedOn');
   if (!name) return { error: a.errors.name };
-  if (!isDate(joinedOn) || joinedOn < todayDhaka() || !editable(joinedOn)) return { error: getDictionary(lang).meals.errors.bad };
+  if (!isDate(joinedOn) || joinedOn < todayDhaka() || !editable(joinedOn, await openFrom(db, me.flatId, todayDhaka()))) return { error: getDictionary(lang).meals.errors.bad };
   if (!(await addMember(db, me.flatId, name, joinedOn))) return { error: a.errors.nameTaken };
   refresh();
   return { done: a.added };
@@ -138,7 +139,10 @@ export async function usualAction(_: FormState, d: FormData): Promise<FormState>
   // all three off = cooking for yourself; any on = back in shared meals
   const usual = { b: d.has('b'), l: d.has('l'), d: d.has('d') };
   const inMeals = usual.b || usual.l || usual.d, was = await isInMeals(db, me.flatId, me.memberId);
-  await setDefaults(db, me.flatId, me.memberId, usual, editFrom(todayDhaka()), await lastLocked(me.flatId), inMeals === was ? null : inMeals);
+  // every open month keeps the meals it had, however old: freeze from the oldest open month, not just the edit window
+  const open = await openStart(db, me.flatId), locked = await lastLocked(me.flatId);
+  const r = await unlessClosed(() => setDefaults(db, me.flatId, me.memberId, usual, open, locked, inMeals === was ? null : inMeals));
+  if (r === 'closed') return { error: m.errors.closed };
   if (inMeals !== was) { refresh(); return { done: inMeals ? m.savedShared : m.savedOwn }; }
   refresh();
   return { done: m.saved };
@@ -169,17 +173,18 @@ export async function cookLinkAction(d: FormData) {
   refresh();
 }
 
-const editable = (date: string) => isDate(date) && date >= editFrom(todayDhaka()) && date <= addDays(todayDhaka(), 60);
+const editable = (date: string, from: string) => isDate(date) && date >= from && date <= addDays(todayDhaka(), 60);
 
 export async function noCookAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireManager(lang);
   await seedLock(db, me.flatId, nowDhaka());
-  const from = str(d, 'from'), to = str(d, 'to'), meals = MEALS.filter(x => d.has(x));
-  if (!editable(from) || !editable(to) || to < from) return { error: m.errors.bad };
+  const from = str(d, 'from'), to = str(d, 'to'), meals = MEALS.filter(x => d.has(x)), open = await openFrom(db, me.flatId, todayDhaka());
+  if (!editable(from, open) || !editable(to, open) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
   if (!meals.length) return { error: m.errors.pickMeal };
-  await noCooking(db, me.flatId, me.memberId, from, to, meals, await lastLocked(me.flatId));
+  const locked = await lastLocked(me.flatId);
+  if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, locked)) === 'closed') return { error: m.errors.closed };
   refresh();
   return { done: m.saved };
 }
@@ -209,9 +214,9 @@ export async function adminSetAction(d: FormData) {
   // own plate and guests are set separately, so a guest change never touches someone's own meal and back
   const memberId = str(d, 'memberId'), date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own'), guests = plates(str(d, 'guests'));
   const member = (await loadMeals(db, me.flatId, date, date)).members.find(x => x.id === memberId);
-  if (member && editable(date) && isPresent(member, date) && isMeal(meal) && (own === '0' || own === '1') && guests !== null && guests <= 9) {
+  if (member && editable(date, await openFrom(db, me.flatId, todayDhaka())) && isPresent(member, date) && isMeal(meal) && (own === '0' || own === '1') && guests !== null && guests <= 9) {
     const r = await mealRules(db, me.flatId);
-    await saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count: Number(own) + guests, guests }, isLocked(date, nowDhaka(), r.cutoff));
+    await unlessClosed(() => saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count: Number(own) + guests, guests }, isLocked(date, nowDhaka(), r.cutoff)));
   }
   refresh();
 }
@@ -222,7 +227,7 @@ export async function noCookCancelAction(d: FormData) {
   await seedLock(db, me.flatId, nowDhaka());
   const date = str(d, 'date'), meals = str(d, 'meals').split(',').filter(isMeal);
   // today or later, as the screen offers: a past day was already cooked (or not), and un-blocking it would rewrite everyone's meals
-  if (editable(date) && date >= todayDhaka() && meals.length) await cookAgain(db, me.flatId, me.memberId, date, date, meals, date);
+  if (editable(date, await openFrom(db, me.flatId, todayDhaka())) && date >= todayDhaka() && meals.length) await unlessClosed(() => cookAgain(db, me.flatId, me.memberId, date, date, meals, date));
   refresh();
 }
 
@@ -306,8 +311,9 @@ export async function bringBackAction(_: FormState, d: FormData): Promise<FormSt
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireManager(lang);
   await seedLock(db, me.flatId, nowDhaka());
-  const today = todayDhaka(), id = str(d, 'memberId');
-  const r = await bringBack(db, me.flatId, me.memberId, id, today, editFrom(today));
+  const today = todayDhaka(), id = str(d, 'memberId'), open = await openFrom(db, me.flatId, today);
+  const r = await unlessClosed(() => bringBack(db, me.flatId, me.memberId, id, today, open));
+  if (r === 'closed') return { error: a.errors.notFound };
   if (r === 'taken') return { error: a.errors.nameUsedSince };
   // a second phone pressing at the same moment finds them already back: that is the same good outcome, not an error
   if (r === 'no' && !(await listMembers(db, me.flatId)).some(x => x.id === id && !x.leftOn)) return { error: a.errors.notFound };
@@ -319,6 +325,11 @@ const TYPES = ['bazar', 'bill', 'deposit', 'payout'] as const;
 const SPLITS = ['here', 'equal', 'room', 'meals', 'selected'] as const;
 const pick = <T extends string>(list: readonly T[], v: string) => (list as readonly string[]).includes(v) ? (v as T) : null;
 
+/** A write into a closed month is refused by the database (month_closed); here it becomes a message, not a crash. */
+async function unlessClosed<T>(f: () => Promise<T>): Promise<T | 'closed'> {
+  try { return await f(); } catch (err) { if (String(err).includes('month_closed')) return 'closed'; throw err; }
+}
+
 /** Every money entry form. `who`: for bazar and bills who paid ('fund' = flat money); for deposits and payouts the other person. */
 export async function entryAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
@@ -329,17 +340,19 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
   // this month only: last month's numbers change only through Plan 6's dated corrections
   if (!isDate(date) || date < monthOf(today) || date > today) return { error: x.errors.date };
   const note = str(d, 'note').trim().slice(0, 100) || null, who = str(d, 'who');
-  const split = type === 'bill' ? pick(SPLITS, str(d, 'split')) : null, selected = d.getAll('people').map(String);
+  const split = type === 'bill' ? pick(SPLITS, str(d, 'split')) : null, selected = [...new Set(d.getAll('people').map(String))];
   if (type === 'bill' && !split) return { error: x.errors.bad };
   if (type === 'bill' && !note) return { error: x.errors.name };
   if (split === 'selected' && !selected.length) return { error: x.errors.people };
   const moving = type === 'deposit' || type === 'payout';
-  const r = await addEntry(db, me.flatId, me, {
+  const key = str(d, 'key');
+  const r = await unlessClosed(() => addEntry(db, me.flatId, me, {
+    id: UUID.test(key) ? key : undefined,
     type, amount, date, note, split, selected,
     paidBy: moving || who === 'fund' ? null : who,
     memberId: moving ? who || me.memberId : null,
     repeat: type === 'bill' && d.get('repeat') === '1',   // saved with the bill in one statement
-  });
+  }));
   if (r !== 'ok') return { error: x.errors[r] };
   refresh();
   return { done: x.saved };
@@ -347,13 +360,13 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
 
 export async function confirmAction(d: FormData) {
   const me = await requireMember(langOf(d)), id = str(d, 'id');
-  if (UUID.test(id)) await confirmEntry(db, me.flatId, me, id);
+  if (UUID.test(id)) await unlessClosed(() => confirmEntry(db, me.flatId, me, id));
   refresh();
 }
 
 export async function removeAction(d: FormData) {
   const me = await requireMember(langOf(d)), id = str(d, 'id');
-  if (UUID.test(id)) await removeEntry(db, me.flatId, me, id, todayDhaka());
+  if (UUID.test(id)) await unlessClosed(() => removeEntry(db, me.flatId, me, id, todayDhaka()));
   refresh();
 }
 
@@ -391,6 +404,66 @@ export async function stopRepeatAction(d: FormData) {
 
 export async function putBackAction(d: FormData) {
   const me = await requireMember(langOf(d)), id = str(d, 'id');
-  if (UUID.test(id)) await putBack(db, me.flatId, me.memberId, id, todayDhaka());   // the rules live in putBack
+  if (UUID.test(id)) await unlessClosed(() => putBack(db, me.flatId, me.memberId, id, todayDhaka()));   // the rules live in putBack
   refresh();
+}
+
+/** The collector closes the oldest finished month: the four cash boxes must add up to the app's fund. */
+export async function closeAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireManager(lang);
+  const month = str(d, 'month');
+  if (!/^\d{4}-\d{2}-01$/.test(month) || !isDate(month)) return { error: x.errors.bad };
+  const cash = parseCash(Object.fromEntries(CASH_KEYS.map(k => [k, str(d, k)])) as Record<(typeof CASH_KEYS)[number], string>);
+  if (!cash) return { error: x.errors.cashBoxes };
+  const r = await closeMonth(db, me.flatId, me, month, todayDhaka(), cash);
+  if (r.result === 'cash') {
+    return { error: (r.actual < r.expected ? x.errors.cashShort : x.errors.cashOver)
+      .replace('{a}', fmtExact(r.actual)).replace('{b}', fmtSigned(r.expected)).replace('{d}', fmtExact(r.actual - r.expected)) };
+  }
+  if (r.result !== 'ok' && r.result !== 'closed') return { error: r.result === 'notCollector' ? x.errors.bad : x.errors[r.result] };
+  redirect(`/${lang}/money?m=${month.slice(0, 7)}`);   // the closed month, with its settlement to share; 'closed' means a second tap already got it there
+}
+
+/** The collector paid more than flat money held: records their own deposit of the gap into the month to close (amount from the server). */
+export async function coverGapAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireManager(lang);
+  // the one deliberate exception to entryAction's this-month-only dates: only this deposit, only into the month to close
+  // `shown`: the amount the card showed, in poisha; only compared, never recorded
+  const shown = Number(str(d, 'shown'));
+  if (!Number.isSafeInteger(shown)) return { error: x.errors.bad };
+  const r = await unlessClosed(() => coverGap(db, me.flatId, me, todayDhaka(), x.coverNote, shown));
+  if (r === 'changed') { refresh(); return { error: x.errors.coverChanged }; }
+  if (r !== 'ok') { refresh(); return { error: r === 'closed' ? x.errors.closed : x.errors.bad }; }   // a stale card redraws
+  refresh();
+  return { done: x.saved };
+}
+
+const KINDS = ['bazar', 'bill', 'move'] as const;
+const FIX_SPLITS = ['meals', 'equal', 'selected'] as const;
+
+/** A fix for a closed month, booked in this month (collector only; the rules live in addCorrection). */
+export async function correctionAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireManager(lang);
+  const kind = pick(KINDS, str(d, 'kind')), amount = toPoisha(str(d, 'amount')), forMonth = str(d, 'forMonth'), key = str(d, 'key');
+  const note = str(d, 'note').trim().slice(0, 100);
+  // a bill split outside the list is a bad form, not a silent default
+  const split = kind === 'bill' ? pick(FIX_SPLITS, str(d, 'split')) : null;
+  if (!kind || !UUID.test(key) || !/^\d{4}-\d{2}-01$/.test(forMonth) || !isDate(forMonth) || (kind === 'bill' && !split)) return { error: x.errors.bad };
+  if (amount === null) return { error: x.errors.amount };
+  if (!note) return { error: x.errors.reason };
+  const people = [...new Set(d.getAll('people').map(String))];
+  const base = { id: key, forMonth, amount, note };
+  const c: Correction = kind === 'move' ? { ...base, kind, from: str(d, 'from'), to: str(d, 'to') }
+    : kind === 'bill' ? { ...base, kind, paidBy: str(d, 'who'), split: split!, selected: people }
+    : { ...base, kind, paidBy: str(d, 'who') };
+  const ids = kind === 'move' ? [str(d, 'from'), str(d, 'to')] : [str(d, 'who'), ...(split === 'selected' ? people : [])];
+  if (kind === 'move' && ids[0] && ids[0] === ids[1]) return { error: x.errors.samePerson };
+  if (!ids.every(id => UUID.test(id)) || (split === 'selected' && !people.length)) return { error: x.errors.people };
+  const r = await addCorrection(db, me.flatId, me, c, todayDhaka());
+  if (r !== 'ok') return { error: r === 'month' ? x.errors.month : x.errors.bad };
+  refresh();
+  return { done: x.saved };
 }

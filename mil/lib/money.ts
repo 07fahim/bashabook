@@ -15,13 +15,15 @@ export function allocate(total: number, weights: number[]): number[] | null {
 
 export interface LedgerRow {
   id: string;
-  type: 'deposit' | 'bazar' | 'bill' | 'payout';
+  type: 'deposit' | 'bazar' | 'bill' | 'payout' | 'adjustment';
   amount: number;            // poisha, positive integer
   paidBy: string | null;     // bazar/bill: member id, null = paid from fund
-  memberId: string | null;   // deposit: payer; payout: receiver
+  memberId: string | null;   // deposit: payer; payout: receiver; adjustment: who it moves from
   split: Split | null;       // bills only
   selected: string[];        // split = 'selected'
   status: 'ok' | 'pending';
+  moves?: string | null;     // adjustment: who it moves to
+  weights?: [string, number][] | null;   // a correction for a closed month: that month's frozen split (person, weight)
 }
 
 export interface MonthInput {
@@ -42,6 +44,7 @@ export interface MemberResult {
   foodCost: number;
   billShare: number;
   payouts: number;
+  adjustments: number;
   balance: number;           // + flat owes them, - they owe
 }
 
@@ -58,7 +61,7 @@ export function monthBalances(input: MonthInput): MonthResult {
   const ids = input.memberIds;
   const res = new Map<string, MemberResult>(ids.map(id => {
     const opening = input.opening.get(id) ?? 0;
-    return [id, { id, opening, paidIn: 0, foodCost: 0, billShare: 0, payouts: 0, balance: 0 }];
+    return [id, { id, opening, paidIn: 0, foodCost: 0, billShare: 0, payouts: 0, adjustments: 0, balance: 0 }];
   }));
   const problems: string[] = [];
   const lines: MonthResult['lines'] = [];
@@ -79,7 +82,8 @@ export function monthBalances(input: MonthInput): MonthResult {
     shares.forEach((s, i) => { res.get(who[i])![field] += s; lines.push({ rowId, memberId: who[i], amount: s }); });
   };
 
-  const totalBazar = rows.filter(l => l.type === 'bazar').reduce((a, l) => a + l.amount, 0);
+  // corrections for a closed month are split by that month's frozen meals and stay out of this month's meal rate
+  const totalBazar = rows.filter(l => l.type === 'bazar' && !l.weights).reduce((a, l) => a + l.amount, 0);
   if (totalBazar > 0) charge('foodCost', 'bazar', totalBazar, ids, meals);
 
   const rentRooms = input.rooms.filter(room => room.rentShare > 0);
@@ -90,10 +94,12 @@ export function monthBalances(input: MonthInput): MonthResult {
   }
 
   for (const l of rows) {
-    if (!known(l.id, [l.memberId, l.paidBy])) continue;
+    if (!known(l.id, [l.memberId, l.paidBy, l.moves ?? null])) continue;
+    if (l.type === 'adjustment') { res.get(l.memberId!)!.adjustments -= l.amount; res.get(l.moves!)!.adjustments += l.amount; continue; }
     if (l.type === 'deposit') { res.get(l.memberId!)!.paidIn += l.amount; fund += l.amount; continue; }
     if (l.type === 'payout') { res.get(l.memberId!)!.payouts += l.amount; fund -= l.amount; continue; }
     if (l.paidBy) res.get(l.paidBy)!.paidIn += l.amount; else fund -= l.amount;
+    if (l.weights) { charge(l.type === 'bazar' ? 'foodCost' : 'billShare', l.id, l.amount, l.weights.map(w => w[0]), l.weights.map(w => w[1])); continue; }
     if (l.type !== 'bill') continue;
     if (l.split === 'equal') charge('billShare', l.id, l.amount, ids, ids.map(daysOf));
     else if (l.split === 'meals') charge('billShare', l.id, l.amount, ids, meals);
@@ -107,7 +113,7 @@ export function monthBalances(input: MonthInput): MonthResult {
     }
   }
 
-  for (const m of res.values()) m.balance = m.opening + m.paidIn - m.foodCost - m.billShare - m.payouts;
+  for (const m of res.values()) m.balance = m.opening + m.paidIn - m.foodCost - m.billShare - m.payouts + m.adjustments;
   const perMember = [...res.values()];
   const diff = perMember.reduce((a, m) => a + m.balance, 0) - fund;
   if (diff !== 0) problems.push(`balances differ from fund by ${diff}`);
@@ -122,6 +128,16 @@ export function monthBalances(input: MonthInput): MonthResult {
   };
 }
 
+/** Who settles what with the collector once a month is closed. Each amount is one person's balance: nothing is divided,
+ *  so the lines are exact to the poisha and add up with the fund. */
+export function settleLines(perMember: MemberResult[], collectorId: string) {
+  return perMember.filter(p => p.balance !== 0).map(p => ({
+    id: p.id, amount: Math.abs(p.balance),
+    kind: (p.id === collectorId ? (p.balance > 0 ? 'collectorTakes' : 'collectorAdds') : p.balance < 0 ? 'pays' : 'gets') as
+      'pays' | 'gets' | 'collectorAdds' | 'collectorTakes',
+  }));
+}
+
 /** A member's food cost split into their own meals and their guests' (meals in hundredths). The two always add up exactly. */
 export function foodSplit(foodCost: number, meals: number, guestMeals: number) {
   const guests = meals ? Math.round((foodCost * guestMeals) / meals) : 0;
@@ -134,4 +150,19 @@ export function toPoisha(v: string): number | null {
   if (!/^\d{1,8}(\.\d{1,2})?$/.test(s)) return null;
   const p = Math.round(Number(s) * 100);
   return p > 0 && p <= 1_000_000_000 ? p : null;
+}
+
+export type Cash = { cash: number; bkash: number; nagad: number; bank: number };
+export const CASH_KEYS = ['cash', 'bkash', 'nagad', 'bank'] as const;
+
+/** The four cash boxes as typed: empty is 0, otherwise an amount like any entry (0 allowed). Null if any box is wrong. */
+export function parseCash(raw: Record<keyof Cash, string>): Cash | null {
+  const out = {} as Cash;
+  for (const k of CASH_KEYS) {
+    const v = (raw[k] ?? '').replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/[,\s৳]/g, '');
+    const p = v === '' || /^0+(\.0+)?$/.test(v) ? 0 : toPoisha(v);
+    if (p === null) return null;
+    out[k] = p;
+  }
+  return out;
 }

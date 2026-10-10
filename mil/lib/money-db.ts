@@ -1,9 +1,15 @@
 import type { Db } from './db';
 import { daysOfMonth, daysPresent, isPresent, weightedMeals } from './meals';
 import { loadMeals } from './meals-db';
-import { monthBalances, type LedgerRow, type Split } from './money';
+import { monthBalances, type LedgerRow, type MonthResult, type Split } from './money';
 
-export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string };
+export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string; forMonth: string | null; moves: string | null };
+export type CashRecord = { cash: number; bkash: number; nagad: number; bank: number; expected: number; actual: number; difference: number; by: string };
+type Snap = { id: string; meals: number; days: number; opening: number; paidIn: number; foodCost: number; billShare: number; payouts: number; adjustments: number; balance: number };
+const snapshot = (db: Db, flatId: string, month: string) => db<Snap>(
+  `select member_id as id, weighted_meals as meals, days_present as days, opening::int, paid_in::int as "paidIn", food_cost::int as "foodCost",
+     bill_share::int as "billShare", payouts::int, adjustments::int, balance::int
+   from month_balances where flat_id = $1 and month = $2`, [flatId, month]);
 export type Room = { id: string; name: string; rentShare: number };
 export type Removed = { id: string; at: string; by: string; byId: string; type: LedgerRow['type']; amount: number; date: string; note: string | null };
 
@@ -33,22 +39,35 @@ export async function openMonth(db: Db, flatId: string, month: string) {
 /** One ledger row, its split people, its history row and (if `repeat`) its monthly template, all in one statement,
  *  so a bill can never be saved without the repeat the person ticked, or the other way round. Callers check the rules. */
 async function insertEntry(db: Db, flatId: string, by: string,
-  e: { type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[] },
+  e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[] },
   status: 'ok' | 'pending', repeat: { split: Split; selected: string[] } | null = null) {
   await db(
-    `with l as (insert into ledger (flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by)
-       values ($1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10) returning *),
+    `with l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by)
+       values (coalesce($15::uuid, gen_random_uuid()), $1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10)
+       on conflict (id) do nothing returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, l.id, x::uuid from l, json_array_elements_text($11::text::json) x),
      t as (insert into bill_templates (flat_id, name, amount_poisha, split, selected_member_ids)
-       select $1, $8, $4, $12, array(select json_array_elements_text($13::text::json)::uuid) where $14::boolean)
+       select $1, $8, $4, $12, array(select json_array_elements_text($13::text::json)::uuid) from l where $14::boolean)
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), $10 from l`,
     [flatId, e.date, e.type, e.amount, e.paidBy, e.memberId, e.split, e.note, status, by, JSON.stringify(e.split === 'selected' ? e.selected : []),
-     repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null]);
+     repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null, e.id ?? null]);
 }
 
-/** Everything the money screens need for one month. Numbers so far: meals up to today, no carry-over until Plan 6 closes months. */
+/** Everything the money screens need for one month. The version is read first: closeMonth freezes only results computed
+ *  from inputs no newer than it. A closed month comes from its snapshot, never recalculated. An open month starts from the
+ *  latest closed month's snapshot, unless an earlier month is still open (then nothing is carried: the banner says so). */
 export async function loadMonth(db: Db, flatId: string, month: string, today: string) {
   if (month === monthOf(today)) await openMonth(db, flatId, month);
+  const [info = null] = await db<{ status: 'open' | 'closed'; version: number; closedAt: string | null; cash: CashRecord | null; fund: number | null; rate: number | null }>(
+    `select status, version, closed_at::text as "closedAt", cash, closing_fund::int as fund, meal_rate::int as rate
+     from months where flat_id = $1 and month = $2`, [flatId, month]);
+  const earlier = await db<{ month: string; status: string; fund: number | null }>(
+    `select month::text as month, status, closing_fund::int as fund from months where flat_id = $1 and month < $2 order by month`, [flatId, month]);
+  const earlierOpen = earlier.find(x => x.status === 'open')?.month ?? null;
+  const lastClosed = earlierOpen ? null : earlier.filter(x => x.status === 'closed').at(-1) ?? null;
+  const closedMonths = [...earlier, ...(info?.status === 'closed' ? [{ month, status: 'closed', fund: null }] : [])]
+    .filter(x => x.status === 'closed').map(x => x.month).reverse();
+
   const end = daysOfMonth(month).at(-1)!, upTo = today < end ? today : end;
   const { flat, members: everyone, changes } = await loadMeals(db, flatId, month, end);   // meals must come through loadMeals (no cooking)
   const roomOf = new Map((await db<{ id: string; roomId: string | null }>(
@@ -56,11 +75,12 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
   const all = everyone.map(m => ({ ...m, roomId: roomOf.get(m.id) ?? null }));
   const members = all.filter(m => m.joinedOn <= end && (m.leftOn === null || m.leftOn >= month));
   const rooms = await db<Room>(`select id, name, rent_share_poisha::int as "rentShare" from rooms where flat_id = $1 order by name`, [flatId]);
-  const entries = await db<Entry>(
-    `select l.id, l.type, l.amount_poisha::int as amount, l.paid_by_member_id as "paidBy", l.member_id as "memberId", l.split, l.status,
-       l.date::text as date, l.note, l.created_by as "createdBy",
+  const select = `select l.id, l.type, l.amount_poisha::int as amount, l.paid_by_member_id as "paidBy", l.member_id as "memberId", l.split, l.status,
+       l.date::text as date, l.note, l.created_by as "createdBy", l.for_month::text as "forMonth", l.moves,
        (select coalesce(json_agg(s.member_id), '[]'::json) from bill_split_members s where s.ledger_id = l.id) as selected
-     from ledger l where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
+     from ledger l`;
+  const entries = await db<Entry>(`${select} where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
+  const corrections = await db<Entry>(`${select} where l.flat_id = $1 and l.for_month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
   // per entry only its latest removal (audit ids follow commit order per entry: see putBack), and only while it is still gone
   const removed = await db<Removed>(
     `select id, at, by, "byId", type, amount, date, note from (select distinct on (a.entity_id) a.entity_id as id, a.at, m.name as by, a.by_member as "byId",
@@ -69,16 +89,44 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
        where a.flat_id = $1 and a.entity = 'ledger' and a.after->>'removed' = 'true' and a.before->>'month' = $2
          and not exists (select 1 from ledger l where l.flat_id = a.flat_id and l.id = a.entity_id::uuid)
        order by a.entity_id, a.id desc) r order by seq desc`, [flatId, month]);
+  const first = monthOf(all.reduce((a, m) => (m.joinedOn < a ? m.joinedOn : a), month));
+  const days = daysPresent(members, month);
+
+  if (info?.status === 'closed') {
+    const snap = await snapshot(db, flatId, month);
+    const result: MonthResult = {
+      mealRate: info.rate ?? 0, fund: info.fund ?? 0, invariantOk: true, problems: [], lines: [],
+      perMember: snap.map(s => ({ id: s.id, opening: s.opening, paidIn: s.paidIn, foodCost: s.foodCost, billShare: s.billShare, payouts: s.payouts, adjustments: s.adjustments, balance: s.balance })),
+    };
+    return { flat, all, members, rooms, entries, removed, meals: new Map(snap.map(s => [s.id, s.meals])), guestMeals: new Map<string, number>(),
+      result, first, info, earlierOpen, carriedFrom: null, closedMonths, days: new Map(snap.map(s => [s.id, s.days])), corrections };
+  }
+
+  // corrections for a closed month carry that month's frozen split
+  const frozen = new Map<string, Snap[]>();
+  for (const fm of new Set(entries.map(x => x.forMonth).filter((x): x is string => !!x))) frozen.set(fm, await snapshot(db, flatId, fm));
+  for (const x of entries) {
+    if (!x.forMonth || (x.type !== 'bazar' && x.type !== 'bill')) continue;
+    const s = frozen.get(x.forMonth) ?? [], byMeals = x.type === 'bazar' || x.split === 'meals';
+    x.weights = x.split === 'selected' ? x.selected.map((id): [string, number] => [id, 1])
+      : s.map((p): [string, number] => [p.id, byMeals ? p.meals : p.days]).filter(w => w[1] > 0);
+  }
+  const carried = lastClosed ? await snapshot(db, flatId, lastClosed.month) : [];
+  const ids = new Set(members.map(m => m.id));
+  for (const c of carried) if (c.balance !== 0) ids.add(c.id);   // someone who moved out keeps a row until settled
+  // everyone an entry names: a correction's people, or money to someone who moved out while an earlier month is still open
+  for (const x of entries) for (const id of [x.paidBy, x.memberId, x.moves, ...(x.weights ?? []).map(w => w[0])]) if (id) ids.add(id);
+
   const meals = weightedMeals(members, changes, month, flat.weights, upTo);
   const guestMeals = new Map(members.map(m => [m.id, changes
     .filter(c => c.memberId === m.id && c.date <= upTo && isPresent(m, c.date))
     .reduce((s, c) => s + c.guests * flat.weights[c.meal], 0)]));
   const result = monthBalances({
-    memberIds: members.map(m => m.id), opening: new Map(), openingFund: 0,
-    weightedMeals: meals, daysPresent: daysPresent(members, month), roomOf, rooms, ledger: entries,
+    memberIds: [...ids], opening: new Map(carried.map(c => [c.id, c.balance])), openingFund: lastClosed?.fund ?? 0,
+    weightedMeals: meals, daysPresent: days, roomOf, rooms, ledger: entries,
   });
-  const first = monthOf(all.reduce((a, m) => (m.joinedOn < a ? m.joinedOn : a), month));
-  return { flat, all, members, rooms, entries, removed, meals, guestMeals, result, first };
+  return { flat, all, members, rooms, entries, removed, meals, guestMeals, result, first, info, earlierOpen,
+    carriedFrom: lastClosed?.month ?? null, closedMonths, days, corrections };
 }
 
 /** Rows waiting for this person's tap: deposits for the collector, money handed to me for me. `name` = who the row is for. */
@@ -98,6 +146,7 @@ export type NewEntry = {
   split: Split | 'here' | null;   // bills only; 'here' = everyone living here on the bill date
   selected: string[];
   repeat?: boolean;               // bills, collector only: also copy it into every new month (from flat money)
+  id?: string;                    // one-time id from the form: a retry with the same id records nothing new
 };
 
 /** Adds an entry if the rules allow it. 'rooms' = rent by room asked before rooms and rents are set. */
@@ -120,7 +169,11 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): 
     selected = here.filter(m => m.joinedOn <= e.date && (m.leftOn === null || m.leftOn >= e.date)).map(m => m.id);
   }
   if (split === 'selected' && !selected.length) return 'bad';
-  const ids = new Set(here.map(m => m.id));
+  // someone who moved out before this month but still has a balance from the latest closed month can be settled with
+  const owed = moving ? await db<{ id: string }>(
+    `select member_id as id from month_balances where flat_id = $1 and balance <> 0
+       and month = (select max(month) from months where flat_id = $1 and month < $2::date and status = 'closed')`, [flatId, month]) : [];
+  const ids = new Set([...here.map(m => m.id), ...owed.map(o => o.id)]);
   if (![e.paidBy, e.memberId, ...selected].every(id => id === null || ids.has(id))) return 'bad';
   // whoever paid the shop or the bill was living here that day; money to or from someone who left is settling up, so it stays allowed
   if (e.paidBy && !here.some(m => m.id === e.paidBy && m.joinedOn <= e.date && (m.leftOn === null || m.leftOn >= e.date))) return 'gone';
@@ -130,7 +183,7 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry): 
   }
   // money between two people waits for the receiver: the collector for deposits, the person for payouts. Someone who has
   // moved out can't sign in to confirm, so paying them back counts at once: the collector's entry is the record.
-  const gone = here.some(m => m.id === e.memberId && m.gone);
+  const gone = here.some(m => m.id === e.memberId && m.gone) || (owed.some(o => o.id === e.memberId) && !here.some(m => m.id === e.memberId));
   const pending = (e.type === 'deposit' && !boss) || (e.type === 'payout' && e.memberId !== by.memberId && !gone);
   await openMonth(db, flatId, month);
   // a repeated "everyone living here" bill becomes "everyone, by days": the people living here change month to month
@@ -150,12 +203,19 @@ export async function confirmEntry(db: Db, flatId: string, by: Actor, id: string
 }
 
 /** Whoever added it, or the collector, removes an entry. A confirmed deposit only the collector: the cash is with them.
- *  Only this month's entries (`today` is the Dhaka date): a past month is never changed, and its removal could not be put back.
+ *  A non-collector: only this month's entries (`today` is the Dhaka date) — a past month is never changed for them.
+ *  The collector: this month or any earlier month that is still open; once a month closes, removal is forbidden for anyone,
+ *  enforced here (not just a hidden button) by requiring the entry's month to have a `months` row with status 'open'.
  *  A pending entry can go from any month: it counts nowhere, and a wrong one must not wait forever for a tap.
  *  The removed row is kept in the history, so the entries list can show it. */
 export async function removeEntry(db: Db, flatId: string, by: Actor, id: string, today: string) {
   const r = await db(
-    `with l as (delete from ledger where flat_id = $1 and id = $2 and (month = $5::date or status = 'pending')
+    `with l as (delete from ledger where flat_id = $1 and id = $2
+       and (
+         status = 'pending'
+         or ($4::boolean and exists (select 1 from months mo where mo.flat_id = $1 and mo.month = ledger.month and mo.status = 'open'))
+         or (not $4::boolean and month = $5::date)
+       )
        and ($4::boolean or (created_by = $3 and (type <> 'deposit' or status = 'pending'))) returning *)
      insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
      select $1, 'ledger', l.id::text,
@@ -208,10 +268,14 @@ export async function stopRepeat(db: Db, flatId: string, by: Actor, id: string) 
 }
 
 /** Every ledger column: a removal record missing any of them is never put back. A test keeps this in step with the table. */
-export const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at';
+export const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at,for_month,moves';
+/** What a removal record must hold to be put back: every column a row had before migration 009 added the two correction ones. */
+const PUT_BACK_COLUMNS = LEDGER_COLUMNS.replace(',for_month,moves', '');
 
 /** Brings a removed entry back exactly as it was (same id, status, people), rebuilt only from its latest removal record.
- *  Allowed for whoever made that removal or the current collector, only in this open month (`today` is the Dhaka date).
+ *  Whoever made that removal: only while it's still this month (`today` is the Dhaka date). The current collector: this
+ *  month or any earlier month that is still open — same window as removeEntry. Either way the entry's month must still
+ *  have a `months` row with status 'open'.
  *  One statement: the entry, its people and the history row land together; a second tap finds the entry back and writes nothing.
  *  Per entry, remove (delete … returning) and put back (insert … on conflict do nothing) can only succeed one after the other,
  *  each after the previous committed, so the highest audit id is the latest removal. */
@@ -220,15 +284,18 @@ export async function putBack(db: Db, flatId: string, by: string, id: string, to
     `with a as (select before, by_member from audit_log where flat_id = $1 and entity = 'ledger' and entity_id = $2 and after->>'removed' = 'true'
        order by id desc limit 1),
      ok as (select a.before from a
-       where (a.by_member = $3 or exists (select 1 from members where flat_id = $1 and id = $3 and role = 'manager'))
-         and a.before ?& string_to_array($5::text, ',')
-         and (a.before->>'flat_id')::uuid = $1 and (a.before->>'month')::date = $4::date
-         and exists (select 1 from months where flat_id = $1 and month = $4::date and status = 'open')),
+       where a.before ?& string_to_array($5::text, ',')
+         and (a.before->>'flat_id')::uuid = $1
+         and exists (select 1 from months where flat_id = $1 and month = (a.before->>'month')::date and status = 'open')
+         and (
+           (a.by_member = $3 and (a.before->>'month')::date = $4::date)
+           or exists (select 1 from members where flat_id = $1 and id = $3 and role = 'manager')
+         )),
      l as (insert into ledger select (jsonb_populate_record(null::ledger, ok.before)).* from ok on conflict do nothing returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id)
        select $1, l.id, x::uuid from l, ok, jsonb_array_elements_text(coalesce(ok.before->'selected', '[]'::jsonb)) x)
      insert into audit_log (flat_id, entity, entity_id, after, by_member)
      select $1, 'ledger', l.id::text, to_jsonb(l) || '{"putBack":true}', $3 from l returning 1`,
-    [flatId, id, by, monthOf(today), LEDGER_COLUMNS]);
+    [flatId, id, by, monthOf(today), PUT_BACK_COLUMNS]);
   return r.length > 0;
 }

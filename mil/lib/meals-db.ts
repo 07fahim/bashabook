@@ -159,9 +159,13 @@ export async function upcomingAway(db: Db, flatId: string, memberId: string, tod
   return merged;
 }
 
-/** New usual meals. Days freezeFrom..freezeTo first keep the old usual meals as saved rows, so locked days don't move.
- *  `inMeals = false` (cooking for yourself) also clears plain future rows, so booked meals don't keep counting. */
-export async function setDefaults(db: Db, flatId: string, memberId: string, d: Record<Meal, boolean>, freezeFrom: string, freezeTo: string, inMeals: boolean | null = null) {
+/** New usual meals. Days freezeFrom..freezeTo first keep the old usual meals as saved rows, so locked days don't move;
+ *  `freezeFrom` null = from the day they joined (no month closed yet, so every month is open).
+ *  `inMeals = false` (cooking for yourself) also clears plain future rows, so booked meals don't keep counting.
+ *  ponytail: the members update fires touch_open_months, which locks the open months in heap order, while the frozen rows
+ *  lock them in date order: two such writes at once could rarely deadlock. If it ever shows, a new migration makes
+ *  touch_open_months lock them `order by month` (select ... for update) first. */
+export async function setDefaults(db: Db, flatId: string, memberId: string, d: Record<Meal, boolean>, freezeFrom: string | null, freezeTo: string, inMeals: boolean | null = null) {
   await db(
     `with frozen as (insert into meal_changes (flat_id, member_id, date, meal, count)
        select m.flat_id, m.id, day::date, x.meal, (case x.meal when 'b' then m.default_b when 'l' then m.default_l else m.default_d end)::int

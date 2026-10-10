@@ -98,6 +98,11 @@ describe('fmtRange', () => {
     expect([fmtMeals(2250), fmtMeals(2200), fmtMeals(2225), fmtMeals(0)]).toEqual(['22.5', '22', '22.25', '0']);
     expect([fmtRate(3172, 100), fmtRate(3170, 100), fmtRate(123456, 1), fmtRate(0, 0), fmtRate(0, 2500)]).toEqual(['৳31.72', '৳31.70', '৳1,234.56', '—', '—']);
   });
+
+  it('exact taka shows poisha only when there are some', async () => {
+    const { fmtExact } = await import('../app/[lang]/format');
+    expect([fmtExact(85037), fmtExact(120000), fmtExact(-5), fmtExact(0)]).toEqual(['৳850.37', '৳1,200', '৳0.05', '৳0']);
+  });
 });
 
 
