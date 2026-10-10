@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { listGone, listMembers } from '@/lib/auth';
-import { openFrom } from '@/lib/close';
+import { closeInfo, openFrom } from '@/lib/close';
 import { db } from '@/lib/db';
 import { addDays, countChanges, headcount, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
 import { countAtLock, loadMeals, loadNoCookDays } from '@/lib/meals-db';
@@ -11,6 +12,7 @@ import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
 import { addMemberAction, addRoomAction, adminSetAction, cookLinkAction, entryAction, noCookAction, noCookCancelAction, bringBackAction, leavingAction, removePhotoAction, renameAction, rentAction, resetPinAction, setRoomAction, settingsAction, stopRepeatAction } from '../actions';
 import { Avatar } from '../avatar';
+import { CloseCard } from '../close-card';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtTaka, fmtTime } from '../format';
 import { DateField } from '../date-field';
@@ -38,7 +40,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   // the person and day picked in "Change someone's meals"
   const who = typeof sp.who === 'string' ? sp.who : me.memberId;
   const day = typeof sp.day === 'string' && isDate(sp.day) && sp.day >= from && sp.day <= to ? sp.day : today;
-  const [members, gone, meals, picked, noCookDays, mo, waiting, repeats] = await Promise.all([
+  const [members, gone, meals, picked, noCookDays, mo, waiting, repeats, closing] = await Promise.all([
     listMembers(db, me.flatId),
     listGone(db, me.flatId, from),
     loadMeals(db, me.flatId, today, tomorrow),
@@ -47,6 +49,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
     loadMonth(db, me.flatId, monthOf(today), today),
     toConfirm(db, me.flatId, me.memberId, true),
     listRepeats(db, me.flatId),
+    closeInfo(db, me.flatId, today),
   ]);
   const t = getDictionary(lang), a = t.app, m = t.meals, mn = t.money;
   const tom = headcount(meals.members, meals.changes, tomorrow);
@@ -100,6 +103,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </div>
           <div>
             <h2 className={groupLabel}>{mn.groupMoney}</h2>
+            {closing && <div className="mt-3"><CloseCard lang={lang} x={mn} c={closing} /></div>}
             <div className="mt-3">
               {waiting.length ? <ConfirmList lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /> : <p className="text-muted">{mn.noPending}</p>}
             </div>
@@ -108,6 +112,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 <ActionForm action={entryAction} className="mt-4">
                   <input type="hidden" name="lang" value={lang} />
                   <input type="hidden" name="type" value={type} />
+                  <input type="hidden" name="key" value={randomUUID()} />
                   <label className="block font-semibold">
                     {label}
                     <select name="who" className={field} required defaultValue="">

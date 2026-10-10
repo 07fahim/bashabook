@@ -41,6 +41,9 @@ export const fmtTaka = (p: number) => `৳${Math.round(Math.abs(p) / 100).toLoca
 export const fmtExact = (p: number) =>
   `৳${(Math.abs(p) / 100).toLocaleString('en-US', { minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
+/** fmtExact with a minus when below zero (the flat's fund can be): '−৳500'. */
+export const fmtSigned = (p: number) => `${p < 0 ? '−' : ''}${fmtExact(p)}`;
+
 /** '2026-10-01' -> 'October 2026' (same in both languages). */
 export const fmtMonth = (month: string) =>
   new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });

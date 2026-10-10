@@ -1,0 +1,43 @@
+import Link from 'next/link';
+import { CASH_KEYS } from '@/lib/close';
+import { ActionForm } from './action-form';
+import { closeAction } from './actions';
+import type { Dict, Locale } from './dictionaries';
+import { fmtMonth, fmtSigned } from './format';
+import { Field, link, primary } from './ui';
+
+export type CloseInfo = { month: string; fund: number; pending: number; problems: number; earlierOpen: string | null };
+
+/** The collector's card for the oldest finished month: what blocks it, or the cash count and Close. */
+export function CloseCard({ lang, x, c }: { lang: Locale; x: Dict['money']; c: CloseInfo }) {
+  const name = fmtMonth(c.month), blocked = c.pending > 0 || c.problems > 0 || c.earlierOpen !== null;
+  return (
+    <section className="rounded-3xl border-2 border-turmeric bg-surface p-5">
+      <h2 className="text-xl font-bold">{x.closeTitle.replace('{month}', name)}</h2>
+      <p className="mt-1 text-muted">{x.closeLead}</p>
+      {blocked ? (
+        <ul className="mt-3 list-disc space-y-2 pl-5">
+          {c.earlierOpen && <li>{x.blockEarlier.replace('{month}', fmtMonth(c.earlierOpen))}</li>}
+          {c.pending > 0 && (
+            <li>
+              {x.blockPending.replace('{n}', String(c.pending))}{' '}
+              <Link href={`/${lang}/money?m=${c.month.slice(0, 7)}`} className={`inline-flex min-h-11 items-center ${link}`}>{x.fixIt}</Link>
+              <span className="block text-[15px] text-muted">{x.blockPayout}</span>
+            </li>
+          )}
+          {c.problems > 0 && <li>{x.blockProblems}</li>}
+        </ul>
+      ) : (
+        <ActionForm action={closeAction} className="mt-4">
+          <input type="hidden" name="lang" value={lang} />
+          <input type="hidden" name="month" value={c.month} />
+          <p className="font-semibold">{x.expected.replace('{t}', fmtSigned(c.fund))}</p>
+          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+            {CASH_KEYS.map(k => <Field key={k} label={x.cashMethods[k]} name={k} inputMode="decimal" placeholder="0" />)}
+          </div>
+          <button className={primary}>{x.closeBtn.replace('{month}', name)}</button>
+        </ActionForm>
+      )}
+    </section>
+  );
+}

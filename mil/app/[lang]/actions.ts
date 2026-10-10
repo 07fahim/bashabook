@@ -15,7 +15,7 @@ import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
-import { fmtDay, fmtExact } from './format';
+import { fmtDay, fmtExact, fmtSigned } from './format';
 
 const str = (d: FormData, k: string) => String(d.get(k) ?? '');
 const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLocale(l) ? l : 'bn'; };
@@ -417,7 +417,8 @@ export async function closeAction(_: FormState, d: FormData): Promise<FormState>
   if (!cash) return { error: x.errors.cashBoxes };
   const r = await closeMonth(db, me.flatId, me, month, todayDhaka(), cash);
   if (r.result === 'cash') {
-    return { error: x.errors.cash.replace('{a}', fmtExact(r.actual)).replace('{b}', fmtExact(r.expected)).replace('{d}', fmtExact(r.actual - r.expected)) };
+    return { error: (r.actual < r.expected ? x.errors.cashShort : x.errors.cashOver)
+      .replace('{a}', fmtExact(r.actual)).replace('{b}', fmtSigned(r.expected)).replace('{d}', fmtExact(r.actual - r.expected)) };
   }
   if (r.result !== 'ok' && r.result !== 'closed') return { error: r.result === 'notCollector' ? x.errors.bad : x.errors[r.result] };
   redirect(`/${lang}/money?m=${month.slice(0, 7)}`);   // the closed month, with its settlement to share; 'closed' means a second tap already got it there
