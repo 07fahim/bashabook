@@ -3,7 +3,7 @@ import { daysOfMonth, daysPresent, isPresent, weightedMeals } from './meals';
 import { loadMeals } from './meals-db';
 import { monthBalances, type LedgerRow, type MonthResult, type Split } from './money';
 
-export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string; forMonth: string | null; moves: string | null };
+export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string; forMonth: string | null; moves: string | null; heldBy: string | null };
 export type CashRecord = { cash: number; bkash: number; nagad: number; bank: number; expected: number; actual: number; difference: number; by: string };
 type Snap = { id: string; meals: number; days: number; opening: number; paidIn: number; foodCost: number; billShare: number; payouts: number; adjustments: number; balance: number };
 const snapshot = (db: Db, flatId: string, month: string) => db<Snap>(
@@ -76,7 +76,7 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
   const members = all.filter(m => m.joinedOn <= end && (m.leftOn === null || m.leftOn >= month));
   const rooms = await db<Room>(`select id, name, rent_share_poisha::int as "rentShare" from rooms where flat_id = $1 order by name`, [flatId]);
   const select = `select l.id, l.type, l.amount_poisha::int as amount, l.paid_by_member_id as "paidBy", l.member_id as "memberId", l.split, l.status,
-       l.date::text as date, l.note, l.created_by as "createdBy", l.for_month::text as "forMonth", l.moves,
+       l.date::text as date, l.note, l.created_by as "createdBy", l.for_month::text as "forMonth", l.moves, l.held_by as "heldBy",
        (select coalesce(json_agg(s.member_id), '[]'::json) from bill_split_members s where s.ledger_id = l.id) as selected
      from ledger l`;
   const entries = await db<Entry>(`${select} where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
@@ -131,12 +131,14 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
 
 /** Rows waiting for this person's tap: deposits for the collector, money handed to me for me. `name` = who the row is for. */
 export const toConfirm = (db: Db, flatId: string, memberId: string, boss: boolean) => db<{
-  id: string; type: 'deposit' | 'payout'; amount: number; date: string; note: string | null; name: string; paidTo: string | null;
+  id: string; type: 'deposit' | 'payout'; amount: number; date: string; note: string | null; name: string; paidTo: string | null; heldByName: string | null;
 }>(
   // paidTo: who received a waiting deposit, named only when that is no longer the collector (after a handover)
+  // heldByName: who handed out a waiting payout, so the recipient's confirm text never relabels it to the current collector
   `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.note, m.name
      , (select hb.name from members hb where hb.id = l.held_by and l.type = 'deposit'
          and hb.id is distinct from (select id from members where flat_id = l.flat_id and role = 'manager')) as "paidTo"
+     , (select hb.name from members hb where hb.id = l.held_by) as "heldByName"
    from ledger l join members m on m.flat_id = l.flat_id and m.id = l.member_id
    where l.flat_id = $1 and l.status = 'pending' and ((l.type = 'deposit' and $3::boolean) or (l.type = 'payout' and l.member_id = $2))
    order by l.date, l.created_at`, [flatId, memberId, boss]);

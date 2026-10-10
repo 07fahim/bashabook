@@ -103,6 +103,11 @@ describe('fmtRange', () => {
     const { fmtExact } = await import('../app/[lang]/format');
     expect([fmtExact(85037), fmtExact(120000), fmtExact(-5), fmtExact(0)]).toEqual(['৳850.37', '৳1,200', '৳0.05', '৳0']);
   });
+
+  it('fmtTaka2 always shows two decimals', async () => {
+    const { fmtTaka2 } = await import('../app/[lang]/format');
+    expect([fmtTaka2(2721200), fmtTaka2(50000), fmtTaka2(5), fmtTaka2(-50000)]).toEqual(['৳27,212.00', '৳500.00', '৳0.05', '−৳500.00']);
+  });
 });
 
 

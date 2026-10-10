@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal } from './meals-db';
-import { addEntry, confirmEntry, putBack, removeEntry, toConfirm, type NewEntry } from './money-db';
+import { addEntry, confirmEntry, loadMonth, putBack, removeEntry, toConfirm, type NewEntry } from './money-db';
 import { closeMonth } from './close';
 import { setLeaving } from './auth';
 import { acceptHandover, cancelHandover, currentOffer, declineHandover, flatMoney, handoverHistory, lastOutcome, offerHandover, overrideCollector, pendingCount } from './handover';
@@ -333,6 +333,16 @@ describe('handover in the app', { timeout: 30000 }, () => {
     expect(await overrideCollector(db, flatId, ids.Zarif, 'phone lost', 'app team')).toBe('ok');
     const rows = await db<{ status: string; h: string }>(`select status, held_by as h from ledger where flat_id = $1`, [flatId]);
     expect(rows).toEqual([{ status: 'pending', h: ids.Nafis }]);
+  });
+
+  it('loadMonth never relabels a deposit after a handover: it still shows the collector who actually held it', async () => {
+    const { flatId, ids } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const };
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 50000, date: '2026-09-03', memberId: ids.Tahsin }))).toBe('ok');
+    expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 50000, '2026-09-10')).toBe('ok');
+    expect(await acceptHandover(db, flatId, ids.Tahsin, (await currentOffer(db, flatId))!.id)).toBe('ok');
+    const mo = await loadMonth(db, flatId, '2026-09-01', '2026-09-10');
+    expect(mo.entries.find(x => x.type === 'deposit')?.heldBy).toBe(ids.Nafis);
   });
 
   it('removing and putting back a deposit keeps who held it', async () => {

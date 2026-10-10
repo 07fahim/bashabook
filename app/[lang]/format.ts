@@ -44,6 +44,10 @@ export const fmtExact = (p: number) =>
 /** fmtExact with a minus when below zero (the flat's fund can be): '−৳500'. */
 export const fmtSigned = (p: number) => `${p < 0 ? '−' : ''}${fmtExact(p)}`;
 
+/** Handover amounts: always two decimals, so the exact poisha is never hidden: '৳27,212.00', '−৳500.00'. */
+export const fmtTaka2 = (p: number) =>
+  `${p < 0 ? '−' : ''}৳${(Math.abs(p) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 /** '2026-10-01' -> 'October 2026' (same in both languages). */
 export const fmtMonth = (month: string) =>
   new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });

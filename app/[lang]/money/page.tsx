@@ -78,8 +78,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   for (let n = 0; keep < dates.length && (n += shown.filter(e => e.date === dates[keep]).length) <= 15; keep++);
   keep = Math.max(1, keep);
   const who = (e: Entry) =>
-    e.type === 'deposit' ? (e.memberId === collector.id ? collector.name : `${name(e.memberId)} → ${collector.name}`)
-    : e.type === 'payout' ? `${collector.name} → ${name(e.memberId)}`
+    e.type === 'deposit' ? (e.memberId === e.heldBy ? name(e.heldBy) : `${name(e.memberId)} → ${name(e.heldBy)}`)
+    : e.type === 'payout' ? `${name(e.heldBy)} → ${name(e.memberId)}`
     : e.type === 'adjustment' ? `${name(e.memberId)} → ${name(e.moves)}`
     : e.paidBy ? x.paidBy.replace('{name}', name(e.paidBy)) : x.fundPaid;
   const settle = mo.result.perMember.filter(p => p.balance !== 0).map(p => {
