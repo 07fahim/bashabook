@@ -6,8 +6,8 @@ export type FlatInfo = {
 };
 export type Member = MealMember & { name: string; role: 'member' | 'manager'; inMeals: boolean };
 export type HistoryRow = {
-  at: Date | string; actor: string | null; who: string | null; entity: 'meal_changes' | 'members' | 'flats' | 'cook'; entityId: string;
-  before?: { guests?: number; count?: number } | null;
+  at: Date | string; actor: string | null; who: string | null; entity: 'meal_changes' | 'members' | 'flats' | 'cook' | 'rooms' | 'bill_templates'; entityId: string;
+  before?: { guests?: number; count?: number; rent_share_poisha?: number; roomId?: string | null; room?: string | null; name?: string; amount_poisha?: number } | null;
   after: {
     count?: number; guests?: number; late?: boolean;
     away?: [string, string]; awayCancel?: [string, string];
@@ -15,6 +15,8 @@ export type HistoryRow = {
     b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean; rename?: [string, string]; left?: string | null; back?: [string, string];
     cutoff?: string; weights?: Record<Meal, number>;
     told?: string; plates?: Record<Meal, number>;
+    name?: string; rent_share_poisha?: number; roomId?: string | null; room?: string | null; fixFor?: string[];   // rooms
+    amount_poisha?: number; removed?: boolean;   // bill_templates (monthly bills)
   };
 };
 export type SavedChange = MealChange & { guests: number; late: boolean };
@@ -270,19 +272,20 @@ export async function cookAgain(db: Db, flatId: string, by: string, from: string
 export const flatStart = async (db: Db, flatId: string) =>
   (await db<{ start: string }>(`select min(joined_on)::text as start from members where flat_id = $1`, [flatId]))[0].start;
 
-/** Changes worth seeing: late, made for someone else, away, no cooking, usual meals and meal rules. The newest `limit`
- *  (the page asks for one more to know whether older ones exist). `mine` keeps my own meals plus flat-wide rows. */
+/** Changes worth seeing: late, made for someone else, away, no cooking, usual meals, meal rules, rooms and rent shares, and
+ *  monthly bills started or stopped. The newest `limit` (the page asks for one more to know whether older ones exist).
+ *  `mine` keeps my own meals plus flat-wide rows; every room, rent and monthly bill change can move my rent, so it stays. */
 export const loadHistory = (db: Db, flatId: string, mine: string | null = null, limit = 50) => db<HistoryRow>(
   `select a.at, actor.name as actor, who.name as who, a.entity, a.entity_id as "entityId", a.after, a.before
    from audit_log a
    left join members actor on actor.id = a.by_member
    left join members who on who.flat_id = a.flat_id and who.id::text = split_part(a.entity_id, '|', 1)
    where a.flat_id = $1
-     and (a.entity in ('members', 'flats', 'cook')
+     and (a.entity in ('members', 'flats', 'cook', 'rooms', 'bill_templates')
           or (a.entity = 'meal_changes' and (a.entity_id like 'flat|%' or a.entity_id like '%|away'
               or coalesce((a.after->>'guests')::int, 0) <> coalesce((a.before->>'guests')::int, 0)   -- every guest change is worth seeing
               or coalesce((a.after->>'late')::boolean, false) or split_part(a.entity_id, '|', 1) <> a.by_member::text)))
-     and ($2::text is null or a.entity_id like 'flat|%' or split_part(a.entity_id, '|', 1) = $2::text)
+     and ($2::text is null or a.entity_id like 'flat|%' or a.entity in ('rooms', 'bill_templates') or split_part(a.entity_id, '|', 1) = $2::text)
    order by a.id desc limit $3::int`, [flatId, mine, limit]);
 
 /** Days from `from` on with no cooking, and which meals. */

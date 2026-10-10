@@ -247,7 +247,7 @@ describe('money storage', { timeout: 30000 }, () => {
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 120000, note: 'Wi-Fi', split: 'equal', repeat: true }));
     const [t] = await db<{ id: string }>(`select id from bill_templates where flat_id = $1`, [flatId]);
     expect(await stopRepeat(db, flatId, nafis, t.id)).toBe(true);
-    const [h] = await db<{ name: string }>(`select before->>'name' as name from audit_log where entity = 'bill_templates' and entity_id = $1`, [t.id]);
+    const [h] = await db<{ name: string }>(`select before->>'name' as name from audit_log where entity = 'bill_templates' and entity_id = $1 and after->>'removed' = 'true'`, [t.id]);
     expect(h.name).toBe('Wi-Fi');
   });
   it('who paid the shop must live here that day; money to and from someone who left still works', async () => {
