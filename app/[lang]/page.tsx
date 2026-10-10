@@ -7,9 +7,9 @@ import { Header } from './header';
 import { focus } from './ui';
 
 const h2 = 'font-display text-3xl font-bold';
-// ponytail: placeholder contacts, replace with the real WhatsApp number and email before launch
-const WHATSAPP = 'https://wa.me/8801700000000';
-const EMAIL = 'mailto:hello@bashabook.example';
+// contact links: a link shows only when it is set (null hides it), so a placeholder never looks like a real address
+const WHATSAPP: string | null = 'https://wa.me/8801852153575';
+const EMAIL: string | null = 'mailto:faiyazfahim743@gmail.com';
 
 /** Line icons for the feature cards (24px grid). */
 const ICONS = {
@@ -148,33 +148,6 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           </dl>
         </section>
 
-        <section className="grid gap-8 border-t border-line py-14 md:grid-cols-2 md:items-center">
-          <div>
-            <h2 className={h2}>{t.price.title}</h2>
-            <p className="mt-3 text-lg text-muted">{t.price.lead}</p>
-          </div>
-          <div className="rounded-3xl border border-line bg-surface p-6 sm:p-8">
-            <p className="flex items-baseline gap-2">
-              <span className="text-5xl font-bold tabular-nums">{t.price.amount}</span>
-              <span className="text-lg text-muted">{t.price.period}</span>
-            </p>
-            <p className="mt-2 text-muted">{t.price.note}</p>
-            <ul className="mt-6 space-y-3">
-              {t.price.features.map(f => (
-                <li key={f} className="flex items-start gap-3">
-                  <svg className="mt-1 size-5 shrink-0 text-leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                    <path d="m5 12.5 4.5 4.5L19 7.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 flex min-h-12 w-full items-center justify-center rounded-full bg-turmeric px-6 font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
-              {t.price.cta}
-            </Link>
-          </div>
-        </section>
-
         <section className="grid gap-6 border-t border-line py-14 md:grid-cols-[1fr_2fr] md:gap-12">
           <h2 className={h2}>{t.faqTitle}</h2>
           <div className="divide-y divide-line border-y border-line">
@@ -196,12 +169,16 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="font-semibold text-ink">{t.footer.tagline}</p>
             <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {WHATSAPP && (
               <a href={WHATSAPP} target="_blank" rel="noopener noreferrer" className={`inline-flex min-h-11 items-center font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`}>
-                {t.footer.whatsapp}
-              </a>
+                  {t.footer.whatsapp}
+                </a>
+              )}
+              {EMAIL && (
               <a href={EMAIL} className={`inline-flex min-h-11 items-center font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`}>
-                {t.footer.email}
-              </a>
+                  {t.footer.email}
+                </a>
+              )}
             </div>
           </div>
           <p>{t.footer.privacy}</p>
