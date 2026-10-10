@@ -248,9 +248,10 @@ export async function removeEntry(db: Db, flatId: string, by: Actor, id: string,
  *  `guard` (every form passes it): rooms, rent shares and meal weights are read as they are today by every open month. So while
  *  a month that has ended is still open, a change that can move its bill is refused with 'earlier' unless `fix` says it
  *  deliberately corrects it; the history row then lists the months it corrected (`fixFor`). It asks even when that month has
- *  no rent bill yet: one can still be added or put back later. In the same statement the ended months are locked too (after
- *  the room or member row), so a close running now finishes first and its month drops out: nothing is refused for, or claims
- *  to fix, a month already closed. */
+ *  no rent bill yet: one can still be added or put back later. In the same statement the ended months are locked too, so a
+ *  close running now finishes first and its month drops out: nothing is refused for, or claims to fix, a month already closed.
+ *  The ask and the "did it change" check are made on the updated row, which Postgres checks again against the newest version
+ *  after waiting, so a change saved at the same moment from another tab is asked or applied, never skipped. */
 export type Guard = { today: string; fix: boolean };
 /** The oldest month that has ended (before today's month) and is still open, or null. */
 export async function endedOpenMonth(db: Db, flatId: string, today: string) {
@@ -261,6 +262,11 @@ export async function endedOpenMonth(db: Db, flatId: string, today: string) {
  *  order, the order the month triggers lock them in (migration 014). */
 const ended = (t: string) => `ended as (select month from months where flat_id = $1 and status = 'open'
     and month < date_trunc('month', ${t}::text::date) order by month for no key update)`;
+/** SQL comment on the gate: `(select ask from g) is not null` is always true and names no row, so Postgres works out `g` once,
+ *  before reading the row. For an unticked save that locks the oldest ended month before the row (as before Plan 7); the other
+ *  open months lock after it, through fixNote and the month triggers. Writers don't share one lock order (the trigger writers
+ *  lock the row first), so a rare deadlock is possible; lib/db.ts runs the statement once more. */
+const GATE = '-- (select ask from g) is not null: see GATE.';
 /** SQL: the history note for a ticked fix, naming every month it corrected (`m`: a set of months), or nothing. */
 const fixNote = (f: string, m: string) => `case when ${f}::boolean and exists (select 1 from ${m}) then jsonb_build_object('fixFor',
     (select jsonb_agg(month::text order by month) from ${m})) else '{}'::jsonb end`;
@@ -283,15 +289,18 @@ export async function setRent(db: Db, flatId: string, by: Actor, roomId: string,
   if (by.role !== 'manager' || !Number.isInteger(rent) || rent < 0) return false;
   const [r] = await db<{ n: number; blocked: boolean }>(
     `with ${ended('$5')},
-     g as (select $5::text is not null and not $6::boolean and exists (select 1 from ended)
-         and exists (select 1 from rooms where flat_id = $1 and id = $2 and rent_share_poisha <> $3) as blocked),
-     -- the old rent comes from the row this update locks (the newest committed one), never from the form
+     g as (select $5::text is not null and not $6::boolean and exists (select 1 from ended) as ask),
+     -- The old rent comes from the row this update locks (the newest committed one), never from the form. Whether the rent
+     -- differs is checked on the updated row itself, which Postgres checks again against the newest version after waiting:
+     -- this statement's own snapshot may predate a change saved at the same moment. ${GATE}
      r as (update rooms x set rent_share_poisha = $3
        from (select id, rent_share_poisha from rooms where flat_id = $1 and id = $2 for no key update) o
-       where x.id = o.id and o.rent_share_poisha <> $3 and not (select blocked from g) returning x.*, o.rent_share_poisha as was),
+       where x.id = o.id and (select ask from g) is not null and not ((select ask from g) and x.rent_share_poisha <> $3)
+       returning x.*, o.rent_share_poisha as was),
      a as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member) select $1, 'rooms', r.id::text,
-       jsonb_build_object('rent_share_poisha', r.was), to_jsonb(r) - 'was' || ${fixNote('$6', 'ended')}, $4 from r)
-     select (select count(*) from r)::int as n, (select blocked from g) as blocked`,
+       jsonb_build_object('rent_share_poisha', r.was), to_jsonb(r) - 'was' || ${fixNote('$6', 'ended')}, $4 from r where r.was <> $3)
+     select (select count(*) from r where was <> $3)::int as n,
+       (select ask from g) and not exists (select 1 from r) and exists (select 1 from rooms where flat_id = $1 and id = $2) as blocked`,
     [flatId, roomId, rent, by.memberId, guard?.today ?? null, guard?.fix ?? false]);
   return r.blocked ? 'earlier' : r.n > 0;   // false: no such room in this flat, or the same rent again (no history line)
 }
@@ -301,18 +310,22 @@ export async function setRoom(db: Db, flatId: string, by: Actor, memberId: strin
   // only the months this person lived in move; an October newcomer's room changes no ended month
   const [r] = await db<{ n: number; blocked: boolean }>(
     `with ${ended('$5')},
-     hit as (select e.month from ended e, members p where p.flat_id = $1 and p.id = $2 and p.room_id is distinct from $3::uuid
+     hit as (select e.month from ended e, members p where p.flat_id = $1 and p.id = $2
        and p.joined_on <= (e.month + interval '1 month' - interval '1 day')::date and (p.left_on is null or p.left_on >= e.month)),
-     g as (select $5::text is not null and not $6::boolean and exists (select 1 from hit) as blocked),
-     -- the old room comes from the row this update locks, never from the form; names are saved too (rooms are never renamed)
+     g as (select $5::text is not null and not $6::boolean and exists (select 1 from hit) as ask),
+     -- the old room comes from the row this update locks, never from the form; names are saved too (rooms are never renamed).
+     -- Whether the room differs is checked on the updated row itself, as in setRent. ${GATE}
      m as (update members p set room_id = $3
        from (select id, room_id from members where flat_id = $1 and id = $2 for no key update) o
-       where p.id = o.id and o.room_id is distinct from $3::uuid and not (select blocked from g)
+       where p.id = o.id and (select ask from g) is not null and not ((select ask from g) and p.room_id is distinct from $3::uuid)
        and ($3::uuid is null or exists (select 1 from rooms where flat_id = $1 and id = $3)) returning p.id, p.room_id, o.room_id as was),
      a as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
        select $1, 'rooms', m.id::text, jsonb_build_object('roomId', m.was, 'room', (select name from rooms where id = m.was)),
-         jsonb_build_object('roomId', m.room_id, 'room', (select name from rooms where id = m.room_id)) || ${fixNote('$6', 'hit')}, $4 from m)
-     select (select count(*) from m)::int as n, (select blocked from g) as blocked`,
+         jsonb_build_object('roomId', m.room_id, 'room', (select name from rooms where id = m.room_id)) || ${fixNote('$6', 'hit')}, $4
+       from m where m.was is distinct from m.room_id)
+     select (select count(*) from m where was is distinct from room_id)::int as n,
+       (select ask from g) and not exists (select 1 from m) and exists (select 1 from members where flat_id = $1 and id = $2)
+         and ($3::uuid is null or exists (select 1 from rooms where flat_id = $1 and id = $3)) as blocked`,
     [flatId, memberId, roomId, by.memberId, guard?.today ?? null, guard?.fix ?? false]);
   return r.blocked ? 'earlier' : r.n > 0;   // false: no such member or room in this flat, or the same room again (no history line)
 }

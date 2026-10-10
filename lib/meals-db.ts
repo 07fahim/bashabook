@@ -229,23 +229,31 @@ export const isInMeals = async (db: Db, flatId: string, memberId: string) =>
 export async function updateSettings(db: Db, flatId: string, by: string, s: { cutoff: string; weights: Record<Meal, number> }, now: string, fix = false): Promise<'ok' | 'earlier'> {
   const reopened = !isLocked(addDays(now.slice(0, 10), 1), now, s.cutoff);
   const [r] = await db<{ blocked: boolean }>(
-    `with old as (select cutoff_time::text as cutoff, json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights,
-         (weight_b, weight_l, weight_d) is distinct from ($3::int, $4::int, $5::int) as reweigh from flats where id = $1),
-     -- the ended months still open, locked so a close running now finishes first and its month drops out (see addRoom). No lock
-     -- on old: it may run after up changed the flat row, and a locking read skips a row its own statement changed (the
-     -- history row would vanish). up locks the flat row itself.
+    `with
+     -- the ended months still open, locked so a close running now finishes first and its month drops out (see addRoom)
      ended as (select month from months where flat_id = $1 and status = 'open' and month < date_trunc('month', $9::text::date)
        order by month for no key update),
-     g as (select (select reweigh from old) and not $10::boolean and exists (select 1 from ended) as blocked),
+     -- the flat row first, then the months, the order the ledger writers of 011 and 012 take (otherwise a lock-time save and a
+     -- September entry at the same moment deadlock). fl runs inside g, before up, so it never meets a row up already changed.
+     fl as (select 1 from flats where id = $1 for no key update),
+     g as (select exists (select 1 from fl) and not $10::boolean and exists (select 1 from ended) as ask),
+     -- The old values come from the flat row this update locks (never a separate locking read: it may run after up and skip
+     -- the row up changed). Whether the weights change is checked on the updated row itself, which Postgres checks again
+     -- against the newest version after waiting: this statement's snapshot may predate a change saved at the same moment.
+     -- (select ask from g) is not null is always true and names no row: Postgres works out g once, before reading the flat row.
+     up as (update flats f set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5,
+       lock_date = case when $8::boolean then null else f.lock_date end, lock_count = case when $8::boolean then null else f.lock_count end
+       from (select id, cutoff_time, weight_b, weight_l, weight_d from flats where id = $1 for no key update) o
+       where f.id = o.id and (select ask from g) is not null
+         and not ((select ask from g) and (f.weight_b, f.weight_l, f.weight_d) is distinct from ($3::int, $4::int, $5::int))
+       returning o.cutoff_time::text as cutoff, json_build_object('b', o.weight_b, 'l', o.weight_l, 'd', o.weight_d) as weights,
+         (o.weight_b, o.weight_l, o.weight_d) is distinct from ($3::int, $4::int, $5::int) as reweigh),
      log as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
-       select $1, 'flats', 'flat|settings', to_jsonb(old) - 'reweigh',
-         $6::text::jsonb || case when $10::boolean and old.reweigh and exists (select 1 from ended)
+       select $1, 'flats', 'flat|settings', jsonb_build_object('cutoff', up.cutoff, 'weights', up.weights),
+         $6::text::jsonb || case when $10::boolean and up.reweigh and exists (select 1 from ended)
            then jsonb_build_object('fixFor', (select jsonb_agg(month::text order by month) from ended)) else '{}'::jsonb end, $7
-       from old where not (select blocked from g)),
-     up as (update flats set cutoff_time = $2, weight_b = $3, weight_l = $4, weight_d = $5,
-       lock_date = case when $8::boolean then null else lock_date end, lock_count = case when $8::boolean then null else lock_count end
-     where id = $1 and not (select blocked from g))
-     select (select blocked from g) as blocked`,
+       from up)
+     select not exists (select 1 from up) as blocked`,
     [flatId, s.cutoff, s.weights.b, s.weights.l, s.weights.d, JSON.stringify(s), by, reopened, now.slice(0, 10), fix]);
   return r.blocked ? 'earlier' : 'ok';
 }
