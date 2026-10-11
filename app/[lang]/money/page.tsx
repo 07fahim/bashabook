@@ -320,7 +320,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               });
               const note = x.settleNote.replace('{name}', collector.name).replace('{next}', fmtMonth(next));
               const text = [`${mo.flat.name} · ${fmtMonth(month)}`, ...lines, `${x.withName.replace('{name}', holder)}: ${fmtSigned(mo.result.fund)}`,
-                `${x.mealRate}: ${fmtExact(mo.result.mealRate)}`, '', note].join('\n');
+                `${x.mealRate}: ${fmtExact(mo.result.mealRate)}`, ...(lines.length ? ['', note] : [])].join('\n');
               return (<>
                 <h3 className="mt-5 font-semibold">{x.settleUp}</h3>
                 {lines.length ? <ul className="mt-1 list-disc space-y-1 pl-5 md:columns-2 md:gap-10">{lines.map(s => <li key={s}>{s}</li>)}</ul> : <p className="mt-1 text-muted">{x.nobodyOwes}</p>}

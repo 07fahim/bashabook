@@ -153,7 +153,7 @@ export async function usualAction(_: FormState, d: FormData): Promise<FormState>
   // every open month keeps the meals it had, however old: freeze from the oldest open month, not just the edit window
   const open = await openStart(db, me.flatId), locked = await lastLocked(me.flatId);
   const r = await unlessClosed(() => setDefaults(db, me.flatId, me.memberId, usual, open, locked, inMeals === was ? null : inMeals));
-  if (r === 'closed') return { error: m.errors.closed };
+  if (r === 'closed') return { error: m.errors.monthClosed };
   if (inMeals !== was) { refresh(); return { done: inMeals ? m.savedShared : m.savedOwn }; }
   refresh();
   return { done: m.saved };
@@ -190,7 +190,7 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
   if (to > addDays(from, 59)) return { error: m.errors.range };
   if (!meals.length) return { error: m.errors.pickMeal };
   const locked = await lastLocked(me.flatId);
-  if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, locked)) === 'closed') return { error: m.errors.closed };
+  if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, locked)) === 'closed') return { error: m.errors.monthClosed };
   refresh();
   return { done: m.saved };
 }
