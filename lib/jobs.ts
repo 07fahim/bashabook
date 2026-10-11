@@ -12,8 +12,9 @@ const claim = async (db: Db, flatId: string, date: string, job: string) =>
 
 /** Every 5 minutes from cron-job.org. `now` is Dhaka 'YYYY-MM-DDTHH:MM'. Postgres picks the flats with something due (two
  *  queries for the whole run, however many flats there are); each is then claimed and sent one by one.
- *  Meal: in the hour before the flat's cutoff, to everyone still living there (nobody is ever "unset": they eat their usual
- *  meals unless they change them), skipped when nothing is cooked tomorrow. Close: once per month to the collector, from the
+ *  Meal: in the hour before the flat's cutoff, to everyone in the flat's meals who still lives there tomorrow (nobody is ever
+ *  "unset": they eat their usual meals unless they change them), skipped when nothing is cooked tomorrow. Cutoffs start at
+ *  01:00 (settingsAction), so the window never wraps midnight. Close: once per month to the collector, from the
  *  1st at 10:00, for the oldest month still open.
  *  ponytail: each due reminder is three round trips (claim, members, subscriptions), about 0.25 s from Singapore; the route
  *  has 25 s, so ~80 due reminders per run. A pilot has a handful of flats; batch the claims if flats ever reach dozens. */
@@ -29,7 +30,7 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
        and not exists (select 1 from sent_jobs where flat_id = flats.id and date = $2::date and job_type = 'meal')`, [time, tomorrow]);
   for (const f of meals) {
     if (!await claim(db, f.id, tomorrow, 'meal')) continue;
-    const ids = (await db<{ id: string }>(`select id from members where flat_id = $1 and (left_on is null or left_on >= $2::date)`, [f.id, today])).map(m => m.id);
+    const ids = (await db<{ id: string }>(`select id from members where flat_id = $1 and in_meals and (left_on is null or left_on > $2::date)`, [f.id, today])).map(m => m.id);
     out.meal++; add(await send(db, ids, mealMsg(f.lang, f.cutoff)));
   }
 

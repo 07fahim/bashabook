@@ -15,8 +15,9 @@ How BashaBook's reminders work and what to check when they don't.
 - No amounts, PINs, phone numbers or balances ever appear in a notification: names and times only.
 - Delivery is best effort. Nothing is retried: Home shows the same facts.
 - Capacity: each due reminder costs about a quarter second of database round trips and the route has 25 s, so about 80
-  reminders per run. Measured 2026-10-11 on the test copy: 807 due reminders took 3.5 minutes. Batch the claims before the
-  app has dozens of flats.
+  reminders per run. Measured 2026-10-11 on the test copy: 807 due reminders took 3.5 minutes. A run cut off at 25 s loses nothing: the
+  next run, five minutes later, picks up what is still due inside the hour-long window. Batch the claims before the app has
+  dozens of flats.
 
 ## When something is off
 

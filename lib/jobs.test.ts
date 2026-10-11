@@ -20,7 +20,8 @@ describe('timed reminders', { timeout: 30000 }, () => {
     expect((await runJobs(db, '2026-10-05T21:00', s.send)).meal).toBe(1);
     expect((await runJobs(db, '2026-10-05T21:05', s.send)).meal).toBe(0);   // claimed already
     expect(s.calls.length).toBe(1);
-    expect(s.calls[0].ids.length).toBe(2);
+    const [t] = await db<{ id: string }>(`select id from members where flat_id = $1 and role = 'member'`, [f.flatId]);
+    expect(s.calls[0].ids.sort()).toEqual([f.memberId, t.id].sort());
     expect(s.calls[0].msg.title).toContain('10:00 pm');
     expect(s.calls[0].msg.url).toBe('/bn/meals');
     // another cutoff moves the window
@@ -32,6 +33,15 @@ describe('timed reminders', { timeout: 30000 }, () => {
     expect((await runJobs(db, '2026-10-07T19:00', s.send)).meal).toBe(0);
     await db(`delete from no_cook where flat_id = $1 and meal = 'd'`, [f.flatId]);
     expect((await runJobs(db, '2026-10-07T19:01', s.send)).meal).toBe(1);
+    // a leaver whose last day is today has no meals tomorrow; someone cooking for themselves has none to lock
+    await db(`update members set left_on = '2026-10-08' where id = $1`, [t.id]);
+    await db(`update members set in_meals = false where id = $1`, [f.memberId]);
+    expect((await runJobs(db, '2026-10-08T19:00', s.send)).meal).toBe(1);
+    expect(s.calls.at(-1)!.ids).toEqual([]);
+    // two runs at once: the claim, not the filter, keeps it to one
+    await db(`update members set in_meals = true, left_on = null where flat_id = $1`, [f.flatId]);
+    const both = await Promise.all([runJobs(db, '2026-10-09T19:00', s.send), runJobs(db, '2026-10-09T19:00', s.send)]);
+    expect(both[0].meal + both[1].meal).toBe(1);
   });
 
   it('close: once per month to the collector from the 1st at 10:00, and says how many confirmations are missing', async () => {
@@ -43,6 +53,10 @@ describe('timed reminders', { timeout: 30000 }, () => {
     expect((await runJobs(db, '2026-10-01T09:59', s.send)).close).toBe(0);   // too early in the day
     expect((await runJobs(db, '2026-10-01T10:00', s.send)).close).toBe(1);
     expect((await runJobs(db, '2026-10-01T10:05', s.send)).close).toBe(0);
+    // a flat with only the current month open has nothing to close
+    const h = await createFlat(db, { flatName: 'J4', name: 'Rafi', pin: '1234', others: [], today: '2026-10-01', lang: 'en' });
+    await openMonth(db, h.flatId, '2026-10-01');
+    expect((await runJobs(db, '2026-10-01T10:06', s.send)).close).toBe(0);
     const c = s.calls.find(c => c.msg.url === '/en/manage')!;
     expect(c.ids).toEqual([f.memberId]);
     expect(c.msg.title).toBe('September is ready to close');
@@ -54,7 +68,7 @@ describe('timed reminders', { timeout: 30000 }, () => {
     expect((await runJobs(db, '2026-10-01T10:10', s.send)).close).toBe(1);
     const w = s.calls.find(c => c.msg.url === '/en/money')!;
     expect(w.ids).toEqual([g.memberId]);
-    expect(w.msg.title).toBe('September is waiting on 1 confirmations');
+    expect(w.msg.title).toBe('September: 1 still to confirm');
   });
 
   it('authorized: bearer secret only, timing-safe, no secret configured means nobody', () => {

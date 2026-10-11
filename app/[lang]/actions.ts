@@ -166,7 +166,8 @@ export async function settingsAction(_: FormState, d: FormData): Promise<FormSta
   const cutoff = str(d, 'cutoff').slice(0, 5);
   const [b, l, dd] = MEALS.map(x => (/^(\d{1,2}(\.\d{1,2})?|\.\d{1,2})$/.test(str(d, `w_${x}`)) ? Math.round(Number(str(d, `w_${x}`)) * 100) : -1));
   const weightsOk = [b, l, dd].every(w => w >= 0 && w <= 1000) && b + l + dd > 0;
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(cutoff) || !weightsOk) return { error: m.errors.bad };
+  // from 01:00: a cutoff in the midnight hour would lock tomorrow from the start of today, and the reminder window can't wrap
+  if (!/^(0[1-9]|1\d|2[0-3]):[0-5]\d$/.test(cutoff) || !weightsOk) return { error: m.errors.bad };
   const now = nowDhaka(), tomorrow = addDays(now.slice(0, 10), 1), was = await mealRules(db, me.flatId);
   const set = await updateSettings(db, me.flatId, me.memberId, { cutoff, weights: { b, l, d: dd } }, now, d.get('fix') === '1');
   if (set === 'earlier') return await earlier(lang, me.flatId, now.slice(0, 10));
