@@ -13,6 +13,7 @@ import {
 import { toPoisha } from '@/lib/money';
 import { addEntry, addRoom, confirmEntry, endedOpenMonth, monthOf, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
+import { removePush, savePush, type PushSub } from '@/lib/push-db';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
@@ -554,4 +555,17 @@ export async function declineHandoverAction(_: FormState, d: FormData): Promise<
   if (r === 'ok' || r === 'declined') return { done: x.takeDeclined.replace('{name}', from) };
   if (r === 'accepted') return { done: x.takeDone };
   return { error: x.takeStale.replace('{name}', from) };
+}
+
+/** This browser's push subscription. flatId/memberId come from the session, never from the client. */
+export async function savePushAction(sub: PushSub) {
+  const me = await requireMember('bn');
+  const ok = typeof sub?.endpoint === 'string' && sub.endpoint.startsWith('https://') && sub.endpoint.length < 2000
+    && typeof sub.keys?.p256dh === 'string' && typeof sub.keys?.auth === 'string';
+  if (ok) await savePush(db, me.flatId, me.memberId, { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } });
+}
+
+export async function removePushAction(endpoint: string) {
+  const me = await requireMember('bn');
+  if (typeof endpoint === 'string') await removePush(db, me.memberId, endpoint);
 }
