@@ -2,7 +2,7 @@
 
 import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
@@ -64,6 +64,14 @@ export async function addMemberAction(_: FormState, d: FormData): Promise<FormSt
   if (!(await addMember(db, me.flatId, name, joinedOn))) return { error: a.errors.nameTaken };
   refresh();
   return { done: a.added };
+}
+
+export async function newCodeAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), a = getDictionary(lang).app;
+  const me = await requireManager(lang);
+  if (!(await newFlatCode(db, me.flatId, me))) return { error: a.errors.notFound };
+  refresh();
+  return { done: a.newCodeDone };
 }
 
 export async function resetPinAction(_: FormState, d: FormData): Promise<FormState> {

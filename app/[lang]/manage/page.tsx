@@ -11,7 +11,7 @@ import { loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { listRepeats, loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireManager } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { addMemberAction, addRoomAction, adminSetAction, cancelHandoverAction, offerHandoverAction, entryAction, noCookAction, noCookCancelAction, bringBackAction, leavingAction, removePhotoAction, renameAction, rentAction, resetPinAction, setRoomAction, settingsAction, stopRepeatAction } from '../actions';
+import { addMemberAction, newCodeAction, addRoomAction, adminSetAction, cancelHandoverAction, offerHandoverAction, entryAction, noCookAction, noCookCancelAction, bringBackAction, leavingAction, removePhotoAction, renameAction, rentAction, resetPinAction, setRoomAction, settingsAction, stopRepeatAction } from '../actions';
 import { Avatar } from '../avatar';
 import { CloseCard } from '../close-card';
 import { getDictionary, hasLocale } from '../dictionaries';
@@ -21,6 +21,7 @@ import { FocusHere } from '../focus-here';
 import { Header } from '../header';
 import { ConfirmList } from '../money/bits';
 import { Nav } from '../nav';
+import { ShareButton } from '../share-button';
 import { checkChip, field, Field, Fold, focus, Group, link, PinField, primary, secondary, PageSkeleton } from '../ui';
 
 type Props = PageProps<'/[lang]/manage'>;
@@ -434,6 +435,15 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
               <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={firstOpen} />
               <button className={primary}>{a.addBtn}</button>
+            </ActionForm>
+          </Fold>
+          <Fold row title={a.joinLinkTitle} lead={a.joinLinkLead} level={3}>
+            <p className="mt-3">{a.code}: <span className="font-bold tracking-widest">{me.joinCode}</span></p>
+            <div className="mt-3 sm:max-w-xs"><ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} /></div>
+            <p className="mt-5 max-w-prose text-[15px] text-muted">{a.newCodeLead}</p>
+            <ActionForm action={newCodeAction} className="mt-3">
+              <input type="hidden" name="lang" value={lang} />
+              <button className={`${secondary} sm:w-auto`}>{a.newCodeBtn}</button>
             </ActionForm>
           </Fold>
           </Group>
