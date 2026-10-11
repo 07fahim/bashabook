@@ -417,7 +417,7 @@ const bn = {
     billNameHint: 'যেমন: Wi-Fi, ভাড়া, রাঁধুনির বেতন',
     whoPaidShop: 'দোকানে কে টাকা দিয়েছে?',
     whoPaidBill: 'বিলটা কে দিয়েছে?',
-    flatMoney: '{name} (ফ্ল্যাটের টাকা)',
+    flatMoney: 'ফ্ল্যাটের টাকা ({name}-এর কাছে)',
     whoShares: 'বিলটা কারা ভাগ করবে?',
     splits: {
       here: 'সেদিন যারা ফ্ল্যাটে ছিল, সবাই',
@@ -966,7 +966,7 @@ const en: Dict = {
     billNameHint: 'e.g. Wi-Fi, rent, cook’s pay',
     whoPaidShop: 'Who paid the shop?',
     whoPaidBill: 'Who paid the bill?',
-    flatMoney: '{name} (flat money)',
+    flatMoney: 'Flat money ({name} holds it)',
     whoShares: 'Who shares this bill?',
     splits: {
       here: 'Everyone living here on that date',
