@@ -1,5 +1,5 @@
-import { getDictionary, type Locale } from '@/app/[lang]/dictionaries';
-import { fmtMonth, fmtTime } from '@/app/[lang]/format';
+import { getDictionary, type Locale } from '../app/[lang]/dictionaries';
+import { fmtMonth, fmtTime } from '../app/[lang]/format';
 import type { Msg } from './push';
 
 const t = (lang: Locale) => getDictionary(lang).push;
