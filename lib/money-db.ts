@@ -41,7 +41,7 @@ export async function openMonth(db: Db, flatId: string, month: string) {
 async function insertEntry(db: Db, flatId: string, by: string,
   e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[] },
   status: 'ok' | 'pending', repeat: { split: Split; selected: string[] } | null = null) {
-  await db(
+  return (await db(
     `with l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by)
        values (coalesce($15::uuid, gen_random_uuid()), $1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10)
        on conflict (id) do nothing returning *),
@@ -49,9 +49,9 @@ async function insertEntry(db: Db, flatId: string, by: string,
      t as (insert into bill_templates (flat_id, name, amount_poisha, split, selected_member_ids)
        select $1, $8, $4, $12, array(select json_array_elements_text($13::text::json)::uuid) from l where $14::boolean returning *),
      th as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'bill_templates', t.id::text, to_jsonb(t), $10 from t)
-     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), $10 from l`,
+     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), $10 from l returning 1`,
     [flatId, e.date, e.type, e.amount, e.paidBy, e.memberId, e.split, e.note, status, by, JSON.stringify(e.split === 'selected' ? e.selected : []),
-     repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null, e.id ?? null]);
+     repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null, e.id ?? null])).length > 0;   // false: this id was saved already
 }
 
 /** Everything the money screens need for one month. The version is read first: closeMonth freezes only results computed
@@ -164,7 +164,8 @@ export async function entryFrom(db: Db, flatId: string, by: Actor, today: string
 
 /** Adds an entry if the rules allow it. 'rooms' = rent by room asked before rooms and rents are set. With `today` (every form
  *  does), the date must lie from entryFrom to today ('date'), and only an entry in this month may repeat monthly. */
-export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, today?: string): Promise<'ok' | 'bad' | 'rooms' | 'gone' | 'date'> {
+/** 'again': the same entry (same id) was saved before, so nothing new went in: the form's retry, not an error. */
+export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, today?: string): Promise<'ok' | 'again' | 'bad' | 'rooms' | 'gone' | 'date'> {
   const boss = by.role === 'manager', moving = e.type === 'deposit' || e.type === 'payout';
   if (today !== undefined) {
     if (e.date > today || e.date < await entryFrom(db, flatId, by, today)) return 'date';
@@ -206,8 +207,7 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, t
   await openMonth(db, flatId, month);
   // a repeated "everyone living here" bill becomes "everyone, by days": the people living here change month to month
   const repeat = e.repeat ? (split === 'selected' && e.split !== 'here' ? { split: 'selected' as const, selected } : { split: e.split === 'here' ? 'equal' as const : split!, selected: [] }) : null;
-  await insertEntry(db, flatId, by.memberId, { ...e, split, selected }, pending ? 'pending' : 'ok', repeat);
-  return 'ok';
+  return await insertEntry(db, flatId, by.memberId, { ...e, split, selected }, pending ? 'pending' : 'ok', repeat) ? 'ok' : 'again';
 }
 
 /** The receiver's tap: the collector confirms deposits, the person who got the money confirms a payout. */

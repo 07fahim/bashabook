@@ -320,7 +320,7 @@ describe('corrections', { timeout: 30000 }, () => {
   it('a retried money entry with the same one-time id is recorded once', async () => {
     const { flatId, ids, nafis } = await flat();
     const id = randomUUID();
-    for (let i = 0; i < 2; i++) expect(await addEntry(db, flatId, nafis, e({ id, type: 'deposit', amount: 7000, memberId: ids.Zarif }))).toBe('ok');
+    for (const want of ['ok', 'again']) expect(await addEntry(db, flatId, nafis, e({ id, type: 'deposit', amount: 7000, memberId: ids.Zarif }))).toBe(want);   // the retry says so, and sends no second nudge
     expect(await db(`select 1 from ledger where id = $1`, [id])).toHaveLength(1);
   });
 });

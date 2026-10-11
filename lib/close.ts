@@ -69,7 +69,7 @@ export async function coverGap(db: Db, flatId: string, by: Actor, today: string,
   if (mo.entries.some(x => x.status === 'pending') || !mo.result.invariantOk) return 'bad';   // same blockers as the close card
   if (-fund !== shown) return 'changed';
   return (await addEntry(db, flatId, by, { id: gapId(flatId, month, mo.info.version), type: 'deposit', amount: -fund,
-    date: daysOfMonth(month).at(-1)!, note, paidBy: null, memberId: by.memberId, split: null, selected: [] })) === 'ok' ? 'ok' : 'bad';
+    date: daysOfMonth(month).at(-1)!, note, paidBy: null, memberId: by.memberId, split: null, selected: [] })) in { ok: 1, again: 1 } ? 'ok' : 'bad';
 }
 
 /** Saves every missing meal row of an open `month` as the calendar shows it now: a saved row stays as it is, a no-cooking

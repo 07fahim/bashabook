@@ -383,14 +383,17 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
     memberId: moving ? who || me.memberId : null,
     repeat: type === 'bill' && d.get('repeat') === '1',   // saved with the bill in one statement
   }, today));
-  if (r !== 'ok') return { error: x.errors[r] };
-  // money between two people waits for the receiver's tap: tell them after the response, never instead of it
+  if (r !== 'ok' && r !== 'again') return { error: x.errors[r] };
+  // money between two people waits for the receiver's tap: tell them after the response, never instead of it ('again' is the
+  // form's retry of an entry already saved: nothing new, so no second nudge)
   const receiver = type === 'deposit' && me.role !== 'manager' ? 'collector' : type === 'payout' && who && who !== me.memberId ? who : null;
-  if (receiver) after(async () => {
-    const [to] = await db<{ id: string; lang: Locale | null }>(
-      receiver === 'collector' ? `select id, language as lang from members where flat_id = $1 and role = 'manager'` : `select id, language as lang from members where flat_id = $1 and id = $2`,
-      receiver === 'collector' ? [me.flatId] : [me.flatId, receiver]);
-    if (to) await sendPush(db, [to.id], (type === 'deposit' ? depositMsg : payoutMsg)(to.lang ?? me.lang, me.name));
+  if (receiver && r === 'ok') after(async () => {
+    try {
+      const [to] = await db<{ id: string; lang: Locale | null }>(
+        receiver === 'collector' ? `select id, language as lang from members where flat_id = $1 and role = 'manager'` : `select id, language as lang from members where flat_id = $1 and id = $2`,
+        receiver === 'collector' ? [me.flatId] : [me.flatId, receiver]);
+      if (to) await sendPush(db, [to.id], (type === 'deposit' ? depositMsg : payoutMsg)(to.lang ?? me.lang, me.name));
+    } catch (e) { console.warn('push failed', String(e)); }
   });
   refresh();
   return { done: x.saved };
@@ -529,8 +532,10 @@ export async function offerHandoverAction(_: FormState, d: FormData): Promise<Fo
   refresh();
   if (r === 'ok') {
     after(async () => {
-      const [rcv] = await db<{ lang: Locale | null }>(`select language as lang from members where flat_id = $1 and id = $2`, [me.flatId, to]);
-      await sendPush(db, [to], handoverMsg(rcv?.lang ?? me.lang, me.name));
+      try {
+        const [rcv] = await db<{ lang: Locale | null }>(`select language as lang from members where flat_id = $1 and id = $2`, [me.flatId, to]);
+        await sendPush(db, [to], handoverMsg(rcv?.lang ?? me.lang, me.name));
+      } catch (e) { console.warn('push failed', String(e)); }
     });
     return { done: x.saved };
   }
