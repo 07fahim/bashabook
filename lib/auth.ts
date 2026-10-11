@@ -33,6 +33,7 @@ export async function createFlat(db: Db, f: { flatName: string; name: string; pi
  *  everyone signed in stays signed in (sessions don't depend on the code). The history says so, without the code. */
 export async function newFlatCode(db: Db, flatId: string, by: { memberId: string; role: 'member' | 'manager' }, gen = newJoinCode) {
   if (by.role !== 'manager') return null;
+  // ponytail: a draw equal to this flat's own code (about 1 in 900 million) changes nothing; read the old code first if that matters
   for (let i = 0; i < 3; i++) {
     const code = gen();
     try {

@@ -440,11 +440,15 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           <Fold row title={a.joinLinkTitle} lead={a.joinLinkLead} level={3}>
             <p className="mt-3">{a.code}: <span className="font-bold tracking-widest">{me.joinCode}</span></p>
             <div className="mt-3 sm:max-w-xs"><ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} /></div>
-            <p className="mt-5 max-w-prose text-[15px] text-muted">{a.newCodeLead}</p>
-            <ActionForm action={newCodeAction} className="mt-3">
-              <input type="hidden" name="lang" value={lang} />
-              <button className={`${secondary} sm:w-auto`}>{a.newCodeBtn}</button>
-            </ActionForm>
+            {/* a second tap, as for every flat-wide or per-person change here: it sits right under Share and kills the old link */}
+            <details className="mt-4">
+              <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{a.newCodeBtn}</summary>
+              <p className="mt-2 max-w-prose text-[15px] text-muted">{a.newCodeLead}</p>
+              <ActionForm action={newCodeAction} className="mt-3">
+                <input type="hidden" name="lang" value={lang} />
+                <button className={`${secondary} sm:w-auto`}>{a.newCodeConfirm}</button>
+              </ActionForm>
+            </details>
           </Fold>
           </Group>
         </div>
