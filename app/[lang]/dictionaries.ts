@@ -65,7 +65,6 @@ const bn = {
     ['বাসাবুক কি আমাদের টাকা রাখে?', 'না। এখন যেভাবে দেন, বিকাশ, নগদ বা ক্যাশে, সেভাবেই দেবেন। বাসাবুক শুধু লিখে রাখে কে কত দিল।'],
     ['মাসের মাঝখানে কেউ উঠলে বা চলে গেলে?', 'যে কয়দিন ছিল, সেই কয়দিনের হিসাবে বিলের ভাগ হয়। মাস শেষে তার হিসাবও বাকিদের মতোই মিটে যায়।'],
     ['সবাই কি সবার এন্ট্রি দেখতে পারে?', 'হ্যাঁ। প্রতিটা বাজার, বিল আর জমা ফ্ল্যাটের সবাই দেখতে পারে, তাই হিসাব নিয়ে সন্দেহ থাকে না।'],
-    ['আইফোনে চলবে?', 'হ্যাঁ, অ্যান্ড্রয়েড আর আইফোন দুটোতেই চলে।'],
   ],
   footer: {
     tagline: 'বাসাবুক · শেয়ার্ড ফ্ল্যাটের হিসাব',
@@ -577,7 +576,6 @@ const en: Dict = {
     ['Does BashaBook hold our money?', 'No. You pay by bKash, Nagad or cash as you do now. BashaBook only records who paid what.'],
     ['What if someone moves in or out mid-month?', 'Bills are shared by the days each person stayed. Their balance settles at month end like everyone else’s.'],
     ['Can everyone see every entry?', 'Yes. Every bazar, bill and deposit is visible to the whole flat, so nobody has to take the numbers on trust.'],
-    ['Does it work on iPhone?', 'Yes, on Android and iPhone.'],
   ],
   footer: {
     tagline: 'BashaBook · accounts for shared flats',
