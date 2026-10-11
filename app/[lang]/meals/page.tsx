@@ -81,6 +81,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     if (h.entity === 'members') {
       if (a.pinReset) return a.admin ? `${who} · ${m.pinResetTeam}` : `${actor} · ${who} · ${m.pinResetHistory}`;
       if (a.back) return `${actor} · ${who} · ${m.backHistory}: ${range(a.back)}`;
+      if (a.added) return `${actor} · ${who} · ${m.addedHistory}: ${fmtDay(a.added, lang)}`;
       if ('left' in a) return `${actor} · ${who} · ${a.left ? `${m.lastDayHistory}: ${fmtDay(a.left, lang)}` : m.stayingHistory}`;
       if (a.rename) return `${actor} ${m.renamedHistory}: ${a.rename[0]} → ${a.rename[1]}`;
       if (a.inMeals === false) return `${who} ${m.ownStarted}`;
