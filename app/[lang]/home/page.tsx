@@ -221,7 +221,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
               <button className={`${secondary} sm:w-auto`}>{a.savePhone}</button>
             </ActionForm>
             <div className="mt-6 border-t border-line pt-6">
-              <Reminders t={t.push} />
+              <Reminders lang={lang} t={t.push} />
             </div>
             <div className="mt-8 border-t border-line pt-6">
               <h3 className="text-lg font-bold">{a.changePin}</h3>

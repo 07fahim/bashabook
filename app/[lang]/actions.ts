@@ -557,15 +557,21 @@ export async function declineHandoverAction(_: FormState, d: FormData): Promise<
   return { error: x.takeStale.replace('{name}', from) };
 }
 
+/** Only the real push services: the server will POST to this URL on every reminder, so it must not be any URL a member types. */
+const PUSH_HOST = /^(fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|web\.push\.apple\.com|[\w.-]+\.(notify\.windows\.com|push\.apple\.com))$/;
+const B64 = /^[\w-]+$/;
+
 /** This browser's push subscription. flatId/memberId come from the session, never from the client. */
-export async function savePushAction(sub: PushSub) {
-  const me = await requireMember('bn');
-  const ok = typeof sub?.endpoint === 'string' && sub.endpoint.startsWith('https://') && sub.endpoint.length < 2000
-    && typeof sub.keys?.p256dh === 'string' && typeof sub.keys?.auth === 'string';
+export async function savePushAction(lang: string, sub: PushSub) {
+  const me = await requireMember(hasLocale(lang) ? lang : 'bn');
+  const u = typeof sub?.endpoint === 'string' && sub.endpoint.length < 2000 && URL.canParse(sub.endpoint) ? new URL(sub.endpoint) : null;
+  const ok = u?.protocol === 'https:' && PUSH_HOST.test(u.hostname)
+    && typeof sub.keys?.p256dh === 'string' && B64.test(sub.keys.p256dh) && sub.keys.p256dh.length <= 90
+    && typeof sub.keys?.auth === 'string' && B64.test(sub.keys.auth) && sub.keys.auth.length <= 30;
   if (ok) await savePush(db, me.flatId, me.memberId, { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } });
 }
 
-export async function removePushAction(endpoint: string) {
-  const me = await requireMember('bn');
+export async function removePushAction(lang: string, endpoint: string) {
+  const me = await requireMember(hasLocale(lang) ? lang : 'bn');
   if (typeof endpoint === 'string') await removePush(db, me.memberId, endpoint);
 }
