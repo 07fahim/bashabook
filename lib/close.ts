@@ -108,7 +108,9 @@ export async function closeMonth(db: Db, flatId: string, by: Actor, month: strin
   const expected = mo.result.fund;
   if (!mo.info || mo.earlierOpen) return out('order', expected);
   if (mo.info.status === 'closed') return out('closed', expected);
-  if (mo.entries.some(x => x.status === 'pending')) return out('pending', expected);
+  // pending money in this or a later open month is in the hand but not in the books, so the count can't come out right: the
+  // close card blocks on it (closeInfo), and so does the statement below, whatever the card showed when it was opened
+  if (mo.entries.some(x => x.status === 'pending') || (await closeInfo(db, flatId, today))?.pending) return out('pending', expected);
   if (!mo.result.invariantOk) return out('problems', expected);
   // ponytail: the count is checked against later open months too, but only this month's version guards the close; an entry
   // landing in a later month mid-close can't change what is frozen here, only make this check slightly stale
@@ -123,7 +125,7 @@ export async function closeMonth(db: Db, flatId: string, by: Actor, month: strin
          where flat_id = $1 and month = $2::date and status = 'open' and version = $3
            and exists (select 1 from members where flat_id = $1 and id = $8 and role = 'manager')
            and not exists (select 1 from months e where e.flat_id = $1 and e.month < $2::date and e.status = 'open')
-           and not exists (select 1 from ledger where flat_id = $1 and month = $2::date and status = 'pending')
+           and not exists (select 1 from ledger where flat_id = $1 and month >= $2::date and status = 'pending')
          returning month),
        b as (insert into month_balances (flat_id, month, member_id, weighted_meals, days_present, opening, paid_in, food_cost, bill_share, payouts, adjustments, balance)
          select $1, m.month, (x->>'id')::uuid, (x->>'meals')::int, (x->>'days')::int, (x->>'opening')::bigint, (x->>'paidIn')::bigint,
