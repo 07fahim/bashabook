@@ -20,7 +20,7 @@ import { Nav } from '../nav';
 import { PendingButton } from '../pending-button';
 import { PayerSelect } from '../payer-select';
 import { ShareButton } from '../share-button';
-import { checkChip, field, Field, Fold, focus, link, LongList, PageSkeleton, primary } from '../ui';
+import { card, checkChip, field, Field, focal, Fold, focus, link, LongList, PageSkeleton, primary } from '../ui';
 import { balanceText, ConfirmList } from './bits';
 import { breakdownOf, breakdownText, pickWho, type Labels } from './breakdown';
 
@@ -51,7 +51,6 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const prev = monthOf(addDays(month, -1)), next = addDays(daysOfMonth(month).at(-1)!, 1);
   const href = (m: string, only: boolean, who?: string) => `/${lang}/money?${new URLSearchParams({ ...(m !== thisMonth ? { m: m.slice(0, 7) } : {}), ...(only ? { mine: '1' } : {}), ...(who ? { who } : {}) })}`;
   const arrow = `inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-muted font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 ${focus}`;
-  const card = 'rounded-3xl border border-line bg-surface p-5';
 
   const ok = mo.entries.filter(e => e.status === 'ok');
   // ?who= : the collector opens someone else's "How this adds up" (to explain or settle it, e.g. with someone moving out).
@@ -133,7 +132,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
         <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* balance, forms and everyone's balances (8 to 10 people): about as tall as the summary and entries beside them */}
           <div>
-            <section id="balance" className={`${card} scroll-mt-24`}>
+            <section id="balance" className={`${focal} scroll-mt-24`}>
               <h2 className="text-xl font-bold">{whoId ? x.of.title.replace('{name}', name(whoId)) : `${t.app.hi}, ${me.name}`}</h2>
               {!r || !balance || !bd ? <p className="mt-2 text-muted">{x.notHere}</p> : (<>
                 <p className={`mt-2 text-2xl font-bold ${balance.tone}`}>{balance.text}</p>

@@ -11,7 +11,7 @@ import { getDictionary, hasLocale } from '../dictionaries';
 import { dhakaDate, fmtDay, fmtExact, fmtMonth, fmtRange, fmtTime, fmtWhen } from '../format';
 import { Header, withQuery } from '../header';
 import { Nav } from '../nav';
-import { checkChip, field, Field, Fold, focus, link, LongList, primary, secondary, PageSkeleton } from '../ui';
+import { card as baseCard, checkChip, field, Field, Fold, focus, link, LongList, primary, secondary, PageSkeleton } from '../ui';
 import { DateField } from '../date-field';
 import { WeekChart } from '../week-chart';
 
@@ -54,7 +54,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const href = (n: number, only: boolean, more = 0) => `/${lang}/meals?${new URLSearchParams({ ...(n ? { week: String(n) } : {}), ...(only ? { mine: '1' } : {}), ...(more ? { older: String(more) } : {}) })}`;
   const hasOlder = history.length > shownRows;
   const arrow = `inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-muted px-3 font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 sm:px-4 ${focus}`;
-  const card = 'mt-8 rounded-3xl border border-line bg-surface p-5';
+  const card = `mt-8 ${baseCard}`;
   const range = (r: [string, string]) => (r[0] === r[1] ? fmtDay(r[0], lang) : `${fmtDay(r[0], lang)} – ${fmtDay(r[1], lang)}`);
   /** One history line, e.g. 'Nafis → Tahsin · Sat, 10 October · Lunch: Off · Late'. */
   const describe = (h: HistoryRow) => {

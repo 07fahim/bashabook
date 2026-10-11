@@ -10,6 +10,11 @@ export const secondary = `flex min-h-12 w-full rounded-full items-center justify
 /** A label wrapping a checkbox; turns turmeric when ticked. */
 export const checkChip = 'flex min-h-12 items-center justify-center gap-2 rounded-full border border-muted bg-surface font-semibold has-[:checked]:border-turmeric has-[:checked]:bg-turmeric has-[:checked]:text-on-turmeric';
 export const link = `font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`;
+/** Every card; `focal`: the one card a page is for (the balance, the plates, the week), marked by a turmeric top edge. */
+export const card = 'rounded-3xl border border-line bg-surface p-5 shadow-card';
+export const focal = `${card} border-t-4 border-t-turmeric`;
+/** A card that asks for a tap (money waiting, a handover, the month close). */
+export const alertCard = 'rounded-3xl border-2 border-turmeric bg-surface p-5 shadow-card';
 
 export function Field({ label, hint, className = '', ...input }: { label: string; hint?: string; name: string } & ComponentProps<'input'>) {
   return (
@@ -31,7 +36,7 @@ export const PinField = (p: { label: string; name: string; autoComplete: string 
 export function Fold({ id, title, lead, level = 2, open, row, children }: { id?: string; title: string; lead?: string; level?: 2 | 3; open?: boolean; row?: boolean; children: ReactNode }) {
   const H = level === 2 ? 'h2' : 'h3';
   return (
-    <details id={id} open={open} className={row ? 'group scroll-mt-24' : 'group mt-3 scroll-mt-24 rounded-3xl border border-line bg-surface'}>
+    <details id={id} open={open} className={row ? 'group scroll-mt-24' : 'group mt-3 scroll-mt-24 rounded-3xl border border-line bg-surface shadow-card'}>
       <summary className={`flex cursor-pointer list-none items-center justify-between gap-4 p-5 [&::-webkit-details-marker]:hidden ${row ? insetFocus : `rounded-3xl ${focus}`}`}>
         <H className="text-lg font-bold">{title}</H>
         <span aria-hidden="true" className="text-2xl leading-none text-muted transition-transform group-open:rotate-45">+</span>
@@ -74,7 +79,7 @@ export function LongList({ items, keep, label, more, less, fill, short }: { item
 /** One card holding a few `Fold row`s under a small heading, a line between them. */
 export function Group({ title, children, className = '' }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`mt-3 overflow-hidden rounded-3xl border border-line bg-surface ${className}`}>
+    <section className={`mt-3 overflow-hidden rounded-3xl border border-line bg-surface shadow-card ${className}`}>
       <h2 className="px-5 pt-5 text-[15px] font-semibold text-muted">{title}</h2>
       <div className="divide-y divide-line">{children}</div>
     </section>

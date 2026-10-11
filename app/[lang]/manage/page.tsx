@@ -86,7 +86,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           <div className={`md:col-span-2 md:flex md:flex-col ${todo ? 'xl:col-span-1 xl:self-stretch' : 'xl:col-span-3'}`}>
             {closing && <div className="mt-3"><CloseCard lang={lang} x={mn} c={closing} collector={me.name} /></div>}
             {waiting.length > 0 && <div className="mt-3 md:flex-1"><ConfirmList fill lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /></div>}
-            {!todo && <p className="mt-3 rounded-3xl border border-line bg-surface px-5 py-4 text-muted md:mb-5">{mn.noPending}</p>}
+            {!todo && <p className="mt-3 rounded-3xl border border-line bg-surface px-5 py-4 text-muted shadow-card md:mb-5">{mn.noPending}</p>}
           </div>
           <div className={`contents md:col-span-2 md:grid md:grid-cols-2 md:items-start md:gap-x-8 ${todo ? 'xl:col-span-2' : 'xl:col-span-3 xl:grid-cols-3'}`}>
           <div className={todo ? 'contents md:block' : 'contents md:block xl:contents'}>

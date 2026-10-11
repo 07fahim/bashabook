@@ -15,7 +15,7 @@ export function WeekChart({ lang, m, meId, today, week, decide, note, ...meals }
   const hasToday = week.includes(today);
   const self = meals.members.find(x => x.id === meId);
   return (
-    <section className="md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
+    <section className="md:rounded-3xl md:border md:border-line md:border-t-4 md:border-t-turmeric md:bg-surface md:p-6 md:shadow-card">
       <ul className="space-y-6 md:grid md:grid-flow-col md:grid-cols-[auto_repeat(7,minmax(0,1fr))] md:grid-rows-[auto_repeat(3,auto)] md:gap-2 md:space-y-0">
         <li aria-hidden="true" className="hidden md:contents">
           <span />
