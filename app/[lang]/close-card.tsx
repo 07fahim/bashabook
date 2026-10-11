@@ -32,13 +32,13 @@ export function CloseCard({ lang, x, c, collector }: { lang: Locale; x: Dict['mo
       ) : c.fund < 0 ? (
         // nothing to count below ৳0. If the collector paid the gap themselves it becomes their deposit first: two taps, as Remove
         <div className="mt-4">
-          <p className="max-w-prose font-semibold">{x.coverLead.replaceAll('{name}', collector).replaceAll('{t}', gap)}</p>
+          <p className="max-w-prose font-semibold">{x.coverLead.replaceAll('{t}', gap)}</p>
           <details className="mt-4">
             <summary className={`${secondary} @xl:inline-flex @xl:w-auto cursor-pointer list-none [&::-webkit-details-marker]:hidden`}>{x.coverBtn.replace('{t}', gap)}</summary>
             <ActionForm action={coverGapAction} className="mt-4">
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="shown" value={-c.fund} />
-              <p>{x.coverAsk.replace('{t}', gap).replace('{name}', collector)}</p>
+              <p>{x.coverAsk.replace('{t}', gap)}</p>
               <button className={`${primary} @xl:w-auto`}>{x.coverYes}</button>
             </ActionForm>
           </details>

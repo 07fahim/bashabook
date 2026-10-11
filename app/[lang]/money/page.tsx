@@ -318,11 +318,13 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   : l.kind === 'collectorAdds' ? x.adds.replace('{a}', a).replace('{t}', amt)
                   : x.paysTo.replace('{a}', l.kind === 'pays' ? a : collector.name).replace('{b}', l.kind === 'pays' ? collector.name : a).replace('{t}', amt);
               });
+              const note = x.settleNote.replace('{name}', collector.name).replace('{next}', fmtMonth(next));
               const text = [`${mo.flat.name} · ${fmtMonth(month)}`, ...lines, `${x.withName.replace('{name}', holder)}: ${fmtSigned(mo.result.fund)}`,
-                `${x.mealRate}: ${fmtExact(mo.result.mealRate)}`].join('\n');
+                `${x.mealRate}: ${fmtExact(mo.result.mealRate)}`, '', note].join('\n');
               return (<>
                 <h3 className="mt-5 font-semibold">{x.settleUp}</h3>
                 {lines.length ? <ul className="mt-1 list-disc space-y-1 pl-5 md:columns-2 md:gap-10">{lines.map(s => <li key={s}>{s}</li>)}</ul> : <p className="mt-1 text-muted">{x.nobodyOwes}</p>}
+                {lines.length > 0 && <p className="mt-3 max-w-prose text-[15px] text-muted">{note}</p>}
                 <div className="mt-4 sm:max-w-xs"><ShareButton text={text} label={t.meals.share} copied={t.meals.copied} /></div>
               </>);
             })() : (<>

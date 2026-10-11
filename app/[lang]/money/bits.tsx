@@ -35,7 +35,7 @@ export function ConfirmList({ lang, x, a, items, collector, fill }: {
             <form action={confirmAction}>
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="id" value={w.id} />
-              <button className={`${secondary} sm:w-auto`}>{w.type === 'payout' ? x.confirmYes : x.confirm}</button>
+              <button className={`${secondary} sm:w-auto`}>{w.type === 'payout' || !w.paidTo ? x.confirmYes : x.confirm}</button>
             </form>
           </li>
         ))} />
