@@ -13,7 +13,7 @@ export type HistoryRow = {
     away?: [string, string]; awayCancel?: [string, string];
     nocook?: [string, string]; cookAgain?: [string, string]; meals?: string;
     b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean; rename?: [string, string]; left?: string | null; back?: [string, string];
-    pinReset?: boolean; admin?: string;   // admin: the app team reset it (the reason stays out of the app)
+    pinReset?: boolean; admin?: string; codeChanged?: boolean;   // admin: the app team reset it (the reason stays out of the app)
     cutoff?: string; weights?: Record<Meal, number>;
     told?: string; plates?: Record<Meal, number>;
     name?: string; rent_share_poisha?: number; roomId?: string | null; room?: string | null; fixFor?: string[];   // rooms

@@ -29,6 +29,27 @@ export async function createFlat(db: Db, f: { flatName: string; name: string; pi
   return { flatId: row.flat_id, memberId: row.member_id };
 }
 
+/** The collector makes a new join code (the link got shared outside the flat): the old link stops working at once, and
+ *  everyone signed in stays signed in (sessions don't depend on the code). The history says so, without the code. */
+export async function newFlatCode(db: Db, flatId: string, by: { memberId: string; role: 'member' | 'manager' }, gen = newJoinCode) {
+  if (by.role !== 'manager') return null;
+  // ponytail: a draw equal to this flat's own code (about 1 in 900 million) changes nothing; read the old code first if that matters
+  for (let i = 0; i < 3; i++) {
+    const code = gen();
+    try {
+      const rows = await db<{ code: string }>(
+        `with f as (update flats set join_code = $2 where id = $1
+             and exists (select 1 from members where flat_id = $1 and id = $3 and role = 'manager') returning join_code),
+         a as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'flats', 'flat|code', '{"codeChanged": true}', $3 from f)
+         select join_code as code from f`, [flatId, code, by.memberId]);
+      return rows[0]?.code ?? null;
+    } catch (e) {
+      if ((e as { code?: string }).code !== '23505') throw e;   // that code belongs to another flat: draw again
+    }
+  }
+  return null;
+}
+
 export async function flatByCode(db: Db, code: string) {
   const [flat] = await db<{ id: string; name: string }>(`select id, name from flats where join_code = $1`, [code.toUpperCase()]);
   if (!flat) return null;

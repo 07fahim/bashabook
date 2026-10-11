@@ -76,6 +76,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
       const x = a.removed ? h.before : a;
       return `${actor} · ${a.removed ? m.repeatStopped : m.repeatStarted}: ${x?.name ?? '?'} · ${fmtExact(x?.amount_poisha ?? 0)}`;
     }
+    if (h.entity === 'flats' && a.codeChanged) return `${actor} ${m.codeChangedHistory}`;
     if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
     if (h.entity === 'members') {
       if (a.pinReset) return a.admin ? `${who} · ${m.pinResetTeam}` : `${actor} · ${who} · ${m.pinResetHistory}`;

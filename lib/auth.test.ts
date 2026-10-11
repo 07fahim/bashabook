@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { openMonth } from './money-db';
-import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listGone, addMember } from './auth';
+import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listGone, addMember } from './auth';
 
 const today = '2026-10-09';
 
@@ -96,6 +96,33 @@ describe('auth', { timeout: 30000 }, () => {
     expect([await state(), await versions()]).toEqual([s0, v0]);                                       // role, people and months untouched
     const rows = await db<{ entity_id: string; after: unknown; by: string | null }>(`select entity_id, after, by_member as by from audit_log where flat_id = $1 and after ? 'pinReset'`, [flatId]);
     expect(rows).toEqual([{ entity_id: nafis, after: { pinReset: true, ...team }, by: null }]);
+  });
+
+  it('a new join code: the old link stops working, everyone stays signed in, only the collector, in the history', async () => {
+    const { flatId, code, id, memberId: nafis } = await flat();
+    await login(db, code, id('Tahsin'), '5555', null);
+    const tahsin = await createSession(db, id('Tahsin'));
+    expect(await newFlatCode(db, flatId, { memberId: id('Tahsin'), role: 'member' })).toBeNull();          // not the collector
+    expect(await newFlatCode(db, flatId, { memberId: id('Tahsin'), role: 'manager' })).toBeNull();         // a stale role: the database decides
+    const fresh = await newFlatCode(db, flatId, { memberId: nafis, role: 'manager' });
+    expect(fresh).toMatch(/^[A-HJKMNP-Z2-9]{6}$/);
+    expect(fresh).not.toBe(code);
+    expect(await flatByCode(db, code)).toBeNull();                                                         // the old link
+    expect((await flatByCode(db, fresh!))?.members.map(m => m.name)).toEqual(['Nafis', 'Tahsin', 'Zarif']);
+    expect(await login(db, code, id('Zarif'), '7777', null)).toEqual({ error: 'notFound' });               // can't claim through it
+    expect((await memberBySession(db, tahsin))?.joinCode).toBe(fresh);                                     // still signed in
+    const rows = await db<{ entity_id: string; after: unknown; by: string }>(`select entity_id, after, by_member as by from audit_log where flat_id = $1 and entity_id = 'flat|code'`, [flatId]);
+    expect(rows).toEqual([{ entity_id: 'flat|code', after: { codeChanged: true }, by: nafis }]);
+  });
+
+  it('a new code that another flat already has is drawn again', async () => {
+    const { flatId, memberId: nafis } = await flat();
+    const other = await createFlat(db, { flatName: 'Other', name: 'Rafi', pin: '1234', others: [], today, lang: 'bn' });
+    const [{ join_code: taken }] = await db<{ join_code: string }>(`select join_code from flats where id = $1`, [other.flatId]);
+    const draws = [taken, 'ZZZZ22'];
+    expect(await newFlatCode(db, flatId, { memberId: nafis, role: 'manager' }, () => draws.shift()!)).toBe('ZZZZ22');
+    const [{ join_code }] = await db<{ join_code: string }>(`select join_code from flats where id = $1`, [other.flatId]);
+    expect(join_code).toBe(taken);                                                                        // the other flat keeps its code
   });
 
   it('changes my own PIN with the current one, and signs out my other phones', async () => {
