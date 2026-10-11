@@ -108,6 +108,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
     <>
       <Header t={t} lang={lang} path={withQuery('/money', sp)}><Nav t={t} lang={lang} current="money" showFlat={boss} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
+        {sp.why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{t.app.notSavedNote}</p>}
         <nav aria-label={x.monthNav} className="flex items-center justify-between gap-3">
           <h1 className="font-display text-3xl font-bold">{fmtMonth(month)}</h1>
           <span className="flex gap-2">
@@ -284,7 +285,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           <section className={card}>
             <h2 className="text-xl font-bold">{x.summary}</h2>
             <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 lg:grid-cols-4">
-              {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar' && !e.forMonth)))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
+              {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar' && !e.forMonth)))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill' && !e.forMonth)))],
                 [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? (totalMeals === 100 ? x.mealSoFar : x.mealsSoFar) : totalMeals === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
                 [x.withName.replace('{name}', holder), `${held < 0 ? '−' : ''}${fmtTaka(held)}`]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">

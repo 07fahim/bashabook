@@ -6,10 +6,10 @@ import { ThemeToggle } from './theme-toggle';
 import { focus } from './ui';
 
 /** Full-width top bar: brand, tabs (children), theme toggle, and this page in the other language. */
-/** The same page in the other language keeps its month, person and view. */
+/** The same page in the other language keeps its month, person and view; a one-time note (?why=) is not carried along. */
 export const withQuery = (path: string, sp: Record<string, string | string[] | undefined>) => {
   const q = new URLSearchParams();
-  for (const [k, v] of Object.entries(sp)) if (typeof v === 'string') q.set(k, v);
+  for (const [k, v] of Object.entries(sp)) if (typeof v === 'string' && k !== 'why') q.set(k, v);
   const s = q.toString();
   return s ? `${path}?${s}` : path;
 };

@@ -1,7 +1,8 @@
 'use server';
 
 import { refresh } from 'next/cache';
-import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
+import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
 import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
@@ -95,14 +96,12 @@ const inRange = (date: string) => isDate(date) && date >= todayDhaka() && date <
 
 /** A meal chip tap. The chip sends the count it wants; repeating the tap is harmless. */
 export async function setMealAction(d: FormData) {
-  const me = await requireMember(langOf(d), true);
+  const lang = langOf(d), me = await requireMember(lang, true);
   await seedLock(db, me.flatId, nowDhaka());
   // a chip switches only my own plate; my guests stay
   const date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own');
-  if (inRange(date) && isMeal(meal) && (own === '0' || own === '1')) {
-    await setOwn(db, me.flatId, me.memberId, date, meal, own === '1' ? 1 : 0, nowDhaka());
-  }
-  refresh();   // also redraws a page left open past midnight
+  const r = inRange(date) && isMeal(meal) && (own === '0' || own === '1') ? await setOwn(db, me.flatId, me.memberId, date, meal, own === '1' ? 1 : 0, nowDhaka()) : 'closed';
+  return back(lang, r === 'closed' ? 'notSaved' : undefined);   // also redraws a page left open past midnight
 }
 
 /** Removes my guests from one later meal; my own plate stays. */
@@ -220,16 +219,17 @@ export async function cancelAwayAction(_: FormState, d: FormData): Promise<FormS
 
 /** The flat's starter sets anyone's plates for a meal (− / +), today and past days included. Late once the day is locked. */
 export async function adminSetAction(d: FormData) {
-  const me = await requireManager(langOf(d), true);
+  const lang = langOf(d), me = await requireManager(lang, true);
   await seedLock(db, me.flatId, nowDhaka());
   // own plate and guests are set separately, so a guest change never touches someone's own meal and back
   const memberId = str(d, 'memberId'), date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own'), guests = plates(str(d, 'guests'));
   const member = (await loadMeals(db, me.flatId, date, date)).members.find(x => x.id === memberId);
   if (member && editable(date, await openFrom(db, me.flatId, todayDhaka())) && isPresent(member, date) && isMeal(meal) && (own === '0' || own === '1') && guests !== null && guests <= 9) {
     const r = await mealRules(db, me.flatId);
-    await unlessClosed(() => saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count: Number(own) + guests, guests }, isLocked(date, nowDhaka(), r.cutoff)));
+    const w = await unlessClosed(() => saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count: Number(own) + guests, guests }, isLocked(date, nowDhaka(), r.cutoff)));
+    return back(lang, w === 'closed' ? 'notSaved' : undefined);
   }
-  refresh();
+  return back(lang, 'notSaved');
 }
 
 /** Another flatmate's own plate, before the lock. The actor always comes from the session; every rule is checked again
@@ -360,6 +360,17 @@ async function unlessClosed<T>(f: () => Promise<T>): Promise<T | 'closed'> {
   try { return await f(); } catch (err) { if (String(err).includes('month_closed')) return 'closed'; throw err; }
 }
 
+/** Back to the page the tap came from, freshly drawn. A tap that changed nothing (already done, the month is closed, not
+ *  mine to change) carries a note; a later tap that worked drops it. Only the referer's path and query are reused, so this
+ *  can't send anyone off the site; replace, so Back doesn't walk through every tap. */
+async function back(lang: string, why?: 'notSaved'): Promise<never> {
+  const ref = (await headers()).get('referer'), u = ref && URL.canParse(ref) ? new URL(ref) : null;
+  const path = u && u.pathname.startsWith(`/${lang}/`) ? u.pathname : `/${lang}/home`, q = new URLSearchParams(u?.search ?? '');
+  if (why) q.set('why', why); else q.delete('why');
+  const s = q.toString();
+  redirect(s ? `${path}?${s}` : path, RedirectType.replace);
+}
+
 /** Every money entry form. `who`: for bazar and bills who paid ('fund' = flat money); for deposits and payouts the other person. */
 export async function entryAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
@@ -400,15 +411,15 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
 }
 
 export async function confirmAction(d: FormData) {
-  const me = await requireMember(langOf(d), true), id = str(d, 'id');
-  if (UUID.test(id)) await unlessClosed(() => confirmEntry(db, me.flatId, me, id));
-  refresh();
+  const lang = langOf(d), me = await requireMember(lang, true), id = str(d, 'id');
+  const ok = UUID.test(id) && await unlessClosed(() => confirmEntry(db, me.flatId, me, id)) === true;
+  return back(lang, ok ? undefined : 'notSaved');
 }
 
 export async function removeAction(d: FormData) {
-  const me = await requireMember(langOf(d), true), id = str(d, 'id');
-  if (UUID.test(id)) await unlessClosed(() => removeEntry(db, me.flatId, me, id, todayDhaka()));
-  refresh();
+  const lang = langOf(d), me = await requireMember(lang, true), id = str(d, 'id');
+  const ok = UUID.test(id) && await unlessClosed(() => removeEntry(db, me.flatId, me, id, todayDhaka())) === true;
+  return back(lang, ok ? undefined : 'notSaved');
 }
 
 /** Rent typed in taka; 0 is allowed (a room that pays no rent). */
@@ -457,9 +468,10 @@ export async function stopRepeatAction(d: FormData) {
 }
 
 export async function putBackAction(d: FormData) {
-  const me = await requireMember(langOf(d), true), id = str(d, 'id');
-  if (UUID.test(id)) await unlessClosed(() => putBack(db, me.flatId, me.memberId, id, todayDhaka()));   // the rules live in putBack
-  refresh();
+  const lang = langOf(d), me = await requireMember(lang, true), id = str(d, 'id');
+  // the rules live in putBack
+  const ok = UUID.test(id) && await unlessClosed(() => putBack(db, me.flatId, me.memberId, id, todayDhaka())) === true;
+  return back(lang, ok ? undefined : 'notSaved');
 }
 
 /** The collector closes the oldest finished month: the four cash boxes must add up to the app's fund. */

@@ -70,6 +70,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
     <>
       <Header t={t} lang={lang} path={withQuery('/manage', sp)}><Nav t={t} lang={lang} current="manage" showFlat /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
+        {sp.why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{a.notSavedNote}</p>}
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 text-muted">
           <span>{m.lockTime.replace('{t}', fmtTime(meals.flat.cutoff))}</span> <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link>
