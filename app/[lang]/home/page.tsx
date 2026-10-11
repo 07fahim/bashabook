@@ -23,12 +23,13 @@ import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
 import { Field, Fold, focus, link, LongList, PageSkeleton, PinField, primary, secondary } from '../ui';
 
-export default function Home({ params }: PageProps<'/[lang]/home'>) {
-  return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} /></Suspense>;
+export default function Home({ params, searchParams }: PageProps<'/[lang]/home'>) {
+  return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} searchParams={searchParams} /></Suspense>;
 }
 
-async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
+async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
+  const { why } = await searchParams;
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), a = t.app, m = t.meals;
@@ -96,6 +97,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             </p>
           </section>
         )}
+        {why === 'role' && <p role="status" className="mt-4 font-semibold text-chili">{a.roleLostNote}</p>}
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
         {/* only the person whose meals were changed sees this; it goes when the day passes or they change it themselves */}
         {byOthers.length > 0 && (
@@ -140,7 +142,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
             {mo.earlierOpen && <p className="mt-2 text-[15px] text-muted">{x.notClosedYet.replace('{month}', fmtMonth(mo.earlierOpen)).replace('{name}', starter?.name ?? '')}</p>}
             {/* the same shape as the plates card beside it: three numbers in tiles, the button at the bottom */}
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
-              {([[x.mealRate, fmtRate(mo.result.mealRate, totalMeals)], [x.myMeals, fmtMeals(mo.meals.get(me.memberId) ?? 0)],
+              {([[x.mealRate, fmtRate(mo.result.mealRate, totalMeals)], [x.myMeals, fmtMeals((mo.meals.get(me.memberId) ?? 0) - (mo.guestMeals.get(me.memberId) ?? 0))],
                 [x.withName.replace('{name}', starter?.name ?? ''), `${held < 0 ? '−' : ''}${fmtTaka(held)}`]] as const).map(([k, v]) => (
                 <div key={k} className="rounded-xl bg-paper px-1 py-3">
                   <dt className="text-[15px] text-muted">{k}</dt>
@@ -183,7 +185,7 @@ async function HomeBody({ params }: Pick<PageProps<'/[lang]/home'>, 'params'>) {
                       {(p.leftOn || p.joinedOn > today) && <span className="block text-[15px] text-muted">{p.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(p.leftOn, lang)) : a.movingInBadge.replace('{d}', fmtDay(p.joinedOn, lang))}</span>}
                     </span>
                   </span>
-                  {p.phone ? <a href={`tel:${p.phone}`} aria-label={`${a.call} ${p.name}`} className={`inline-flex min-h-11 items-center tabular-nums ${link}`}>{p.phone}</a>
+                  {p.phone ? <a href={`tel:${p.phone}`} className={`inline-flex min-h-11 items-center tabular-nums ${link}`}><span className="sr-only">{a.call} {p.name}: </span>{p.phone}</a>
                     : <span className="text-[15px] text-muted">{a.noPhone}</span>}
                 </li>
               ))}

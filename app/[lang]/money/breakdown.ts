@@ -13,8 +13,6 @@ export type Labels = { meals: string; share: string; deposited: string; spent: s
 export const pickWho = (boss: boolean, me: string, who: unknown, here: { id: string }[]) =>
   boss && typeof who === 'string' && who !== me && here.some(p => p.id === who) ? who : null;
 
-/** '+৳500' / '−৳300', so the breakdown reads as a sum; no sign on ৳0. */
-const signed = (sign: '+' | '−', p: number) => `${p ? sign : ''}${fmtTaka(p)}`;
 
 /** One person's "How this adds up" for one month, from the same numbers the Money page shows: the screen and the Share text
  *  both come from these rows, so they can't disagree. A closed month has only its snapshot: no guest or per-bill lines.
@@ -34,21 +32,24 @@ export function breakdownOf(mo: Month, id: string, x: Dict['money'], l: Labels, 
     const e = mo.entries.find(e => e.id === line.rowId), note = e?.note ?? x.types.bill;
     return { label: e?.forMonth ? `${x.correctionFor.replace('{month}', fmtMonth(e.forMonth))} · ${note}` : note, value: fmtTaka(line.amount) };
   });
+  // one formatter for every row: exact (shared, to settle) or whole taka (the own card); a sign only on a number that shows
+  const fm = exact ? fmtExact : fmtTaka, shown = (p: number) => (exact ? p !== 0 : Math.round(p / 100) !== 0);
+  const signed = (sign: '+' | '−', p: number) => `${shown(p) ? sign : ''}${fm(p)}`;
   const rows: Row[] = [
-    ...(r.opening !== 0 ? [{ label: x.broughtFrom.replace('{month}', fmtMonth(broughtFrom)), value: `${r.opening < 0 ? '−' : '+'}${fmtTaka(r.opening)}`, kind: 'head' as const }] : []),
+    ...(r.opening !== 0 ? [{ label: x.broughtFrom.replace('{month}', fmtMonth(broughtFrom)), value: `${r.opening < 0 ? '−' : '+'}${fm(r.opening)}`, kind: 'head' as const }] : []),
     { label: l.share, value: signed('−', r.foodCost + r.billShare), kind: 'head' },
-    { label: `${l.meals} · ${meals(myMeals - myGuests)}`, value: fmtTaka(closed ? r.foodCost : bazarShare - guestFood), kind: 'sub' },
-    ...(myGuests > 0 ? [{ label: `${x.guestMeals} · ${meals(myGuests)}`, value: fmtTaka(guestFood), kind: 'sub' as const }] : []),
-    ...(closed ? (r.billShare > 0 ? [{ label: x.bills, value: fmtTaka(r.billShare), kind: 'sub' as const }] : [])
+    { label: `${l.meals} · ${meals(myMeals - myGuests)}`, value: fm(closed ? r.foodCost : bazarShare - guestFood), kind: 'sub' },
+    ...(myGuests > 0 ? [{ label: `${x.guestMeals} · ${meals(myGuests)}`, value: fm(guestFood), kind: 'sub' as const }] : []),
+    ...(closed ? (r.billShare > 0 ? [{ label: x.bills, value: fm(r.billShare), kind: 'sub' as const }] : [])
       : bills.map(b => ({ ...b, kind: 'sub' as const }))),
     ...(closed ? [{ label: l.paidIn, value: signed('+', r.paidIn) }] : [
       { label: l.deposited, value: signed('+', sum(e => e.type === 'deposit' && e.memberId === id)) },
       { label: l.spent, value: signed('+', sum(e => e.type !== 'deposit' && e.type !== 'payout' && e.paidBy === id)) },
     ]),
     { label: l.received, value: signed('−', r.payouts) },
-    ...(r.adjustments !== 0 ? [{ label: x.adjustments, value: `${r.adjustments < 0 ? '−' : '+'}${fmtTaka(r.adjustments)}` }] : []),
+    ...(r.adjustments !== 0 ? [{ label: x.adjustments, value: `${r.adjustments < 0 ? '−' : '+'}${fm(r.adjustments)}` }] : []),
     // `exact`: to the poisha, like settle-up, for a breakdown that gets shared to settle; otherwise whole taka like the headline
-    { label: x.balance, value: `${r.balance < 0 ? '−' : ''}${(exact ? fmtExact : fmtTaka)(r.balance)}`, kind: 'total' },
+    { label: x.balance, value: `${shown(r.balance) && r.balance < 0 ? '−' : ''}${fm(r.balance)}`, kind: 'total' },
   ];
   return { rows, balance: r.balance };
 }

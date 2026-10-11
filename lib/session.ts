@@ -28,15 +28,16 @@ export async function currentMember() {
 }
 
 /** The logged-in member. flatId comes only from here, never from the URL or a form. */
-export async function requireMember(lang: string) {
+/** `why`: from a Server Action, so the page it lands on can say the typed data wasn't saved (a page load says nothing). */
+export async function requireMember(lang: string, why = false) {
   const token = (await cookies()).get(COOKIE)?.value;
   const me = token ? await memberBySession(db, token) : null;
-  if (!me) redirect(`/${lang}/join`);
+  if (!me) redirect(`/${lang}/join${why ? '?why=out' : ''}`);
   return me;
 }
 
-export async function requireManager(lang: string) {
-  const me = await requireMember(lang);
-  if (me.role !== 'manager') redirect(`/${lang}/home`);
+export async function requireManager(lang: string, why = false) {
+  const me = await requireMember(lang, why);
+  if (me.role !== 'manager') redirect(`/${lang}/home${why ? '?why=role' : ''}`);
   return me;
 }
