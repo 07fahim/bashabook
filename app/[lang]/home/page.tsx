@@ -21,7 +21,7 @@ import { balanceText, ConfirmList } from '../money/bits';
 import { Nav } from '../nav';
 import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
-import { Field, Fold, focus, link, LongList, PageSkeleton, PinField, primary, secondary } from '../ui';
+import { alertCard, card, Field, focal, Fold, focus, link, LongList, PageSkeleton, PinField, primary, secondary } from '../ui';
 
 export default function Home({ params, searchParams }: PageProps<'/[lang]/home'>) {
   return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} searchParams={searchParams} /></Suspense>;
@@ -78,7 +78,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
         </div>
         {/* an offer to me waits here; for a day after it ends, the result stays (it survives the refresh that hides the buttons) */}
         {ho?.status === 'offered' ? (
-          <section className="mt-6 rounded-3xl border-2 border-turmeric bg-surface p-5">
+          <section className={`mt-6 ${alertCard}`}>
             <h2 className="text-xl font-bold">{x.takeTitle}</h2>
             <p className="mt-2 max-w-prose font-semibold">{x.takeLead.replace('{name}', ho.from).replace('{t}', fmtTaka2(ho.amount))}</p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -91,7 +91,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             </div>
           </section>
         ) : ho?.recent && (ho.decidedBy === me.memberId || (ho.status === 'cancelled' && !ho.decidedBy)) && (
-          <section role="status" className="mt-6 rounded-3xl border-2 border-turmeric bg-surface p-5">
+          <section role="status" className={`mt-6 ${alertCard}`}>
             <p className="max-w-prose font-semibold">
               {ho.status === 'accepted' ? x.takeDone : (ho.status === 'declined' ? x.takeDeclined : x.takeStale).replace('{name}', ho.from)}
             </p>
@@ -101,7 +101,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
         {/* only the person whose meals were changed sees this; it goes when the day passes or they change it themselves */}
         {byOthers.length > 0 && (
-          <section className="mt-6 rounded-3xl border-2 border-turmeric bg-surface p-5">
+          <section className={`mt-6 ${alertCard}`}>
             <h2 className="text-xl font-bold">{m.noticeTitle}</h2>
             <p className="mt-1 text-[15px] text-muted">{m.noticeLead}</p>
             <LongList label={m.noticeTitle} keep={3} more={a.showAll.replace('{n}', String(byOthers.length))} less={a.showLess} items={byOthers.map(c => (
@@ -113,13 +113,13 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             not a button as wide as the screen */}
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
           {/* phones only: wider screens change tomorrow in the week chart, with the lock time above it */}
-          <section className="rounded-3xl border border-line bg-surface p-5 md:hidden">
+          <section className={`${card} md:hidden`}>
             <h2 className="text-xl font-bold">{m.tomorrow} · {fmtDay(tomorrow, lang)}</h2>
             {lockLine(false)}
             <MealRow lang={lang} m={m} meId={me.memberId} date={tomorrow} decision={decision} {...meals} />
             <Link href={`/${lang}/meals`} className={`mt-3 inline-flex min-h-11 items-center ${link}`}>{m.seeWeek}</Link>
           </section>
-          <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
+          <section className={`flex flex-col ${focal}`}>
             <h2 className="text-xl font-bold">{m.headcountTitle}</h2>
             <p className="mt-1 text-[15px] text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)} · {status}</p>
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
@@ -135,7 +135,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             <div className="grow" />
             <ShareButton text={countText(me.flatName, m, tomorrow, hc, status, lang, meals.noCook)} label={m.share} copied={m.copied} />
           </section>
-          {bal && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
+          {bal && <section className={`flex flex-col ${card}`}>
             <h2 className="text-xl font-bold">{x.title}</h2>
             <p className={`mt-1 text-lg font-bold ${bal.tone}`}>{bal.text}</p>
             {/* the balance jumps when the earlier month closes: say why beforehand, as the Money page does */}
@@ -153,7 +153,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             <div className="grow" />
             <Link href={`/${lang}/money`} className={`mt-5 ${secondary}`}>{x.seeMoney}</Link>
           </section>}
-          {someoneMissing && <section className="flex flex-col rounded-3xl border border-line bg-surface p-5">
+          {someoneMissing && <section className={`flex flex-col ${card}`}>
             <h2 className="text-xl font-bold">{a.shareTitle}</h2>
             <p className="mt-2 text-muted">{a.shareLead}</p>
             <p className="mt-4">

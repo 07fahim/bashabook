@@ -13,6 +13,7 @@
   --on-turmeric: #1C1A16;
   --leaf: #2F7D4F;
   --chili: #C2412D;
+  --card-shadow: 0 1px 2px rgb(28 26 22 / 0.04), 0 12px 32px -18px rgb(28 26 22 / 0.22);
 }
 
 :root[data-theme="dark"] {
@@ -24,6 +25,7 @@
   --turmeric-ink: #E8A93F;
   --leaf: #5FBF85;
   --chili: #F07A63;
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 12px 32px -18px rgb(0 0 0 / 0.9);
 }
 
 @theme inline {
@@ -39,6 +41,7 @@
   --color-chili: var(--chili);
   --font-sans: var(--font-hind);
   --font-display: var(--font-hind);
+  --shadow-card: var(--card-shadow);
 }
 
 html {

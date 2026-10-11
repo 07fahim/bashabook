@@ -4,7 +4,7 @@ import { closeAction, coverGapAction } from './actions';
 import { CashCount } from './cash-count';
 import type { Dict, Locale } from './dictionaries';
 import { fmtExact, fmtMonth, fmtSigned } from './format';
-import { link, primary, secondary } from './ui';
+import { alertCard, link, primary, secondary } from './ui';
 
 /** `fund`: the month's own fund (below 0 = its gap is paid first); `held`: the cash to count, every open month's money now. */
 export type CloseInfo = { month: string; fund: number; held: number; later: number; pending: number; pendingMonth: string; problems: number };
@@ -15,7 +15,7 @@ export function CloseCard({ lang, x, c, collector }: { lang: Locale; x: Dict['mo
   const gap = fmtExact(c.fund), name = fmtMonth(c.month), blocked = c.pending > 0 || c.problems > 0;
   // @container: full width on Money, one column on Flat; when wide, the four boxes sit in a row and text keeps a readable measure
   return (
-    <section className="@container rounded-3xl border-2 border-turmeric bg-surface p-5">
+    <section className={`@container ${alertCard}`}>
       <h2 className="text-xl font-bold">{x.closeTitle.replace('{month}', name)}</h2>
       <p className="mt-1 max-w-prose text-muted">{x.closeLead}</p>
       {blocked ? (

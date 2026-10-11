@@ -3,7 +3,7 @@ import { confirmAction } from '../actions';
 import type { Dict, Locale } from '../dictionaries';
 import { fmtDay, fmtExact, fmtTaka } from '../format';
 import { PendingButton } from '../pending-button';
-import { LongList, secondary } from '../ui';
+import { alertCard, LongList, secondary } from '../ui';
 
 /** 'You get back ৳380 so far' in leaf, 'You owe ৳210 so far' in chili; a closed month drops 'so far'. */
 export const balanceText = (x: Dict['money'], balance: number, closed = false) => {
@@ -23,7 +23,7 @@ export function ConfirmList({ lang, x, a, items, collector, fill }: {
 }) {
   if (!items.length) return null;
   return (
-    <section className={`rounded-3xl border-2 border-turmeric bg-surface p-5 ${fill ? 'md:flex md:h-full md:flex-col' : ''}`}>
+    <section className={`${alertCard} ${fill ? 'md:flex md:h-full md:flex-col' : ''}`}>
       {/* the count: on wider screens the list scrolls inside its card and Show all (n) is a phone-only control */}
       <h2 className="text-xl font-bold">{x.waitingTitle} ({items.length})</h2>
       <LongList short fill={fill} label={x.waitingTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(w => (
