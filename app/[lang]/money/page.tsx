@@ -15,8 +15,9 @@ import { CloseCard } from '../close-card';
 import { DateField } from '../date-field';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { dhakaDate, fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka, fmtTaka2 } from '../format';
-import { Header } from '../header';
+import { Header, withQuery } from '../header';
 import { Nav } from '../nav';
+import { PendingButton } from '../pending-button';
 import { PayerSelect } from '../payer-select';
 import { ShareButton } from '../share-button';
 import { checkChip, field, Field, Fold, focus, link, LongList, PageSkeleton, primary } from '../ui';
@@ -106,7 +107,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
 
   return (
     <>
-      <Header t={t} lang={lang} path="/money"><Nav t={t} lang={lang} current="money" showFlat={boss} /></Header>
+      <Header t={t} lang={lang} path={withQuery('/money', sp)}><Nav t={t} lang={lang} current="money" showFlat={boss} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <nav aria-label={x.monthNav} className="flex items-center justify-between gap-3">
           <h1 className="font-display text-3xl font-bold">{fmtMonth(month)}</h1>
@@ -159,14 +160,14 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             {(month === thisMonth ? !closed : boss && mo.info?.status === 'open') && (<>
               {month !== thisMonth && <p className="max-w-prose text-[15px] text-muted">{x.lateLead.replaceAll('{month}', fmtMonth(month))}</p>}
               <Fold title={x.addBazar} lead={x.bazarLead}>
-                <ActionForm action={entryAction} className="mt-4">
+                <ActionForm action={entryAction} className="mt-4" clearOnDone>
                   {hidden('bazar')}{amountDate}{whoPaid(x.whoPaidShop)}
                   <Field label={x.note} name="note" maxLength={100} />
                   <button className={primary}>{x.save}</button>
                 </ActionForm>
               </Fold>
               <Fold title={x.addBill} lead={x.billLead}>
-                <ActionForm action={entryAction} className="mt-4">
+                <ActionForm action={entryAction} className="mt-4" clearOnDone>
                   {hidden('bill')}
                   <Field label={x.billName} hint={x.billNameHint} name="note" required maxLength={100} />
                   {amountDate}{whoPaid(x.whoPaidBill)}
@@ -201,7 +202,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               <Fold title={x.iPaid} lead={boss ? x.iPaidLeadSelf : x.iPaidLead.replaceAll('{name}', collector.name)}>
                 {/* "I paid" only credits me; money paid for a friend must be recorded by the collector under the friend's name */}
                 {!boss && <p className="mt-2 font-semibold">{x.forSomeone.replaceAll('{name}', collector.name)}</p>}
-                <ActionForm action={entryAction} className="mt-4">
+                <ActionForm action={entryAction} className="mt-4" clearOnDone>
                   {hidden('deposit')}{amountDate}
                   <Field label={x.noteRef} name="note" maxLength={100} />
                   <button className={primary}>{x.save}</button>
@@ -209,7 +210,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               </Fold>
               {boss && month === thisMonth && mo.closedMonths.length > 0 && (
                 <Fold title={x.correctTitle} lead={x.correctLead}>
-                  <ActionForm action={correctionAction} className="group/c mt-4">
+                  <ActionForm action={correctionAction} className="group/c mt-4" clearOnDone>
                     <input type="hidden" name="lang" value={lang} />
                     <input type="hidden" name="key" value={randomUUID()} />
                     <label className="block font-semibold">{x.forMonth}
@@ -264,7 +265,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       <span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span>
                       {!mo.members.some(m => m.id === p.id) && <span className="block text-[15px] text-muted">{x.movedOut}</span>}
                     </span>
-                    <span className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{p.balance > 0 ? '+' : p.balance < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
+                    <span className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{Math.round(p.balance / 100) > 0 ? '+' : Math.round(p.balance / 100) < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
                   </>);
                   // the collector's rows open that person's breakdown: the whole row is the tap target, so every row keeps one height
                   return (
@@ -284,7 +285,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           <section className={card}>
             <h2 className="text-xl font-bold">{x.summary}</h2>
             <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 lg:grid-cols-4">
-              {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar')))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
+              {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar' && !e.forMonth)))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill')))],
                 [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? (totalMeals === 100 ? x.mealSoFar : x.mealsSoFar) : totalMeals === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
                 [x.withName.replace('{name}', holder), `${held < 0 ? '−' : ''}${fmtTaka(held)}`]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">
@@ -336,7 +337,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           <section className={`flex flex-1 flex-col ${card}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xl font-bold">{x.entries}</h2>
-              <Link href={href(month, !mine)} aria-pressed={mine} className={`inline-flex min-h-11 items-center rounded-full border border-muted px-4 font-semibold ${mine ? 'bg-turmeric text-on-turmeric border-turmeric' : ''} ${focus}`}>{x.onlyMine}</Link>
+              <Link href={href(month, !mine)} aria-current={mine ? 'true' : undefined} className={`inline-flex min-h-11 items-center rounded-full border border-muted px-4 font-semibold ${mine ? 'bg-turmeric text-on-turmeric border-turmeric' : ''} ${focus}`}>{x.onlyMine}</Link>
             </div>
             {!dates.length ? <p className="mt-3 text-muted">{x.noEntries}</p> : <LongList fill label={x.entries} keep={keep} more={t.app.showAll.replace('{n}', String(shown.length))} less={t.app.showLess} items={dates.map(d => (
                 <li key={d}>
@@ -354,10 +355,10 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          <span className="font-bold tabular-nums">{fmtTaka(e.amount)}</span>
+                          <span className="font-bold tabular-nums">{fmtExact(e.amount)}</span>
                           {!closed && (month === thisMonth || e.status === 'pending' || boss) && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
                             <details>
-                              <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtTaka(e.amount)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
+                              <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtExact(e.amount)}, ${fmtDay(e.date, lang)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
                             </details>
                           )}
                         </div>
@@ -366,8 +367,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         <form action={removeAction} className="mt-2 hidden flex-wrap items-center justify-end gap-3 group-has-[details[open]]:flex">
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="id" value={e.id} />
-                          <span id={`rm-${e.id}`}>{x.confirmRemove.replace('{what}', `${x.types[e.type]} ${fmtTaka(e.amount)}`)}</span>
-                          <button aria-describedby={`rm-${e.id}`} className={`inline-flex min-h-11 items-center rounded-full border border-chili px-5 font-semibold text-chili hover:bg-paper ${focus}`}>{x.yesRemove}</button>
+                          <span id={`rm-${e.id}`}>{x.confirmRemove.replace('{what}', `${x.types[e.type]} ${fmtExact(e.amount)}`)}</span>
+                          <PendingButton aria-describedby={`rm-${e.id}`} className={`inline-flex min-h-11 items-center rounded-full border border-chili px-5 font-semibold text-chili hover:bg-paper ${focus}`}>{x.yesRemove}</PendingButton>
                         </form>
                       </li>
                     ))}
@@ -409,7 +410,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 {mo.corrections.map(c => (
                   <li key={c.id} className="flex justify-between gap-4 py-2">
                     <span className="min-w-0">{fmtDay(c.date, lang)} · {x.types[c.type]}{c.type === 'adjustment' ? ` · ${name(c.memberId)} → ${name(c.moves)}` : ''} · {c.note}</span>
-                    <span className="shrink-0 font-semibold tabular-nums">{fmtTaka(c.amount)}</span>
+                    <span className="shrink-0 font-semibold tabular-nums">{fmtExact(c.amount)}</span>
                   </li>
                 ))}
               </ul>

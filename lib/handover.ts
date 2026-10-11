@@ -11,9 +11,8 @@ export async function flatMoney(db: Db, flatId: string, today: string) {
     `select month::text as month from months where flat_id = $1 and status = 'open' and month > coalesce($2::date, '-infinity'::date) order by month`,
     [flatId, last?.month ?? null]);
   if (!open.length) return last?.fund ?? 0;
-  let total = 0;
-  for (const { month } of open) total += (await loadMonth(db, flatId, month, today)).result.fund;
-  return total;
+  const funds = await Promise.all(open.map(({ month }) => loadMonth(db, flatId, month, today)));
+  return funds.reduce((a, m) => a + m.result.fund, 0);
 }
 
 export type OfferResult = 'ok' | 'changed' | 'notCollector' | 'recipient' | 'waiting' | 'already' | 'negative';

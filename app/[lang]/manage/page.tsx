@@ -18,7 +18,7 @@ import { getDictionary, hasLocale } from '../dictionaries';
 import { fmtDay, fmtTaka, fmtTaka2, fmtTime } from '../format';
 import { DateField } from '../date-field';
 import { FocusHere } from '../focus-here';
-import { Header } from '../header';
+import { Header, withQuery } from '../header';
 import { ConfirmList } from '../money/bits';
 import { Nav } from '../nav';
 import { ShareButton } from '../share-button';
@@ -68,7 +68,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
 
   return (
     <>
-      <Header t={t} lang={lang} path="/manage"><Nav t={t} lang={lang} current="manage" showFlat /></Header>
+      <Header t={t} lang={lang} path={withQuery('/manage', sp)}><Nav t={t} lang={lang} current="manage" showFlat /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 text-muted">
@@ -93,7 +93,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           <Group title={mn.groupMoney}>
             {([['payout', mn.giveTitle, mn.giveLead, mn.to], ['deposit', mn.gotTitle, mn.gotLead, mn.from]] as const).map(([type, title, lead, label]) => (
               <Fold row key={type} title={title} lead={lead} level={3}>
-                <ActionForm action={entryAction} className="mt-4">
+                <ActionForm action={entryAction} className="mt-4" clearOnDone>
                   <input type="hidden" name="lang" value={lang} />
                   <input type="hidden" name="type" value={type} />
                   <input type="hidden" name="key" value={randomUUID()} />
@@ -345,7 +345,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     </summary>
                     <div className="pb-4">
                   {sp.back === x.id && <p role="status" className="font-semibold text-leaf">{a.broughtBack}</p>}
-                  {x.phone && <a href={`tel:${x.phone}`} aria-label={`${a.call} ${x.name}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}>{x.phone}</a>}
+                  {x.phone && <a href={`tel:${x.phone}`} className={`inline-flex min-h-11 items-center text-[15px] tabular-nums ${link}`}><span className="sr-only">{a.call} {x.name}: </span>{x.phone}</a>}
                   {/* the member's actions sit on one line; an opened one takes the full width below */}
                   <div className="flex flex-wrap items-start gap-x-6">
                     <details className="open:basis-full">
