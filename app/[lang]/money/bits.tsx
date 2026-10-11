@@ -8,9 +8,9 @@ import { LongList, secondary } from '../ui';
 /** 'You get back ৳380 so far' in leaf, 'You owe ৳210 so far' in chili; a closed month drops 'so far'. */
 export const balanceText = (x: Dict['money'], balance: number, closed = false) => {
   const c = closed ? x.final : x;
-  const r = Math.round(balance / 100);   // the headline is whole taka: a few poisha either way reads as even, not as "owe ৳0"
-  return r > 0 ? { text: c.getBack.replace('{t}', fmtTaka(balance)), tone: 'text-leaf' }
-    : r < 0 ? { text: c.owe.replace('{t}', fmtTaka(balance)), tone: 'text-chili' }
+  const r = Math.round(Math.abs(balance) / 100);   // the headline is whole taka: under 50 poisha either way reads as even, not as "owe ৳0"
+  return r && balance > 0 ? { text: c.getBack.replace('{t}', fmtTaka(balance)), tone: 'text-leaf' }
+    : r && balance < 0 ? { text: c.owe.replace('{t}', fmtTaka(balance)), tone: 'text-chili' }
     : { text: c.even, tone: '' };
 };
 
@@ -37,7 +37,7 @@ export function ConfirmList({ lang, x, a, items, collector, fill }: {
             <form action={confirmAction}>
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="id" value={w.id} />
-              <PendingButton className={`${secondary} sm:w-auto`}>{w.type === 'payout' || !w.paidTo ? x.confirmYes : x.confirm}<span className="sr-only">: {w.name}, {fmtExact(w.amount)}</span></PendingButton>
+              <PendingButton className={`${secondary} sm:w-auto`}>{w.type === 'payout' || !w.paidTo ? x.confirmYes : x.confirm}<span className="sr-only">: {w.type === 'payout' ? w.paidTo ?? collector : w.name}, {fmtExact(w.amount)}</span></PendingButton>
             </form>
           </li>
         ))} />

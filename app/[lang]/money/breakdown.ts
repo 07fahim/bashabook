@@ -28,15 +28,15 @@ export function breakdownOf(mo: Month, id: string, x: Dict['money'], l: Labels, 
   const bazarShare = mo.result.lines.filter(ln => ln.memberId === id && ln.rowId === 'bazar').reduce((a, ln) => a + ln.amount, 0);
   const guestFood = foodSplit(bazarShare, myMeals, myGuests).guests;   // own + guests = bazar share, tested
   const meals = (h: number) => (h === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(h));
+  // one formatter for every row: exact (shared, to settle) or whole taka (the own card); a sign only on a number that shows
+  const fm = exact ? fmtExact : fmtTaka, shown = (p: number) => (exact ? p !== 0 : Math.round(Math.abs(p) / 100) !== 0);
+  const signed = (sign: '+' | '−', p: number) => `${shown(p) ? sign : ''}${fm(p)}`;
   const bills = mo.result.lines.filter(ln => ln.memberId === id && ln.rowId !== 'bazar').map(line => {
     const e = mo.entries.find(e => e.id === line.rowId), note = e?.note ?? x.types.bill;
-    return { label: e?.forMonth ? `${x.correctionFor.replace('{month}', fmtMonth(e.forMonth))} · ${note}` : note, value: fmtTaka(line.amount) };
+    return { label: e?.forMonth ? `${x.correctionFor.replace('{month}', fmtMonth(e.forMonth))} · ${note}` : note, value: fm(line.amount) };
   });
-  // one formatter for every row: exact (shared, to settle) or whole taka (the own card); a sign only on a number that shows
-  const fm = exact ? fmtExact : fmtTaka, shown = (p: number) => (exact ? p !== 0 : Math.round(p / 100) !== 0);
-  const signed = (sign: '+' | '−', p: number) => `${shown(p) ? sign : ''}${fm(p)}`;
   const rows: Row[] = [
-    ...(r.opening !== 0 ? [{ label: x.broughtFrom.replace('{month}', fmtMonth(broughtFrom)), value: `${r.opening < 0 ? '−' : '+'}${fm(r.opening)}`, kind: 'head' as const }] : []),
+    ...(r.opening !== 0 ? [{ label: x.broughtFrom.replace('{month}', fmtMonth(broughtFrom)), value: `${shown(r.opening) ? (r.opening < 0 ? '−' : '+') : ''}${fm(r.opening)}`, kind: 'head' as const }] : []),
     { label: l.share, value: signed('−', r.foodCost + r.billShare), kind: 'head' },
     { label: `${l.meals} · ${meals(myMeals - myGuests)}`, value: fm(closed ? r.foodCost : bazarShare - guestFood), kind: 'sub' },
     ...(myGuests > 0 ? [{ label: `${x.guestMeals} · ${meals(myGuests)}`, value: fm(guestFood), kind: 'sub' as const }] : []),
@@ -47,7 +47,7 @@ export function breakdownOf(mo: Month, id: string, x: Dict['money'], l: Labels, 
       { label: l.spent, value: signed('+', sum(e => e.type !== 'deposit' && e.type !== 'payout' && e.paidBy === id)) },
     ]),
     { label: l.received, value: signed('−', r.payouts) },
-    ...(r.adjustments !== 0 ? [{ label: x.adjustments, value: `${r.adjustments < 0 ? '−' : '+'}${fm(r.adjustments)}` }] : []),
+    ...(r.adjustments !== 0 ? [{ label: x.adjustments, value: `${shown(r.adjustments) ? (r.adjustments < 0 ? '−' : '+') : ''}${fm(r.adjustments)}` }] : []),
     // `exact`: to the poisha, like settle-up, for a breakdown that gets shared to settle; otherwise whole taka like the headline
     { label: x.balance, value: `${shown(r.balance) && r.balance < 0 ? '−' : ''}${fm(r.balance)}`, kind: 'total' },
   ];
