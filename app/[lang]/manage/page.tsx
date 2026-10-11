@@ -246,7 +246,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               {'rules' in sp && <FocusHere />}
               <ActionForm action={settingsAction} className="mt-4">
                 <input type="hidden" name="lang" value={lang} />
-                <Field label={m.cutoff} name="cutoff" type="time" required defaultValue={meals.flat.cutoff.slice(0, 5)} />
+                <Field label={m.cutoff} name="cutoff" type="time" required min="01:00" defaultValue={meals.flat.cutoff.slice(0, 5)} />
                 <fieldset>
                   <legend className="font-semibold">{m.weights}</legend>
                   <p className="text-[15px] text-muted">{m.weightsHint}</p>
