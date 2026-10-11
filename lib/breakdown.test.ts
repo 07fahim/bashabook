@@ -62,7 +62,7 @@ describe('someone else’s breakdown, shared by the collector', { timeout: 30000
     const mo = await loadMonth(db, flatId, SEP, OCT2);
     const b = breakdownOf(mo, ids.Tahsin, x, x.of, SEP);
     expect(rowsOf(b)).toEqual([
-      ['Share of costs', '−৳900'], ['Meals · 75 meals', '৳600'], ['Bills', '৳300'],
+      ['Share of costs', '−৳900'], ['Meals · 75 meals', '৳600'], ['Bill share', '৳300'],
       ['Paid in (deposits and spending)', '+৳3,000'], ['Got from flat money', '৳0'], ['Balance', '৳2,100']]);
     expect(breakdownText('Flat 4B', SEP, 'Tahsin', b!, true, OCT2, x, 'en').split('\n').at(-1)).toBe('September 2026 is closed: these numbers are final.');
     // October carries it: the next month opens with Tahsin's ৳2,100 brought forward

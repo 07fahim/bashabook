@@ -232,7 +232,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       <legend className="font-semibold">{x.whoShares}</legend>
                       {(['equal', 'meals', 'selected'] as const).map(s => (
                         <label key={s} className="flex min-h-11 items-center gap-3">
-                          <input type="radio" name="split" value={s} defaultChecked={s === 'equal'} className="size-5 shrink-0 accent-turmeric" />{x.splits[s]}
+                          <input type="radio" name="split" value={s} defaultChecked={s === 'equal'} className="size-5 shrink-0 accent-turmeric" />{s === 'equal' ? x.splitEqualThatMonth : x.splits[s]}
                         </label>
                       ))}
                       <div className="grid grid-cols-2 gap-2">
