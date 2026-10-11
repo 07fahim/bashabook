@@ -71,7 +71,7 @@ const bn = {
     tagline: 'বাসাবুক · শেয়ার্ড ফ্ল্যাটের হিসাব',
     whatsapp: 'হোয়াটসঅ্যাপে লিখুন',
     email: 'ইমেইল করুন',
-    privacy: 'আমরা নাম, মিল আর টাকার অঙ্ক রাখি। কেউ ফোন নম্বর বা ছবি দিলে শুধু সেটুকুও রাখি। বাসাবুক কখনো আপনাদের টাকা রাখে না।',
+    privacy: 'আমরা নাম, মিল আর টাকার অঙ্ক রাখি। কেউ ফোন নম্বর বা ছবি দিলে শুধু সেটুকুও রাখি। কেউ চলে গেলেও তার মিল, বিল আর হিসাব ফ্ল্যাটের খাতায় থেকে যায়, যাতে আগের হিসাব ঠিক থাকে। বাসাবুক কখনো আপনাদের টাকা রাখে না।',
   },
   app: {
     newTitle: 'নতুন ফ্ল্যাট খুলুন',
@@ -583,7 +583,7 @@ const en: Dict = {
     tagline: 'BashaBook · accounts for shared flats',
     whatsapp: 'Message us on WhatsApp',
     email: 'Email us',
-    privacy: 'We store names, meals and amounts, plus a phone number or photo only if someone adds one. BashaBook never holds your money.',
+    privacy: 'We store names, meals and amounts, plus a phone number or photo only if someone adds one. When someone moves out, we keep their records as part of the flat’s financial history, so past meals, bills and settlements stay accurate. BashaBook never holds your money.',
   },
   app: {
     newTitle: 'Create a flat',

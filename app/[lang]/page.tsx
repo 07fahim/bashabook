@@ -181,7 +181,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
               )}
             </div>
           </div>
-          <p>{t.footer.privacy}</p>
+          <p className="max-w-3xl">{t.footer.privacy}</p>
         </div>
       </footer>
     </>
