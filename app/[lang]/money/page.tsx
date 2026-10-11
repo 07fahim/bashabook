@@ -318,7 +318,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   : l.kind === 'collectorAdds' ? x.adds.replace('{a}', a).replace('{t}', amt)
                   : x.paysTo.replace('{a}', l.kind === 'pays' ? a : collector.name).replace('{b}', l.kind === 'pays' ? collector.name : a).replace('{t}', amt);
               });
-              const note = x.settleNote.replace('{name}', collector.name).replace('{next}', fmtMonth(next));
+              const note = x.settleNote.replaceAll('{name}', collector.name).replace('{next}', fmtMonth(next));
               const text = [`${mo.flat.name} · ${fmtMonth(month)}`, ...lines, `${x.withName.replace('{name}', holder)}: ${fmtSigned(mo.result.fund)}`,
                 `${x.mealRate}: ${fmtExact(mo.result.mealRate)}`, ...(lines.length ? ['', note] : [])].join('\n');
               return (<>
