@@ -118,9 +118,13 @@ export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: st
   `select id, name, phone, joined_on::text as "joinedOn", left_on::text as "leftOn", case when photo is null then null else photo_v end as "photoV", pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked
    from members where flat_id = $1 and ${STAYING} order by role = 'manager' desc, name`, [flatId]);
 
-export async function addMember(db: Db, flatId: string, name: string, today: string) {
+/** The collector adds a name, moving in on `today` or later; the history says who added whom and from when. */
+export async function addMember(db: Db, flatId: string, name: string, today: string, by: string) {
   // the target must be named: one_manager_per_flat is deferrable (011) and can't be an on conflict arbiter
-  const rows = await db(`insert into members (flat_id, name, joined_on) values ($1, $2, $3) on conflict on constraint one_name_per_stay do nothing returning id`, [flatId, name, today]);
+  const rows = await db(
+    `with m as (insert into members (flat_id, name, joined_on) values ($1, $2, $3) on conflict on constraint one_name_per_stay do nothing returning id, joined_on),
+     a as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'members', m.id::text, jsonb_build_object('added', m.joined_on::text), $4 from m)
+     select id from m`, [flatId, name, today, by]);
   return rows.length > 0;
 }
 

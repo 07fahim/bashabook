@@ -347,11 +347,11 @@ describe('meal storage', { timeout: 30000 }, () => {
   });
 
   it('keeps the count first seen after the lock, so any later change shows, even a new member', async () => {
-    const { flatId, load } = await flat();
+    const { flatId, memberId, load } = await flat();
     const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
     const first = await hc();
     expect(await countAtLock(db, flatId, '2026-10-10', first, LATE)).toEqual(first);   // first view saves it
-    await addMember(db, flatId, 'Rafi', '2026-10-10');                             // no meal row is written for this
+    await addMember(db, flatId, 'Rafi', '2026-10-10', memberId);                             // no meal row is written for this
     const now = await hc();
     expect(now.l).toBe(first.l + 1);
     expect(await countAtLock(db, flatId, '2026-10-10', now, LATE)).toEqual(first);      // still the first one

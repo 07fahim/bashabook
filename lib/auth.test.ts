@@ -214,10 +214,13 @@ describe('auth', { timeout: 30000 }, () => {
   it('a name comes back once its person has gone, but two people living here at once need different names', async () => {
     const { flatId, memberId, id } = await flat();
     const zarif = id('Zarif');
-    expect(await addMember(db, flatId, 'Zarif', '2026-10-21')).toBe(false);                          // the old Zarif still lives here
+    expect(await addMember(db, flatId, 'Zarif', '2026-10-21', memberId)).toBe(false);                          // the old Zarif still lives here
     expect(await setLeaving(db, flatId, memberId, zarif, '2026-10-20', today)).toBe('ok');
-    expect(await addMember(db, flatId, 'Zarif', '2026-10-20')).toBe(false);                          // both here on the 20th
-    expect(await addMember(db, flatId, 'Zarif', '2026-10-21')).toBe(true);                           // the new Zarif moves in after
+    expect(await addMember(db, flatId, 'Zarif', '2026-10-20', memberId)).toBe(false);                          // both here on the 20th
+    expect(await addMember(db, flatId, 'Zarif', '2026-10-21', memberId)).toBe(true);                           // the new Zarif moves in after
+    // the history says who added the name and from when; the two refused tries wrote nothing
+    expect(await db(`select 1 from audit_log where flat_id = $1 and entity = 'members' and after->>'added' = '2026-10-21' and by_member = $2`, [flatId, memberId])).toHaveLength(1);
+    expect(await db(`select 1 from audit_log where flat_id = $1 and after ? 'added'`, [flatId])).toHaveLength(1);
     expect(await setLeaving(db, flatId, memberId, zarif, null, today)).toBe('taken');                // old Zarif can't stay on now
     expect(await renameMember(db, flatId, memberId, id('Tahsin'), 'Zarif')).toBe('taken');
   });
@@ -247,6 +250,6 @@ describe('auth', { timeout: 30000 }, () => {
     expect((await listGone(db, flatId, '2026-09-01')).map(m => m.name)).toEqual([]);
     expect(await bringBack(db, flatId, memberId, zarif, '2026-10-09', '2026-09-01')).toBe('no');
     expect((await db(`select 1 from meal_changes where member_id = $1`, [zarif])).length).toBe(0);
-    expect(await addMember(db, flatId, 'Zarif', '2026-10-09')).toBe(true);
+    expect(await addMember(db, flatId, 'Zarif', '2026-10-09', memberId)).toBe(true);
   });
 });

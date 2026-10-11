@@ -63,7 +63,7 @@ export async function addMemberAction(_: FormState, d: FormData): Promise<FormSt
   const name = cleanName(d.get('name')), joinedOn = str(d, 'joinedOn');
   if (!name) return { error: a.errors.name };
   if (!isDate(joinedOn) || joinedOn < todayDhaka() || !editable(joinedOn, await openFrom(db, me.flatId, todayDhaka()))) return { error: getDictionary(lang).meals.errors.bad };
-  if (!(await addMember(db, me.flatId, name, joinedOn))) return { error: a.errors.nameTaken };
+  if (!(await addMember(db, me.flatId, name, joinedOn, me.memberId))) return { error: a.errors.nameTaken };
   refresh();
   return { done: a.added };
 }

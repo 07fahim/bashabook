@@ -85,7 +85,7 @@ describe('money storage', { timeout: 30000 }, () => {
 
   it('someone who joins mid-month shares an everyone bill by days here', async () => {
     const { flatId, ids, nafis, month } = await flat();
-    await addMember(db, flatId, 'Rafi', '2026-10-17');                  // 15 of 31 days
+    await addMember(db, flatId, 'Rafi', '2026-10-17', nafis.memberId);                  // 15 of 31 days
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 108000, note: 'Electricity', split: 'equal' }));
     const { result, members } = await month();
     const rafi = members.find(m => m.name === 'Rafi')!.id;
@@ -103,7 +103,7 @@ describe('money storage', { timeout: 30000 }, () => {
 
   it('a one-off bill for everyone living here leaves out someone who moves in later', async () => {
     const { flatId, ids, nafis, month } = await flat();
-    await addMember(db, flatId, 'Rafi', '2026-10-07');
+    await addMember(db, flatId, 'Rafi', '2026-10-07', nafis.memberId);
     expect(await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 30000, note: 'Fan repair', split: 'here' }))).toBe('ok');
     const { entries, result } = await month();
     expect([...entries[0].selected].sort()).toEqual([ids.Nafis, ids.Tahsin, ids.Zarif].sort());
@@ -258,7 +258,7 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000, paidBy: ids.Zarif, date: '2026-10-08' }))).toBe('ok');   // his last day
     expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 120000, memberId: ids.Zarif, date: '2026-10-12' }))).toBe('ok');   // he pays what he owes
     expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 10000, memberId: ids.Zarif, date: '2026-10-12' }))).toBe('ok');    // paid back
-    await addMember(db, flatId, 'Rafi', '2026-10-15');
+    await addMember(db, flatId, 'Rafi', '2026-10-15', nafis.memberId);
     const rafi = (await db<{ id: string }>(`select id from members where flat_id = $1 and name = 'Rafi'`, [flatId]))[0].id;
     expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000, paidBy: rafi, date: '2026-10-05' }))).toBe('gone');   // not here yet
   });

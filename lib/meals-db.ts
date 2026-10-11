@@ -12,7 +12,7 @@ export type HistoryRow = {
     count?: number; guests?: number; late?: boolean;
     away?: [string, string]; awayCancel?: [string, string];
     nocook?: [string, string]; cookAgain?: [string, string]; meals?: string;
-    b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean; rename?: [string, string]; left?: string | null; back?: [string, string];
+    b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean; rename?: [string, string]; left?: string | null; back?: [string, string]; added?: string;
     pinReset?: boolean; admin?: string; codeChanged?: boolean;   // admin: the app team reset it (the reason stays out of the app)
     cutoff?: string; weights?: Record<Meal, number>;
     told?: string; plates?: Record<Meal, number>;
