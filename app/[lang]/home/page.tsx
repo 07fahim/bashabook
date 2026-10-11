@@ -12,6 +12,7 @@ import { ActionForm } from '../action-form';
 import { acceptHandoverAction, changePinAction, declineHandoverAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
+import { Reminders } from '../reminders';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka, fmtTaka2, fmtTime } from '../format';
 import { Header } from '../header';
@@ -219,6 +220,9 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
               {/* settings are quiet (outlined): the bright buttons stay for the page's main actions */}
               <button className={`${secondary} sm:w-auto`}>{a.savePhone}</button>
             </ActionForm>
+            <div className="mt-6 border-t border-line pt-6">
+              <Reminders lang={lang} t={t.push} />
+            </div>
             <div className="mt-8 border-t border-line pt-6">
               <h3 className="text-lg font-bold">{a.changePin}</h3>
               <ActionForm action={changePinAction} className="mt-4" clearOnDone>
