@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useActionState, useEffect, useRef, type ReactNode } from 'react';
+import { startTransition, useActionState, useEffect, useRef, useState, type ReactNode } from 'react';
 
 /** `confirm`: the server refused until the person ticks this box (it then posts fix=1): a deliberate choice, asked only when needed. */
 export type FormState = { error?: string; done?: string; confirm?: string } | null;
@@ -10,6 +10,7 @@ export type FormState = { error?: string; done?: string; confirm?: string } | nu
 export function ActionForm({ action, children, className, clearOnDone }: { action: (prev: FormState, data: FormData) => Promise<FormState>; children: ReactNode; className?: string; clearOnDone?: boolean }) {
   const [state, run, pending] = useActionState(action, null);
   const form = useRef<HTMLFormElement>(null);
+  const [n, setN] = useState(0);   // one key per submit, so the same message twice is announced twice
   useEffect(() => { if (clearOnDone && state?.done) form.current?.reset(); }, [state, clearOnDone]);
   return (
     <form
@@ -18,6 +19,7 @@ export function ActionForm({ action, children, className, clearOnDone }: { actio
       onSubmit={e => {
         e.preventDefault();
         if (pending) return;
+        setN(k => k + 1);
         const data = new FormData(e.currentTarget);
         startTransition(() => run(data));
       }}
@@ -29,7 +31,7 @@ export function ActionForm({ action, children, className, clearOnDone }: { actio
           <input type="checkbox" name="fix" value="1" className="mt-1 size-5 shrink-0 accent-turmeric" />{state.confirm}
         </label>
       )}
-      {state?.done && <p role="status" className="mt-4 font-semibold text-leaf">{state.done}</p>}
+      {state?.done && !pending && <p key={n} role="status" className="mt-4 font-semibold text-leaf">{state.done}</p>}
     </form>
   );
 }

@@ -1,10 +1,11 @@
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 import { joinByCodeAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { Header } from '../header';
 import { Field, primary } from '../ui';
 
-export default async function JoinByCode({ params }: PageProps<'/[lang]/join'>) {
+export default async function JoinByCode({ params, searchParams }: PageProps<'/[lang]/join'>) {
   const { lang } = await params;
   if (!hasLocale(lang)) notFound();
   const t = getDictionary(lang), a = t.app;
@@ -16,6 +17,8 @@ export default async function JoinByCode({ params }: PageProps<'/[lang]/join'>) 
         <div>
           <h1 className="font-display text-3xl font-bold md:text-4xl">{a.joinTitle}</h1>
           <p className="mt-2 text-lg text-muted">{a.joinLead}</p>
+          {/* the page stays static; only this note reads the query, streamed in */}
+          <Suspense fallback={null}><WhyNote searchParams={searchParams} text={a.signedOutNote} /></Suspense>
         </div>
         <form action={joinByCodeAction} className="mt-8 space-y-5 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
           <input type="hidden" name="lang" value={lang} />
@@ -25,4 +28,9 @@ export default async function JoinByCode({ params }: PageProps<'/[lang]/join'>) 
       </main>
     </>
   );
+}
+
+async function WhyNote({ searchParams, text }: { searchParams: PageProps<'/[lang]/join'>['searchParams']; text: string }) {
+  const { why } = await searchParams;
+  return why === 'out' ? <p role="status" className="mt-3 font-semibold text-chili">{text}</p> : null;
 }

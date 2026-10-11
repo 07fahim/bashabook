@@ -27,18 +27,21 @@ const cell = (c: MealChange) => `${c.memberId}|${c.date}|${c.meal}`;
 
 /** Everything the meal screens need for dates from..to. */
 export async function loadMeals(db: Db, flatId: string, from: string, to: string) {
-  const [flat] = await db<FlatInfo>(
-    `select name, cutoff_time::text as cutoff, language as lang,
-       json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights
-     from flats where id = $1`, [flatId]);
-  const members = await db<Member>(
-    `select id, name, role, in_meals as "inMeals", joined_on::text as "joinedOn", left_on::text as "leftOn",
-       json_build_object('b', default_b, 'l', default_l, 'd', default_d) as defaults
-     from members where flat_id = $1 order by name`, [flatId]);
-  const changes = await db<SavedChange>(
-    `select member_id as "memberId", date::text as date, meal, count, guests, late
-     from meal_changes where flat_id = $1 and date between $2 and $3`, [flatId, from, to]);
-  const noCook = await db<NoCook>(`select date::text as date, meal from no_cook where flat_id = $1 and date between $2 and $3`, [flatId, from, to]);
+  // four independent reads at once: one round trip instead of four, on every page
+  const [[flat], members, changes, noCook] = await Promise.all([
+    db<FlatInfo>(
+      `select name, cutoff_time::text as cutoff, language as lang,
+         json_build_object('b', weight_b, 'l', weight_l, 'd', weight_d) as weights
+       from flats where id = $1`, [flatId]),
+    db<Member>(
+      `select id, name, role, in_meals as "inMeals", joined_on::text as "joinedOn", left_on::text as "leftOn",
+         json_build_object('b', default_b, 'l', default_l, 'd', default_d) as defaults
+       from members where flat_id = $1 order by name`, [flatId]),
+    db<SavedChange>(
+      `select member_id as "memberId", date::text as date, meal, count, guests, late
+       from meal_changes where flat_id = $1 and date between $2 and $3`, [flatId, from, to]),
+    db<NoCook>(`select date::text as date, meal from no_cook where flat_id = $1 and date between $2 and $3`, [flatId, from, to]),
+  ]);
   // A no-cooking meal counts 0 for everyone without a saved row, whatever deleted or never wrote one (cancelled away,
   // someone moving in later). Saved rows win, so the starter can still override. Money must load meals through here.
   const saved = new Set(changes.map(c => `${c.memberId}|${c.date}|${c.meal}`));

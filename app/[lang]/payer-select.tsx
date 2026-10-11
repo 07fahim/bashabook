@@ -19,7 +19,9 @@ export function PayerSelect({ label, fundLabel, people, initial, today }: { labe
       setDate(t.value);
       setPicked(v => (v === 'fund' || lives(v, t.value) ? v : initial));   // a pick that drops out goes back to the default for good
     };
-    const onReset = () => { setDate(today); setPicked(initial); };       // a cleared form starts from today again
+    // a cleared form starts from today again. The browser resets the select to its first option after this event, and React
+    // sees no state change when the pick already was the default, so the DOM is put back by hand once the reset has run
+    const onReset = () => { setDate(today); setPicked(initial); setTimeout(() => { if (ref.current) ref.current.value = initial; }, 0); };
     form?.addEventListener('input', onInput);
     form?.addEventListener('reset', onReset);
     return () => { form?.removeEventListener('input', onInput); form?.removeEventListener('reset', onReset); };

@@ -57,7 +57,7 @@ export async function logoutAction(d: FormData) {
 
 export async function addMemberAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   // before any change: keep tomorrow's count as it was at the lock, so the cards can say what moved
   await seedLock(db, me.flatId, nowDhaka());
   const name = cleanName(d.get('name')), joinedOn = str(d, 'joinedOn');
@@ -70,7 +70,7 @@ export async function addMemberAction(_: FormState, d: FormData): Promise<FormSt
 
 export async function newCodeAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   if (!(await newFlatCode(db, me.flatId, me))) return { error: a.errors.notFound };
   refresh();
   return { done: a.newCodeDone };
@@ -78,7 +78,7 @@ export async function newCodeAction(_: FormState, d: FormData): Promise<FormStat
 
 export async function resetPinAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   if (!isPin(d.get('pin'))) return { error: a.errors.pin };
   if (!(await resetPin(db, me.flatId, str(d, 'memberId'), str(d, 'pin'), { memberId: me.memberId }))) return { error: a.errors.notFound };
   refresh();
@@ -91,7 +91,7 @@ const inRange = (date: string) => isDate(date) && date >= todayDhaka() && date <
 
 /** A meal chip tap. The chip sends the count it wants; repeating the tap is harmless. */
 export async function setMealAction(d: FormData) {
-  const me = await requireMember(langOf(d));
+  const me = await requireMember(langOf(d), true);
   await seedLock(db, me.flatId, nowDhaka());
   // a chip switches only my own plate; my guests stay
   const date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own');
@@ -103,7 +103,7 @@ export async function setMealAction(d: FormData) {
 
 /** Removes my guests from one later meal; my own plate stays. */
 export async function removeGuestsAction(d: FormData) {
-  const me = await requireMember(langOf(d));
+  const me = await requireMember(langOf(d), true);
   await seedLock(db, me.flatId, nowDhaka());
   const date = str(d, 'date'), meal = str(d, 'meal');
   if (inRange(date) && isMeal(meal)) await removeGuests(db, me.flatId, me.memberId, date, meal, nowDhaka());
@@ -112,7 +112,7 @@ export async function removeGuestsAction(d: FormData) {
 
 export async function guestAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   await seedLock(db, me.flatId, nowDhaka());
   // guests plus my own plate when I'm eating too
   const guests = /^\d$/.test(str(d, 'guests')) ? Number(str(d, 'guests')) : null;
@@ -128,7 +128,7 @@ export async function guestAction(_: FormState, d: FormData): Promise<FormState>
 
 export async function awayAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   await seedLock(db, me.flatId, nowDhaka());
   const from = str(d, 'from'), to = str(d, 'to');
   if (!inRange(from) || !isDate(to) || to < from) return { error: m.errors.bad };
@@ -145,7 +145,7 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
 
 export async function usualAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   await seedLock(db, me.flatId, nowDhaka());
   // all three off = cooking for yourself; any on = back in shared meals
   const usual = { b: d.has('b'), l: d.has('l'), d: d.has('d') };
@@ -161,7 +161,7 @@ export async function usualAction(_: FormState, d: FormData): Promise<FormState>
 
 export async function settingsAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   const cutoff = str(d, 'cutoff').slice(0, 5);
   const [b, l, dd] = MEALS.map(x => (/^(\d{1,2}(\.\d{1,2})?|\.\d{1,2})$/.test(str(d, `w_${x}`)) ? Math.round(Number(str(d, `w_${x}`)) * 100) : -1));
   const weightsOk = [b, l, dd].every(w => w >= 0 && w <= 1000) && b + l + dd > 0;
@@ -183,7 +183,7 @@ const editable = (date: string, from: string) => isDate(date) && date >= from &&
 
 export async function noCookAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   await seedLock(db, me.flatId, nowDhaka());
   const from = str(d, 'from'), to = str(d, 'to'), meals = MEALS.filter(x => d.has(x)), open = await openFrom(db, me.flatId, todayDhaka());
   if (!editable(from, open) || !editable(to, open) || to < from) return { error: m.errors.bad };
@@ -204,7 +204,7 @@ async function lastLocked(flatId: string) {
 /** Cancels my away from the first open day on; locked days stay as they were. */
 export async function cancelAwayAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   await seedLock(db, me.flatId, nowDhaka());
   const from = str(d, 'from'), to = str(d, 'to'), first = addDays(await lastLocked(me.flatId), 1);
   if (!isDate(from) || !isDate(to) || to < first) return { error: m.errors.bad };
@@ -215,7 +215,7 @@ export async function cancelAwayAction(_: FormState, d: FormData): Promise<FormS
 
 /** The flat's starter sets anyone's plates for a meal (− / +), today and past days included. Late once the day is locked. */
 export async function adminSetAction(d: FormData) {
-  const me = await requireManager(langOf(d));
+  const me = await requireManager(langOf(d), true);
   await seedLock(db, me.flatId, nowDhaka());
   // own plate and guests are set separately, so a guest change never touches someone's own meal and back
   const memberId = str(d, 'memberId'), date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own'), guests = plates(str(d, 'guests'));
@@ -231,7 +231,7 @@ export async function adminSetAction(d: FormData) {
  *  inside set_other_meal, so a forged form gets 'closed', never a write. */
 export async function otherMealAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   await seedLock(db, me.flatId, nowDhaka());
   const target = str(d, 'target'), date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own'), seen = str(d, 'seen');
   if (!UUID.test(target) || !isDate(date) || !isMeal(meal) || !/^[01]$/.test(own) || !/^[01]$/.test(seen)) return { error: m.errors.bad };
@@ -248,7 +248,7 @@ export async function otherMealAction(_: FormState, d: FormData): Promise<FormSt
 
 /** The cook is back for one listed no-cooking day. */
 export async function noCookCancelAction(d: FormData) {
-  const me = await requireManager(langOf(d));
+  const me = await requireManager(langOf(d), true);
   await seedLock(db, me.flatId, nowDhaka());
   const date = str(d, 'date'), meals = str(d, 'meals').split(',').filter(isMeal);
   // today or later, as the screen offers: a past day was already cooked (or not), and un-blocking it would rewrite everyone's meals
@@ -258,7 +258,7 @@ export async function noCookCancelAction(d: FormData) {
 
 /** I told the cook the count on my screen: it becomes tomorrow's baseline, so the after-the-lock warning goes for everyone. */
 export async function toldCookAction(d: FormData) {
-  const me = await requireMember(langOf(d));
+  const me = await requireMember(langOf(d), true);
   const date = str(d, 'date');
   // only tomorrow's count: a page left open overnight posts a day nobody looks at any more
   if (date === addDays(todayDhaka(), 1) && MEALS.every(x => /^\d{1,3}$/.test(str(d, x)))) {
@@ -270,7 +270,7 @@ export async function toldCookAction(d: FormData) {
 /** I change my own PIN: current one, then the new one twice. My other phones are signed out. */
 export async function changePinAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   if (!isPin(d.get('pin')) || !isPin(d.get('newPin'))) return { error: a.errors.pin };
   if (str(d, 'newPin') !== str(d, 'pin2')) return { error: a.errors.pinMatch };
   const r = await changePin(db, me.memberId, str(d, 'pin'), str(d, 'newPin'), await currentToken());
@@ -281,7 +281,7 @@ export async function changePinAction(_: FormState, d: FormData): Promise<FormSt
 /** My own mobile number; empty removes it. */
 export async function phoneAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   const raw = str(d, 'phone').trim(), phone = raw ? normalizePhone(raw) : null;
   if (raw && !phone) return { error: a.errors.phone };
   await setPhone(db, me.memberId, phone);
@@ -292,7 +292,7 @@ export async function phoneAction(_: FormState, d: FormData): Promise<FormState>
 /** The person who runs the flat fixes someone's name. */
 export async function renameAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   const name = cleanName(d.get('name'));
   if (!name) return { error: a.errors.name };
   const r = await renameMember(db, me.flatId, me.memberId, str(d, 'memberId'), name);
@@ -304,7 +304,7 @@ export async function renameAction(_: FormState, d: FormData): Promise<FormState
 /** My photo, already shrunk by the phone to a small JPEG and sent as a data URL. */
 export async function photoAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   const bytes = fromDataUrl(str(d, 'photo'));
   if (!bytes || !(await setPhoto(db, me.memberId, bytes))) return { error: a.errors.photo };
   refresh();
@@ -313,7 +313,7 @@ export async function photoAction(_: FormState, d: FormData): Promise<FormState>
 
 /** My own photo, or anyone's for the person who runs the flat. */
 export async function removePhotoAction(d: FormData) {
-  const me = await requireMember(langOf(d)), id = str(d, 'memberId');
+  const me = await requireMember(langOf(d), true), id = str(d, 'memberId');
   if (UUID.test(id)) await removePhoto(db, me, id);
   refresh();
 }
@@ -321,7 +321,7 @@ export async function removePhotoAction(d: FormData) {
 /** The person who runs the flat sets someone's last day here, or takes it back. */
 export async function leavingAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   await seedLock(db, me.flatId, nowDhaka());
   const day = d.has('stay') ? null : str(d, 'lastDay');
   if (day !== null && !isDate(day)) return { error: a.errors.lastDay };
@@ -334,7 +334,7 @@ export async function leavingAction(_: FormState, d: FormData): Promise<FormStat
 /** Undoes a departure marked by mistake; the days in between stay as they were cooked. */
 export async function bringBackAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), a = getDictionary(lang).app;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   await seedLock(db, me.flatId, nowDhaka());
   const today = todayDhaka(), id = str(d, 'memberId'), open = await openFrom(db, me.flatId, today);
   const r = await unlessClosed(() => bringBack(db, me.flatId, me.memberId, id, today, open));
@@ -358,7 +358,7 @@ async function unlessClosed<T>(f: () => Promise<T>): Promise<T | 'closed'> {
 /** Every money entry form. `who`: for bazar and bills who paid ('fund' = flat money); for deposits and payouts the other person. */
 export async function entryAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   const type = pick(TYPES, str(d, 'type')), amount = toPoisha(str(d, 'amount')), date = str(d, 'date'), today = todayDhaka();
   if (!type) return { error: x.errors.bad };
   if (amount === null) return { error: x.errors.amount };
@@ -384,13 +384,13 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
 }
 
 export async function confirmAction(d: FormData) {
-  const me = await requireMember(langOf(d)), id = str(d, 'id');
+  const me = await requireMember(langOf(d), true), id = str(d, 'id');
   if (UUID.test(id)) await unlessClosed(() => confirmEntry(db, me.flatId, me, id));
   refresh();
 }
 
 export async function removeAction(d: FormData) {
-  const me = await requireMember(langOf(d)), id = str(d, 'id');
+  const me = await requireMember(langOf(d), true), id = str(d, 'id');
   if (UUID.test(id)) await unlessClosed(() => removeEntry(db, me.flatId, me, id, todayDhaka()));
   refresh();
 }
@@ -400,7 +400,7 @@ const rentOf = (v: string) => (v.trim() !== '' && Number(v.trim()) === 0 ? 0 : t
 
 export async function addRoomAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   const name = cleanName(d.get('name')), rent = rentOf(str(d, 'rent'));
   if (!name) return { error: x.errors.roomName };
   if (rent === null) return { error: x.errors.amount };
@@ -419,7 +419,7 @@ async function earlier(lang: Locale, flatId: string, today: string): Promise<For
 }
 
 export async function rentAction(_: FormState, d: FormData): Promise<FormState> {
-  const lang = langOf(d), me = await requireManager(lang), id = str(d, 'roomId'), rent = rentOf(str(d, 'rent'));
+  const lang = langOf(d), me = await requireManager(lang, true), id = str(d, 'roomId'), rent = rentOf(str(d, 'rent'));
   if (!UUID.test(id) || rent === null) return { error: getDictionary(lang).money.errors.amount };
   if (await setRent(db, me.flatId, me, id, rent, guardOf(d)) === 'earlier') return await earlier(lang, me.flatId, todayDhaka());
   refresh();
@@ -427,7 +427,7 @@ export async function rentAction(_: FormState, d: FormData): Promise<FormState> 
 }
 
 export async function setRoomAction(_: FormState, d: FormData): Promise<FormState> {
-  const lang = langOf(d), me = await requireManager(lang), memberId = str(d, 'memberId'), roomId = str(d, 'roomId');
+  const lang = langOf(d), me = await requireManager(lang, true), memberId = str(d, 'memberId'), roomId = str(d, 'roomId');
   if (!UUID.test(memberId) || (roomId !== '' && !UUID.test(roomId))) return null;
   if (await setRoom(db, me.flatId, me, memberId, roomId || null, guardOf(d)) === 'earlier') return await earlier(lang, me.flatId, todayDhaka());
   refresh();
@@ -435,13 +435,13 @@ export async function setRoomAction(_: FormState, d: FormData): Promise<FormStat
 }
 
 export async function stopRepeatAction(d: FormData) {
-  const me = await requireManager(langOf(d)), id = str(d, 'id');
+  const me = await requireManager(langOf(d), true), id = str(d, 'id');
   if (UUID.test(id)) await stopRepeat(db, me.flatId, me, id);
   refresh();
 }
 
 export async function putBackAction(d: FormData) {
-  const me = await requireMember(langOf(d)), id = str(d, 'id');
+  const me = await requireMember(langOf(d), true), id = str(d, 'id');
   if (UUID.test(id)) await unlessClosed(() => putBack(db, me.flatId, me.memberId, id, todayDhaka()));   // the rules live in putBack
   refresh();
 }
@@ -449,7 +449,7 @@ export async function putBackAction(d: FormData) {
 /** The collector closes the oldest finished month: the four cash boxes must add up to the app's fund. */
 export async function closeAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   const month = str(d, 'month');
   if (!/^\d{4}-\d{2}-01$/.test(month) || !isDate(month)) return { error: x.errors.bad };
   const cash = parseCash(Object.fromEntries(CASH_KEYS.map(k => [k, str(d, k)])) as Record<(typeof CASH_KEYS)[number], string>);
@@ -466,7 +466,7 @@ export async function closeAction(_: FormState, d: FormData): Promise<FormState>
 /** The collector paid more than flat money held: records their own deposit of the gap into the month to close (amount from the server). */
 export async function coverGapAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   // the one deliberate exception to entryAction's this-month-only dates: only this deposit, only into the month to close
   // `shown`: the amount the card showed, in poisha; only compared, never recorded
   const shown = Number(str(d, 'shown'));
@@ -484,7 +484,7 @@ const FIX_SPLITS = ['meals', 'equal', 'selected'] as const;
 /** A fix for a closed month, booked in this month (collector only; the rules live in addCorrection). */
 export async function correctionAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   const kind = pick(KINDS, str(d, 'kind')), amount = toPoisha(str(d, 'amount')), forMonth = str(d, 'forMonth'), key = str(d, 'key');
   const note = str(d, 'note').trim().slice(0, 100);
   // a bill split outside the list is a bad form, not a silent default
@@ -509,7 +509,7 @@ export async function correctionAction(_: FormState, d: FormData): Promise<FormS
 /** The collector offers the flat money; the role moves only when the recipient accepts. */
 export async function offerHandoverAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
-  const me = await requireManager(lang);
+  const me = await requireManager(lang, true);
   const to = str(d, 'to'), shown = Number(str(d, 'shown'));
   if (!UUID.test(to) || !Number.isSafeInteger(shown)) return { error: x.errors.people };
   const r = await offerHandover(db, me.flatId, me, to, shown, todayDhaka());
@@ -525,7 +525,7 @@ export async function offerHandoverAction(_: FormState, d: FormData): Promise<Fo
 }
 
 export async function cancelHandoverAction(d: FormData) {
-  const me = await requireManager(langOf(d)), id = str(d, 'id');
+  const me = await requireManager(langOf(d), true), id = str(d, 'id');
   if (UUID.test(id)) await cancelHandover(db, me.flatId, me.memberId, id);
   refresh();
 }
@@ -533,7 +533,7 @@ export async function cancelHandoverAction(d: FormData) {
 /** `from` is the offerer's name, posted only for the message; never trusted for anything else. */
 export async function acceptHandoverAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   const id = str(d, 'id'), from = str(d, 'from');
   if (!UUID.test(id)) return { error: x.errors.bad };
   const r = await acceptHandover(db, me.flatId, me.memberId, id);
@@ -546,7 +546,7 @@ export async function acceptHandoverAction(_: FormState, d: FormData): Promise<F
 
 export async function declineHandoverAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
-  const me = await requireMember(lang);
+  const me = await requireMember(lang, true);
   const id = str(d, 'id'), from = str(d, 'from');
   if (!UUID.test(id)) return { error: x.errors.bad };
   const r = await declineHandover(db, me.flatId, me.memberId, id);

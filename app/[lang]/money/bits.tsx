@@ -1,14 +1,16 @@
 import type { toConfirm } from '@/lib/money-db';
 import { confirmAction } from '../actions';
 import type { Dict, Locale } from '../dictionaries';
-import { fmtDay, fmtTaka } from '../format';
+import { fmtDay, fmtExact, fmtTaka } from '../format';
+import { PendingButton } from '../pending-button';
 import { LongList, secondary } from '../ui';
 
 /** 'You get back ৳380 so far' in leaf, 'You owe ৳210 so far' in chili; a closed month drops 'so far'. */
 export const balanceText = (x: Dict['money'], balance: number, closed = false) => {
   const c = closed ? x.final : x;
-  return balance > 0 ? { text: c.getBack.replace('{t}', fmtTaka(balance)), tone: 'text-leaf' }
-    : balance < 0 ? { text: c.owe.replace('{t}', fmtTaka(balance)), tone: 'text-chili' }
+  const r = Math.round(Math.abs(balance) / 100);   // the headline is whole taka: under 50 poisha either way reads as even, not as "owe ৳0"
+  return r && balance > 0 ? { text: c.getBack.replace('{t}', fmtTaka(balance)), tone: 'text-leaf' }
+    : r && balance < 0 ? { text: c.owe.replace('{t}', fmtTaka(balance)), tone: 'text-chili' }
     : { text: c.even, tone: '' };
 };
 
@@ -29,13 +31,13 @@ export function ConfirmList({ lang, x, a, items, collector, fill }: {
             <span>
               {/* paidTo: who actually handed it out, never relabelled to the current collector after a handover */}
               {(w.type === 'payout' ? x.confirmGot.replace('{name}', w.paidTo ?? collector)
-                : w.paidTo ? x.confirmDepositTo.replace('{name}', w.name).replace('{to}', w.paidTo) : x.confirmDeposit.replace('{name}', w.name)).replace('{t}', fmtTaka(w.amount))}
+                : w.paidTo ? x.confirmDepositTo.replace('{name}', w.name).replace('{to}', w.paidTo) : x.confirmDeposit.replace('{name}', w.name)).replace('{t}', fmtExact(w.amount))}
               <span className="block text-[15px] text-muted">{fmtDay(w.date, lang)}{w.note ? ` · ${w.note}` : ''}</span>
             </span>
             <form action={confirmAction}>
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="id" value={w.id} />
-              <button className={`${secondary} sm:w-auto`}>{w.type === 'payout' || !w.paidTo ? x.confirmYes : x.confirm}</button>
+              <PendingButton className={`${secondary} sm:w-auto`}>{w.type === 'payout' || !w.paidTo ? x.confirmYes : x.confirm}<span className="sr-only">: {w.type === 'payout' ? w.paidTo ?? collector : w.name}, {fmtExact(w.amount)}</span></PendingButton>
             </form>
           </li>
         ))} />

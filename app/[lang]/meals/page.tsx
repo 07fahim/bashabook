@@ -9,7 +9,7 @@ import { ActionForm } from '../action-form';
 import { awayAction, cancelAwayAction, guestAction, otherMealAction, removeGuestsAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { dhakaDate, fmtDay, fmtExact, fmtMonth, fmtRange, fmtTime, fmtWhen } from '../format';
-import { Header } from '../header';
+import { Header, withQuery } from '../header';
 import { Nav } from '../nav';
 import { checkChip, field, Field, Fold, focus, link, LongList, primary, secondary, PageSkeleton } from '../ui';
 import { DateField } from '../date-field';
@@ -48,8 +48,8 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const others = meals.members.filter(x => x.id !== me.memberId && x.inMeals && (!x.leftOn || x.leftOn >= firstOpen));
   const pickDay = isDate(sp.day) && sp.day >= firstOpen && sp.day <= addDays(today, 60) ? sp.day : firstOpen;
   const pick = others.find(x => x.id === sp.who) ?? others[0];
-  const pickData = pick ? await loadMeals(db, me.flatId, pickDay, pickDay) : null;
-  const pickAway = pick ? (await upcomingAway(db, me.flatId, pick.id, firstOpen)).some(([f, t]) => pickDay >= f && pickDay <= t) : false;
+  const [pickData, pickAwayList] = await Promise.all([pick ? loadMeals(db, me.flatId, pickDay, pickDay) : null, pick ? upcomingAway(db, me.flatId, pick.id, firstOpen) : []]);
+  const pickAway = pickAwayList.some(([f, t]) => pickDay >= f && pickDay <= t);
   const guestDays = week.filter(d => d === today || decide(d) !== 'closed');   // today too: a host may add surprise guests
   const href = (n: number, only: boolean, more = 0) => `/${lang}/meals?${new URLSearchParams({ ...(n ? { week: String(n) } : {}), ...(only ? { mine: '1' } : {}), ...(more ? { older: String(more) } : {}) })}`;
   const hasOlder = history.length > shownRows;
@@ -104,7 +104,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
 
   return (
     <>
-      <Header t={t} lang={lang} path="/meals"><Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} /></Header>
+      <Header t={t} lang={lang} path={withQuery('/meals', sp)}><Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{m.mealsTitle}</h1>
         <p className="mt-2 max-w-prose text-muted">{w < 0 ? m.pastLead : m.weekLead.replace('{t}', fmtTime(meals.flat.cutoff))
@@ -142,7 +142,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                 </ul>
               </div>
             )}
-            <ActionForm action={guestAction} className="mt-4">
+            <ActionForm action={guestAction} className="mt-4" clearOnDone>
               <input type="hidden" name="lang" value={lang} />
               <DateField lang={lang} label={m.day} name="date" required min={today} max={addDays(today, 60)} defaultValue={guestDays[0]} />
               <label className="block font-semibold">
@@ -151,7 +151,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                   {MEALS.map(x => <option key={x} value={x}>{m.names[x]}</option>)}
                 </select>
               </label>
-              <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={1} max={9} required defaultValue={1} hint={m.todayGuestHint} />
+              <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={1} max={9} required hint={m.todayGuestHint} />
               <button className={primary}>{m.save}</button>
             </ActionForm>
           </Fold>
