@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   async redirects() {
-    return [{ source: '/', destination: '/bn', permanent: false }];
+    return [{ source: '/', destination: '/en', permanent: false }];
   },
   // every response: no search indexing during the pilot (robots.ts too), never inside another site's frame, no content-type
   // guessing, no full URL (a join link carries the flat's code) sent to other sites, HTTPS only once seen over HTTPS.

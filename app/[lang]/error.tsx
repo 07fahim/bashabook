@@ -34,7 +34,7 @@ export default function PageError({ error, retry }: { error: Error & { digest?: 
       <div className="mt-6 flex flex-col gap-3">
         <button type="button" onClick={() => retry()} className={primary}>{c.retry}</button>
         {/* a full load, not a client navigation: the app may be in a bad state */}
-        <a href={`/${lang === 'en' ? 'en' : 'bn'}/home`} className={secondary}>{c.home}</a>
+        <a href={`/${lang === 'bn' ? 'bn' : 'en'}/home`} className={secondary}>{c.home}</a>
       </div>
     </main>
   );

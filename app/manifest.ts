@@ -2,12 +2,12 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'BashaBook · ফ্ল্যাটের হিসাব',
+    name: 'BashaBook · Shared flat accounts',
     short_name: 'BashaBook',
     description: 'Meals, bazar, bills and month-end dues for shared flats.',
     id: '/',
     scope: '/',
-    start_url: '/bn/home',
+    start_url: '/en/home',
     display: 'standalone',
     background_color: '#FBF7F0',
     theme_color: '#FBF7F0',
