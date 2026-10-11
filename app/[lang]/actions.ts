@@ -23,7 +23,7 @@ import { getDictionary, hasLocale, type Locale } from './dictionaries';
 import { fmtDay, fmtExact, fmtMonth, fmtSigned } from './format';
 
 const str = (d: FormData, k: string) => String(d.get(k) ?? '');
-const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLocale(l) ? l : 'bn'; };
+const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLocale(l) ? l : 'en'; };
 
 export async function createFlatAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), e = getDictionary(lang).app.errors;
@@ -586,7 +586,7 @@ const B64 = /^[\w-]+$/;
 
 /** This browser's push subscription. flatId/memberId come from the session, never from the client. */
 export async function savePushAction(lang: string, sub: PushSub) {
-  const me = await requireMember(hasLocale(lang) ? lang : 'bn');
+  const me = await requireMember(hasLocale(lang) ? lang : 'en');
   const u = typeof sub?.endpoint === 'string' && sub.endpoint.length < 2000 && URL.canParse(sub.endpoint) ? new URL(sub.endpoint) : null;
   const ok = u?.protocol === 'https:' && PUSH_HOST.test(u.hostname)
     && typeof sub.keys?.p256dh === 'string' && B64.test(sub.keys.p256dh) && sub.keys.p256dh.length <= 90
@@ -595,6 +595,6 @@ export async function savePushAction(lang: string, sub: PushSub) {
 }
 
 export async function removePushAction(lang: string, endpoint: string) {
-  const me = await requireMember(hasLocale(lang) ? lang : 'bn');
+  const me = await requireMember(hasLocale(lang) ? lang : 'en');
   if (typeof endpoint === 'string') await removePush(db, me.memberId, endpoint);
 }

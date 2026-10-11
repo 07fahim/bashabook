@@ -12,7 +12,7 @@ const copy = {
 
 export default function NotFound() {
   const { lang } = useParams<{ lang: string }>();
-  const en = lang === 'en', c = en ? copy.en : copy.bn;
+  const en = lang !== 'bn', c = en ? copy.en : copy.bn;   // English unless the path says Bangla
   return (
     <main className="mx-auto max-w-md px-5 pt-16 pb-28">
       <h1 className="font-display text-3xl font-bold">{c.title}</h1>
