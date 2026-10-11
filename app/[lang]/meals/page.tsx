@@ -151,7 +151,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                   {MEALS.map(x => <option key={x} value={x}>{m.names[x]}</option>)}
                 </select>
               </label>
-              <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={1} max={9} required defaultValue={1} hint={m.todayGuestHint} />
+              <Field label={m.guests} name="guests" type="number" inputMode="numeric" min={1} max={9} required hint={m.todayGuestHint} />
               <button className={primary}>{m.save}</button>
             </ActionForm>
           </Fold>

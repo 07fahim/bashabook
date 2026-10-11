@@ -31,7 +31,7 @@ export function ActionForm({ action, children, className, clearOnDone }: { actio
           <input type="checkbox" name="fix" value="1" className="mt-1 size-5 shrink-0 accent-turmeric" />{state.confirm}
         </label>
       )}
-      {state?.done && <p key={n} role="status" className="mt-4 font-semibold text-leaf">{state.done}</p>}
+      {state?.done && !pending && <p key={n} role="status" className="mt-4 font-semibold text-leaf">{state.done}</p>}
     </form>
   );
 }

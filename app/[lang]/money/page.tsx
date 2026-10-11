@@ -265,7 +265,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       <span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span>
                       {!mo.members.some(m => m.id === p.id) && <span className="block text-[15px] text-muted">{x.movedOut}</span>}
                     </span>
-                    <span className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{Math.round(p.balance / 100) > 0 ? '+' : Math.round(p.balance / 100) < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
+                    <span className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{Math.round(Math.abs(p.balance) / 100) ? (p.balance > 0 ? '+' : '−') : ''}{fmtTaka(p.balance)}</span>
                   </>);
                   // the collector's rows open that person's breakdown: the whole row is the tap target, so every row keeps one height
                   return (
