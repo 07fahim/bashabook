@@ -6,7 +6,7 @@ import { closeInfo } from '@/lib/close';
 import { db } from '@/lib/db';
 import { flatMoney, handoverHistory } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
-import { foodSplit, settleLines } from '@/lib/money';
+import { settleLines } from '@/lib/money';
 import { loadMonth, monthOf, toConfirm, type Entry } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
@@ -21,14 +21,13 @@ import { PayerSelect } from '../payer-select';
 import { ShareButton } from '../share-button';
 import { checkChip, field, Field, Fold, focus, link, LongList, PageSkeleton, primary } from '../ui';
 import { balanceText, ConfirmList } from './bits';
+import { breakdownOf, breakdownText, pickWho, type Labels } from './breakdown';
 
 export default function Money({ params, searchParams }: PageProps<'/[lang]/money'>) {
   return <Suspense fallback={<PageSkeleton />}><MoneyBody params={params} searchParams={searchParams} /></Suspense>;
 }
 
 const sum = (rows: Entry[]) => rows.reduce((a, e) => a + e.amount, 0);
-/** '+৳500' / '−৳300', so the breakdown reads as a sum; no sign on ৳0. */
-const signed = (sign: '+' | '−', p: number) => `${p ? sign : ''}${fmtTaka(p)}`;
 
 async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
@@ -49,26 +48,20 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const name = (id: string | null) => mo.all.find(p => p.id === id)?.name ?? '?';
   const collector = mo.all.find(p => p.role === 'manager')!;
   const prev = monthOf(addDays(month, -1)), next = addDays(daysOfMonth(month).at(-1)!, 1);
-  const href = (m: string, only: boolean) => `/${lang}/money?${new URLSearchParams({ ...(m !== thisMonth ? { m: m.slice(0, 7) } : {}), ...(only ? { mine: '1' } : {}) })}`;
+  const href = (m: string, only: boolean, who?: string) => `/${lang}/money?${new URLSearchParams({ ...(m !== thisMonth ? { m: m.slice(0, 7) } : {}), ...(only ? { mine: '1' } : {}), ...(who ? { who } : {}) })}`;
   const arrow = `inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-muted font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 ${focus}`;
   const card = 'rounded-3xl border border-line bg-surface p-5';
 
   const ok = mo.entries.filter(e => e.status === 'ok');
-  const r = mo.result.perMember.find(p => p.id === me.memberId);
-  const deposited = sum(ok.filter(e => e.type === 'deposit' && e.memberId === me.memberId));
-  const spent = sum(ok.filter(e => e.type !== 'deposit' && e.type !== 'payout' && e.paidBy === me.memberId));
-  const myMeals = mo.meals.get(me.memberId) ?? 0, myGuests = mo.guestMeals.get(me.memberId) ?? 0;
-  // this month's bazar share; a correction for a closed month is its own line below, split by that month's meals
-  const bazarShare = mo.result.lines.filter(l => l.memberId === me.memberId && l.rowId === 'bazar').reduce((a, l) => a + l.amount, 0);
-  const guestFood = foodSplit(bazarShare, myMeals, myGuests).guests;   // own + guests = bazar share, tested
+  // ?who= : the collector opens someone else's "How this adds up" (to explain or settle it, e.g. with someone moving out).
+  // Only the collector, and only a person in this flat's month: anyone else, or an unknown id, gets their own.
+  const whoId = pickWho(boss, me.memberId, sp.who, mo.result.perMember);
+  const r = mo.result.perMember.find(p => p.id === (whoId ?? me.memberId));
+  const own: Labels = { meals: x.myMeals, share: x.share, deposited: x.deposited, spent: x.spent, received: x.received, paidIn: x.paidIn };
+  const bd = breakdownOf(mo, whoId ?? me.memberId, x, whoId ? x.of : own, mo.carriedFrom ?? prev, !!whoId);
   // meal counts are the engine's own numbers (hundredths, guests inside the host's count); the flat total is their sum
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
   const meals = (h: number) => (h === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(h));
-  const billLines = mo.result.lines.filter(l => l.memberId === me.memberId && l.rowId !== 'bazar')
-    .map(l => {
-      const e = mo.entries.find(e => e.id === l.rowId), note = e?.note ?? x.types.bill;
-      return { id: l.rowId, amount: l.amount, note: e?.forMonth ? `${x.correctionFor.replace('{month}', fmtMonth(e.forMonth))} · ${note}` : note };
-    });
 
   // Only mine = entries I added, paid, received, deposited, or was picked for. Bills shared by everyone (and bazar) are not
   // 'mine' here: they'd make the filter show nearly everything, and My balance already lists my share of each one by name.
@@ -87,7 +80,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
     : e.type === 'adjustment' ? `${name(e.memberId)} → ${name(e.moves)}`
     : e.paidBy ? x.paidBy.replace('{name}', name(e.paidBy)) : x.fundPaid;
   const settle = mo.result.perMember.filter(p => p.balance !== 0).map(p => {
-    const a = name(p.id), amt = fmtTaka(p.balance);
+    const a = name(p.id), amt = fmtExact(p.balance);   // settle-up amounts to the poisha, as a shared breakdown says them
     if (p.id === collector.id) return (p.balance > 0 ? x.takes : x.adds).replace('{a}', a).replace('{t}', amt);
     return x.paysTo.replace('{a}', p.balance < 0 ? a : collector.name).replace('{b}', p.balance < 0 ? collector.name : a).replace('{t}', amt);
   });
@@ -104,7 +97,10 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
     <PayerSelect label={label} fundLabel={x.flatMoney.replace('{name}', collector.name)} today={dTo} initial={boss ? 'fund' : me.memberId}
       people={mo.members.filter(p => p.id !== collector.id).map(p => ({ id: p.id, name: p.name, joinedOn: p.joinedOn, leftOn: p.leftOn }))} />
   );
-  const balance = r && balanceText(x, r.balance, mo.info?.status === 'closed');
+  const balance = r && (whoId ? {
+    text: (r.balance < 0 ? x.of.owes : r.balance > 0 ? x.of.gets : x.of.even).replace('{name}', name(whoId)).replace('{t}', fmtExact(r.balance)),
+    tone: balanceText(x, r.balance).tone,
+  } : balanceText(x, r.balance, mo.info?.status === 'closed'));
   // a closed month's fund was held by whoever closed it, not by today's collector if a handover happened since
   const holder = closed && mo.info?.cash ? name(mo.info.cash.by) : collector.name;
 
@@ -117,9 +113,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           <span className="flex gap-2">
             {/* at the ends a plain span, not a link: keyboard users can't follow a link that only looks disabled */}
             {month <= mo.first ? <span aria-disabled="true" aria-label={x.prevMonth} className={arrow}>←</span>
-              : <Link href={href(prev, mine)} aria-label={x.prevMonth} className={arrow}>←</Link>}
+              : <Link href={href(prev, mine, whoId ?? undefined)} aria-label={x.prevMonth} className={arrow}>←</Link>}
             {month >= thisMonth ? <span aria-disabled="true" aria-label={x.nextMonth} className={arrow}>→</span>
-              : <Link href={href(next, mine)} aria-label={x.nextMonth} className={arrow}>→</Link>}
+              : <Link href={href(next, mine, whoId ?? undefined)} aria-label={x.nextMonth} className={arrow}>→</Link>}
           </span>
         </nav>
         {closed && <p className="mt-1 text-muted">{x.closedOn.replace('{d}', fmtDay(dhakaDate(mo.info!.closedAt!), lang))}</p>}
@@ -136,32 +132,29 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
         <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* balance, forms and everyone's balances (8 to 10 people): about as tall as the summary and entries beside them */}
           <div>
-            <section className={card}>
-              <h2 className="text-xl font-bold">{t.app.hi}, {me.name}</h2>
-              {!r || !balance ? <p className="mt-2 text-muted">{x.notHere}</p> : (<>
+            <section id="balance" className={`${card} scroll-mt-24`}>
+              <h2 className="text-xl font-bold">{whoId ? x.of.title.replace('{name}', name(whoId)) : `${t.app.hi}, ${me.name}`}</h2>
+              {!r || !balance || !bd ? <p className="mt-2 text-muted">{x.notHere}</p> : (<>
                 <p className={`mt-2 text-2xl font-bold ${balance.tone}`}>{balance.text}</p>
-                <details className="mt-3">
+                <details className="mt-3" open={!!whoId}>
                   <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.breakdown}</summary>
                   <dl className="mt-2 space-y-1 [&>div]:flex [&>div]:justify-between [&>div]:gap-4 [&_dd]:tabular-nums">
-                    {r.opening !== 0 && <div className="font-semibold"><dt>{x.broughtFrom.replace('{month}', fmtMonth(mo.carriedFrom ?? prev))}</dt><dd>{r.opening < 0 ? '−' : '+'}{fmtTaka(r.opening)}</dd></div>}
-                    <div className="font-semibold"><dt>{x.share}</dt><dd>{signed('−', r.foodCost + r.billShare)}</dd></div>
-                    {/* a closed month has only its snapshot: no guest or per-bill lines */}
-                    <div className="pl-4"><dt>{x.myMeals} · {meals(myMeals - myGuests)}</dt><dd>{fmtTaka(closed ? r.foodCost : bazarShare - guestFood)}</dd></div>
-                    {myGuests > 0 && <div className="pl-4"><dt>{x.guestMeals} · {meals(myGuests)}</dt><dd>{fmtTaka(guestFood)}</dd></div>}
-                    {closed ? r.billShare > 0 && <div className="pl-4"><dt>{x.bills}</dt><dd>{fmtTaka(r.billShare)}</dd></div>
-                      : billLines.map(b => <div key={b.id} className="pl-4"><dt>{b.note}</dt><dd>{fmtTaka(b.amount)}</dd></div>)}
-                    {closed ? <div><dt>{x.paidIn}</dt><dd>{signed('+', r.paidIn)}</dd></div> : (<>
-                      <div><dt>{x.deposited}</dt><dd>{signed('+', deposited)}</dd></div>
-                      <div><dt>{x.spent}</dt><dd>{signed('+', spent)}</dd></div>
-                    </>)}
-                    <div><dt>{x.received}</dt><dd>{signed('−', r.payouts)}</dd></div>
-                    {r.adjustments !== 0 && <div><dt>{x.adjustments}</dt><dd>{r.adjustments < 0 ? '−' : '+'}{fmtTaka(r.adjustments)}</dd></div>}
-                    <div className="border-t border-line pt-1 font-bold"><dt>{x.balance}</dt><dd>{r.balance < 0 ? '−' : ''}{fmtTaka(r.balance)}</dd></div>
+                    {bd.rows.map((row, i) => (
+                      <div key={i} className={row.kind === 'head' ? 'font-semibold' : row.kind === 'sub' ? 'pl-4' : row.kind === 'total' ? 'border-t border-line pt-1 font-bold' : ''}>
+                        <dt>{row.label}</dt><dd>{row.value}</dd>
+                      </div>
+                    ))}
                   </dl>
                   {/* rent split by room counts the whole month by one room: say so where each person reads their share */}
                   {mo.entries.some(e => e.split === 'room') && <p className="mt-2 max-w-prose text-[15px] text-muted">{x.roomMonthNote}</p>}
                 </details>
+                {/* sending it is always a deliberate tap: opening someone's breakdown shares nothing */}
+                {whoId && (<>
+                  <p className="mt-3 max-w-prose text-[15px] text-muted">{closed ? x.of.final.replace('{month}', fmtMonth(month)) : x.of.soFar.replace('{d}', fmtDay(today, lang)).replace('{month}', fmtMonth(month))}</p>
+                  <div className="mt-3 sm:max-w-xs"><ShareButton text={breakdownText(mo.flat.name, month, name(whoId), bd, closed, today, x, lang, mo.earlierOpen, collector.name)} label={t.meals.share} copied={t.meals.copied} /></div>
+                </>)}
               </>)}
+              {whoId && <Link href={`${href(month, mine)}#balance`} scroll={false} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{x.of.back}</Link>}
             </section>
             {(month === thisMonth ? !closed : boss && mo.info?.status === 'open') && (<>
               {month !== thisMonth && <p className="max-w-prose text-[15px] text-muted">{x.lateLead.replaceAll('{month}', fmtMonth(month))}</p>}
@@ -262,14 +255,27 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             {/* everyone's balance grows with the flat (8 to 10 people): here it fills the side column beside the long list */}
             <section className={`mt-3 ${card}`}>
               <h2 className="text-xl font-bold">{x.everyone}</h2>
+              {boss && <p className="mt-1 text-[15px] text-muted">{x.of.tapHint}</p>}
               <ul className="mt-1 divide-y divide-line">
-                {mo.result.perMember.map(p => (
-                  <li key={p.id} className="flex justify-between gap-4 py-2">
-                    <span className="min-w-0">{name(p.id)}<span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span>
-                      {!mo.members.some(m => m.id === p.id) && <span className="block text-[15px] text-muted">{x.movedOut}</span>}</span>
+                {mo.result.perMember.map(p => {
+                  const row = (<>
+                    <span className="min-w-0">
+                      <span className={boss && p.id !== me.memberId ? 'font-semibold text-turmeric-ink' : ''}>{name(p.id)}</span>
+                      <span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span>
+                      {!mo.members.some(m => m.id === p.id) && <span className="block text-[15px] text-muted">{x.movedOut}</span>}
+                    </span>
                     <span className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{p.balance > 0 ? '+' : p.balance < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
-                  </li>
-                ))}
+                  </>);
+                  // the collector's rows open that person's breakdown: the whole row is the tap target, so every row keeps one height
+                  return (
+                    <li key={p.id}>
+                      {boss && p.id !== me.memberId
+                        ? <Link href={`${href(month, mine, p.id)}#balance`} scroll={false} aria-current={p.id === whoId || undefined}
+                            className={`flex min-h-11 justify-between gap-4 rounded-lg py-2 hover:bg-paper ${focus}`}>{row}</Link>
+                        : <div className="flex justify-between gap-4 py-2">{row}</div>}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           </div>
