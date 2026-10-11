@@ -63,7 +63,7 @@ const bn = {
   faq: [
     ['সবাইকে কি অ্যাপ ডাউনলোড করতে হবে?', 'না। ইনভাইট লিংকে ট্যাপ করলেই ব্রাউজারে খুলে যায়। চাইলে হোম স্ক্রিনে যোগ করে অ্যাপের মতো ব্যবহার করা যায়।'],
     ['বাসাবুক কি আমাদের টাকা রাখে?', 'না। এখন যেভাবে দেন, বিকাশ, নগদ বা ক্যাশে, সেভাবেই দেবেন। বাসাবুক শুধু লিখে রাখে কে কত দিল।'],
-    ['মাসের মাঝখানে কেউ উঠলে বা চলে গেলে?', 'যে কয়দিন ছিল, সেই কয়দিনের হিসাবে বিলের ভাগ হয়। মাস শেষে তার হিসাবও বাকিদের মতোই মিটে যায়।'],
+    ['মাসের মাঝখানে কেউ উঠলে বা চলে গেলে?', 'যে কয়দিন ছিল শুধু সেই কয়দিনের মিল ধরা হয়, আর “থাকার দিন অনুযায়ী” ভাগ করা বিল যে যত দিন ছিল সেই হিসাবে ভাগ হয়। কেউ চলে গেলে যাওয়ার দিন এখন পর্যন্ত যা হয়েছে মিটিয়ে নেয়, বাকিটা মাস বন্ধ হলে।'],
     ['সবাই কি সবার এন্ট্রি দেখতে পারে?', 'হ্যাঁ। প্রতিটা বাজার, বিল আর জমা ফ্ল্যাটের সবাই দেখতে পারে, তাই হিসাব নিয়ে সন্দেহ থাকে না।'],
   ],
   footer: {
@@ -574,7 +574,7 @@ const en: Dict = {
   faq: [
     ['Does everyone need to download an app?', 'No. The invite link opens in the browser. Anyone can add it to their home screen to use it like an app.'],
     ['Does BashaBook hold our money?', 'No. You pay by bKash, Nagad or cash as you do now. BashaBook only records who paid what.'],
-    ['What if someone moves in or out mid-month?', 'Bills are shared by the days each person stayed. Their balance settles at month end like everyone else’s.'],
+    ['What if someone moves in or out mid-month?', 'Meals count only the days they were here, and a bill split “by days here this month” follows the days each person stayed. Someone moving out settles what they owe so far when they leave, and the rest once the month closes.'],
     ['Can everyone see every entry?', 'Yes. Every bazar, bill and deposit is visible to the whole flat, so nobody has to take the numbers on trust.'],
   ],
   footer: {
