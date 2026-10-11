@@ -15,6 +15,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npx next typegen   # the global PageProps/LayoutProps/RouteContext types
       - run: npx tsc --noEmit
       - run: npx eslint app lib
       - run: npx vitest run
