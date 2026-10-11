@@ -37,12 +37,12 @@ describe('someone else’s breakdown, shared by the collector', { timeout: 30000
     const b = breakdownOf(mo, ids.Tahsin, x, x.of, SEP);
     expect(rowsOf(b)).toEqual([
       ['Share of costs', '−৳900'], ['Meals · 75 meals', '৳600'], ['Electricity', '৳300'],
-      ['Deposited', '+৳3,000'], ['Spent for the flat', '৳0'], ['Received', '৳0'], ['Balance', '৳2,100']]);
+      ['Deposited', '+৳3,000'], ['Spent for the flat', '৳0'], ['Got from flat money', '৳0'], ['Balance', '৳2,100']]);
     expect(b!.balance).toBe(210000);
     const text = breakdownText('Flat 4B', SEP, 'Tahsin', b!, false, OCT2, x, 'en');
-    expect(text.split('\n')).toEqual(['Flat 4B · September 2026', 'Tahsin gets back ৳2,100', '',
+    expect(text.split('\n')).toEqual(['Flat 4B · September 2026', 'Tahsin gets back ৳2,100 from the flat', '',
       'Share of costs: −৳900', '  Meals · 75 meals: ৳600', '  Electricity: ৳300', 'Deposited: +৳3,000', 'Spent for the flat: ৳0',
-      'Received: ৳0', 'Balance: ৳2,100', '', 'So far, as of Fri, 2 October. It can still change until September 2026 is closed.']);
+      'Got from flat money: ৳0', 'Balance: ৳2,100', '', 'So far, as of Fri, 2 October. It can still change until September 2026 is closed.']);
   });
 
   it('the viewer’s own breakdown keeps “Your” words; the numbers are the same', async () => {
@@ -52,7 +52,7 @@ describe('someone else’s breakdown, shared by the collector', { timeout: 30000
     expect(mine.rows.map(r => r.value)).toEqual(theirs.rows.map(r => r.value));
     expect(mine.rows[1].label).toBe('Your meals · 75 meals');
     expect(rowsOf(theirs).at(-1)).toEqual(['Balance', '−৳900']);
-    expect(breakdownText('Flat 4B', SEP, 'Zarif', theirs, false, OCT2, x, 'en').split('\n')[1]).toBe('Zarif owes ৳900');
+    expect(breakdownText('Flat 4B', SEP, 'Zarif', theirs, false, OCT2, x, 'en').split('\n')[1]).toBe('Zarif owes the flat ৳900');
   });
 
   it('closed month: from the frozen snapshot, and the text says it is final', async () => {
@@ -62,8 +62,8 @@ describe('someone else’s breakdown, shared by the collector', { timeout: 30000
     const mo = await loadMonth(db, flatId, SEP, OCT2);
     const b = breakdownOf(mo, ids.Tahsin, x, x.of, SEP);
     expect(rowsOf(b)).toEqual([
-      ['Share of costs', '−৳900'], ['Meals · 75 meals', '৳600'], ['Bills', '৳300'],
-      ['Paid in (deposits and spending)', '+৳3,000'], ['Received', '৳0'], ['Balance', '৳2,100']]);
+      ['Share of costs', '−৳900'], ['Meals · 75 meals', '৳600'], ['Bill share', '৳300'],
+      ['Paid in (deposits and spending)', '+৳3,000'], ['Got from flat money', '৳0'], ['Balance', '৳2,100']]);
     expect(breakdownText('Flat 4B', SEP, 'Tahsin', b!, true, OCT2, x, 'en').split('\n').at(-1)).toBe('September 2026 is closed: these numbers are final.');
     // October carries it: the next month opens with Tahsin's ৳2,100 brought forward
     const oct = breakdownOf(await loadMonth(db, flatId, '2026-10-01', OCT2), ids.Tahsin, x, x.of, SEP)!;
@@ -78,7 +78,7 @@ describe('someone else’s breakdown, shared by the collector', { timeout: 30000
     expect(shared.balance % 100).not.toBe(0);
     const exact = `৳${(shared.balance / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     expect(shared.rows.at(-1)!.value).toBe(exact);
-    expect(breakdownText('Flat 4B', SEP, 'Tahsin', shared, false, OCT2, x, 'en').split('\n')[1]).toBe(`Tahsin gets back ${exact}`);
+    expect(breakdownText('Flat 4B', SEP, 'Tahsin', shared, false, OCT2, x, 'en').split('\n')[1]).toBe(`Tahsin gets back ${exact} from the flat`);
     expect(mine.rows.at(-1)!.value).toBe(`৳${Math.round(shared.balance / 100).toLocaleString('en-US')}`);
   });
 

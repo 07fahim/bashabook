@@ -6,7 +6,7 @@ import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, newFla
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
-import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, plates as platesOf, todayDhaka } from '@/lib/meals';
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOtherMeal, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
@@ -25,7 +25,9 @@ export async function createFlatAction(_: FormState, d: FormData): Promise<FormS
   const lang = langOf(d), e = getDictionary(lang).app.errors;
   const flatName = cleanName(d.get('flatName')), name = cleanName(d.get('name'));
   const others = str(d, 'others').split('\n').map(s => s.trim()).filter(Boolean).map(cleanName);
-  if (!flatName || !name || others.includes(null) || others.length > 30) return { error: e.name };
+  if (!flatName) return { error: e.flatName };
+  if (!name) return { error: e.name };
+  if (others.includes(null) || others.length > 30) return { error: e.others };
   if (!isPin(d.get('pin'))) return { error: e.pin };
   if (str(d, 'pin') !== str(d, 'pin2')) return { error: e.pinMatch };
   const { memberId } = await createFlat(db, { flatName, name, pin: str(d, 'pin'), others: others as string[], today: todayDhaka(), lang });
@@ -151,7 +153,7 @@ export async function usualAction(_: FormState, d: FormData): Promise<FormState>
   // every open month keeps the meals it had, however old: freeze from the oldest open month, not just the edit window
   const open = await openStart(db, me.flatId), locked = await lastLocked(me.flatId);
   const r = await unlessClosed(() => setDefaults(db, me.flatId, me.memberId, usual, open, locked, inMeals === was ? null : inMeals));
-  if (r === 'closed') return { error: m.errors.closed };
+  if (r === 'closed') return { error: m.errors.monthClosed };
   if (inMeals !== was) { refresh(); return { done: inMeals ? m.savedShared : m.savedOwn }; }
   refresh();
   return { done: m.saved };
@@ -170,9 +172,9 @@ export async function settingsAction(_: FormState, d: FormData): Promise<FormSta
   refresh();
   // a lock time already past locks tomorrow from now: give the count to tell the cook (earlier changes were on time)
   if (isLocked(tomorrow, now, cutoff) && !isLocked(tomorrow, now, was.cutoff)) {
-    const { members, changes } = await loadMeals(db, me.flatId, tomorrow, tomorrow);
+    const { members, changes, noCook } = await loadMeals(db, me.flatId, tomorrow, tomorrow);
     const hc = headcount(members, changes, tomorrow);
-    return { done: m.lockedNow.replace('{list}', MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(', ')) };
+    return { done: m.lockedNow.replace('{list}', MEALS.map(x => { const p = platesOf(hc, noCook, tomorrow, x); return `${m.names[x]} ${p === 'off' ? m.noCook : p}`; }).join(', ')) };
   }
   return { done: m.saved };
 }
@@ -188,7 +190,7 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
   if (to > addDays(from, 59)) return { error: m.errors.range };
   if (!meals.length) return { error: m.errors.pickMeal };
   const locked = await lastLocked(me.flatId);
-  if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, locked)) === 'closed') return { error: m.errors.closed };
+  if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, locked)) === 'closed') return { error: m.errors.monthClosed };
   refresh();
   return { done: m.saved };
 }
@@ -272,7 +274,7 @@ export async function changePinAction(_: FormState, d: FormData): Promise<FormSt
   if (!isPin(d.get('pin')) || !isPin(d.get('newPin'))) return { error: a.errors.pin };
   if (str(d, 'newPin') !== str(d, 'pin2')) return { error: a.errors.pinMatch };
   const r = await changePin(db, me.memberId, str(d, 'pin'), str(d, 'newPin'), await currentToken());
-  if (r !== 'ok') return { error: a.errors[r] };
+  if (r !== 'ok') return { error: a.errors[r === 'wrongPin' ? 'wrongCurrentPin' : r] };
   return { done: a.pinChanged };
 }
 
@@ -336,7 +338,7 @@ export async function bringBackAction(_: FormState, d: FormData): Promise<FormSt
   await seedLock(db, me.flatId, nowDhaka());
   const today = todayDhaka(), id = str(d, 'memberId'), open = await openFrom(db, me.flatId, today);
   const r = await unlessClosed(() => bringBack(db, me.flatId, me.memberId, id, today, open));
-  if (r === 'closed') return { error: a.errors.notFound };
+  if (r === 'closed') return { error: a.errors.monthClosed };
   if (r === 'taken') return { error: a.errors.nameUsedSince };
   // a second phone pressing at the same moment finds them already back: that is the same good outcome, not an error
   if (r === 'no' && !(await listMembers(db, me.flatId)).some(x => x.id === id && !x.leftOn)) return { error: a.errors.notFound };
