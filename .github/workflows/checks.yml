@@ -1,0 +1,21 @@
+# Type check, lint and tests on every pull request and on main. Vercel builds and deploys on its own.
+name: checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx next typegen   # the global PageProps/LayoutProps/RouteContext types
+      - run: npx tsc --noEmit
+      - run: npx eslint app lib
+      - run: npx vitest run
