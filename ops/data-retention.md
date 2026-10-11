@@ -16,10 +16,11 @@ What BashaBook keeps, for how long, and how it is deleted. Decided 2026-10-11 fo
 A flat is deleted whole, on the collector's request, by the app team with `scripts/delete-flat.mts` (dry run first, then
 `--apply`). One statement removes the flat and every row that belongs to it: people, rooms, months, entries, meals, history,
 handovers, sessions. Nothing of any other flat is touched (`lib/delete-flat.test.ts`). The deletion also leaves Neon's
-point-in-time history after its retention window (currently the plan's default), so a request is final after that window.
+point-in-time history after its retention window (check the Neon project's point-in-time restore setting; the free plan keeps 24 hours by default), so a request is final after that window.
 
 Before deleting: confirm the request with the collector on a verified number (as in `ops/collector-pin-recovery.md`) and,
-because the records belong to the whole flat, with one other flatmate. Tell them the data cannot be recovered afterwards.
+because the records belong to the whole flat, with one other flatmate. Tell them the data cannot be recovered afterwards. The flat's own history goes with it, so write the date, flat name, who asked and
+who confirmed in the app-team log (the script prints the line to paste).
 
 ## Not offered in the pilot
 

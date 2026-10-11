@@ -10,7 +10,8 @@ const args = process.argv.slice(2), apply = args.at(-1) === '--apply';
 const [code, name] = apply ? args.slice(0, -1) : args;
 if (!code || !name) { console.log('usage: <join code> "<flat name>" [--apply]'); process.exit(1); }
 
-console.log(`database: ${new URL(process.env.DATABASE_URL ?? '').hostname.split('.')[0]}`);
+const host = new URL(process.env.DATABASE_URL ?? '').hostname.split('.')[0];
+console.log(`database: ${host} (${host.startsWith('ep-calm-shape-') ? 'TEST COPY' : 'PRODUCTION'})`);
 const [f] = await db<{ id: string; name: string; created: string }>(`select id, name, created_at::text as created from flats where join_code = $1`, [code.toUpperCase()]);
 if (!f) { console.log('no flat with that join code'); process.exit(1); }
 if (f.name !== name) { console.log(`refused: that code belongs to "${f.name}", not "${name}"`); process.exit(1); }
@@ -18,6 +19,6 @@ const people = await db<{ name: string }>(`select name from members where flat_i
 console.log(`flat: ${f.name} (since ${f.created.slice(0, 10)}) · people: ${people.map(p => p.name).join(', ')}`);
 console.log('rows:', await flatRowCounts(db, f.id));
 if (!apply) { console.log('dry run: nothing deleted. Add --apply to delete all of it.'); process.exit(0); }
-console.log(await deleteFlat(db, f.id) ? 'deleted' : 'nothing deleted');
+console.log(await deleteFlat(db, f.id) ? `deleted ${f.name} (${code.toUpperCase()}) on ${host}, ${new Date().toISOString().slice(0, 16)}: paste this line in the ops log` : 'nothing deleted');
 console.log('rows left:', await flatRowCounts(db, f.id));
 process.exit(0);
