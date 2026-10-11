@@ -25,7 +25,9 @@ export async function createFlatAction(_: FormState, d: FormData): Promise<FormS
   const lang = langOf(d), e = getDictionary(lang).app.errors;
   const flatName = cleanName(d.get('flatName')), name = cleanName(d.get('name'));
   const others = str(d, 'others').split('\n').map(s => s.trim()).filter(Boolean).map(cleanName);
-  if (!flatName || !name || others.includes(null) || others.length > 30) return { error: e.name };
+  if (!flatName) return { error: e.flatName };
+  if (!name) return { error: e.name };
+  if (others.includes(null) || others.length > 30) return { error: e.others };
   if (!isPin(d.get('pin'))) return { error: e.pin };
   if (str(d, 'pin') !== str(d, 'pin2')) return { error: e.pinMatch };
   const { memberId } = await createFlat(db, { flatName, name, pin: str(d, 'pin'), others: others as string[], today: todayDhaka(), lang });
@@ -272,7 +274,7 @@ export async function changePinAction(_: FormState, d: FormData): Promise<FormSt
   if (!isPin(d.get('pin')) || !isPin(d.get('newPin'))) return { error: a.errors.pin };
   if (str(d, 'newPin') !== str(d, 'pin2')) return { error: a.errors.pinMatch };
   const r = await changePin(db, me.memberId, str(d, 'pin'), str(d, 'newPin'), await currentToken());
-  if (r !== 'ok') return { error: a.errors[r] };
+  if (r !== 'ok') return { error: a.errors[r === 'wrongPin' ? 'wrongCurrentPin' : r] };
   return { done: a.pinChanged };
 }
 
@@ -336,7 +338,7 @@ export async function bringBackAction(_: FormState, d: FormData): Promise<FormSt
   await seedLock(db, me.flatId, nowDhaka());
   const today = todayDhaka(), id = str(d, 'memberId'), open = await openFrom(db, me.flatId, today);
   const r = await unlessClosed(() => bringBack(db, me.flatId, me.memberId, id, today, open));
-  if (r === 'closed') return { error: a.errors.notFound };
+  if (r === 'closed') return { error: a.errors.monthClosed };
   if (r === 'taken') return { error: a.errors.nameUsedSince };
   // a second phone pressing at the same moment finds them already back: that is the same good outcome, not an error
   if (r === 'no' && !(await listMembers(db, me.flatId)).some(x => x.id === id && !x.leftOn)) return { error: a.errors.notFound };
