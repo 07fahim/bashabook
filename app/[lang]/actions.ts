@@ -2,6 +2,7 @@
 
 import { refresh } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
 import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
@@ -12,7 +13,9 @@ import {
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
 import { addEntry, addRoom, confirmEntry, endedOpenMonth, monthOf, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
+import { depositMsg, handoverMsg, payoutMsg } from '@/lib/notify-text';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
+import { sendPush } from '@/lib/push';
 import { removePush, savePush, type PushSub } from '@/lib/push-db';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -380,7 +383,18 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
     memberId: moving ? who || me.memberId : null,
     repeat: type === 'bill' && d.get('repeat') === '1',   // saved with the bill in one statement
   }, today));
-  if (r !== 'ok') return { error: x.errors[r] };
+  if (r !== 'ok' && r !== 'again') return { error: x.errors[r] };
+  // money between two people waits for the receiver's tap: tell them after the response, never instead of it ('again' is the
+  // form's retry of an entry already saved: nothing new, so no second nudge)
+  const receiver = type === 'deposit' && me.role !== 'manager' ? 'collector' : type === 'payout' && who && who !== me.memberId ? who : null;
+  if (receiver && r === 'ok') after(async () => {
+    try {
+      const [to] = await db<{ id: string; lang: Locale | null }>(
+        receiver === 'collector' ? `select id, language as lang from members where flat_id = $1 and role = 'manager'` : `select id, language as lang from members where flat_id = $1 and id = $2`,
+        receiver === 'collector' ? [me.flatId] : [me.flatId, receiver]);
+      if (to) await sendPush(db, [to.id], (type === 'deposit' ? depositMsg : payoutMsg)(to.lang ?? me.lang, me.name));
+    } catch (e) { console.warn('push failed', String(e)); }
+  });
   refresh();
   return { done: x.saved };
 }
@@ -516,7 +530,15 @@ export async function offerHandoverAction(_: FormState, d: FormData): Promise<Fo
   if (!UUID.test(to) || !Number.isSafeInteger(shown)) return { error: x.errors.people };
   const r = await offerHandover(db, me.flatId, me, to, shown, todayDhaka());
   refresh();
-  if (r === 'ok') return { done: x.saved };
+  if (r === 'ok') {
+    after(async () => {
+      try {
+        const [rcv] = await db<{ lang: Locale | null }>(`select language as lang from members where flat_id = $1 and id = $2`, [me.flatId, to]);
+        await sendPush(db, [to], handoverMsg(rcv?.lang ?? me.lang, me.name));
+      } catch (e) { console.warn('push failed', String(e)); }
+    });
+    return { done: x.saved };
+  }
   if (r === 'waiting') {
     const n = await pendingCount(db, me.flatId);
     return { error: n > 1 ? x.handBlocked.replace('{n}', String(n)) : x.handBlockedOne };
