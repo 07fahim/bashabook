@@ -72,6 +72,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
     <>
       <Header t={t} lang={lang} path="/home"><Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
+        {why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{a.notSavedNote}</p>}
         <p className="text-muted">{me.flatName}</p>
         <div className="flex items-center gap-3">
           <Avatar id={me.memberId} name={me.name} v={self?.photoV ?? null} size={48} />

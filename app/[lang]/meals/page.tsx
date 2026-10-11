@@ -107,6 +107,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     <>
       <Header t={t} lang={lang} path={withQuery('/meals', sp)}><Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
+        {sp.why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{t.app.notSavedNote}</p>}
         <h1 className="font-display text-3xl font-bold">{m.mealsTitle}</h1>
         <p className="mt-2 max-w-prose text-muted">{w < 0 ? m.pastLead : m.weekLead.replace('{t}', fmtTime(meals.flat.cutoff))
           .replace('{b}', String(meals.flat.weights.b / 100)).replace('{l}', String(meals.flat.weights.l / 100)).replace('{d}', String(meals.flat.weights.d / 100))}</p>

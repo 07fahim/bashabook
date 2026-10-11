@@ -61,12 +61,13 @@ export async function flatByCode(db: Db, code: string) {
 export type LoginError = 'notFound' | 'taken' | 'locked' | 'wrongPin' | 'newPinNeeded';
 
 /** Counts a PIN try before it is checked, in one statement, so parallel guesses can't slip past the lock.
- *  Every 5th wrong try locks for longer (15 min, 30, 1 h …). False = locked right now. */
+ *  Every 5th wrong try locks for 15 minutes, a flat cap: anyone with the join link can type wrong PINs under a flatmate's
+ *  name, and a growing lock would let them keep that person out for hours. False = locked right now. */
 async function countTry(db: Db, memberId: string) {
   const tried = await db(
     `update members set failed_pin_count = failed_pin_count + 1,
        locked_until = case when (failed_pin_count + 1) % 5 = 0
-         then now() + interval '15 minutes' * power(2, least((failed_pin_count + 1) / 5 - 1, 4)) else locked_until end
+         then now() + interval '15 minutes' else locked_until end
      where id = $1 and (locked_until is null or locked_until <= now()) returning id`, [memberId]);
   return tried.length > 0;
 }

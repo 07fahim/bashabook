@@ -30,7 +30,7 @@ describe('auth', { timeout: 30000 }, () => {
     expect(await login(db, code, 'not-a-uuid', '5555', null)).toEqual({ error: 'notFound' });
   });
 
-  it('locks after 5 wrong PINs and doubles the wait each time', async () => {
+  it('locks after 5 wrong PINs, 15 minutes each time', async () => {
     const { code, memberId } = await flat();
     const wait = async () => Number((await db<{ m: string }>(`select round(extract(epoch from locked_until - now()) / 60) as m from members where id = $1`, [memberId]))[0].m);
     for (let i = 0; i < 5; i++) expect(await login(db, code, memberId, '0000', null)).toEqual({ error: 'wrongPin' });
@@ -38,14 +38,14 @@ describe('auth', { timeout: 30000 }, () => {
     expect(await wait()).toBe(15);
     await db(`update members set locked_until = now() - interval '1 second' where id = $1`, [memberId]);
     for (let i = 0; i < 5; i++) await login(db, code, memberId, '0000', null);
-    expect(await wait()).toBe(30);
+    expect(await wait()).toBe(15);
     await db(`update members set locked_until = null where id = $1`, [memberId]);
     expect(await login(db, code, memberId, '1234', null)).toEqual({ memberId });
     const [{ failed_pin_count }] = await db<{ failed_pin_count: number }>(`select failed_pin_count from members where id = $1`, [memberId]);
     expect(failed_pin_count).toBe(0);
     await db(`update members set failed_pin_count = 24 where id = $1`, [memberId]);
     await login(db, code, memberId, '0000', null);
-    expect(await wait()).toBe(240);   // capped at 4 hours
+    expect(await wait()).toBe(15);   // never longer, however many tries came before
   });
 
   it('reset sets a one-time PIN, ends sessions and forces a new PIN', async () => {
