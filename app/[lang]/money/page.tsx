@@ -21,7 +21,7 @@ import { PayerSelect } from '../payer-select';
 import { ShareButton } from '../share-button';
 import { checkChip, field, Field, Fold, focus, link, LongList, PageSkeleton, primary } from '../ui';
 import { balanceText, ConfirmList } from './bits';
-import { breakdownOf, breakdownText, type Labels } from './breakdown';
+import { breakdownOf, breakdownText, pickWho, type Labels } from './breakdown';
 
 export default function Money({ params, searchParams }: PageProps<'/[lang]/money'>) {
   return <Suspense fallback={<PageSkeleton />}><MoneyBody params={params} searchParams={searchParams} /></Suspense>;
@@ -55,10 +55,10 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const ok = mo.entries.filter(e => e.status === 'ok');
   // ?who= : the collector opens someone else's "How this adds up" (to explain or settle it, e.g. with someone moving out).
   // Only the collector, and only a person in this flat's month: anyone else, or an unknown id, gets their own.
-  const whoId = boss && typeof sp.who === 'string' && sp.who !== me.memberId && mo.result.perMember.some(p => p.id === sp.who) ? sp.who : null;
+  const whoId = pickWho(boss, me.memberId, sp.who, mo.result.perMember);
   const r = mo.result.perMember.find(p => p.id === (whoId ?? me.memberId));
   const own: Labels = { meals: x.myMeals, share: x.share, deposited: x.deposited, spent: x.spent, received: x.received, paidIn: x.paidIn };
-  const bd = breakdownOf(mo, whoId ?? me.memberId, x, whoId ? x.of : own, mo.carriedFrom ?? prev);
+  const bd = breakdownOf(mo, whoId ?? me.memberId, x, whoId ? x.of : own, mo.carriedFrom ?? prev, !!whoId);
   // meal counts are the engine's own numbers (hundredths, guests inside the host's count); the flat total is their sum
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
   const meals = (h: number) => (h === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(h));
@@ -80,7 +80,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
     : e.type === 'adjustment' ? `${name(e.memberId)} → ${name(e.moves)}`
     : e.paidBy ? x.paidBy.replace('{name}', name(e.paidBy)) : x.fundPaid;
   const settle = mo.result.perMember.filter(p => p.balance !== 0).map(p => {
-    const a = name(p.id), amt = fmtTaka(p.balance);
+    const a = name(p.id), amt = fmtExact(p.balance);   // settle-up amounts to the poisha, as a shared breakdown says them
     if (p.id === collector.id) return (p.balance > 0 ? x.takes : x.adds).replace('{a}', a).replace('{t}', amt);
     return x.paysTo.replace('{a}', p.balance < 0 ? a : collector.name).replace('{b}', p.balance < 0 ? collector.name : a).replace('{t}', amt);
   });
@@ -113,9 +113,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           <span className="flex gap-2">
             {/* at the ends a plain span, not a link: keyboard users can't follow a link that only looks disabled */}
             {month <= mo.first ? <span aria-disabled="true" aria-label={x.prevMonth} className={arrow}>←</span>
-              : <Link href={href(prev, mine)} aria-label={x.prevMonth} className={arrow}>←</Link>}
+              : <Link href={href(prev, mine, whoId ?? undefined)} aria-label={x.prevMonth} className={arrow}>←</Link>}
             {month >= thisMonth ? <span aria-disabled="true" aria-label={x.nextMonth} className={arrow}>→</span>
-              : <Link href={href(next, mine)} aria-label={x.nextMonth} className={arrow}>→</Link>}
+              : <Link href={href(next, mine, whoId ?? undefined)} aria-label={x.nextMonth} className={arrow}>→</Link>}
           </span>
         </nav>
         {closed && <p className="mt-1 text-muted">{x.closedOn.replace('{d}', fmtDay(dhakaDate(mo.info!.closedAt!), lang))}</p>}
@@ -151,7 +151,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 {/* sending it is always a deliberate tap: opening someone's breakdown shares nothing */}
                 {whoId && (<>
                   <p className="mt-3 max-w-prose text-[15px] text-muted">{closed ? x.of.final.replace('{month}', fmtMonth(month)) : x.of.soFar.replace('{d}', fmtDay(today, lang)).replace('{month}', fmtMonth(month))}</p>
-                  <div className="mt-3 sm:max-w-xs"><ShareButton text={breakdownText(mo.flat.name, month, name(whoId), bd, closed, today, x, lang)} label={t.meals.share} copied={t.meals.copied} /></div>
+                  <div className="mt-3 sm:max-w-xs"><ShareButton text={breakdownText(mo.flat.name, month, name(whoId), bd, closed, today, x, lang, mo.earlierOpen, collector.name)} label={t.meals.share} copied={t.meals.copied} /></div>
                 </>)}
               </>)}
               {whoId && <Link href={`${href(month, mine)}#balance`} scroll={false} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{x.of.back}</Link>}
@@ -257,15 +257,25 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               <h2 className="text-xl font-bold">{x.everyone}</h2>
               {boss && <p className="mt-1 text-[15px] text-muted">{x.of.tapHint}</p>}
               <ul className="mt-1 divide-y divide-line">
-                {mo.result.perMember.map(p => (
-                  <li key={p.id} className="flex justify-between gap-4 py-2">
-                    <span className="min-w-0">{boss && p.id !== me.memberId
-                      ? <Link href={`${href(month, mine, p.id)}#balance`} scroll={false} aria-current={p.id === whoId || undefined} className={`inline-flex min-h-11 items-center ${link}`}>{name(p.id)}</Link>
-                      : name(p.id)}<span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span>
-                      {!mo.members.some(m => m.id === p.id) && <span className="block text-[15px] text-muted">{x.movedOut}</span>}</span>
+                {mo.result.perMember.map(p => {
+                  const row = (<>
+                    <span className="min-w-0">
+                      <span className={boss && p.id !== me.memberId ? 'font-semibold text-turmeric-ink' : ''}>{name(p.id)}</span>
+                      <span className="block text-[15px] text-muted">{meals(mo.meals.get(p.id) ?? 0)}</span>
+                      {!mo.members.some(m => m.id === p.id) && <span className="block text-[15px] text-muted">{x.movedOut}</span>}
+                    </span>
                     <span className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${balanceText(x, p.balance).tone}`}>{p.balance > 0 ? '+' : p.balance < 0 ? '−' : ''}{fmtTaka(p.balance)}</span>
-                  </li>
-                ))}
+                  </>);
+                  // the collector's rows open that person's breakdown: the whole row is the tap target, so every row keeps one height
+                  return (
+                    <li key={p.id}>
+                      {boss && p.id !== me.memberId
+                        ? <Link href={`${href(month, mine, p.id)}#balance`} scroll={false} aria-current={p.id === whoId || undefined}
+                            className={`flex min-h-11 justify-between gap-4 rounded-lg py-2 hover:bg-paper ${focus}`}>{row}</Link>
+                        : <div className="flex justify-between gap-4 py-2">{row}</div>}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           </div>

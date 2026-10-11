@@ -855,7 +855,7 @@ const en: Dict = {
       soFar: 'So far, as of {d}. It can still change until {month} is closed.',
       final: '{month} is closed: these numbers are final.',
       back: 'Back to mine',
-      tapHint: 'Tap a name to see how their balance adds up, and share it.',
+      tapHint: 'Tap or click a name to see how their balance adds up, and share it.',
     },
     settleTitle: 'If the month ended today',
     paysTo: '{a} pays {b} {t}',

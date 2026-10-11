@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { getDictionary } from '../app/[lang]/dictionaries';
-import { breakdownOf, breakdownText, type Labels } from '../app/[lang]/money/breakdown';
+import { breakdownOf, breakdownText, pickWho, type Labels } from '../app/[lang]/money/breakdown';
 import { createFlat } from './auth';
 import { closeMonth } from './close';
 import { flatMoney } from './handover';
@@ -70,14 +70,34 @@ describe('someone else’s breakdown, shared by the collector', { timeout: 30000
     expect(oct.rows[0]).toEqual({ label: 'Brought from September 2026', value: '+৳2,100', kind: 'head' });
   });
 
-  it('the balance and the shared amount are to the poisha, as settle-up shows them', async () => {
+  it('a shared breakdown is to the poisha, as settle-up is; the viewer’s own card stays in whole taka like its headline', async () => {
     const { flatId, ids, nafis } = await flat();
     expect(await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 10000, note: 'Water', split: 'equal' }))).toBe('ok');   // ৳100 by three
-    const b = breakdownOf(await loadMonth(db, flatId, SEP, OCT2), ids.Tahsin, x, x.of, SEP)!;
-    expect(b.balance % 100).not.toBe(0);
-    const exact = `৳${(b.balance / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    expect(b.rows.at(-1)!.value).toBe(exact);
-    expect(breakdownText('Flat 4B', SEP, 'Tahsin', b, false, OCT2, x, 'en').split('\n')[1]).toBe(`Tahsin gets back ${exact}`);
+    const mo = await loadMonth(db, flatId, SEP, OCT2);
+    const shared = breakdownOf(mo, ids.Tahsin, x, x.of, SEP, true)!, mine = breakdownOf(mo, ids.Tahsin, x, own, SEP)!;
+    expect(shared.balance % 100).not.toBe(0);
+    const exact = `৳${(shared.balance / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    expect(shared.rows.at(-1)!.value).toBe(exact);
+    expect(breakdownText('Flat 4B', SEP, 'Tahsin', shared, false, OCT2, x, 'en').split('\n')[1]).toBe(`Tahsin gets back ${exact}`);
+    expect(mine.rows.at(-1)!.value).toBe(`৳${Math.round(shared.balance / 100).toLocaleString('en-US')}`);
+  });
+
+  it('while an earlier month is open, the shared text says it isn’t included yet', async () => {
+    const { flatId, ids } = await flat();
+    const oct = await loadMonth(db, flatId, '2026-10-01', OCT2);
+    expect(oct.earlierOpen).toBe(SEP);
+    const b = breakdownOf(oct, ids.Tahsin, x, x.of, SEP, true) ?? { rows: [], balance: 0 };
+    const lines = breakdownText('Flat 4B', '2026-10-01', 'Tahsin', b, false, OCT2, x, 'en', oct.earlierOpen, 'Nafis').split('\n');
+    expect(lines.at(-2)).toBe('September 2026 isn’t closed yet. Its balances will be added here when Nafis closes it.');
+  });
+
+  it('only the collector opens someone else’s, never their own id, and only someone in this month', () => {
+    const here = [{ id: 'a' }, { id: 'b' }];
+    expect(pickWho(true, 'a', 'b', here)).toBe('b');
+    expect(pickWho(false, 'a', 'b', here)).toBeNull();          // a flatmate gets their own
+    expect(pickWho(true, 'a', 'a', here)).toBeNull();           // the collector's own: the normal card
+    expect(pickWho(true, 'a', 'z', here)).toBeNull();           // not in this month (or another flat)
+    expect(pickWho(true, 'a', ['b'], here)).toBeNull();         // ?who=b&who=c arrives as a list
   });
 
   it('nobody outside the month: no breakdown', async () => {

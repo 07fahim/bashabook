@@ -8,13 +8,18 @@ export type Row = { label: string; value: string; kind?: 'head' | 'sub' | 'total
 /** The words for "How this adds up": the viewer's own ("Your meals") or someone else's ("Meals"). */
 export type Labels = { meals: string; share: string; deposited: string; spent: string; received: string; paidIn: string };
 
+/** Whose breakdown the page shows: someone else's only for the collector, never their own id, and only a person in this flat's
+ *  month (so never anyone from another flat); anyone else, or an unknown id, gets their own. */
+export const pickWho = (boss: boolean, me: string, who: unknown, here: { id: string }[]) =>
+  boss && typeof who === 'string' && who !== me && here.some(p => p.id === who) ? who : null;
+
 /** '+৳500' / '−৳300', so the breakdown reads as a sum; no sign on ৳0. */
 const signed = (sign: '+' | '−', p: number) => `${p ? sign : ''}${fmtTaka(p)}`;
 
 /** One person's "How this adds up" for one month, from the same numbers the Money page shows: the screen and the Share text
  *  both come from these rows, so they can't disagree. A closed month has only its snapshot: no guest or per-bill lines.
  *  Null if the person has no row this month. */
-export function breakdownOf(mo: Month, id: string, x: Dict['money'], l: Labels, broughtFrom: string) {
+export function breakdownOf(mo: Month, id: string, x: Dict['money'], l: Labels, broughtFrom: string, exact = false) {
   const r = mo.result.perMember.find(p => p.id === id);
   if (!r) return null;
   const closed = mo.info?.status === 'closed';
@@ -42,8 +47,8 @@ export function breakdownOf(mo: Month, id: string, x: Dict['money'], l: Labels, 
     ]),
     { label: l.received, value: signed('−', r.payouts) },
     ...(r.adjustments !== 0 ? [{ label: x.adjustments, value: `${r.adjustments < 0 ? '−' : '+'}${fmtTaka(r.adjustments)}` }] : []),
-    // the balance to the poisha, as settle-up shows it, so a shared amount never differs from it by a few poisha
-    { label: x.balance, value: `${r.balance < 0 ? '−' : ''}${fmtExact(r.balance)}`, kind: 'total' },
+    // `exact`: to the poisha, like settle-up, for a breakdown that gets shared to settle; otherwise whole taka like the headline
+    { label: x.balance, value: `${r.balance < 0 ? '−' : ''}${(exact ? fmtExact : fmtTaka)(r.balance)}`, kind: 'total' },
   ];
   return { rows, balance: r.balance };
 }
@@ -51,11 +56,13 @@ export function breakdownOf(mo: Month, id: string, x: Dict['money'], l: Labels, 
 /** The text the collector shares for one person: who owes or gets back what, every line, and whether it can still change
  *  (an open month: provisional, with the date) or is final (a closed month). */
 export function breakdownText(flatName: string, month: string, name: string, b: { rows: Row[]; balance: number }, closed: boolean,
-  today: string, x: Dict['money'], lang: 'bn' | 'en') {
+  today: string, x: Dict['money'], lang: 'bn' | 'en', earlierOpen: string | null = null, collector = '') {
   const o = x.of, t = fmtExact(b.balance);
   const head = b.balance < 0 ? o.owes.replace('{name}', name).replace('{t}', t)
     : b.balance > 0 ? o.gets.replace('{name}', name).replace('{t}', t) : o.even.replace('{name}', name);
   return [`${flatName} · ${fmtMonth(month)}`, head, '',
     ...b.rows.map(r => `${r.kind === 'sub' ? '  ' : ''}${r.label}: ${r.value}`), '',
+    // while an earlier month is open this month starts from ৳0: say so, or the reader takes it for the whole amount
+    ...(earlierOpen && !closed ? [x.notClosedYet.replace('{month}', fmtMonth(earlierOpen)).replace('{name}', collector)] : []),
     closed ? o.final.replace('{month}', fmtMonth(month)) : o.soFar.replace('{d}', fmtDay(today, lang)).replace('{month}', fmtMonth(month))].join('\n');
 }
