@@ -1,7 +1,7 @@
 // Exercises Next's Server Action origin check against a running build (http://localhost:3000). Posts the plain "join by code"
 // form action (no sign-in, no write) three ways: a foreign Origin (must be refused: 500 and "Invalid Server Actions request"
 // in the server log), the app's own Origin (a 303 to the code's join page), and no Origin (Next allows it with a warning).
-const B = 'http://localhost:3000', CODE = process.argv[2] ?? 'JYVBKW';   // any code works: a wrong one still gets the same-origin 303
+const B = process.env.BASE ?? 'http://localhost:3000', CODE = process.argv[2] ?? 'JYVBKW';   // any code works: a wrong one still gets the same-origin 303
 const page = await (await fetch(`${B}/en/join`)).text();
 const actionId = /\$ACTION_ID_([0-9a-f]+)/.exec(page)?.[1];
 if (!actionId) { console.log('no form action id on /en/join'); process.exit(1); }
