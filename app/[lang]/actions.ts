@@ -6,7 +6,7 @@ import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, newFla
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
-import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, plates as platesOf, todayDhaka } from '@/lib/meals';
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOtherMeal, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
@@ -172,9 +172,9 @@ export async function settingsAction(_: FormState, d: FormData): Promise<FormSta
   refresh();
   // a lock time already past locks tomorrow from now: give the count to tell the cook (earlier changes were on time)
   if (isLocked(tomorrow, now, cutoff) && !isLocked(tomorrow, now, was.cutoff)) {
-    const { members, changes } = await loadMeals(db, me.flatId, tomorrow, tomorrow);
+    const { members, changes, noCook } = await loadMeals(db, me.flatId, tomorrow, tomorrow);
     const hc = headcount(members, changes, tomorrow);
-    return { done: m.lockedNow.replace('{list}', MEALS.map(x => `${m.names[x]} ${hc[x]}`).join(', ')) };
+    return { done: m.lockedNow.replace('{list}', MEALS.map(x => { const p = platesOf(hc, noCook, tomorrow, x); return `${m.names[x]} ${p === 'off' ? m.noCook : p}`; }).join(', ')) };
   }
   return { done: m.saved };
 }

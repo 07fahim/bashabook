@@ -107,7 +107,8 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
       <Header t={t} lang={lang} path="/meals"><Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <h1 className="font-display text-3xl font-bold">{m.mealsTitle}</h1>
-        <p className="mt-2 text-muted">{w < 0 ? m.pastLead : m.weekLead}</p>
+        <p className="mt-2 max-w-prose text-muted">{w < 0 ? m.pastLead : m.weekLead.replace('{t}', fmtTime(meals.flat.cutoff))
+          .replace('{b}', String(meals.flat.weights.b)).replace('{l}', String(meals.flat.weights.l)).replace('{d}', String(meals.flat.weights.d))}</p>
         <nav aria-label={m.weekNav} className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           {/* at either end the arrow stays in place, greyed out, so keyboard focus is not lost */}
           <Link href={href(Math.max(back, w - 1), mine)} scroll={false} aria-label={m.prevWeek} aria-disabled={w === back || undefined} className={`justify-self-start ${arrow}`}><span aria-hidden="true">←</span><span aria-hidden="true" className="hidden sm:inline">{m.prevWeek}</span></Link>
@@ -128,7 +129,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                     <li key={`${g.date}${g.meal}`} className="flex flex-wrap items-center justify-between gap-x-3 py-2">
                       <span>{fmtDay(g.date, lang)} · {m.names[g.meal]} · {g.guests === 1 ? m.guestOne : m.guestMany.replace('{n}', String(g.guests))}</span>
                       {/* removing today's guests stays with the person who runs the flat */}
-                      {g.date === today ? <span className="text-[15px] text-muted">{m.todayGuestsKeep}</span> : (
+                      {g.date === today ? <span className="text-[15px] text-muted">{m.todayGuestsKeep.replace('{name}', starter?.name ?? '')}</span> : (
                         <form action={removeGuestsAction}>
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="date" value={g.date} />
