@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { db, migrate } from '../db/test-db';
 import { addMember, bringBack, createFlat, createSession, deleteSession, listMembers, login, memberBySession, renameMember, resetPin, setLeaving } from './auth';
-import { addCorrection } from './close';
+import { addCorrection, closeMonth } from './close';
 import { acceptHandover, offerHandover } from './handover';
 import { setOtherMeal } from './meals-db';
 import { addEntry, confirmEntry, openMonth, putBack, removeEntry, setRent, setRoom, stopRepeat, type NewEntry } from './money-db';
 import { removePhoto, setPhoto } from './photo';
 
-const today = '2026-10-09', OCT = '2026-10-01';
+const today = '2026-10-09', OCT = '2026-10-01', SEP = '2026-09-01', noCash = { cash: 0, bkash: 0, nagad: 0, bank: 0 };
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
   ({ date: '2026-10-05', note: null, paidBy: null, memberId: null, split: null, selected: [], ...p });
 
@@ -16,9 +16,9 @@ const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =
 async function two() {
   await migrate();
   const mk = async (flatName: string, name: string, other: string) => {
-    const f = await createFlat(db, { flatName, name, pin: '1234', others: [other], today: OCT, lang: 'bn' });
+    const f = await createFlat(db, { flatName, name, pin: '1234', others: [other], today: SEP, lang: 'bn' });
     const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
-    await openMonth(db, f.flatId, OCT);
+    await openMonth(db, f.flatId, SEP); await openMonth(db, f.flatId, OCT);
     return { flatId: f.flatId, boss: { memberId: f.memberId, role: 'manager' as const }, other: ids[other], member: { memberId: ids[other], role: 'member' as const } };
   };
   return { A: await mk('A', 'Nafis', 'Tahsin'), B: await mk('B', 'Zarif', 'Rafi') };
@@ -55,6 +55,7 @@ describe('flat isolation', { timeout: 60000 }, () => {
     expect(await addEntry(db, A.flatId, A.boss, e({ type: 'bazar', amount: 100, paidBy: B.other }), today)).toBe('bad');
     expect(await addEntry(db, A.flatId, A.boss, e({ type: 'deposit', amount: 100, memberId: B.other }), today)).toBe('bad');
     expect(await addEntry(db, A.flatId, A.boss, e({ type: 'payout', amount: 100, memberId: B.other }), today)).toBe('bad');
+    expect(await addEntry(db, A.flatId, A.boss, e({ type: 'bill', amount: 100, note: 'x', split: 'selected', selected: [A.other] }), today)).toBe('ok');   // control
     expect(await addEntry(db, A.flatId, A.boss, e({ type: 'bill', amount: 100, note: 'x', split: 'selected', selected: [B.other] }), today)).toBe('bad');
     expect(await confirmEntry(db, A.flatId, A.boss, pending)).toBe(false);
     expect(await removeEntry(db, A.flatId, A.boss, bazar, today)).toBe(false);
@@ -62,8 +63,17 @@ describe('flat isolation', { timeout: 60000 }, () => {
     expect(await stopRepeat(db, A.flatId, A.boss, tpl.id)).toBe(false);
     expect(await setRent(db, A.flatId, A.boss, room.id, 500)).toBe(false);
     expect(await setRoom(db, A.flatId, A.boss, B.other, room.id)).toBe(false);
-    expect(await setRoom(db, A.flatId, A.boss, A.other, room.id)).toBe(false);
-    expect(await addCorrection(db, A.flatId, A.boss, { id: randomUUID(), forMonth: '2026-09-01', amount: 100, note: 'x', kind: 'move', from: B.other, to: B.boss.memberId }, today)).toBe('month');
+    expect(await setRoom(db, A.flatId, A.boss, A.other, room.id)).toBe(false);   // B's room
+    const [roomA] = await db<{ id: string }>(`insert into rooms (flat_id, name, rent_share_poisha) values ($1, 'R', 100) returning id`, [A.flatId]);
+    expect(await setRoom(db, A.flatId, A.boss, B.other, roomA.id)).toBe(false);   // B's person
+    expect(await setRoom(db, A.flatId, A.boss, A.other, roomA.id)).toBe(true);    // control
+    // a correction for A's closed September: fine between A's own people, refused for B's (A's ledger gets one row, not two)
+    expect(await addEntry(db, A.flatId, A.boss, e({ type: 'bazar', amount: 100, paidBy: A.other, date: '2026-09-05' }))).toBe('ok');
+    expect((await closeMonth(db, A.flatId, A.boss, SEP, today, noCash)).result).toBe('ok');
+    expect(await addCorrection(db, A.flatId, A.boss, { id: randomUUID(), forMonth: SEP, amount: 100, note: 'x', kind: 'move', from: A.boss.memberId, to: A.other }, today)).toBe('ok');
+    expect(await addCorrection(db, A.flatId, A.boss, { id: randomUUID(), forMonth: SEP, amount: 100, note: 'x', kind: 'move', from: B.other, to: B.boss.memberId }, today)).toBe('month');
+    expect(await addCorrection(db, A.flatId, A.boss, { id: randomUUID(), forMonth: SEP, amount: 100, note: 'x', kind: 'bill', paidBy: A.boss.memberId, split: 'selected', selected: [B.other] }, today)).toBe('month');
+    expect(await db(`select 1 from ledger where flat_id = $1 and for_month = $2`, [A.flatId, SEP])).toHaveLength(1);
     expect(await db(`select 1 from ledger where flat_id = $1`, [B.flatId])).toHaveLength(2);
     expect((await db<{ status: string }>(`select status from ledger where id = $1`, [pending]))[0].status).toBe('pending');
     expect(await db(`select 1 from bill_templates where flat_id = $1`, [B.flatId])).toHaveLength(1);
@@ -77,11 +87,13 @@ describe('flat isolation', { timeout: 60000 }, () => {
     await db(`update members set left_on = '2026-10-05' where id = $1`, [B.other]);
     expect(await bringBack(db, A.flatId, A.boss.memberId, B.other, today, OCT)).toBe('no');
     await db(`update members set left_on = null where id = $1`, [B.other]);
-    expect(await setOtherMeal(db, A.flatId, A.boss.memberId, B.other, '2026-10-20', 'l', 0, 1)).toBe('closed');
+    const soon = new Date(Date.now() + 6 * 3600_000 + 3 * 864e5).toISOString().slice(0, 10);   // Dhaka, three days ahead: open to a flatmate's switch
+    expect(await setOtherMeal(db, A.flatId, A.boss.memberId, A.other, soon, 'l', 0, 1)).toBe('ok');   // control
+    expect(await setOtherMeal(db, A.flatId, A.boss.memberId, B.other, soon, 'l', 0, 1)).toBe('closed');
     expect(await setPhoto(db, B.other, Uint8Array.from([0xff, 0xd8, 0xff, 0]))).toBe(true);
     expect(await removePhoto(db, { flatId: A.flatId, ...A.boss }, B.other)).toBe(false);
+    await db(`update members set pin_hash = 'x' where id = $1`, [B.other]);   // eligible in B, so the refusal below is the flat
     expect(await offerHandover(db, A.flatId, A.boss, B.other, 0, today)).toBe('recipient');
-    await db(`update members set pin_hash = 'x' where id = $1`, [B.other]);
     expect(await offerHandover(db, B.flatId, B.boss, B.other, 0, today)).toBe('ok');
     const [h] = await db<{ id: string }>(`select id from handovers where flat_id = $1`, [B.flatId]);
     expect(await acceptHandover(db, A.flatId, A.other, h.id)).toBe('gone');

@@ -255,7 +255,7 @@ const bn = {
     lastDayHistory: 'এখানে শেষ দিন',
     stayingHistory: 'আসলে থাকছে',
     backHistory: 'ফিরিয়ে আনা হয়েছে · মিল ছিল না',
-    addedHistory: 'যোগ করেছে, থাকবে',
+    addedHistory: 'যোগ করেছে, উঠবে',
     usualChanged: 'রোজকার মিল',
     pinResetHistory: 'PIN রিসেট',
     codeChangedHistory: 'নতুন যোগ দেওয়ার কোড বানিয়েছে',
