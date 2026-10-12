@@ -50,7 +50,7 @@ export async function loginAction(_: FormState, d: FormData): Promise<FormState>
   if (!isPin(pin) || (newPin !== null && !isPin(newPin))) return { error: e.pin };
   if (d.has('pin2') && (newPin ?? pin) !== str(d, 'pin2')) return { error: e.pinMatch };
   const r = await login(db, str(d, 'code'), str(d, 'memberId'), pin, newPin);
-  if ('error' in r) return { error: e[r.error] };
+  if ('error' in r) return { error: e[r.error] + (r.left ? ' ' + e.lastTries.replace('{n}', String(r.left)) : '') };
   await startSession(r.memberId);
   redirect(`/${lang}/home`);
 }
@@ -280,7 +280,7 @@ export async function changePinAction(_: FormState, d: FormData): Promise<FormSt
   if (!isPin(d.get('pin')) || !isPin(d.get('newPin'))) return { error: a.errors.pin };
   if (str(d, 'newPin') !== str(d, 'pin2')) return { error: a.errors.pinMatch };
   const r = await changePin(db, me.memberId, str(d, 'pin'), str(d, 'newPin'), await currentToken());
-  if (r !== 'ok') return { error: a.errors[r === 'wrongPin' ? 'wrongCurrentPin' : r] };
+  if (r !== 'ok') return { error: a.errors[r.error === 'wrongPin' ? 'wrongCurrentPin' : r.error] + (r.left ? ' ' + a.errors.lastTries.replace('{n}', String(r.left)) : '') };
   return { done: a.pinChanged };
 }
 

@@ -26,7 +26,7 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
     const { code, tahsin } = await flat();
     await wrong(code, tahsin, 24);
     expect(await state(tahsin)).toEqual({ n: 24, forGood: false });
-    expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'wrongPin' });   // the 25th
+    expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'lockedForGood' });   // the 25th says so at once
     expect(await state(tahsin)).toEqual({ n: 25, forGood: true });
     expect(await login(db, code, tahsin, '5678', null)).toEqual({ error: 'lockedForGood' });
     expect(await lockRows(tahsin)).toBe(1);   // once, and never again on later tries
@@ -38,6 +38,13 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
     expect(await login(db, code, tahsin, '5678', null)).toEqual({ memberId: tahsin });
     expect(await state(tahsin)).toEqual({ n: 0, forGood: false });
     expect(await lockRows(tahsin)).toBe(0);
+  });
+
+  it('1c: from the 20th wrong try on, the message says how many are left', async () => {
+    const { code, tahsin } = await flat();
+    await wrong(code, tahsin, 19);
+    for (const left of [5, 4, 3, 2, 1]) { expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'wrongPin', left }); await unlockTemp(tahsin); }
+    expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'lockedForGood' });
   });
 
   it('2: parallel wrong tries cannot pass the limit', async () => {
@@ -53,7 +60,7 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
     const token = await createSession(db, tahsin);   // a phone signed in before the lock
     await wrong(code, tahsin, 25);
     expect(await login(db, code, tahsin, '5678', null)).toEqual({ error: 'lockedForGood' });
-    expect(await changePin(db, tahsin, '5678', '9999', token)).toBe('lockedForGood');
+    expect(await changePin(db, tahsin, '5678', '9999', token)).toEqual({ error: 'lockedForGood' });
     await setPhone(db, tahsin, '01712345678');
     expect(await state(tahsin)).toEqual({ n: 25, forGood: true });
   });
@@ -98,6 +105,7 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
       expect(t.app.errors.lockedForGood).toContain('25');
       expect(t.app.errors.lockedForGood).not.toBe(t.app.errors.locked);
       expect(t.meals.lockedHistory).toContain('25');
+      expect(t.app.errors.lastTries).toContain('{n}');
     }
   });
 

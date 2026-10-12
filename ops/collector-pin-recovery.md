@@ -6,7 +6,8 @@ the collector resets it on the Flat tab.
 
 ## Locks (policy of 2026-10-12)
 
-Wrong PIN tries 5, 10, 15 and 20 lock the sign-in for a while (15 minutes, doubling). The 25th locks it for good, and only a
+Wrong PIN tries 5, 10, 15 and 20 lock the sign-in for a while (15 minutes, doubling). From the 20th on, every wrong try
+says how many are left. The 25th locks it for good and says so at once, and only a
 PIN reset unlocks it: the collector's reset for a flatmate, this procedure for the collector. Each permanent lock shows in
 the flat's history ("locked after 25 wrong PINs") and the Flat tab shows a Locked badge. Nothing else changes: money, meals,
 roles and history stay as they were.

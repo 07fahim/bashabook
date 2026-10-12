@@ -128,7 +128,7 @@ describe('auth', { timeout: 30000 }, () => {
   it('changes my own PIN with the current one, and signs out my other phones', async () => {
     const { code, memberId } = await flat();
     const here = await createSession(db, memberId), other = await createSession(db, memberId);
-    expect(await changePin(db, memberId, '0000', '4321', here)).toBe('wrongPin');
+    expect(await changePin(db, memberId, '0000', '4321', here)).toEqual({ error: 'wrongPin' });
     expect(await changePin(db, memberId, '1234', '4321', here)).toBe('ok');
     expect(await memberBySession(db, here)).not.toBeNull();     // this phone stays signed in
     expect(await memberBySession(db, other)).toBeNull();        // the others are signed out
@@ -139,8 +139,8 @@ describe('auth', { timeout: 30000 }, () => {
   it('wrong current PINs count toward the same lockout as logging in', async () => {
     const { memberId } = await flat();
     const here = await createSession(db, memberId);
-    for (let i = 0; i < 5; i++) expect(await changePin(db, memberId, '0000', '4321', here)).toBe('wrongPin');
-    expect(await changePin(db, memberId, '1234', '4321', here)).toBe('locked');   // even the right PIN waits now
+    for (let i = 0; i < 5; i++) expect(await changePin(db, memberId, '0000', '4321', here)).toEqual({ error: 'wrongPin' });
+    expect(await changePin(db, memberId, '1234', '4321', here)).toEqual({ error: 'locked' });   // even the right PIN waits now
   });
 
   it('the person who runs the flat fixes a name; a name already in the flat is refused', async () => {
