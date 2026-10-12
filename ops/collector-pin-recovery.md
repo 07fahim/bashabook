@@ -1,8 +1,20 @@
 # Collector PIN recovery (app team, pilot)
 
-The collector forgot their PIN. There is no self-service recovery: the app team verifies who is asking, then sets a
-one-time PIN with `scripts/reset-collector-pin.mts`. A flatmate who forgot their PIN doesn't need this: the collector resets
-it on the Flat tab.
+The collector forgot their PIN, or their sign-in is locked. There is no self-service recovery: the app team verifies who is
+asking, then sets a one-time PIN with `scripts/reset-collector-pin.mts`. A flatmate who forgot their PIN doesn't need this:
+the collector resets it on the Flat tab.
+
+## Locks (policy of 2026-10-12)
+
+Wrong PIN tries 5, 10, 15 and 20 lock the sign-in for a while (15 minutes, doubling). From the 20th on, every wrong try
+says how many are left. The 25th locks it for good and says so at once, and only a
+PIN reset unlocks it: the collector's reset for a flatmate, this procedure for the collector. Each permanent lock shows in
+the flat's history ("locked after 25 wrong PINs") and the Flat tab shows a Locked badge. Nothing else changes: money, meals,
+roles and history stay as they were.
+
+Anyone holding the flat's join link can run up a member's wrong tries. If locks appear that nobody in the flat caused, the
+collector makes a new join code (Flat tab, Join link): the old link stops working at once, everyone signed in stays signed
+in. A new code does not unlock anyone; the locked people still need a reset.
 
 ## Before the pilot: phone numbers at onboarding
 
