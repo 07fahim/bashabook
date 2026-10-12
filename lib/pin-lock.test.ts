@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, newFlatCode, resetPin, setPhone } from './auth';
+import { changePin, createFlat, createSession, flatByCode, listMembers, login, newFlatCode, resetPin, setPhone } from './auth';
 import { loadHistory } from './meals-db';
 import { addEntry, openMonth } from './money-db';
 import { getDictionary } from '../app/[lang]/dictionaries';
@@ -18,6 +18,7 @@ async function flat() {
 }
 const unlockTemp = (id: string) => db(`update members set locked_until = null where id = $1 and locked_until <> 'infinity'`, [id]);
 const wrong = async (code: string, id: string, n: number) => { for (let i = 0; i < n; i++) { await login(db, code, id, '0000', null); await unlockTemp(id); } };
+const lockRows = async (id: string) => (await db(`select 1 from audit_log where entity = 'members' and entity_id = $1 and after ? 'locked'`, [id])).length;
 const state = async (id: string) => (await db<{ n: number; forGood: boolean }>(`select failed_pin_count as n, coalesce(locked_until = 'infinity', false) as "forGood" from members where id = $1`, [id]))[0];
 
 describe('permanent PIN lock', { timeout: 60000 }, () => {
@@ -28,6 +29,15 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
     expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'wrongPin' });   // the 25th
     expect(await state(tahsin)).toEqual({ n: 25, forGood: true });
     expect(await login(db, code, tahsin, '5678', null)).toEqual({ error: 'lockedForGood' });
+    expect(await lockRows(tahsin)).toBe(1);   // once, and never again on later tries
+  });
+
+  it('1b: the right PIN on the 25th try signs in, and no lock goes in the history', async () => {
+    const { code, tahsin } = await flat();
+    await wrong(code, tahsin, 24);
+    expect(await login(db, code, tahsin, '5678', null)).toEqual({ memberId: tahsin });
+    expect(await state(tahsin)).toEqual({ n: 0, forGood: false });
+    expect(await lockRows(tahsin)).toBe(0);
   });
 
   it('2: parallel wrong tries cannot pass the limit', async () => {
@@ -35,16 +45,16 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
     await wrong(code, tahsin, 20);
     await Promise.all(Array.from({ length: 40 }, () => login(db, code, tahsin, '0000', null)));
     expect(await state(tahsin)).toEqual({ n: 25, forGood: true });
+    expect(await lockRows(tahsin)).toBe(1);
   });
 
   it('3: a right PIN, a PIN change and other actions do not clear a permanent lock', async () => {
-    const { flatId, code, tahsin } = await flat();
+    const { code, tahsin } = await flat();
     const token = await createSession(db, tahsin);   // a phone signed in before the lock
     await wrong(code, tahsin, 25);
     expect(await login(db, code, tahsin, '5678', null)).toEqual({ error: 'lockedForGood' });
     expect(await changePin(db, tahsin, '5678', '9999', token)).toBe('lockedForGood');
     await setPhone(db, tahsin, '01712345678');
-    await newFlatCode(db, flatId, { memberId: (await memberBySession(db, token))!.memberId, role: 'member' }).catch(() => null);
     expect(await state(tahsin)).toEqual({ n: 25, forGood: true });
   });
 

@@ -63,21 +63,24 @@ export async function flatByCode(db: Db, code: string) {
 export type LoginError = 'notFound' | 'taken' | 'locked' | 'lockedForGood' | 'wrongPin' | 'newPinNeeded';
 
 /** Counts a PIN try before it is checked, in one statement, so parallel guesses can't slip past the lock.
- *  Every 5th wrong try locks for longer (15 min, 30, 1 h …); the 25th locks for good, until a PIN reset, and that goes in
- *  the history (policy approved 2026-10-12: 24 guesses in a lifetime, not 30 a day). 'ok' = this try may be checked. */
-async function countTry(db: Db, memberId: string): Promise<'ok' | 'locked' | 'lockedForGood'> {
-  const tried = await db(
-    `with m as (update members set failed_pin_count = failed_pin_count + 1,
+ *  Every 5th wrong try locks for longer (15 min, 30, 1 h …); the 25th locks for good, until a PIN reset (policy approved
+ *  2026-10-12: 24 guesses in a lifetime, not 30 a day). A right PIN on that try still signs in: login clears the lock.
+ *  Returns whether this try may be checked, and whether it is the one that locked for good (the caller writes the history
+ *  row once the PIN has proved wrong). */
+async function countTry(db: Db, memberId: string): Promise<{ forGood: boolean } | 'locked' | 'lockedForGood'> {
+  const [tried] = await db<{ forGood: boolean }>(
+    `update members set failed_pin_count = failed_pin_count + 1,
        locked_until = case when failed_pin_count + 1 >= 25 then 'infinity'::timestamptz
          when (failed_pin_count + 1) % 5 = 0 then now() + interval '15 minutes' * power(2, least((failed_pin_count + 1) / 5 - 1, 4))
          else locked_until end
-       where id = $1 and (locked_until is null or locked_until <= now()) returning id, flat_id, failed_pin_count),
-     a as (insert into audit_log (flat_id, entity, entity_id, after) select flat_id, 'members', id::text, jsonb_build_object('locked', failed_pin_count) from m where failed_pin_count = 25)
-     select id from m`, [memberId]);
-  if (tried.length) return 'ok';
+     where id = $1 and (locked_until is null or locked_until <= now()) returning locked_until = 'infinity' as "forGood"`, [memberId]);
+  if (tried) return tried;
   const [m] = await db<{ forGood: boolean }>(`select locked_until = 'infinity' as "forGood" from members where id = $1`, [memberId]);
   return m?.forGood ? 'lockedForGood' : 'locked';
 }
+/** The history row for a sign-in locked for good: who, and after how many wrong tries. Never a PIN. */
+const lockedRow = (db: Db, memberId: string) => db(
+  `insert into audit_log (flat_id, entity, entity_id, after) select flat_id, 'members', id::text, jsonb_build_object('locked', failed_pin_count) from members where id = $1`, [memberId]);
 
 /** Claims an unclaimed name, or checks the PIN with lockout. newPin is required after a reset. */
 export async function login(db: Db, code: string, memberId: string, pin: string, newPin: string | null): Promise<{ memberId: string } | { error: LoginError }> {
@@ -90,8 +93,8 @@ export async function login(db: Db, code: string, memberId: string, pin: string,
     return claimed.length ? { memberId } : { error: 'taken' };
   }
   const may = await countTry(db, memberId);
-  if (may !== 'ok') return { error: may };
-  if (!(await bcrypt.compare(pin, m.pin_hash))) return { error: 'wrongPin' };
+  if (typeof may === 'string') return { error: may };
+  if (!(await bcrypt.compare(pin, m.pin_hash))) { if (may.forGood) await lockedRow(db, memberId); return { error: 'wrongPin' }; }
   if (m.must_change_pin && !newPin) {
     await db(`update members set failed_pin_count = 0, locked_until = null where id = $1`, [memberId]);
     return { error: 'newPinNeeded' };
@@ -151,8 +154,8 @@ export const setPhone = (db: Db, memberId: string, phone: string | null) => db(`
 export async function changePin(db: Db, memberId: string, current: string, next: string, keepToken: string): Promise<'ok' | 'locked' | 'lockedForGood' | 'wrongPin'> {
   const [m] = await db<{ pin_hash: string | null }>(`select pin_hash from members where id = $1`, [memberId]);
   const may = await countTry(db, memberId);
-  if (may !== 'ok') return may;
-  if (!m?.pin_hash || !(await bcrypt.compare(current, m.pin_hash))) return 'wrongPin';
+  if (typeof may === 'string') return may;
+  if (!m?.pin_hash || !(await bcrypt.compare(current, m.pin_hash))) { if (may.forGood) await lockedRow(db, memberId); return 'wrongPin'; }
   // pin_hash = the one we checked, so a reset that lands at the same moment wins (and nothing else changes)
   const done = await db(`update members set pin_hash = $2, failed_pin_count = 0, locked_until = null, must_change_pin = false
     where id = $1 and pin_hash = $3 returning id`, [memberId, await hashPin(next), m.pin_hash]);
