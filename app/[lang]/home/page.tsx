@@ -9,7 +9,7 @@ import { changedByOthers, countAtLock, loadMeals } from '@/lib/meals-db';
 import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { acceptHandoverAction, changePinAction, declineHandoverAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
+import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { Reminders } from '../reminders';
@@ -30,7 +30,7 @@ export default function Home({ params, searchParams }: PageProps<'/[lang]/home'>
 
 async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
-  const { why } = await searchParams;
+  const { why, cleared } = await searchParams;
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), a = t.app, m = t.meals;
@@ -100,7 +100,26 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
           </section>
         )}
         {why === 'role' && <p role="status" className="mt-4 font-semibold text-chili">{a.roleLostNote}</p>}
+        {typeof cleared === 'string' && people.some(p => p.id === cleared) && (
+          <p role="status" className="mt-4 font-semibold text-leaf">{a.lockCleared.replace('{name}', people.find(p => p.id === cleared)!.name)}</p>
+        )}
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
+        {/* someone locked after wrong PINs: anyone here clears a flatmate's lock (the PIN stays); the collector's lock is the
+            app team's job. Up here, not in the Flatmates fold, so it is seen exactly when it matters. The locked person is
+            signed out, so they never see their own card. */}
+        {people.filter(p => p.locked && p.id !== me.memberId).map(p => (
+          <section key={p.id} className={`mt-6 ${alertCard}`}>
+            <h2 className="text-xl font-bold">{a.lockedTitle.replace('{name}', p.name)}</h2>
+            {p.collector ? <p className="mt-2 max-w-prose text-[15px] text-muted">{a.lockedCollectorLead}</p> : (
+              <ActionForm action={clearLockAction} className="mt-2">
+                <input type="hidden" name="lang" value={lang} />
+                <input type="hidden" name="memberId" value={p.id} />
+                <p className="max-w-prose text-[15px] text-muted">{a.clearLockLead}</p>
+                <button className={`${secondary} sm:w-auto`}>{a.clearLock}</button>
+              </ActionForm>
+            )}
+          </section>
+        ))}
         {/* only the person whose meals were changed sees this; it goes when the day passes or they change it themselves */}
         {byOthers.length > 0 && (
           <section className={`mt-6 ${alertCard}`}>

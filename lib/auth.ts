@@ -135,9 +135,25 @@ export async function memberBySession(db: Db, token: string): Promise<Me | null>
 
 export const deleteSession = (db: Db, token: string) => db(`delete from sessions where token_hash = $1`, [hashToken(token)]);
 
-export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean; phone: string | null; photoV: number | null; joinedOn: string; leftOn: string | null }>(
-  `select id, name, phone, joined_on::text as "joinedOn", left_on::text as "leftOn", case when photo is null then null else photo_v end as "photoV", pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked
+export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean; collector: boolean; phone: string | null; photoV: number | null; joinedOn: string; leftOn: string | null }>(
+  `select id, name, phone, joined_on::text as "joinedOn", left_on::text as "leftOn", case when photo is null then null else photo_v end as "photoV", pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked, role = 'manager' as collector
    from members where flat_id = $1 and ${STAYING} order by role = 'manager' desc, name`, [flatId]);
+
+/** A flatmate clears another flatmate's lock (policy of 2026-10-13): the PIN stays, so this can't take an account over. A
+ *  permanent lock leaves 4 tries (count 20), so a cleared lock hands out 4 guesses, not 24; a timed lock keeps its count.
+ *  Never their own, never the collector's (the app team's phone-verified path), only people living here now, only while
+ *  locked (so a clear can't take tries away from someone who isn't). One statement: a second clear at the same moment finds
+ *  nothing locked and writes nothing. In the history: who cleared whom. */
+export async function clearLock(db: Db, flatId: string, memberId: string, by: string) {
+  if (!UUID.test(memberId)) return false;
+  const [r] = await db<{ n: number }>(
+    `with m as (update members set locked_until = null, failed_pin_count = case when locked_until = 'infinity' then 20 else failed_pin_count end
+       where flat_id = $1 and id = $2 and id <> $3 and role <> 'manager' and locked_until > now() and ${STAYING}
+         and exists (select 1 from members a where a.flat_id = $1 and a.id = $3 and ${STAYING.replaceAll('left_on', 'a.left_on')}) returning id),
+     a as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'members', id::text, '{"lockCleared": true}', $3 from m)
+     select count(*)::int as n from m`, [flatId, memberId, by]);
+  return r.n > 0;
+}
 
 /** The collector adds a name, moving in on `today` or later; the history says who added whom and from when. */
 export async function addMember(db: Db, flatId: string, name: string, today: string, by: string) {

@@ -15,6 +15,7 @@ export type HistoryRow = {
     b?: boolean; l?: boolean; d?: boolean; inMeals?: boolean; rename?: [string, string]; left?: string | null; back?: [string, string]; added?: string;
     pinReset?: boolean; admin?: string; codeChanged?: boolean;   // admin: the app team reset it (the reason stays out of the app)
     locked?: number;   // wrong PIN tries when the sign-in was locked for good
+    lockCleared?: boolean;   // a flatmate cleared the lock; the PIN stayed
     cutoff?: string; weights?: Record<Meal, number>;
     told?: string; plates?: Record<Meal, number>;
     name?: string; rent_share_poisha?: number; roomId?: string | null; room?: string | null; fixFor?: string[];   // rooms

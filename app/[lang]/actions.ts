@@ -4,7 +4,7 @@ import { refresh } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
-import { addMember, changePin, cleanName, cleanText, UUID, createFlat, isPin, login, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addMember, changePin, cleanName, cleanText, clearLock, UUID, createFlat, isPin, login, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
@@ -88,6 +88,15 @@ export async function resetPinAction(_: FormState, d: FormData): Promise<FormSta
   if (!(await resetPin(db, me.flatId, str(d, 'memberId'), str(d, 'pin'), { memberId: me.memberId }))) return { error: a.errors.notFound };
   refresh();
   return { done: a.resetDone };
+}
+
+/** Any flatmate clears another flatmate's lock from Home; the PIN stays. */
+export async function clearLockAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), a = getDictionary(lang).app;
+  const me = await requireMember(lang, true);
+  if (!(await clearLock(db, me.flatId, str(d, 'memberId'), me.memberId))) return { error: a.errors.notFound };
+  // the card goes with the lock, so the done line lives on the page, not in the form
+  redirect(`/${lang}/home?cleared=${str(d, 'memberId')}`);
 }
 
 const plates = (v: string) => (/^\d{1,2}$/.test(v) && Number(v) <= 10 ? Number(v) : null);
