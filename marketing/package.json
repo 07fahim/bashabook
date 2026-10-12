@@ -1,0 +1,26 @@
+{
+  "name": "bashabook-marketing",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio",
+    "render:en": "remotion render BashaBookEN out/bashabook-en.mp4",
+    "render:bn": "remotion render BashaBookBN out/bashabook-bn.mp4",
+    "prerender:en": "node scripts/music.mjs",
+    "prerender:bn": "node scripts/music.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.535",
+    "@remotion/google-fonts": "^4.0.535",
+    "@remotion/tailwind-v4": "^4.0.535",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "^4.0.535",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

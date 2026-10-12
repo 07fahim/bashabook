@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowJs": true,
+    "esModuleInterop": true,
+    "paths": { "@/*": ["../*"] }
+  },
+  "include": ["src", "remotion.config.ts", "../app/[lang]/dictionaries.ts", "../app/[lang]/format.ts", "../lib/meals.ts"]
+}
