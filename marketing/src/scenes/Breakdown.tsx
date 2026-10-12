@@ -8,7 +8,7 @@ import { Stage } from '../ui/Stage';
 export function Breakdown({ d }: { d: Data }) {
   const frame = useCurrentFrame(), x = d.t.money;
   const line = ease(frame, 20, 24);
-  const chain = [[d.t.khata.totalMeals, '206.5'], [x.mealRate, '৳31.72'], [x.balance, '৳669.48']] as const;
+  const chain = [[d.t.khata.totalMeals, d.khata.totalMeals], [x.mealRate, d.rate], [x.balance, d.balance]] as const;
   return (
     <Stage scale={1.55} style={{ display: 'flex', gap: 56, alignItems: 'center' }}>
       <div className="relative w-[420px]">
@@ -22,7 +22,7 @@ export function Breakdown({ d }: { d: Data }) {
           ))}
         </ul>
       </div>
-      <section className={`w-[560px] ${focal}`} style={{ ...rise(frame, 0, 14), ...push(frame, 180, 0.03) }}>
+      <section className={`w-[560px] ${focal}`} style={rise(frame, 0, 14, push(frame, 180, 0.03))}>
         <h2 className="text-xl font-bold">{d.t.app.hi}, {d.n.nafis}</h2>
         <p className="mt-2 text-2xl font-bold text-leaf">{d.balanceLine}</p>
         <p className={`mt-3 inline-flex min-h-11 items-center ${link}`}>{x.breakdown}</p>

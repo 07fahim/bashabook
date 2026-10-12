@@ -20,8 +20,8 @@ This folder is isolated from the app: its own `package.json`, no app code is cha
 ```bash
 npm install                 # once
 pip install edge-tts        # once, for the voice
-python scripts/voice.py     # regenerate voice lines (skips files that exist)
-node scripts/music.mjs      # regenerate the music bed
+python scripts/voice.py     # regenerate voice lines (skips files that exist; the committed ones are fine)
+node scripts/music.mjs      # the music bed, public/audio/music.wav (not committed; the render scripts run this first)
 npm run studio              # preview in the browser
 npm run render:en           # out/bashabook-en.mp4
 npm run render:bn           # out/bashabook-bn.mp4
@@ -31,7 +31,7 @@ Check a render: `ffprobe -show_entries format=duration:stream=width,height,r_fra
 
 ## Replacing the audio
 
-Drop your own recordings as `public/audio/en/01.mp3` … `10.mp3` (same numbering as `scripts/voice.py`), or a music track as `public/audio/music.wav`, and re-render. Shift a line's start in `src/timeline.ts` (`VOICE[].at`, seconds after its scene's cut).
+Drop your own recordings as `public/audio/en/01.mp3` … `10.mp3` (same numbering as `scripts/voice.py`), or a music track as `public/audio/music.wav`, and re-render. Shift a line's start in `src/timeline.ts` (`VOICE[].at`, seconds after its scene's cut). A line plays to its end whatever the cut, so keep each recording shorter than its scene (scene lengths are in the same file); a longer one runs over the next line.
 
 ## Maker card
 

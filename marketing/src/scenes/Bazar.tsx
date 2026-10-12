@@ -11,10 +11,11 @@ export function Bazar({ d, lang }: { d: Data; lang: Locale }) {
   const frame = useCurrentFrame(), x = d.t.money;
   const typed = '1250'.slice(0, Math.floor(ease(frame, 20, 24) * 4));
   const picked = frame >= 60, saved = frame >= 110;
+  // the notebook's own entries, newest first; Rafi's deposit is still waiting for a tap, so it isn't settled here
   const rows = [
-    [`${x.types.bill} · Wi-Fi`, '৳1,200', x.paidBy.replace('{name}', d.n.zarif), '20 Sep'],
-    [x.types.bazar, '৳1,980', x.paidBy.replace('{name}', d.n.tahsin), '18 Sep'],
-    [x.types.deposit, '৳3,000', `${d.n.rafi}`, '11 Sep'],
+    [`${x.types.bill} · Wi-Fi`, '৳1,200', x.paidBy.replace('{name}', d.n.zarif), fmtDay('2026-09-20', lang)],
+    [x.types.bazar, '৳2,120', x.paidBy.replace('{name}', d.n.zarif), fmtDay('2026-09-09', lang)],
+    [x.types.bazar, '৳1,980', x.paidBy.replace('{name}', d.n.tahsin), fmtDay('2026-09-05', lang)],
   ];
   return (
     <Stage top scale={1.22} style={{ width: 1500 }}>

@@ -20,7 +20,7 @@ export function Close({ d }: { d: Data }) {
     <Stage top scale={1.22} style={{ width: 1500 }}>
       <TopBar brand={d.t.brand} accent={d.t.brandAccent} tabs={d.tabs} current={3} />
       <main className="px-8 pt-8">
-        <section className={`w-[960px] ${alertCard}`} style={{ ...rise(frame, 0, 14), ...push(frame, 210, 0.03) }}>
+        <section className={`w-[960px] ${alertCard}`} style={rise(frame, 0, 14, push(frame, 210, 0.03))}>
           <h2 className="text-xl font-bold">{x.closeTitle.replace('{month}', month)}</h2>
           <p className="mt-1 max-w-prose text-muted">{lead(x.closeLead)}</p>
           <p className="mt-4 font-semibold">{x.expected.replace('{t}', d.held)}</p>

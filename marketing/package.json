@@ -5,10 +5,10 @@
     "studio": "remotion studio",
     "render:en": "remotion render BashaBookEN out/bashabook-en.mp4",
     "render:bn": "remotion render BashaBookBN out/bashabook-bn.mp4",
-    "still": "remotion still"
+    "prerender:en": "node scripts/music.mjs",
+    "prerender:bn": "node scripts/music.mjs"
   },
   "dependencies": {
-    "@fontsource/hind-siliguri": "^5.3.0",
     "@remotion/cli": "^4.0.535",
     "@remotion/google-fonts": "^4.0.535",
     "@remotion/tailwind-v4": "^4.0.535",

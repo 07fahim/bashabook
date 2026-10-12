@@ -1,6 +1,5 @@
-import { staticFile } from 'remotion';
 import type { CSSProperties, ReactNode } from 'react';
-import { AbsoluteFill } from 'remotion';
+import { AbsoluteFill, staticFile } from 'remotion';
 
 /** Paper background, content centred, the product UI shown at 1.3× so 16 px type reads at 1080p. */
 export function Stage({ children, style, scale = 1.3, top }: { children: ReactNode; style?: CSSProperties; scale?: number; top?: boolean }) {

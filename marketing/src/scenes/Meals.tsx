@@ -10,10 +10,10 @@ import { Stage, TopBar } from '../ui/Stage';
 export function Meals({ d, lang }: { d: Data; lang: Locale }) {
   const frame = useCurrentFrame(), m = d.t.meals;
   const off = ease(frame, 72, 8);   // the chip's turmeric drains
-  const chip = (on: boolean, label: string, drain = 0) => (
+  const chip = (on: boolean, drain = 0) => (
     <div className={`flex min-h-12 items-center justify-center gap-x-1.5 rounded-full font-semibold ${on ? 'bg-turmeric text-on-turmeric' : 'border border-line bg-surface text-muted'}`}
       style={drain ? { backgroundColor: `color-mix(in srgb, var(--turmeric) ${(1 - drain) * 100}%, var(--surface))`, color: drain > 0.5 ? 'var(--muted)' : undefined, border: drain > 0.5 ? '1px solid var(--line)' : undefined } : undefined}>
-      {drain ? (drain > 0.5 ? m.off : m.on) : label}
+      {drain ? (drain > 0.5 ? m.off : m.on) : on ? m.on : m.off}
     </div>
   );
   return (
@@ -23,7 +23,7 @@ export function Meals({ d, lang }: { d: Data; lang: Locale }) {
         <h1 className="font-display text-3xl font-bold">{m.mealsTitle}</h1>
         <p className="mt-2 max-w-prose text-muted">{m.lockTime.replace('{t}', fmtTime(CUTOFF))}</p>
         <p className="mt-6 text-center font-semibold">{fmtRange(WEEK[0], WEEK[6])}</p>
-        <section className="mt-4 rounded-3xl border border-line border-t-4 border-t-turmeric bg-surface p-6 shadow-card" style={push(frame, 180, 0.03)}>
+        <section className="mt-4 rounded-3xl border border-line border-t-4 border-t-turmeric bg-surface p-6 shadow-card" style={{ transform: push(frame, 180, 0.03) }}>
           <ul className="grid grid-flow-col grid-cols-[auto_repeat(7,minmax(0,1fr))] grid-rows-[auto_repeat(3,auto)] gap-2">
             <li className="contents">
               <span />
@@ -38,8 +38,8 @@ export function Meals({ d, lang }: { d: Data; lang: Locale }) {
                 </p>
                 {MEALS.map(meal => {
                   const past = date < TOMORROW, on = !(meal === 'b' && (date === WEEK[1] || date === WEEK[5]));
-                  if (date === TOMORROW && meal === 'd') return <div key={meal}>{chip(true, m.on, off)}</div>;
-                  return <div key={meal} style={past ? { opacity: 0.9 } : undefined}>{chip(on, on ? m.on : m.off)}</div>;
+                  if (date === TOMORROW && meal === 'd') return <div key={meal}>{chip(true, off)}</div>;
+                  return <div key={meal} style={past ? { opacity: 0.9 } : undefined}>{chip(on)}</div>;
                 })}
               </li>
             ))}

@@ -1,5 +1,4 @@
-import { staticFile } from 'remotion';
-import { useCurrentFrame } from 'remotion';
+import { staticFile, useCurrentFrame } from 'remotion';
 import type { Data } from '../data';
 import { ease, rise } from '../ui/anim';
 import { primary } from '../ui/classes';

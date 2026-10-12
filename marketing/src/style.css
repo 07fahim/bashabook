@@ -1,6 +1,7 @@
 /* The app's own tokens: paper, ink, turmeric, card shadow. Nothing redefined here. */
 @import "../../app/globals.css";
 @source "./";
+@source "../../app/[lang]/ui.tsx";
 
 :root {
   --font-hind: 'Hind Siliguri', sans-serif;

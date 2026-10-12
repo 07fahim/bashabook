@@ -28,6 +28,8 @@ export function dataFor(lang: Locale) {
       ] as [string, string, string][],
       totalBazar: '6,550', totalMeals: '206.5', rate: '31.72',
     },
+    // Nafis's month, the one set of numbers every scene reads: 41 meals × ৳31.72 = ৳1,300.52 food, ৳1,480 bills, ৳3,450 paid in
+    rate: '৳31.72', myMeals: x.mealsN.replace('{n}', '41'), balance: '৳669.48', heldShort: '৳27,212',
     // breakdown rows exactly as app/[lang]/money/breakdown.ts shapes them
     breakdown: [
       { label: x.share, value: '−৳2,780.52', kind: 'head' as const },
@@ -40,11 +42,12 @@ export function dataFor(lang: Locale) {
     balanceLine: x.getBack.replace('{t}', '৳669.48'),
     cash: { cash: 9212, bkash: 12000, nagad: 4000, bank: 2000 },   // 27,212.00, matches
     held: '৳27,212.00',
+    // as money/page.tsx writes them: Tahsin holds the flat money, so every line goes to or from Tahsin, to the poisha
     settle: [
-      x.takes.replace('{a}', n.nafis).replace('{t}', '৳669'),
-      x.paysTo.replace('{a}', n.zarif).replace('{b}', n.tahsin).replace('{t}', '৳1,180'),
-      x.paysTo.replace('{a}', n.rafi).replace('{b}', n.tahsin).replace('{t}', '৳310'),
-      x.paysTo.replace('{a}', n.sakib).replace('{b}', n.nafis).replace('{t}', '৳110'),
+      x.paysTo.replace('{a}', n.tahsin).replace('{b}', n.nafis).replace('{t}', '৳669.48'),
+      x.paysTo.replace('{a}', n.zarif).replace('{b}', n.tahsin).replace('{t}', '৳1,180.00'),
+      x.paysTo.replace('{a}', n.rafi).replace('{b}', n.tahsin).replace('{t}', '৳310.00'),
+      x.paysTo.replace('{a}', n.sakib).replace('{b}', n.tahsin).replace('{t}', '৳110.00'),
     ],
     settleHead: lang === 'bn' ? `${sep}-এর হিসাব` : `${sep} accounts`,
     rateLine: `${x.mealRate} ৳31.72`,
