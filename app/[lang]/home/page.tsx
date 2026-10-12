@@ -212,6 +212,8 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
                 </li>
               ))}
             </ul>
+            {/* no request button on purpose: the collector sets the last day, since it moves rent and bill shares */}
+            {me.role !== 'manager' && starter && <p className="mt-4 text-[15px] text-muted">{a.leavingNote.replace('{name}', starter.name)}</p>}
           </Fold>
           <Fold title={a.myAccount}>
             <div className="mt-4 flex items-center gap-4">
