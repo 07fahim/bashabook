@@ -4,7 +4,7 @@ import { refresh } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
-import { addMember, changePin, cleanName, UUID, createFlat, isPin, login, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addMember, changePin, cleanName, cleanText, UUID, createFlat, isPin, login, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
@@ -119,10 +119,10 @@ export async function guestAction(_: FormState, d: FormData): Promise<FormState>
   await seedLock(db, me.flatId, nowDhaka());
   // guests plus my own plate when I'm eating too
   const guests = /^\d$/.test(str(d, 'guests')) ? Number(str(d, 'guests')) : null;
-  const date = str(d, 'date'), meal = str(d, 'meal'), now = nowDhaka();
-  if (!inRange(date) || !isMeal(meal) || guests === null) return { error: m.errors.bad };
-  // the member always comes from the session, so nobody can change someone else's guests
-  const r = await addGuests(db, me.flatId, me.memberId, date, meal, guests, now);
+  const date = str(d, 'date'), meal = str(d, 'meal'), now = nowDhaka(), key = str(d, 'key');
+  if (!inRange(date) || !isMeal(meal) || guests === null || !UUID.test(key)) return { error: m.errors.bad };
+  // the member always comes from the session, so nobody can change someone else's guests; the key makes a resubmit a no-op
+  const r = await addGuests(db, me.flatId, me.memberId, date, meal, guests, now, key);
   if (r === 'full') return { error: m.errors.tooManyGuests };
   if (r === 'closed') return { error: guests < 1 ? m.errors.todayAddOnly : m.errors.closed };
   refresh();
@@ -223,6 +223,7 @@ export async function adminSetAction(d: FormData) {
   await seedLock(db, me.flatId, nowDhaka());
   // own plate and guests are set separately, so a guest change never touches someone's own meal and back
   const memberId = str(d, 'memberId'), date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own'), guests = plates(str(d, 'guests'));
+  if (!isDate(date)) return back(lang, 'notSaved');   // before loadMeals, which would throw on a bad date
   const member = (await loadMeals(db, me.flatId, date, date)).members.find(x => x.id === memberId);
   if (member && editable(date, await openFrom(db, me.flatId, todayDhaka())) && isPresent(member, date) && isMeal(meal) && (own === '0' || own === '1') && guests !== null && guests <= 9) {
     const r = await mealRules(db, me.flatId);
@@ -380,7 +381,7 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
   if (amount === null) return { error: x.errors.amount };
   // which dates are allowed (flatmates: this month; the collector: any month still open) is checked in addEntry
   if (!isDate(date)) return { error: x.errors.date };
-  const note = str(d, 'note').trim().slice(0, 100) || null, who = str(d, 'who');
+  const note = cleanText(str(d, 'note')).slice(0, 100) || null, who = str(d, 'who');
   const split = type === 'bill' ? pick(SPLITS, str(d, 'split')) : null, selected = [...new Set(d.getAll('people').map(String))];
   if (type === 'bill' && !split) return { error: x.errors.bad };
   if (type === 'bill' && !note) return { error: x.errors.name };
@@ -514,7 +515,7 @@ export async function correctionAction(_: FormState, d: FormData): Promise<FormS
   const lang = langOf(d), x = getDictionary(lang).money;
   const me = await requireManager(lang, true);
   const kind = pick(KINDS, str(d, 'kind')), amount = toPoisha(str(d, 'amount')), forMonth = str(d, 'forMonth'), key = str(d, 'key');
-  const note = str(d, 'note').trim().slice(0, 100);
+  const note = cleanText(str(d, 'note')).slice(0, 100);
   // a bill split outside the list is a bad form, not a silent default
   const split = kind === 'bill' ? pick(FIX_SPLITS, str(d, 'split')) : null;
   if (!kind || !UUID.test(key) || !/^\d{4}-\d{2}-01$/.test(forMonth) || !isDate(forMonth) || (kind === 'bill' && !split)) return { error: x.errors.bad };
@@ -602,7 +603,9 @@ export async function savePushAction(lang: string, sub: PushSub) {
   const u = typeof sub?.endpoint === 'string' && sub.endpoint.length < 2000 && URL.canParse(sub.endpoint) ? new URL(sub.endpoint) : null;
   const ok = u?.protocol === 'https:' && PUSH_HOST.test(u.hostname)
     && typeof sub.keys?.p256dh === 'string' && B64.test(sub.keys.p256dh) && sub.keys.p256dh.length <= 90
-    && typeof sub.keys?.auth === 'string' && B64.test(sub.keys.auth) && sub.keys.auth.length <= 30;
+    && typeof sub.keys?.auth === 'string' && B64.test(sub.keys.auth) && sub.keys.auth.length <= 30
+    // a real P-256 public key: 65 bytes starting 0x04; a made-up key would sit in the table for good, failing every send
+    && Buffer.from(sub.keys.p256dh, 'base64url').length === 65 && Buffer.from(sub.keys.p256dh, 'base64url')[0] === 4 && Buffer.from(sub.keys.auth, 'base64url').length === 16;
   if (ok) await savePush(db, me.flatId, me.memberId, { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } });
 }
 

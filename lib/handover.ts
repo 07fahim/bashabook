@@ -6,7 +6,7 @@ import { loadMonth, type Actor } from './money-db';
  *  Every month closed: the latest closed fund (not zero). */
 export async function flatMoney(db: Db, flatId: string, today: string) {
   const [last] = await db<{ month: string; fund: number }>(
-    `select month::text as month, closing_fund::int as fund from months where flat_id = $1 and status = 'closed' order by month desc limit 1`, [flatId]);
+    `select month::text as month, closing_fund::float8 as fund from months where flat_id = $1 and status = 'closed' order by month desc limit 1`, [flatId]);
   const open = await db<{ month: string }>(
     `select month::text as month from months where flat_id = $1 and status = 'open' and month > coalesce($2::date, '-infinity'::date) order by month`,
     [flatId, last?.month ?? null]);
@@ -52,7 +52,7 @@ export const cancelHandover = (db: Db, flatId: string, me: string, id: string) =
 
 export async function currentOffer(db: Db, flatId: string) {
   const [o] = await db<{ id: string; from: string; to: string; amount: number }>(
-    `select h.id, f.name as "from", t.name as "to", h.amount::int as amount
+    `select h.id, f.name as "from", t.name as "to", h.amount::float8 as amount
      from handovers h join members f on f.id = h.from_member join members t on t.id = h.to_member
      where h.flat_id = $1 and h.status = 'offered'`, [flatId]);
   return o ?? null;
@@ -60,7 +60,7 @@ export async function currentOffer(db: Db, flatId: string) {
 
 /** Who got the role and how: newest first. The current holder comes from the role; this only explains it. */
 export const handoverHistory = (db: Db, flatId: string) => db<{ status: 'accepted' | 'overridden'; from: string; to: string; amount: number | null; at: string }>(
-  `select h.status, f.name as "from", t.name as "to", h.amount::int as amount, h.decided_at::text as at
+  `select h.status, f.name as "from", t.name as "to", h.amount::float8 as amount, h.decided_at::text as at
    from handovers h join members f on f.id = h.from_member join members t on t.id = h.to_member
    where h.flat_id = $1 and h.status in ('accepted', 'overridden') order by h.decided_at desc`, [flatId]);
 
@@ -77,7 +77,7 @@ export async function lastOutcome(db: Db, flatId: string, me: string) {
 /** The latest offer made to me, for Home: waiting, or how it ended. `recent` = decided in the last 24 hours and still the flat's latest handover. */
 export async function myLatestHandover(db: Db, flatId: string, me: string) {
   const [o] = await db<{ id: string; status: string; from: string; amount: number; decidedBy: string | null; recent: boolean }>(
-    `select h.id, h.status, f.name as "from", h.amount::int as amount, h.decided_by as "decidedBy",
+    `select h.id, h.status, f.name as "from", h.amount::float8 as amount, h.decided_by as "decidedBy",
        coalesce(h.decided_at > now() - interval '24 hours', false)
          and not exists (select 1 from handovers n where n.flat_id = h.flat_id and n.created_at > h.created_at) as recent
      from handovers h join members f on f.id = h.from_member
