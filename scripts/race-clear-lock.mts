@@ -41,6 +41,13 @@ async function main() {
     check(`round ${round}: 10 clears and 10 wrong tries at once: one clear, count 20 + the wrong tries that got through (+1 if the 5th locked again), never past 25`,
       r.filter(x => x === true).length === 1 && s.rows === 1 && s.n === 20 + wrong + (s.lock === 'infinity' ? 1 : 0) && s.n <= 25, { ...s, wrong, seen: r.filter(x => typeof x === 'string') });
   }
+  // one clear per helper between PIN resets: the same helper, 20 at once, twice in a row (locked again in between) clears once in all
+  await lock();
+  const first = (await Promise.all(Array.from({ length: 20 }, () => clearLock(db, flatId, tahsin, zarif)))).filter(Boolean).length;
+  await db(`update members set failed_pin_count = 25, locked_until = 'infinity' where id = $1`, [tahsin]);
+  const second = (await Promise.all(Array.from({ length: 20 }, () => clearLock(db, flatId, tahsin, zarif)))).filter(Boolean).length;
+  const s = await state();
+  check('the same helper: 20 at once clear once; locked again, 20 at once clear nothing', first === 1 && second === 0 && s.rows === 1 && s.lock === 'infinity', { first, second, ...s });
   await deleteFlat(db, flatId);
   console.log(failed ? `${failed} FAILED` : 'all passed', '· flat deleted');
   process.exitCode = failed ? 1 : 0;

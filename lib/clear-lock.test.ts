@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { clearLock, createFlat, flatByCode, listMembers, login, resetPin } from './auth';
+import { clearLock, clearedBefore, createFlat, flatByCode, listMembers, login, resetPin } from './auth';
 import { loadHistory } from './meals-db';
 import { addEntry, openMonth } from './money-db';
 import { getDictionary } from '../app/[lang]/dictionaries';
@@ -27,7 +27,7 @@ const clears = async (id: string) => (await db(`select 1 from audit_log where en
 
 describe('a flatmate clears a lock', { timeout: 60000 }, () => {
   it('a permanent lock: PIN unchanged, 4 tries left, then locked for good again; one history row with who and whom', async () => {
-    const { flatId, code, tahsin, zarif } = await flat();
+    const { flatId, code, nafis, tahsin, zarif } = await flat();
     await wrong(code, tahsin, 25);
     const { hash } = await state(tahsin);
     expect(await clearLock(db, flatId, tahsin, zarif)).toBe(true);
@@ -35,13 +35,13 @@ describe('a flatmate clears a lock', { timeout: 60000 }, () => {
     expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'wrongPin', left: 4 });
     expect(await login(db, code, tahsin, '5678', null)).toEqual({ memberId: tahsin });   // the right PIN still works
     await wrong(code, tahsin, 25);
-    expect(await clearLock(db, flatId, tahsin, zarif)).toBe(true);
+    expect(await clearLock(db, flatId, tahsin, nafis)).toBe(true);   // another helper: Zarif's one clear is used up
     for (let i = 0; i < 4; i++) await login(db, code, tahsin, '0000', null);   // 4 more wrong tries are allowed
     expect(await state(tahsin)).toMatchObject({ n: 24, lock: null });
     expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'lockedForGood' });   // the 5th locks for good again
     expect(await clears(tahsin)).toBe(2);
-    const row = (await loadHistory(db, flatId)).find(r => r.after.lockCleared);
-    expect(row).toMatchObject({ actor: 'Zarif', who: 'Tahsin', entityId: tahsin, after: { lockCleared: true } });
+    const rows = (await loadHistory(db, flatId)).filter(r => r.after.lockCleared);   // newest first
+    expect(rows).toMatchObject([{ actor: 'Nafis', who: 'Tahsin', entityId: tahsin }, { actor: 'Zarif', who: 'Tahsin', entityId: tahsin }]);
   });
 
   it('a timed lock: lifted, the count stays', async () => {
@@ -75,6 +75,26 @@ describe('a flatmate clears a lock', { timeout: 60000 }, () => {
     // the collector's lock: only the app team
     expect(await resetPin(db, flatId, nafis, '7777', { admin: 'Fahim', reason: 'locked, verified by phone' })).toBe(true);
     expect(await login(db, code, nafis, '7777', '1357')).toEqual({ memberId: nafis });
+  });
+
+  it('one clear per helper per person between PIN resets: the same helper is refused, another helps, a reset starts over', async () => {
+    const { flatId, code, nafis, tahsin, zarif } = await flat();
+    await wrong(code, tahsin, 25);
+    expect(await clearLock(db, flatId, tahsin, zarif)).toBe(true);
+    await wrong(code, tahsin, 5);   // locked for good again
+    expect(await clearLock(db, flatId, tahsin, zarif)).toBe(false);   // Zarif already did once
+    expect(await clearedBefore(db, flatId, zarif)).toEqual(new Set([tahsin]));
+    expect(await clearedBefore(db, flatId, nafis)).toEqual(new Set());
+    expect(await state(tahsin)).toMatchObject({ n: 25, lock: 'infinity' });
+    expect(await clearLock(db, flatId, tahsin, nafis)).toBe(true);   // the collector is a flatmate too
+    await wrong(code, tahsin, 5);
+    expect(await clearLock(db, flatId, tahsin, zarif)).toBe(false);
+    expect(await resetPin(db, flatId, tahsin, '4321', { memberId: nafis })).toBe(true);
+    expect(await login(db, code, tahsin, '4321', '2468')).toEqual({ memberId: tahsin });
+    expect(await clearedBefore(db, flatId, zarif)).toEqual(new Set());
+    await wrong(code, tahsin, 25);
+    expect(await clearLock(db, flatId, tahsin, zarif)).toBe(true);   // after the reset Zarif may help again
+    expect(await clears(tahsin)).toBe(3);
   });
 
   it('two clears at once: one row, count 20 once; a wrong try racing a clear never gives more than 4 tries', async () => {
@@ -114,6 +134,8 @@ describe('a flatmate clears a lock', { timeout: 60000 }, () => {
       expect(t.app.lockedTitle).toContain('{name}');
       expect(t.app.lockCleared).toContain('{name}');
       expect(t.app.lockedBadgeTeam).not.toBe(t.app.lockedBadge);
+      expect(t.app.clearedBeforeLead).toBeTruthy();
+      expect(t.app.errors.clearedBefore).toBeTruthy();
       expect(t.meals.lockClearedHistory).toBeTruthy();
     }
   });

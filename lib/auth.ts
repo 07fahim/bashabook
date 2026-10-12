@@ -143,18 +143,24 @@ export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: st
  *  permanent lock leaves 4 wrong tries and a 5th that locks again (count 20), so a cleared lock hands out 5 guesses, not 25;
  *  a timed lock keeps its count. Never their own, never the collector's (the app team's phone-verified path), only people
  *  living here now, only while locked (so a clear can't take tries away from someone who isn't). One statement: a second
- *  clear at the same moment finds nothing locked and writes nothing. In the history: who cleared whom. Clears are not
- *  capped (policy of 2026-10-13: every one is a named row; more than three for one person in a month is looked into). */
+ *  clear at the same moment finds nothing locked and writes nothing. In the history: who cleared whom. One clear per helper
+ *  per person between that person's PIN resets (decided 2026-10-13), so one helper can't top up the same person's guesses
+ *  again and again; another flatmate still can. The row lock on the member makes the check and the write one step. */
+const CLEARED_BEFORE = (by: string) => `exists (select 1 from audit_log c where c.entity_id = m.id::text and c.by_member = ${by} and c.after ? 'lockCleared'
+  and c.id > coalesce((select max(r.id) from audit_log r where r.entity_id = m.id::text and r.after ? 'pinReset'), 0))`;
 export async function clearLock(db: Db, flatId: string, memberId: string, by: string) {
   if (!UUID.test(memberId)) return false;
   const [r] = await db<{ n: number }>(
-    `with m as (update members set locked_until = null, failed_pin_count = case when locked_until = 'infinity' then 20 else failed_pin_count end
-       where flat_id = $1 and id = $2 and id <> $3 and role <> 'manager' and locked_until > now() and ${STAYING}
+    `with m as (update members m set locked_until = null, failed_pin_count = case when locked_until = 'infinity' then 20 else failed_pin_count end
+       where flat_id = $1 and id = $2 and id <> $3 and role <> 'manager' and locked_until > now() and ${STAYING} and not ${CLEARED_BEFORE('$3')}
          and exists (select 1 from members a where a.flat_id = $1 and a.id = $3 and ${STAYING}) returning id),
      a as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'members', id::text, '{"lockCleared": true}', $3 from m)
      select count(*)::int as n from m`, [flatId, memberId, by]);
   return r.n > 0;
 }
+/** The flatmates `by` has already cleared once since their last PIN reset: Home shows them no button for those. */
+export const clearedBefore = async (db: Db, flatId: string, by: string) =>
+  new Set((await db<{ id: string }>(`select m.id from members m where m.flat_id = $1 and ${CLEARED_BEFORE('$2')}`, [flatId, by])).map(r => r.id));
 
 /** The collector adds a name, moving in on `today` or later; the history says who added whom and from when. */
 export async function addMember(db: Db, flatId: string, name: string, today: string, by: string) {

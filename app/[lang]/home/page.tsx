@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 import { db } from '@/lib/db';
 import { flatMoney, myLatestHandover } from '@/lib/handover';
 import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka, plates, type Meal } from '@/lib/meals';
-import { listMembers } from '@/lib/auth';
+import { clearedBefore, listMembers } from '@/lib/auth';
 import { changedByOthers, countAtLock, loadMeals } from '@/lib/meals-db';
 import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
@@ -36,11 +36,12 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   const t = getDictionary(lang), a = t.app, m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const [meals, people, mo, waiting, ho, byOthers] = await Promise.all([
+  const [meals, people, mo, waiting, ho, byOthers, iCleared] = await Promise.all([
     loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId),
     loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId, me.role === 'manager'),
     myLatestHandover(db, me.flatId, me.memberId),
     changedByOthers(db, me.flatId, me.memberId, today),
+    clearedBefore(db, me.flatId, me.memberId),
   ]);
   const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
@@ -110,7 +111,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
         {people.filter(p => p.locked && p.id !== me.memberId && (!p.collector || p.forGood)).map(p => (
           <section key={p.id} className={`mt-6 ${alertCard}`}>
             <h2 className="text-xl font-bold">{a.lockedTitle.replace('{name}', p.name)}</h2>
-            {p.collector ? <p className="mt-2 max-w-prose text-[15px] text-muted">{a.lockedCollectorLead}</p> : (
+            {p.collector || iCleared.has(p.id) ? <p className="mt-2 max-w-prose text-[15px] text-muted">{p.collector ? a.lockedCollectorLead : a.clearedBeforeLead}</p> : (
               <ActionForm action={clearLockAction} className="mt-2">
                 <input type="hidden" name="lang" value={lang} />
                 <input type="hidden" name="memberId" value={p.id} />
