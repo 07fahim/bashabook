@@ -43,9 +43,9 @@ describe('auth', { timeout: 30000 }, () => {
     expect(await login(db, code, memberId, '1234', null)).toEqual({ memberId });
     const [{ failed_pin_count }] = await db<{ failed_pin_count: number }>(`select failed_pin_count from members where id = $1`, [memberId]);
     expect(failed_pin_count).toBe(0);
-    await db(`update members set failed_pin_count = 24 where id = $1`, [memberId]);
+    await db(`update members set failed_pin_count = 19 where id = $1`, [memberId]);
     await login(db, code, memberId, '0000', null);
-    expect(await wait()).toBe(240);   // capped at 4 hours
+    expect(await wait()).toBe(120);   // the 20th: the last timed lock; the 25th locks for good (pin-lock.test.ts)
   });
 
   it('reset sets a one-time PIN, ends sessions and forces a new PIN', async () => {

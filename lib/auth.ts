@@ -60,17 +60,23 @@ export async function flatByCode(db: Db, code: string) {
   return { ...flat, members };
 }
 
-export type LoginError = 'notFound' | 'taken' | 'locked' | 'wrongPin' | 'newPinNeeded';
+export type LoginError = 'notFound' | 'taken' | 'locked' | 'lockedForGood' | 'wrongPin' | 'newPinNeeded';
 
 /** Counts a PIN try before it is checked, in one statement, so parallel guesses can't slip past the lock.
- *  Every 5th wrong try locks for longer (15 min, 30, 1 h …). False = locked right now. */
-async function countTry(db: Db, memberId: string) {
+ *  Every 5th wrong try locks for longer (15 min, 30, 1 h …); the 25th locks for good, until a PIN reset, and that goes in
+ *  the history (policy approved 2026-10-12: 24 guesses in a lifetime, not 30 a day). 'ok' = this try may be checked. */
+async function countTry(db: Db, memberId: string): Promise<'ok' | 'locked' | 'lockedForGood'> {
   const tried = await db(
-    `update members set failed_pin_count = failed_pin_count + 1,
-       locked_until = case when (failed_pin_count + 1) % 5 = 0
-         then now() + interval '15 minutes' * power(2, least((failed_pin_count + 1) / 5 - 1, 4)) else locked_until end
-     where id = $1 and (locked_until is null or locked_until <= now()) returning id`, [memberId]);
-  return tried.length > 0;
+    `with m as (update members set failed_pin_count = failed_pin_count + 1,
+       locked_until = case when failed_pin_count + 1 >= 25 then 'infinity'::timestamptz
+         when (failed_pin_count + 1) % 5 = 0 then now() + interval '15 minutes' * power(2, least((failed_pin_count + 1) / 5 - 1, 4))
+         else locked_until end
+       where id = $1 and (locked_until is null or locked_until <= now()) returning id, flat_id, failed_pin_count),
+     a as (insert into audit_log (flat_id, entity, entity_id, after) select flat_id, 'members', id::text, jsonb_build_object('locked', failed_pin_count) from m where failed_pin_count = 25)
+     select id from m`, [memberId]);
+  if (tried.length) return 'ok';
+  const [m] = await db<{ forGood: boolean }>(`select locked_until = 'infinity' as "forGood" from members where id = $1`, [memberId]);
+  return m?.forGood ? 'lockedForGood' : 'locked';
 }
 
 /** Claims an unclaimed name, or checks the PIN with lockout. newPin is required after a reset. */
@@ -83,7 +89,8 @@ export async function login(db: Db, code: string, memberId: string, pin: string,
     const claimed = await db(`update members set pin_hash = $2 where id = $1 and pin_hash is null returning id`, [memberId, await hashPin(pin)]);
     return claimed.length ? { memberId } : { error: 'taken' };
   }
-  if (!(await countTry(db, memberId))) return { error: 'locked' };
+  const may = await countTry(db, memberId);
+  if (may !== 'ok') return { error: may };
   if (!(await bcrypt.compare(pin, m.pin_hash))) return { error: 'wrongPin' };
   if (m.must_change_pin && !newPin) {
     await db(`update members set failed_pin_count = 0, locked_until = null where id = $1`, [memberId]);
@@ -141,9 +148,10 @@ export const setPhone = (db: Db, memberId: string, phone: string | null) => db(`
 
 /** I change my own PIN with my current one. Wrong tries count toward the login lockout. My other phones are signed out,
  *  the one I'm using (`keepToken`) stays in. */
-export async function changePin(db: Db, memberId: string, current: string, next: string, keepToken: string): Promise<'ok' | 'locked' | 'wrongPin'> {
+export async function changePin(db: Db, memberId: string, current: string, next: string, keepToken: string): Promise<'ok' | 'locked' | 'lockedForGood' | 'wrongPin'> {
   const [m] = await db<{ pin_hash: string | null }>(`select pin_hash from members where id = $1`, [memberId]);
-  if (!(await countTry(db, memberId))) return 'locked';
+  const may = await countTry(db, memberId);
+  if (may !== 'ok') return may;
   if (!m?.pin_hash || !(await bcrypt.compare(current, m.pin_hash))) return 'wrongPin';
   // pin_hash = the one we checked, so a reset that lands at the same moment wins (and nothing else changes)
   const done = await db(`update members set pin_hash = $2, failed_pin_count = 0, locked_until = null, must_change_pin = false
