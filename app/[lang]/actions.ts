@@ -605,7 +605,7 @@ export async function savePushAction(lang: string, sub: PushSub) {
     && typeof sub.keys?.p256dh === 'string' && B64.test(sub.keys.p256dh) && sub.keys.p256dh.length <= 90
     && typeof sub.keys?.auth === 'string' && B64.test(sub.keys.auth) && sub.keys.auth.length <= 30
     // a real P-256 public key: 65 bytes starting 0x04; a made-up key would sit in the table for good, failing every send
-    && Buffer.from(sub.keys.p256dh, 'base64').length === 65 && Buffer.from(sub.keys.p256dh, 'base64')[0] === 4 && Buffer.from(sub.keys.auth, 'base64').length === 16;
+    && Buffer.from(sub.keys.p256dh, 'base64url').length === 65 && Buffer.from(sub.keys.p256dh, 'base64url')[0] === 4 && Buffer.from(sub.keys.auth, 'base64url').length === 16;
   if (ok) await savePush(db, me.flatId, me.memberId, { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } });
 }
 

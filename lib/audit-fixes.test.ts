@@ -85,6 +85,7 @@ describe('audit fixes', { timeout: 60000 }, () => {
   it('dates before 2000 and hidden characters in names are refused or stripped', () => {
     expect(isDate('0000-01-01')).toBe(false);
     expect(isDate('2026-10-12')).toBe(true);
-    expect(cleanName('Na‮fis\n')).toBe('Nafis');
+    expect(cleanName('Na‮fis\n ')).toBe('Nafis');
+    expect(cleanName('ক্‍ষ‌')).toBe('ক্‍ষ‌');   // Bangla joiners stay
   });
 });

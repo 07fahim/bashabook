@@ -142,12 +142,15 @@ export const myGuests = (db: Db, flatId: string, memberId: string, from: string)
 /** Guests for one of my meals: always added on top of my current plates (at least 1); my own plate never changes.
  *  Later days follow the usual lock rule. Today (surprise guests) is allowed too, saved as late so it shows in history. */
 /** `key`: the form's one-time key. The guests are a delta, so a resubmit after a lost response (same key) must not add them
- *  again: the key is claimed in `sent_jobs` first, the write follows, and a failed write gives the key back. */
+ *  again: a key already in `sent_jobs` means the guests are in, and a key is recorded only once the write has happened.
+ *  ponytail: the write and its claim are two statements, so a crash between them lets a resubmit add once more (the old
+ *  behaviour, never a silent loss); one statement would need a new column on meal_changes. */
 export async function addGuests(db: Db, flatId: string, memberId: string, date: string, meal: Meal, guests: number, now: string, key?: string): Promise<Decision | 'full'> {
   if (guests < 1 || date < now.slice(0, 10)) return 'closed';
-  if (key && !(await db(`insert into sent_jobs (flat_id, date, job_type) values ($1, $2::text::date, $3) on conflict do nothing returning 1`, [flatId, date, `guests:${key}`])).length) return 'open';
+  const claim = [flatId, date, `guests:${key}`];
+  if (key && (await db(`select 1 from sent_jobs where flat_id = $1 and date = $2::text::date and job_type = $3`, claim)).length) return 'open';
   const r = await addGuestsOnce(db, flatId, memberId, date, meal, guests, now);
-  if (key && (r === 'closed' || r === 'full')) await db(`delete from sent_jobs where flat_id = $1 and date = $2::text::date and job_type = $3`, [flatId, date, `guests:${key}`]);
+  if (key && r !== 'closed' && r !== 'full') await db(`insert into sent_jobs (flat_id, date, job_type) values ($1, $2::text::date, $3) on conflict do nothing`, claim);
   return r;
 }
 

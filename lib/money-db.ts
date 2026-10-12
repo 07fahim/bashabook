@@ -191,15 +191,16 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, t
     selected = here.filter(m => m.joinedOn <= e.date && (m.leftOn === null || m.leftOn >= e.date)).map(m => m.id);
   }
   if (split === 'selected' && !selected.length) return 'bad';
-  // someone who moved out before this month but still has a balance from the latest closed month, or a share of a closed
-  // month this month corrects, can be settled with
+  // someone who moved out before this month but still has a balance from the latest closed month, or who lived in a closed
+  // month this month corrects, can be settled with (deposits and payouts only)
   const owed = moving ? await db<{ id: string }>(
     `select member_id as id from month_balances where flat_id = $1 and balance <> 0
        and month = (select max(month) from months where flat_id = $1 and month < $2::date and status = 'closed')
      union select member_id from month_balances where flat_id = $1
        and month in (select for_month from ledger where flat_id = $1 and month = $2::date and for_month is not null)`, [flatId, month]) : [];
   const ids = new Set([...here.map(m => m.id), ...owed.map(o => o.id)]);
-  if (boss && e.type === 'deposit' && e.memberId === by.memberId) ids.add(by.memberId);   // the collector covers a gap of a month before their time too
+  // the collector may record their own deposit into any open month, so they can cover the gap of a month before their time
+  if (boss && e.type === 'deposit' && e.memberId === by.memberId) ids.add(by.memberId);
   if (![e.paidBy, e.memberId, ...selected].every(id => id === null || ids.has(id))) return 'bad';
   // whoever paid the shop or the bill was living here that day; money to or from someone who left is settling up, so it stays allowed
   if (e.paidBy && !here.some(m => m.id === e.paidBy && m.joinedOn <= e.date && (m.leftOn === null || m.leftOn >= e.date))) return 'gone';
