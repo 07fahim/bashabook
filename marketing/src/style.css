@@ -1,0 +1,13 @@
+/* The app's own tokens: paper, ink, turmeric, card shadow. Nothing redefined here. */
+@import "../../app/globals.css";
+@source "./";
+
+:root {
+  --font-hind: 'Hind Siliguri', sans-serif;
+}
+
+* {
+  /* frames are screenshots: no CSS transitions may run on their own clock */
+  transition: none !important;
+  animation: none !important;
+}
