@@ -33,7 +33,8 @@ describe('auth', { timeout: 30000 }, () => {
   it('locks after 5 wrong PINs and doubles the wait each time', async () => {
     const { code, memberId } = await flat();
     const wait = async () => Number((await db<{ m: string }>(`select round(extract(epoch from locked_until - now()) / 60) as m from members where id = $1`, [memberId]))[0].m);
-    for (let i = 0; i < 5; i++) expect(await login(db, code, memberId, '0000', null)).toEqual({ error: 'wrongPin' });
+    for (let i = 0; i < 4; i++) expect(await login(db, code, memberId, '0000', null)).toEqual({ error: 'wrongPin' });
+    expect(await login(db, code, memberId, '0000', null)).toEqual({ error: 'locked' });   // the 5th: the lock starts now, said now
     expect(await login(db, code, memberId, '1234', null)).toEqual({ error: 'locked' });
     expect(await wait()).toBe(15);
     await db(`update members set locked_until = now() - interval '1 second' where id = $1`, [memberId]);
@@ -139,7 +140,8 @@ describe('auth', { timeout: 30000 }, () => {
   it('wrong current PINs count toward the same lockout as logging in', async () => {
     const { memberId } = await flat();
     const here = await createSession(db, memberId);
-    for (let i = 0; i < 5; i++) expect(await changePin(db, memberId, '0000', '4321', here)).toEqual({ error: 'wrongPin' });
+    for (let i = 0; i < 4; i++) expect(await changePin(db, memberId, '0000', '4321', here)).toEqual({ error: 'wrongPin' });
+    expect(await changePin(db, memberId, '0000', '4321', here)).toEqual({ error: 'locked' });
     expect(await changePin(db, memberId, '1234', '4321', here)).toEqual({ error: 'locked' });   // even the right PIN waits now
   });
 

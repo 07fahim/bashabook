@@ -728,7 +728,7 @@ const en: Dict = {
       wrongPin: 'Wrong PIN.',
       lockedForGood: '25 wrong PINs, so this is locked until the person who keeps the flat money resets it. Then sign in with the one-time PIN and choose a new one. If that person is you, contact the BashaBook team.',
       wrongCurrentPin: 'Your current PIN is wrong.',
-      lastTries: '{n} left before it locks for good; then only a PIN reset opens it.',
+      lastTries: '{n} more wrong and it locks for good; then only a PIN reset opens it.',
       newPinNeeded: 'Your PIN was reset. Reload, then enter the one-time PIN and a new one.',
       nameTaken: 'Someone living here already has this name. Add something to tell them apart, like Zarif H.',
       badCode: 'No flat has this code. Check it and try again.',

@@ -43,7 +43,9 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
   it('1c: from the 20th wrong try on, the message says how many are left', async () => {
     const { code, tahsin } = await flat();
     await wrong(code, tahsin, 19);
-    for (const left of [5, 4, 3, 2, 1]) { expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'wrongPin', left }); await unlockTemp(tahsin); }
+    expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'locked', left: 5 });   // the 20th: a 2 h lock starts, said at once
+    await unlockTemp(tahsin);
+    for (const left of [4, 3, 2, 1]) expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'wrongPin', left });
     expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'lockedForGood' });
   });
 

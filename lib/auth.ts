@@ -82,11 +82,13 @@ async function countTry(db: Db, memberId: string): Promise<{ forGood: boolean; l
 const lockedRow = (db: Db, memberId: string) => db(
   `insert into audit_log (flat_id, entity, entity_id, after) select flat_id, 'members', id::text, jsonb_build_object('locked', failed_pin_count) from members where id = $1`, [memberId]);
 
-/** A wrong PIN. On the 25th the sign-in just locked for good: the history row, and told at once. From the 20th on, how many
- *  tries are left, so nobody is locked for good without warning. */
-async function wrongPin(db: Db, memberId: string, may: { forGood: boolean; left: number }): Promise<{ error: 'wrongPin' | 'lockedForGood'; left?: number }> {
+/** A wrong PIN. On the 25th the sign-in just locked for good: the history row, and told at once. On the 5th, 10th, 15th and
+ *  20th a timed lock just started, told at once too. From the 20th on, how many tries are left, so nobody is locked for good
+ *  without warning. */
+async function wrongPin(db: Db, memberId: string, may: { forGood: boolean; left: number }): Promise<{ error: 'wrongPin' | 'locked' | 'lockedForGood'; left?: number }> {
   if (may.forGood) { await lockedRow(db, memberId); return { error: 'lockedForGood' }; }
-  return may.left <= 5 ? { error: 'wrongPin', left: may.left } : { error: 'wrongPin' };
+  const error = may.left % 5 === 0 ? 'locked' : 'wrongPin';
+  return may.left <= 5 ? { error, left: may.left } : { error };
 }
 
 /** Claims an unclaimed name, or checks the PIN with lockout. newPin is required after a reset. */

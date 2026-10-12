@@ -41,7 +41,7 @@ async function main() {
     seen[k] = (seen[k] ?? 0) + 1;
   }
   const s = await state();
-  check('40 at once from 0 stop at 5 with a timed lock', s.n === 5 && s.lock !== null && s.lock !== 'infinity' && seen.wrongPin === 5 && seen.locked === 35, { ...s, seen });
+  check('40 at once from 0 stop at 5 with a timed lock', s.n === 5 && s.lock !== null && s.lock !== 'infinity' && seen.wrongPin === 4 && seen.locked === 36, { ...s, seen });
   await deleteFlat(db, flatId);
   console.log(failed ? `${failed} FAILED` : 'all passed', '· flat deleted');
   process.exitCode = failed ? 1 : 0;
