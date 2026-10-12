@@ -7,30 +7,33 @@ export type Entry = LedgerRow & { date: string; note: string | null; createdBy: 
 export type CashRecord = { cash: number; bkash: number; nagad: number; bank: number; expected: number; actual: number; difference: number; by: string };
 type Snap = { id: string; meals: number; days: number; opening: number; paidIn: number; foodCost: number; billShare: number; payouts: number; adjustments: number; balance: number };
 const snapshot = (db: Db, flatId: string, month: string) => db<Snap>(
-  `select member_id as id, weighted_meals as meals, days_present as days, opening::int, paid_in::int as "paidIn", food_cost::int as "foodCost",
-     bill_share::int as "billShare", payouts::int, adjustments::int, balance::int
+  `select member_id as id, weighted_meals as meals, days_present as days, opening::float8, paid_in::float8 as "paidIn", food_cost::float8 as "foodCost",
+     bill_share::float8 as "billShare", payouts::float8, adjustments::float8, balance::float8
    from month_balances where flat_id = $1 and month = $2`, [flatId, month]);
 export type Room = { id: string; name: string; rentShare: number };
 export type Removed = { id: string; at: string; by: string; byId: string; type: LedgerRow['type']; amount: number; date: string; note: string | null };
 
 export const monthOf = (date: string) => `${date.slice(0, 8)}01`;
 
-/** Makes sure the month exists. The first time, it copies the monthly bills into it, paid from flat money and added by the
- *  collector (whoever happens to open the page first must not own, or be able to remove, the flat's rent). Safe to call again.
- *  One statement: the month, its bills, their people and their history rows are created together or not at all, so a failure
- *  leaves no month and the next call tries again; two people opening the month at once can't both copy (one wins the month row). */
+/** Makes sure the month exists, and every month between the flat's latest month and it: a month nobody opened the app in
+ *  still gets its monthly bills and still has to be closed in order. A new month copies the monthly bills for the people
+ *  living in it, paid from flat money and added by the collector (whoever happens to open the page first must not own, or be
+ *  able to remove, the flat's rent). Safe to call again. One statement: the months, their bills, their people and their history
+ *  rows are created together or not at all, so a failure leaves nothing and the next call tries again; two people opening a
+ *  month at once can't both copy (one wins the month row). */
 export async function openMonth(db: Db, flatId: string, month: string) {
   await db(
-    `with m as (insert into months (flat_id, month) values ($1, $2::date) on conflict do nothing returning month),
+    `with m as (insert into months (flat_id, month)
+       select $1, g::date from generate_series(least(coalesce((select max(month) from months where flat_id = $1), $2::date), $2::date), $2::date, interval '1 month') g
+       on conflict do nothing returning month),
      c as (select id from members where flat_id = $1 and role = 'manager'),
-     here as (select id from members where flat_id = $1
-       and joined_on <= ($2::date + interval '1 month' - interval '1 day')::date and (left_on is null or left_on >= $2::date)),
-     t as (select gen_random_uuid() as lid, b.name, b.amount_poisha, b.split,
-             array(select x from unnest(b.selected_member_ids) x where x in (select id from here)) as sel   -- people who left are dropped
+     t as (select gen_random_uuid() as lid, m.month, b.name, b.amount_poisha, b.split,
+             array(select x from unnest(b.selected_member_ids) x where x in (select id from members where flat_id = $1
+               and joined_on <= (m.month + interval '1 month' - interval '1 day')::date and (left_on is null or left_on >= m.month))) as sel   -- people who left are dropped
            from bill_templates b, m where b.flat_id = $1),
      ok as (select * from t where split <> 'selected' or cardinality(sel) > 0),
      l as (insert into ledger (id, flat_id, month, type, amount_poisha, split, date, note, status, created_by)
-           select lid, $1, $2::date, 'bill', amount_poisha, split, $2::date, name, 'ok', (select id from c) from ok returning *),
+           select lid, $1, month, 'bill', amount_poisha, split, month, name, 'ok', (select id from c) from ok returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, ok.lid, unnest(ok.sel) from ok where ok.split = 'selected')
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), l.created_by from l`,
     [flatId, month]);
@@ -60,10 +63,10 @@ async function insertEntry(db: Db, flatId: string, by: string,
 export async function loadMonth(db: Db, flatId: string, month: string, today: string) {
   if (month === monthOf(today)) await openMonth(db, flatId, month);
   const [info = null] = await db<{ status: 'open' | 'closed'; version: number; closedAt: string | null; cash: CashRecord | null; fund: number | null; rate: number | null }>(
-    `select status, version, closed_at::text as "closedAt", cash, closing_fund::int as fund, meal_rate::int as rate
+    `select status, version, closed_at::text as "closedAt", cash, closing_fund::float8 as fund, meal_rate::int as rate
      from months where flat_id = $1 and month = $2`, [flatId, month]);
   const earlier = await db<{ month: string; status: string; fund: number | null }>(
-    `select month::text as month, status, closing_fund::int as fund from months where flat_id = $1 and month < $2 order by month`, [flatId, month]);
+    `select month::text as month, status, closing_fund::float8 as fund from months where flat_id = $1 and month < $2 order by month`, [flatId, month]);
   const earlierOpen = earlier.find(x => x.status === 'open')?.month ?? null;
   const lastClosed = earlierOpen ? null : earlier.filter(x => x.status === 'closed').at(-1) ?? null;
   const closedMonths = [...earlier, ...(info?.status === 'closed' ? [{ month, status: 'closed', fund: null }] : [])]
@@ -188,11 +191,15 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, t
     selected = here.filter(m => m.joinedOn <= e.date && (m.leftOn === null || m.leftOn >= e.date)).map(m => m.id);
   }
   if (split === 'selected' && !selected.length) return 'bad';
-  // someone who moved out before this month but still has a balance from the latest closed month can be settled with
+  // someone who moved out before this month but still has a balance from the latest closed month, or a share of a closed
+  // month this month corrects, can be settled with
   const owed = moving ? await db<{ id: string }>(
     `select member_id as id from month_balances where flat_id = $1 and balance <> 0
-       and month = (select max(month) from months where flat_id = $1 and month < $2::date and status = 'closed')`, [flatId, month]) : [];
+       and month = (select max(month) from months where flat_id = $1 and month < $2::date and status = 'closed')
+     union select member_id from month_balances where flat_id = $1
+       and month in (select for_month from ledger where flat_id = $1 and month = $2::date and for_month is not null)`, [flatId, month]) : [];
   const ids = new Set([...here.map(m => m.id), ...owed.map(o => o.id)]);
+  if (boss && e.type === 'deposit' && e.memberId === by.memberId) ids.add(by.memberId);   // the collector covers a gap of a month before their time too
   if (![e.paidBy, e.memberId, ...selected].every(id => id === null || ids.has(id))) return 'bad';
   // whoever paid the shop or the bill was living here that day; money to or from someone who left is settling up, so it stays allowed
   if (e.paidBy && !here.some(m => m.id === e.paidBy && m.joinedOn <= e.date && (m.leftOn === null || m.leftOn >= e.date))) return 'gone';

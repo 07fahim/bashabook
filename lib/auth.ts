@@ -6,7 +6,9 @@ export const SESSION_DAYS = 90;
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // no 0/O or 1/I/L
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const cleanName = (v: unknown) => { const s = String(v ?? '').trim(); return s.length >= 1 && s.length <= 40 ? s : null; };
+/** Text people type: no control characters and no bidi overrides, which could fake a line in a shared breakdown or a notification. */
+export const cleanText = (v: unknown) => String(v ?? '').replace(/[\p{Cc}\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu, '').trim();
+export const cleanName = (v: unknown) => { const s = cleanText(v); return s.length >= 1 && s.length <= 40 ? s : null; };
 export const isPin = (v: unknown) => /^\d{4}$/.test(String(v ?? ''));
 const hashPin = (pin: string) => bcrypt.hash(pin, 10);
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');

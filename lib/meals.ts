@@ -89,8 +89,9 @@ export const nowDhaka = () => new Date(Date.now() + 6 * 3600_000).toISOString().
 export const todayDhaka = () => nowDhaka().slice(0, 10);
 
 export const isMeal = (v: unknown): v is Meal => v === 'b' || v === 'l' || v === 'd';
+// years 2000 to 2099: Postgres rejects year 0000, and nothing in a flat's books is older than the app
 export const isDate = (v: unknown): v is string =>
-  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && addDays(v, 0) === v;
+  typeof v === 'string' && /^20\d{2}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && addDays(v, 0) === v;
 
 export type Decision = 'open' | 'late' | 'closed';
 

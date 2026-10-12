@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
@@ -146,6 +147,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
             )}
             <ActionForm action={guestAction} className="mt-4" clearOnDone>
               <input type="hidden" name="lang" value={lang} />
+              <input type="hidden" name="key" value={randomUUID()} />
               <DateField lang={lang} label={m.day} name="date" required min={today} max={addDays(today, 60)} defaultValue={guestDays[0]} />
               <label className="block font-semibold">
                 {m.meal}
