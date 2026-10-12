@@ -338,7 +338,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                         <span className="block font-semibold break-words">{x.name}</span>
                         <span className={`block text-[15px] ${x.locked ? 'font-semibold text-chili' : 'text-muted'}`}>
                           {/* every row has a second line, so the names in one grid row line up; mine says "You" */}
-                          {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? a.lockedBadge : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : x.id === me.memberId ? a.you.charAt(0).toUpperCase() + a.you.slice(1) : ''}
+                          {x.leftOn ? a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang)) : x.joinedOn > today ? a.movingInBadge.replace('{d}', fmtDay(x.joinedOn, lang)) : !x.claimed ? a.notJoined : x.locked ? (x.collector ? a.lockedBadgeTeam : a.lockedBadge) : x.failed > 0 ? `${x.failed} ${a.failed}` : own.has(x.id) ? m.ownBadge : x.id === me.memberId ? a.you.charAt(0).toUpperCase() + a.you.slice(1) : ''}
                         </span>
                       </span>
                       {/* the + text is clipped to its box, and the margin leaves room for that box when it turns to × */}

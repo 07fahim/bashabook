@@ -11,11 +11,13 @@ says how many are left. The 25th locks it for good and says so at once. Each per
 ("locked after 25 wrong PINs") and the Flat tab shows a Locked badge. Nothing else changes: money, meals, roles and
 history stay as they were.
 
-Unlocking a flatmate (policy of 2026-10-13): any flatmate living there clears the lock from Home (Flatmates, "Clear the
-lock"). The PIN stays, so this can't take an account over; after a permanent lock 4 more wrong tries are allowed and the 5th
-locks it for good again (count set to 20), so each clear hands out at most 5 guesses, not 24. The history says who cleared
-whom ("cleared the lock · PIN unchanged"). A clear never touches money, meals, roles or months. The collector's PIN reset
-also still unlocks. Nobody can clear their own lock, and nobody can clear the collector's: that is this procedure, only.
+Unlocking a flatmate (policy of 2026-10-13): any flatmate living there clears the lock from Home (a notice card, "Clear the
+lock", shown while someone is locked). The PIN stays, so this can't take an account over; after a permanent lock 4 more
+wrong tries are allowed and the 5th locks it for good again (count set to 20), so each clear hands out at most 5 guesses,
+not 25. Clears are not capped: the history says who cleared whom ("cleared the lock · PIN unchanged"), and a run of them for
+one person is the thing to look into (below). A clear never touches money, meals, roles or months. The collector's PIN
+reset also still unlocks. Nobody can clear their own lock, and nobody can clear the collector's: that is this procedure,
+only (a timed lock on the collector opens by itself).
 
 Watch per flat and month, from the history: permanent locks, and clears. More than two locks the locked people say they
 didn't cause, or more than three clears for one person: look into it (it may be someone guessing with a cleared lock).

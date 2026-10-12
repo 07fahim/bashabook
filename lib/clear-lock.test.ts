@@ -50,6 +50,7 @@ describe('a flatmate clears a lock', { timeout: 60000 }, () => {
     expect(await login(db, code, tahsin, '5678', null)).toEqual({ error: 'locked' });
     expect(await clearLock(db, flatId, tahsin, zarif)).toBe(true);
     expect((await state(tahsin)).n).toBe(5);
+    expect(await clears(tahsin)).toBe(1);
     expect(await login(db, code, tahsin, '5678', null)).toEqual({ memberId: tahsin });
   });
 
@@ -64,7 +65,10 @@ describe('a flatmate clears a lock', { timeout: 60000 }, () => {
     const other = await createFlat(db, { flatName: 'Flat 9C', name: 'Rafi', pin: '1111', others: [], today, lang: 'en' });
     expect(await clearLock(db, other.flatId, tahsin, other.memberId)).toBe(false);   // another flat
     expect(await clearLock(db, flatId, tahsin, other.memberId)).toBe(false);         // an actor from another flat
-    await db(`update members set left_on = joined_on where id = $1`, [zarif]);   // Zarif moved out (before the real today)
+    await db(`update members set left_on = current_date - 1 where id = $1`, [zarif]);   // Zarif moved out yesterday
+    expect(await clearLock(db, flatId, tahsin, zarif)).toBe(false);
+    await db(`update members set left_on = null where id = $1`, [zarif]);
+    await db(`update members set left_on = current_date - 1 where id = $1`, [tahsin]);   // a locked person who moved out
     expect(await clearLock(db, flatId, tahsin, zarif)).toBe(false);
     expect(await state(tahsin)).toMatchObject({ n: 25, lock: 'infinity' });
     expect(await clears(tahsin)).toBe(0);
@@ -105,7 +109,11 @@ describe('a flatmate clears a lock', { timeout: 60000 }, () => {
     for (const lang of ['en', 'bn'] as const) {
       const t = getDictionary(lang);
       expect(t.app.clearLockLead).toContain('4');
+      expect(t.app.clearLockLead).not.toMatch(/for good|পুরোপুরি/);   // a cleared lock can be cleared again: never promise a final lock
       expect(t.app.errors.lockedForGood).toContain('4');
+      expect(t.app.lockedTitle).toContain('{name}');
+      expect(t.app.lockCleared).toContain('{name}');
+      expect(t.app.lockedBadgeTeam).not.toBe(t.app.lockedBadge);
       expect(t.meals.lockClearedHistory).toBeTruthy();
     }
   });
