@@ -34,7 +34,8 @@ export function ConfirmList({ lang, x, a, items, collector, fill }: {
                 : w.paidTo ? x.confirmDepositTo.replace('{name}', w.name).replace('{to}', w.paidTo) : x.confirmDeposit.replace('{name}', w.name)).replace('{t}', fmtExact(w.amount))}
               <span className="block text-[15px] text-muted">{fmtDay(w.date, lang)}{w.note ? ` · ${w.note}` : ''}</span>
             </span>
-            <form action={confirmAction}>
+            {/* the form is the flex child: without shrink-0 a long name squeezes it and the button's label wraps */}
+            <form action={confirmAction} className="sm:shrink-0">
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="id" value={w.id} />
               <PendingButton className={`${secondary} sm:w-auto`}>{w.type === 'payout' || !w.paidTo ? x.confirmYes : x.confirm}<span className="sr-only">: {w.type === 'payout' ? w.paidTo ?? collector : w.name}, {fmtExact(w.amount)}</span></PendingButton>
