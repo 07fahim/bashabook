@@ -4,12 +4,12 @@ import { Suspense } from 'react';
 import { db } from '@/lib/db';
 import { flatMoney, myLatestHandover } from '@/lib/handover';
 import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka, plates, type Meal } from '@/lib/meals';
-import { listMembers } from '@/lib/auth';
+import { clearedBefore, listMembers } from '@/lib/auth';
 import { changedByOthers, countAtLock, loadMeals } from '@/lib/meals-db';
 import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../action-form';
-import { acceptHandoverAction, changePinAction, declineHandoverAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
+import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { Reminders } from '../reminders';
@@ -30,23 +30,26 @@ export default function Home({ params, searchParams }: PageProps<'/[lang]/home'>
 
 async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
-  const { why } = await searchParams;
+  const { why, cleared } = await searchParams;
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), a = t.app, m = t.meals;
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const [meals, people, mo, waiting, ho, byOthers] = await Promise.all([
+  const [meals, people, mo, waiting, ho, byOthers, iCleared] = await Promise.all([
     loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId),
     loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId, me.role === 'manager'),
     myLatestHandover(db, me.flatId, me.memberId),
     changedByOthers(db, me.flatId, me.memberId, today),
+    clearedBefore(db, me.flatId, me.memberId),
   ]);
   const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
   // what the collector holds now: while last month is open this month's own fund starts from 0, so add up every open month
   const held = mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
   const someoneMissing = people.some(p => !p.claimed);
+  // after a clear the action comes back here with ?cleared=; the line goes once they are locked again (a reloaded old URL)
+  const justCleared = typeof cleared === 'string' ? people.find(p => p.id === cleared && !p.locked) : undefined;
   const self = people.find(p => p.id === me.memberId), myPhone = self?.phone ?? '';   // the invite card only matters while someone hasn't joined
   const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
   const decision = decide(tomorrow);
@@ -100,7 +103,24 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
           </section>
         )}
         {why === 'role' && <p role="status" className="mt-4 font-semibold text-chili">{a.roleLostNote}</p>}
+        {justCleared && <p role="status" className="mt-4 font-semibold text-leaf">{a.lockCleared.replace('{name}', justCleared.name)}</p>}
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
+        {/* someone locked after wrong PINs: anyone here clears a flatmate's lock (the PIN stays); the collector's permanent
+            lock is the app team's job (a timed one opens by itself, so no card). Up here, not in the Flatmates fold, so it
+            is seen exactly when it matters. Never one's own card (a wrong current PIN can lock someone still signed in). */}
+        {people.filter(p => p.locked && p.id !== me.memberId && (!p.collector || p.forGood)).map(p => (
+          <section key={p.id} className={`mt-6 ${alertCard}`}>
+            <h2 className="text-xl font-bold">{a.lockedTitle.replace('{name}', p.name)}</h2>
+            {p.collector || iCleared.has(p.id) ? <p className="mt-2 max-w-prose text-[15px] text-muted">{p.collector ? a.lockedCollectorLead : a.clearedBeforeLead}</p> : (
+              <ActionForm action={clearLockAction} className="mt-2">
+                <input type="hidden" name="lang" value={lang} />
+                <input type="hidden" name="memberId" value={p.id} />
+                <p className="max-w-prose text-[15px] text-muted">{a.clearLockLead}</p>
+                <button className={`${secondary} sm:w-auto`}>{a.clearLock}</button>
+              </ActionForm>
+            )}
+          </section>
+        ))}
         {/* only the person whose meals were changed sees this; it goes when the day passes or they change it themselves */}
         {byOthers.length > 0 && (
           <section className={`mt-6 ${alertCard}`}>
