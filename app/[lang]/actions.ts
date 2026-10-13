@@ -112,8 +112,7 @@ export async function setMealAction(d: FormData) {
   // a chip switches only my own plate; my guests stay
   const date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own');
   const r = inRange(date) && isMeal(meal) && (own === '0' || own === '1') ? await setOwn(db, me.flatId, me.memberId, date, meal, own === '1' ? 1 : 0, nowDhaka()) : 'closed';
-  if (r === 'closed') return back(lang, 'notSaved');
-  refresh();   // in place, no navigation; also redraws a page left open past midnight
+  return back(lang, r === 'closed' ? 'notSaved' : undefined);
 }
 
 /** Removes my guests from one later meal; my own plate stays. */
@@ -376,9 +375,11 @@ async function unlessClosed<T>(f: () => Promise<T>): Promise<T | 'closed'> {
 /** Back to the page the tap came from, freshly drawn. A tap that changed nothing (already done, the month is closed, not
  *  mine to change) carries a note; a later tap that worked drops it. Only the referer's path and query are reused, so this
  *  can't send anyone off the site; replace, so Back doesn't walk through every tap. */
-async function back(lang: string, why?: 'notSaved'): Promise<never> {
+async function back(lang: string, why?: 'notSaved'): Promise<void> {
   const ref = (await headers()).get('referer'), u = ref && URL.canParse(ref) ? new URL(ref) : null;
   const path = u && u.pathname.startsWith(`/${lang}/`) ? u.pathname : `/${lang}/home`, q = new URLSearchParams(u?.search ?? '');
+  // a plain success redraws in place: no navigation, so the page keeps its scroll and nothing flashes
+  if (!why && !q.has('why')) return refresh();
   if (why) q.set('why', why); else q.delete('why');
   const s = q.toString();
   redirect(s ? `${path}?${s}` : path, RedirectType.replace);
