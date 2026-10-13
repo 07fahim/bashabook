@@ -32,8 +32,8 @@ const bn = {
   stepsTitle: 'যেভাবে চলে',
   stepsLead: 'রোজ এক ট্যাপ, মাস শেষে এক ট্যাপ। বাকিটা বাসাবুক করে।',
   steps: [
-    { when: 'রোজ সন্ধ্যায়', title: 'কে খাবে, কে খাবে না', body: 'কাল কোনো বেলা খাবেন না? ফ্ল্যাটের ঠিক করা সময়ের আগে এক ট্যাপে জানিয়ে দিন।', demo: { head: 'কাল · তাহসিন', rows: [['সকাল', 'খাবে'], ['দুপুর', 'খাবে'], ['রাত', 'খাবে না', true]], action: 'রাতে খাব না' } },
-    { when: 'রোজ সকালে', title: 'রাঁধুনি সংখ্যা পেয়ে যায়', body: 'কাল কয় প্লেট লাগবে, হোমেই দেখা যায়। যে বাসায় আছে সে রাঁধুনিকে বলে দেয়, বা এক ট্যাপে পাঠিয়ে দেয়।', demo: { head: 'কালকের প্লেট', rows: [['সকাল', '7'], ['দুপুর', '8'], ['রাত', '9']], action: 'সংখ্যা পাঠান' } },
+    { when: 'রোজ সন্ধ্যায়', title: 'কে খাবে, কে খাবে না', body: 'কাল কোনো বেলা খাবেন না? ফ্ল্যাটের ঠিক করা সময়ের আগে এক ট্যাপে জানিয়ে দিন।', demo: { head: 'কাল · তাহসিন', rows: [['সকাল', 'খাবে'], ['দুপুর', 'খাবে'], ['রাত', 'খাবে না', true]] as [string, string, boolean?][], action: 'রাতে খাব না' } },
+    { when: 'সময় পার হলেই', title: 'রাঁধুনি সংখ্যা পেয়ে যায়', body: 'কাল কয় প্লেট লাগবে, হোমেই দেখা যায়। যে বাসায় আছে সে রাঁধুনিকে বলে দেয়, বা এক ট্যাপে পাঠিয়ে দেয়।', demo: { head: 'কালকের প্লেট', rows: [['সকাল', '7'], ['দুপুর', '8'], ['রাত', '9']], action: 'সংখ্যা পাঠান' } },
     { when: 'মাসে একবার', title: 'হিসাব নিজে থেকে তৈরি', body: 'বাজার আর বিল মিল আর দিন অনুযায়ী ভাগ হয়। কে কত দেবে, কে কত পাবে, সবাই দেখে।', demo: { head: 'অক্টোবরের হিসাব', rows: [['মিল রেট', '৳31.72'], ['নাফিস দেবে', '৳310'], ['জারিফ ফেরত পাবে', '৳420']], action: 'গ্রুপে পাঠান' } },
   ],
   chat: { group: 'ফ্ল্যাট 4B · গ্রুপ', sender: 'বাসাবুক', time: '31 October, 9:15 pm', askBy: 'তাহসিন', ask: 'এই মাসের হিসাব কবে আসবে?', reply: 'ঠিক আছে, আজই টাকা দিয়ে দিচ্ছি' },
@@ -600,7 +600,7 @@ const en: Dict = {
   stepsLead: 'One tap a day, one tap a month. BashaBook does the rest.',
   steps: [
     { when: 'Every evening', title: 'Say who is eating', body: 'Skipping a meal tomorrow? One tap before your flat’s deadline, and it is noted.', demo: { head: 'Tomorrow · Tahsin', rows: [['Breakfast', 'Eating'], ['Lunch', 'Eating'], ['Dinner', 'Skipping', true]], action: 'Skip dinner' } },
-    { when: 'Every morning', title: 'The cook gets the count', body: 'Tomorrow’s plates are on Home. Whoever is home tells the cook, or sends the count in one tap.', demo: { head: 'Tomorrow’s plates', rows: [['Breakfast', '7'], ['Lunch', '8'], ['Dinner', '9']], action: 'Send the count' } },
+    { when: 'When the deadline passes', title: 'The cook gets the count', body: 'Tomorrow’s plates are on Home. Whoever is home tells the cook, or sends the count in one tap.', demo: { head: 'Tomorrow’s plates', rows: [['Breakfast', '7'], ['Lunch', '8'], ['Dinner', '9']], action: 'Send the count' } },
     { when: 'Once a month', title: 'The accounts work themselves out', body: 'Bazar and bills split by meals and days. Everyone sees who pays and who gets money back.', demo: { head: 'October accounts', rows: [['Meal rate', '৳31.72'], ['Nafis pays', '৳310'], ['Zarif gets back', '৳420']], action: 'Share in the group' } },
   ],
   chat: { group: 'Flat 4B · group', sender: 'BashaBook', time: '31 October, 9:15 pm', askBy: 'Tahsin', ask: 'When is this month’s bill coming?', reply: 'OK, I’ll pay today' },

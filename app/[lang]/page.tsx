@@ -61,12 +61,12 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                   {step.when}
                 </p>
                 <h3 className="mt-3 text-xl font-bold">{step.title}</h3>
-                <p className="mt-2 max-w-sm text-muted">{step.body}</p>
-                <div className="mt-6 max-w-sm rounded-2xl border border-line bg-surface p-4 shadow-sm md:mt-auto" aria-hidden="true">
+                <p className="mt-2 mb-6 max-w-sm text-muted">{step.body}</p>
+                <div className="max-w-sm rounded-2xl border border-line bg-surface p-4 shadow-sm md:mt-auto" aria-hidden="true">
                   <p className="font-semibold">{step.demo.head}</p>
                   <dl className="mt-2 divide-y divide-line">
                     {step.demo.rows.map(([label, value, off]) => (
-                      <div key={String(label)} className="flex items-center justify-between py-2">
+                      <div key={label} className="flex items-center justify-between py-2">
                         <dt className="text-muted">{label}</dt>
                         <dd className={off ? 'font-semibold text-chili' : 'font-semibold tabular-nums'}>{value}</dd>
                       </div>
