@@ -49,15 +49,31 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           <Khata t={t.khata} />
         </section>
 
+        {/* Three steps in the order a month runs: two daily taps, one monthly. Each shows the real screen it ends on. */}
         <section className="border-t border-line py-14" aria-labelledby="steps">
           <h2 id="steps" className={h2}>{t.stepsTitle}</h2>
-          <ol className="mt-8 grid gap-8 md:grid-cols-3">
+          <p className="mt-3 max-w-2xl text-lg text-muted">{t.stepsLead}</p>
+          <ol className="mt-10 grid gap-10 md:grid-cols-3 md:gap-8">
             {t.steps.map((step, i) => (
               <li key={step.title} className="flex flex-col">
-                <span className="grid size-10 place-items-center rounded-full bg-turmeric font-bold text-on-turmeric" aria-hidden="true">{i + 1}</span>
-                <h3 className="mt-4 text-xl font-bold">{step.title}</h3>
-                <p className="mt-2 text-muted">{step.body}</p>
-                <p className="mt-4 self-start rounded-full border border-line bg-surface px-3 py-1.5 font-semibold tabular-nums">{step.stat}</p>
+                <p className="flex items-center gap-3 font-semibold text-turmeric-ink">
+                  <span className="grid size-8 place-items-center rounded-full bg-turmeric text-on-turmeric" aria-hidden="true">{i + 1}</span>
+                  {step.when}
+                </p>
+                <h3 className="mt-3 text-xl font-bold">{step.title}</h3>
+                <p className="mt-2 max-w-sm text-muted">{step.body}</p>
+                <div className="mt-6 max-w-sm rounded-2xl border border-line bg-surface p-4 shadow-sm md:mt-auto" aria-hidden="true">
+                  <p className="font-semibold">{step.demo.head}</p>
+                  <dl className="mt-2 divide-y divide-line">
+                    {step.demo.rows.map(([label, value, off]) => (
+                      <div key={String(label)} className="flex items-center justify-between py-2">
+                        <dt className="text-muted">{label}</dt>
+                        <dd className={off ? 'font-semibold text-chili' : 'font-semibold tabular-nums'}>{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <p className="mt-3 inline-flex min-h-10 items-center rounded-full bg-turmeric px-4 text-[15px] font-semibold text-on-turmeric">{step.demo.action}</p>
+                </div>
               </li>
             ))}
           </ol>
