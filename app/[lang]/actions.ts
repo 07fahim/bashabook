@@ -112,7 +112,8 @@ export async function setMealAction(d: FormData) {
   // a chip switches only my own plate; my guests stay
   const date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own');
   const r = inRange(date) && isMeal(meal) && (own === '0' || own === '1') ? await setOwn(db, me.flatId, me.memberId, date, meal, own === '1' ? 1 : 0, nowDhaka()) : 'closed';
-  return back(lang, r === 'closed' ? 'notSaved' : undefined);   // also redraws a page left open past midnight
+  if (r === 'closed') return back(lang, 'notSaved');
+  refresh();   // in place, no navigation; also redraws a page left open past midnight
 }
 
 /** Removes my guests from one later meal; my own plate stays. */
