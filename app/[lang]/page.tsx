@@ -35,6 +35,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
           <div>
             <h1 className="font-display text-4xl leading-tight font-bold text-balance sm:text-5xl md:text-6xl">{t.heroTitle}</h1>
             <p className="mt-5 max-w-prose text-lg text-muted">{t.heroBody}</p>
+            <p className="mt-3 max-w-prose font-semibold">{t.heroWho}</p>
             <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 inline-flex min-h-14 items-center rounded-full bg-turmeric px-8 text-lg font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
               {t.create}
             </Link>
