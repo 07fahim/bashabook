@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { todayDhaka } from '@/lib/meals';
-import { listNotices, markNoticesSeen } from '@/lib/notices';
+import { listNotices, markNoticesSeen, type Notice } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { fmtWhen } from '../format';
@@ -11,6 +11,16 @@ import { noticeLine } from '../notice-line';
 import { Header } from '../header';
 import { Nav } from '../nav';
 import { card, focus, LongList, PageSkeleton } from '../ui';
+
+/** Line icons per kind (24px grid): money, the handover, the month, a plate, a person. */
+const ICONS: Record<Notice['kind'], string> = {
+  paid: 'M3 7h15a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H3V7ZM3 7l12-4v4M16 13.5h2',
+  handover: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12.5l3 3 5-6',
+  handoverDone: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12.5l3 3 5-6',
+  closeMonth: 'M6 3h12v18l-3-2-3 2-3-2-3 2V3ZM9 8h6M9 12h6M9 16h3',
+  meal: 'M7 3v8M5 3v4a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9',
+  account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21a8 8 0 0 1 16 0',
+};
 
 export default function Notices({ params }: PageProps<'/[lang]/notices'>) {
   return <Suspense fallback={<PageSkeleton />}><Body params={params} /></Suspense>;
@@ -32,11 +42,17 @@ async function Body({ params }: Pick<PageProps<'/[lang]/notices'>, 'params'>) {
             <LongList label={t.notices.title} keep={8} more={t.app.showAll.replace('{n}', String(rows.length))} less={t.app.showLess} items={rows.map(([n, l], i) => {
               const [text, href] = l!;
               return (
-                <li key={i} className="py-3">
-                  <Link href={href} className={`block rounded-lg ${focus}`}>
-                    <span className="font-semibold">{text}</span>
-                    {n.pending && <span className="ml-2 rounded-full bg-paper px-2 text-[15px] text-ink">{t.notices.waiting}</span>}
-                    <span className="mt-1 block text-[15px] text-muted">{fmtWhen(n.at, lang)}</span>
+                <li key={i}>
+                  <Link href={href} className={`flex min-h-11 items-center gap-3 rounded-lg py-3 ${focus}`}>
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-paper text-turmeric-ink" aria-hidden="true">
+                      <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={ICONS[n.kind]} /></svg>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="font-semibold">{text}</span>
+                      {n.pending && <span className="ml-2 rounded-full bg-paper px-2 text-[15px] text-ink">{t.notices.waiting}</span>}
+                      <span className="mt-1 block text-[15px] text-muted">{fmtWhen(n.at, lang)}</span>
+                    </span>
+                    <svg className="size-5 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
                   </Link>
                 </li>
               );
