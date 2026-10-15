@@ -4,7 +4,7 @@ import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
-import { billShareIn, costRows, forecast, lastMonths, myPlates, runningSpend, slices, spendByKind } from './charts';
+import { billShareIn, costRows, forecast, history, lastMonths, myPlates, runningSpend, slices, spendByKind, worthALook } from './charts';
 import type { MealChange, MealMember } from './meals';
 
 const row = (p: Partial<Entry> & Pick<Entry, 'type' | 'amount'>): Entry =>
@@ -62,6 +62,34 @@ describe('lastMonths', { timeout: 30000 }, () => {
     expect(await lastMonths(db, f.flatId, '2026-07-01')).toEqual([]);   // only months before the one asked
     expect(await billShareIn(db, f.flatId, ids.Tahsin, '2026-08-01')).toBe(5000);   // the gas bill, split equally between two
     expect(await billShareIn(db, f.flatId, ids.Tahsin, '2026-09-01')).toBeNull();   // not closed, no snapshot
+    // history: the closed months' saved bazar and bills only; the September correction for August stays out, September itself is open
+    expect((await history(db, f.flatId, '2026-10-01')).map(r => [r.month, r.type, r.amount, r.note]))
+      .toEqual([['2026-07-01', 'bazar', 20000, null], ['2026-07-01', 'bill', 10000, 'Gas'], ['2026-08-01', 'bazar', 30000, null], ['2026-08-01', 'bill', 10000, 'Gas']]);
+  });
+});
+
+describe('worthALook', () => {
+  const past = (month: string, p: Partial<{ type: 'bazar' | 'bill'; amount: number; day: string; note: string | null }> = {}) =>
+    ({ month, type: p.type ?? 'bazar', amount: p.amount ?? 1000, date: `${month.slice(0, 8)}${p.day ?? '05'}`, note: p.note ?? null });
+  it('the same saved entry twice on one day; a pending twin does not count', () => {
+    const rows = [row({ type: 'bazar', amount: 500, date: '2026-10-03' }), row({ type: 'bazar', amount: 500, date: '2026-10-03' }), row({ type: 'bazar', amount: 500, date: '2026-10-04' }),
+      row({ type: 'bill', amount: 700, date: '2026-10-03' }), row({ type: 'bill', amount: 700, date: '2026-10-03', status: 'pending' })];
+    expect(worthALook(rows, [], '2026-10-15')).toEqual([{ kind: 'dup', type: 'bazar', date: '2026-10-03', amount: 500, n: 2 }]);
+  });
+  it('a bazar above every closed-month bazar, only once ten of them exist', () => {
+    const nine = Array.from({ length: 9 }, () => past('2026-09-01', { amount: 2000 }));
+    const rows = [row({ type: 'bazar', amount: 2500, date: '2026-10-03' })];
+    expect(worthALook(rows, nine, '2026-10-15')).toEqual([]);
+    expect(worthALook(rows, [...nine, past('2026-08-01', { amount: 2400 })], '2026-10-15')).toEqual([{ kind: 'high', date: '2026-10-03', amount: 2500, max: 2400 }]);
+    expect(worthALook([row({ type: 'bazar', amount: 2400, date: '2026-10-03' })], [...nine, past('2026-08-01', { amount: 2400 })], '2026-10-15')).toEqual([]);   // equal is not above
+  });
+  it('a bill note in by a day in each of the last three closed months, not in yet after that day', () => {
+    const hist = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'].flatMap(m => [past(m, { type: 'bill', note: 'Wi-Fi ', day: m === '2026-08-01' ? '12' : '07' }), past(m, { type: 'bill', note: 'Gas', day: '10' })]);
+    hist.push(past('2026-09-01', { type: 'bill', note: 'Cook pay', day: '28' }));   // one month only: not a habit yet
+    const here = [row({ type: 'bill', amount: 900, note: 'gas', date: '2026-10-02' })];   // Gas is in (note matched loosely)
+    expect(worthALook(here, hist, '2026-10-12')).toEqual([]);                                // the 12th: Wi-Fi's latest day, not past it
+    expect(worthALook(here, hist, '2026-10-13')).toEqual([{ kind: 'missing', note: 'Wi-Fi', day: 12 }]);
+    expect(worthALook(here, hist.filter(p => p.month > '2026-07-01'), '2026-10-13')).toEqual([]);   // only two closed months: no habit
   });
 });
 
