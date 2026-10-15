@@ -93,6 +93,7 @@ describe('worthALook', () => {
     hist.push(past('2026-09-01', { type: 'bill', note: 'Cook pay', day: '28' }));   // one month only: not a habit yet
     const here = [row({ type: 'bill', amount: 900, note: 'gas', date: '2026-10-02' })];   // Gas is in (note matched loosely)
     expect(worthALook(here, hist, '2026-10-12')).toEqual([]);                                // the 12th: Wi-Fi's latest day, not past it
+    expect(worthALook(here, hist, '2026-10-12', true)).toEqual([{ kind: 'missing', note: 'Wi-Fi', day: 12 }]);   // the month is over: it never came
     expect(worthALook(here, hist, '2026-10-13')).toEqual([{ kind: 'missing', note: 'Wi-Fi', day: 12 }]);
     expect(worthALook(here, hist.filter(p => p.month > '2026-07-01'), '2026-10-13')).toEqual([]);   // only two closed months: no habit
   });

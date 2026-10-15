@@ -2,22 +2,33 @@ import Link from 'next/link';
 import { ActionForm } from './action-form';
 import { closeAction, coverGapAction } from './actions';
 import { CashCount } from './cash-count';
+import type { Look } from '@/lib/charts';
 import type { Dict, Locale } from './dictionaries';
 import { fmtExact, fmtMonth, fmtSigned } from './format';
 import { alertCard, link, primary, secondary } from './ui';
 
 /** `fund`: the month's own fund (below 0 = its gap is paid first); `held`: the cash to count, every open month's money now. */
-export type CloseInfo = { month: string; fund: number; held: number; later: number; pending: number; pendingMonth: string; problems: number };
+export type CloseInfo = { month: string; fund: number; held: number; later: number; pending: number; pendingMonth: string; problems: number; looks: Look[] };
 
 /** The collector's card for the oldest finished month: what blocks it, or the cash count and Close. */
 /** `collector`: the collector's name (the signed-in person: only they see this card). */
-export function CloseCard({ lang, x, c, collector }: { lang: Locale; x: Dict['money']; c: CloseInfo; collector: string }) {
+/** `warn`: the look-over questions about this month, already worded (lookText); they never block. */
+export function CloseCard({ lang, x, c, collector, warn }: { lang: Locale; x: Dict['money']; c: CloseInfo; collector: string; warn: string[] }) {
   const gap = fmtExact(c.fund), name = fmtMonth(c.month), blocked = c.pending > 0 || c.problems > 0;
   // @container: full width on Money, one column on Flat; when wide, the four boxes sit in a row and text keeps a readable measure
   return (
     <section className={`@container ${alertCard}`}>
       <h2 className="text-xl font-bold">{x.closeTitle.replace('{month}', name)}</h2>
       <p className="mt-1 max-w-prose text-muted">{x.closeLead}</p>
+      {warn.length > 0 && (
+        <div className="mt-4 max-w-prose">
+          <h3 className="font-semibold">{x.closeLook}</h3>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-[15px]">
+            {warn.map((w, i) => <li key={i}><Link href={`/${lang}/money?m=${c.month.slice(0, 7)}#entries`} className={`inline-flex min-h-11 items-center ${link}`}>{w}</Link></li>)}
+          </ul>
+          <p className="mt-1 text-[15px] text-muted">{x.closeLookHint}</p>
+        </div>
+      )}
       {blocked ? (
         <ul className="mt-3 list-disc space-y-2 pl-5">
           {c.pending > 0 && (

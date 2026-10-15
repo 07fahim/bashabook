@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { billShareIn, costRows, forecast, history, lastMonths, myPlates, runningSpend, slices, spendByKind, worthALook, type Look } from '@/lib/charts';
+import { billShareIn, costRows, forecast, history, lastMonths, myPlates, runningSpend, slices, spendByKind, worthALook } from '@/lib/charts';
 import { db } from '@/lib/db';
 import { flatMoney } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka, weightedMeals } from '@/lib/meals';
@@ -12,7 +12,7 @@ import { Area, HBars, Ring, Stacked, VBars } from '../bars';
 import { getDictionary, hasLocale, type Dict } from '../dictionaries';
 import { fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
 import { Header, withQuery } from '../header';
-import { balanceText } from '../money/bits';
+import { balanceText, lookText } from '../money/bits';
 import { Nav } from '../nav';
 import { card, focus, link, PageSkeleton } from '../ui';
 
@@ -94,11 +94,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const bills = you ? Math.max(you.billShare, lastBills ?? 0) : 0;
   const ending = ahead && you ? Math.round((you.opening + you.paidIn - ahead.food - bills - you.payouts + you.adjustments) / 100) : 0;
   // the collector's look-over of the running month: rules on the flat's own saved rows, each line a question with a link to Money
-  const looks = boss && running ? worthALook(mo.entries, hist, today) : null;
-  const lookText = (l: Look) => l.kind === 'dup'
-    ? x.lookDup.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{type}', l.note ? `${t.money.types.bill} ${l.note}` : t.money.types[l.type].toLowerCase()).replace('{n}', String(l.n))
-    : l.kind === 'high' ? x.lookHigh.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{m}', fmtExact(l.max))
-    : x.lookMissing.replace('{note}', l.note).replace('{day}', String(l.day));
+  const looks = boss && running ? worthALook(mo.entries, hist, today).map(l => lookText(t, lang, l)) : null;
 
   return (
     <>
@@ -146,7 +142,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
               <p className="mt-1 text-[15px] text-muted">{x.lookHint}</p>
               {looks.length ? (
                 <ul className="mt-3 divide-y divide-line text-[15px]">
-                  {looks.map(l => <li key={lookText(l)} className="py-2"><Link href={`/${lang}/money`} className={`underline-offset-4 hover:underline ${focus}`}>{lookText(l)}</Link></li>)}
+                  {looks.map((l, i) => <li key={i} className="py-2"><Link href={`/${lang}/money#entries`} className={`underline-offset-4 hover:underline ${focus}`}>{l}</Link></li>)}
                 </ul>) : <p className="mt-3 text-muted">{x.lookNone}</p>}
             </section>)}
           <section className={`${card} md:col-span-12 lg:col-span-8`}>
