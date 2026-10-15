@@ -94,7 +94,18 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const bills = you ? Math.max(you.billShare, lastBills ?? 0) : 0;
   const ending = ahead && you ? Math.round((you.opening + you.paidIn - ahead.food - bills - you.payouts + you.adjustments) / 100) : 0;
   // the collector's look-over of the running month: rules on the flat's own saved rows, each line a question with a link to Money
-  const looks = boss && running ? worthALook(mo.entries, hist, today).map(l => lookText(t, lang, l)) : null;
+  const looks = boss && running ? worthALook(mo.entries, hist, today) : null;
+  // the forecast card pairs each figure as it stands with where it ends, one small arrow between; the sign of a line is its colour
+  const tone = (p: number) => (p < 0 ? 'text-chili' : p > 0 ? 'text-leaf' : '');
+  const to = <svg aria-hidden="true" className="h-3 w-5 flex-none stroke-muted" fill="none" viewBox="0 0 20 12"><path d="M1 6h17m-4-4 4 4-4 4" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /></svg>;
+  const pair = (label: string, now: string, end: string, endTone = '', nowTone = '') => (
+    <li>
+      <p className="text-[13px] font-semibold text-muted">{label}</p>
+      <p className="mt-1 flex items-baseline gap-2 tabular-nums">
+        <span className={`text-[15px] ${nowTone || 'text-muted'}`}>{now}</span>{to}
+        <span className={`text-[28px] leading-tight font-bold ${endTone}`}>{end}</span>
+      </p>
+    </li>);
 
   return (
     <>
@@ -126,15 +137,23 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-12 md:gap-6 lg:mt-6">
           {running && (
             <section className={`${card} md:col-span-12`}>
-              <h2 className={h2}>{x.pace}</h2>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <h2 className={h2}>{x.pace}</h2>
+                <p className="text-[15px] text-muted tabular-nums">{x.paceDays.replace('{d}', String(upTo + 1)).replace('{n}', String(days.length))}</p>
+              </div>
+              {/* the month as a track: the days gone in turmeric, the rest paper, the way the spend line's ruled page runs */}
+              <svg aria-hidden="true" className="mt-3 h-1.5 w-full" preserveAspectRatio="none" viewBox="0 0 100 2">
+                <rect className="fill-line" height="2" rx="1" width="100" /><rect className="fill-turmeric" height="2" rx="1" width={((upTo + 1) / days.length) * 100} />
+              </svg>
               {ahead ? (<>
-                <dl className="mt-4 flex flex-wrap gap-x-10 gap-y-4">
-                  <div><dt className="text-[13px] font-semibold text-muted">{x.rate}</dt><dd className="mt-1 text-[28px] leading-tight font-bold tabular-nums">{fmtRate(ahead.rate, 1)}</dd></div>
-                  {you && <div><dt className="text-[13px] font-semibold text-muted">{x.cost}</dt><dd className="mt-1 text-[28px] leading-tight font-bold tabular-nums">{fmtTaka(ahead.food + bills)}</dd></div>}
-                </dl>
-                {you && <p className={`mt-3 text-[15px] font-semibold ${ending < 0 ? 'text-chili' : ending > 0 ? 'text-leaf' : ''}`}>{(ending < 0 ? x.paceOwe : ending > 0 ? x.paceGet : x.paceEven).replace('{t}', fmtTaka(ending * 100))}</p>}
-                <p className="mt-2 text-[13px] text-muted">{x.paceNote.replace('{d}', String(upTo + 1)).replace('{b}', you && lastBills !== null && lastBills > you.billShare ? x.paceBillsLast : x.paceBillsSoFar)}</p>
-              </>) : <p className="mt-2 text-muted">{x.paceWait}</p>}
+                <p className="mt-4 flex items-center gap-2 text-[13px] text-muted"><span>{x.soFar}</span>{to}<span>{x.paceEnd}</span></p>
+                <ul className="mt-3 grid gap-5 sm:grid-cols-3">
+                  {pair(x.rate, fmtRate(mo.result.mealRate, totalMeals), fmtRate(ahead.rate, 1))}
+                  {you && pair(x.cost, fmtTaka(you.foodCost + you.billShare), fmtTaka(ahead.food + bills))}
+                  {you && b && pair(x.paceLine, `${b.tone === 'text-chili' ? '−' : ''}${fmtTaka(you.balance)}`, fmtSigned(ending * 100), tone(ending), b.tone)}
+                </ul>
+                <p className="mt-4 text-[13px] text-muted">{x.paceNote.replace('{d}', String(upTo + 1)).replace('{b}', you && lastBills !== null && lastBills > you.billShare ? x.paceBillsLast : x.paceBillsSoFar)}</p>
+              </>) : <p className="mt-4 text-muted">{x.paceWait}</p>}
             </section>)}
           {looks && (
             <section className={`${card} md:col-span-12`}>
@@ -142,8 +161,17 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
               <p className="mt-1 text-[15px] text-muted">{x.lookHint}</p>
               {looks.length ? (
                 <ul className="mt-3 divide-y divide-line text-[15px]">
-                  {looks.map((l, i) => <li key={i} className="py-2"><Link href={`/${lang}/money#entries`} className={`underline-offset-4 hover:underline ${focus}`}>{l}</Link></li>)}
-                </ul>) : <p className="mt-3 text-muted">{x.lookNone}</p>}
+                  {looks.map((l, i) => (
+                    <li key={i} className="flex items-start gap-3 py-3">
+                      {/* the tag names the kind of question, so the eye sorts the list before reading a line */}
+                      <span className="mt-2.5 flex-none rounded-full border border-line bg-paper px-2.5 text-[13px] font-semibold leading-6 whitespace-nowrap">{x.lookKinds[l.kind]}</span>
+                      <Link href={`/${lang}/money#entries`} className={`block min-w-0 py-2.5 leading-6 underline-offset-4 hover:underline ${focus}`}>{lookText(t, lang, l)}</Link>
+                    </li>))}
+                </ul>) : (
+                <p className="mt-3 flex items-center gap-2 text-muted">
+                  <svg aria-hidden="true" className="size-5 flex-none stroke-leaf" fill="none" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" strokeWidth="1.5" /><path d="m6 10.5 2.5 2.5L14 7.5" strokeWidth="1.5" /></svg>
+                  {x.lookNone}
+                </p>)}
             </section>)}
           <section className={`${card} md:col-span-12 lg:col-span-8`}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
