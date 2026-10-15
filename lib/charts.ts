@@ -1,5 +1,5 @@
 import type { Db } from './db';
-import { headcount, MEALS, type MealChange, type MealMember } from './meals';
+import { indexChanges, isPresent, mealCount, MEALS, type Meal, type MealChange, type MealMember } from './meals';
 import type { MemberResult } from './money';
 import type { Entry } from './money-db';
 
@@ -34,9 +34,15 @@ export function runningSpend(entries: Entry[], days: string[]) {
   return days.map(d => { sum += ok.filter(e => e.date === d).reduce((a, e) => a + e.amount, 0); return { day: d, value: sum }; });
 }
 
-/** Plates the cook made each day: everyone's three meals, guests included. */
-export const platesPerDay = (members: MealMember[], changes: MealChange[], days: string[]) =>
-  days.map(d => { const h = headcount(members, changes, d); return { day: d, value: MEALS.reduce((a, m) => a + h[m], 0) }; });
+/** One person's plates per meal over `days`, guests included, and how many of those were guests. */
+export function myPlates(m: MealMember, changes: MealChange[], days: string[]): { meal: Meal; plates: number; guests: number }[] {
+  const idx = indexChanges(changes);
+  return MEALS.map(meal => ({
+    meal,
+    plates: days.reduce((a, d) => a + mealCount(m, idx, d, meal), 0),
+    guests: changes.filter(c => c.memberId === m.id && c.meal === meal && days.includes(c.date) && isPresent(m, c.date)).reduce((a, c) => a + (c.guests ?? 0), 0),
+  }));
+}
 
 /** At most five slices for a ring: the biggest named rows keep their names, everything else (including rows already called
  *  `others`) adds up under one `others` slice, so the legend never shows that word twice. */

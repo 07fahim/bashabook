@@ -86,17 +86,6 @@ export function Area({ points, upTo, running }: { points: { day: string; value: 
   );
 }
 
-/** One thin bar per day of the month. */
-export function DayBars({ points, upTo }: { points: { day: string; value: number }[]; upTo: number }) {
-  const max = Math.max(...points.slice(0, upTo + 1).map(p => p.value), 1), w = points.length * 4;
-  return (
-    <svg aria-hidden="true" className="h-32 w-full" preserveAspectRatio="none" viewBox={`0 0 ${w} 40`}>
-      <line className="stroke-line" vectorEffect="non-scaling-stroke" x1="0" x2={w} y1="40" y2="40" />
-      {points.slice(0, upTo + 1).map((p, i) => <rect key={p.day} className="fill-turmeric" height={(p.value / max) * 38} width="3" x={i * 4 + 0.5} y={40 - (p.value / max) * 38} />)}
-    </svg>
-  );
-}
-
 const RING = ['stroke-turmeric', 'stroke-leaf', 'stroke-muted', 'stroke-chili', 'stroke-line'] as const;
 const SWATCH = ['bg-turmeric', 'bg-leaf', 'bg-muted', 'bg-chili', 'bg-line'] as const;
 
@@ -105,7 +94,7 @@ export function Ring({ slices, fmt }: { slices: { label: string; value: number }
   const total = slices.reduce((a, s) => a + s.value, 0);
   const starts = slices.map((_, i) => slices.slice(0, i).reduce((a, s) => a + (s.value / total) * 100, 0));
   return (
-    <div className="flex flex-col items-center gap-5 2xl:flex-row">
+    <div className="flex flex-col items-center gap-5">
       <div className="relative size-40 flex-none">
         <svg aria-hidden="true" className="size-full -rotate-90" viewBox="0 0 42 42">
           <circle className="stroke-paper" cx="21" cy="21" fill="none" r="15.9155" strokeWidth="5" />
@@ -119,7 +108,7 @@ export function Ring({ slices, fmt }: { slices: { label: string; value: number }
         {slices.map((s, i) => (
           <li key={i} className="flex items-center gap-2">
             <span aria-hidden="true" className={`size-3 flex-none rounded-sm ${SWATCH[i]}`} />
-            <span className="min-w-0 flex-1 truncate" title={s.label}>{s.label}</span>
+            <span className="min-w-0 flex-1">{s.label}</span>
             <span className="tabular-nums">{fmt(s.value)}</span>
             <span className="w-11 text-right text-[13px] text-muted tabular-nums">{total ? Math.round((s.value / total) * 100) : 0}%</span>
           </li>
