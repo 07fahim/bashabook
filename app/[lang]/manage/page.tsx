@@ -10,6 +10,7 @@ import { addDays, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, n
 import { loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { listRepeats, loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireManager } from '@/lib/session';
+import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
 import { addMemberAction, newCodeAction, addRoomAction, adminSetAction, cancelHandoverAction, offerHandoverAction, entryAction, noCookAction, noCookCancelAction, bringBackAction, leavingAction, removePhotoAction, renameAction, rentAction, resetPinAction, setRoomAction, settingsAction, stopRepeatAction } from '../actions';
 import { Avatar } from '../avatar';
@@ -56,6 +57,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
     lastOutcome(db, me.flatId, me.memberId),
   ]);
   const t = getDictionary(lang), a = t.app, m = t.meals, mn = t.money;
+  const noticesP = noticeCount(db, me.flatId, me.memberId, me.role === 'manager');   // the bell's count, read alongside the page
   const own = new Set(meals.members.filter(x => !x.inMeals).map(x => x.id));
   const firstOpen = isLocked(tomorrow, nowDhaka(), meals.flat.cutoff) ? addDays(tomorrow, 1) : tomorrow;
   const person = picked.members.find(x => x.id === who) ?? picked.members.find(x => x.id === me.memberId)!;
@@ -68,7 +70,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
 
   return (
     <>
-      <Header t={t} lang={lang} path={withQuery('/manage', sp)}><Nav t={t} lang={lang} current="manage" showFlat /></Header>
+      <Header t={t} lang={lang} path={withQuery('/manage', sp)} notices={await noticesP}><Nav t={t} lang={lang} current="manage" showFlat /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         {sp.why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{a.notSavedNote}</p>}
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>

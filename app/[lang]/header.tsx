@@ -14,8 +14,9 @@ export const withQuery = (path: string, sp: Record<string, string | string[] | u
   return s ? `${path}?${s}` : path;
 };
 
-export function Header({ t, lang, path, children }: { t: Dict; lang: Locale; path: string; children?: ReactNode }) {
+export function Header({ t, lang, path, notices, children }: { t: Dict; lang: Locale; path: string; notices?: number; children?: ReactNode }) {
   const other = lang === 'bn' ? 'en' : 'bn';
+  const badge = notices === undefined ? null : notices > 9 ? '9+' : notices > 0 ? String(notices) : null;
   return (
     <header className="border-b border-line md:sticky md:top-0 md:z-20 md:bg-paper">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
@@ -30,6 +31,19 @@ export function Header({ t, lang, path, children }: { t: Dict; lang: Locale; pat
         {children}
       </div>
       <div className="flex items-center gap-1">
+        {notices !== undefined && (
+          <Link
+            href={`/${lang}/notices`}
+            aria-label={badge ? t.notices.bellNew.replace('{n}', String(notices)) : t.notices.bell}
+            title={t.notices.bell}
+            className={`relative grid size-11 place-items-center rounded-lg text-muted hover:text-ink ${focus}`}
+          >
+            <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+              <path d="M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15L6 16ZM10 20a2 2 0 0 0 4 0" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {badge && <span aria-hidden="true" className="absolute top-1 right-1 min-w-4 rounded-full bg-chili px-1 text-center text-[11px] leading-4 font-bold text-paper">{badge}</span>}
+          </Link>
+        )}
         <ThemeToggle label={t.themeToggle} />
         <Link href={`/${other}${path}`} hrefLang={other} lang={other} className={`inline-flex min-h-11 items-center px-3 text-muted underline-offset-4 hover:underline ${focus}`}>
           {t.switchLang}
