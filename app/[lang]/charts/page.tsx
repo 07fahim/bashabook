@@ -155,23 +155,19 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
                 <p className="mt-4 text-[13px] text-muted">{x.paceNote.replace('{d}', String(upTo + 1)).replace('{b}', you && lastBills !== null && lastBills > you.billShare ? x.paceBillsLast : x.paceBillsSoFar)}</p>
               </>) : <p className="mt-4 text-muted">{x.paceWait}</p>}
             </section>)}
-          {looks && (
+          {/* only when there is a question: a card that says nothing stands out is weight on every visit */}
+          {looks && looks.length > 0 && (
             <section className={`${card} md:col-span-12`}>
               <h2 className={h2}>{x.look}</h2>
               <p className="mt-1 text-[15px] text-muted">{x.lookHint}</p>
-              {looks.length ? (
-                <ul className="mt-3 divide-y divide-line text-[15px]">
-                  {looks.map((l, i) => (
-                    <li key={i} className="flex items-start gap-3 py-3">
-                      {/* the tag names the kind of question, so the eye sorts the list before reading a line */}
-                      <span className="mt-2.5 flex-none rounded-full border border-line bg-paper px-2.5 text-[13px] font-semibold leading-6 whitespace-nowrap">{x.lookKinds[l.kind]}</span>
-                      <Link href={`/${lang}/money#entries`} className={`block min-w-0 py-2.5 leading-6 underline-offset-4 hover:underline ${focus}`}>{lookText(t, lang, l)}</Link>
-                    </li>))}
-                </ul>) : (
-                <p className="mt-3 flex items-center gap-2 text-muted">
-                  <svg aria-hidden="true" className="size-5 flex-none stroke-leaf" fill="none" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.5" strokeWidth="1.5" /><path d="m6 10.5 2.5 2.5L14 7.5" strokeWidth="1.5" /></svg>
-                  {x.lookNone}
-                </p>)}
+              <ul className="mt-3 divide-y divide-line text-[15px]">
+                {looks.map((l, i) => (
+                  <li key={i} className="flex items-start gap-3 py-3">
+                    {/* the tag names the kind of question, so the eye sorts the list before reading a line */}
+                    <span className="mt-2.5 flex-none rounded-full border border-line bg-paper px-2.5 text-[13px] font-semibold leading-6 whitespace-nowrap">{x.lookKinds[l.kind]}</span>
+                    <Link href={`/${lang}/money#entries`} className={`block min-w-0 py-2.5 leading-6 underline-offset-4 hover:underline ${focus}`}>{lookText(t, lang, l)}</Link>
+                  </li>))}
+              </ul>
             </section>)}
           <section className={`${card} md:col-span-12 lg:col-span-8`}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
