@@ -78,5 +78,14 @@ describe('the day series and the ring', () => {
     const rows = Array.from({ length: 7 }, (_, i) => ({ label: `B${i}`, value: 70 - i * 10 }));
     expect(slices(rows, 'Others').map(r => `${r.label}:${r.value}`)).toEqual(['B0:70', 'B1:60', 'B2:50', 'B3:40', 'Others:60']);
     expect(slices([{ label: 'x', value: 0 }, { label: 'y', value: 5 }], 'Others')).toEqual([{ label: 'y', value: 5 }]);
+    // a no-note bill already called Others never becomes a second Others line
+    const withOthers = [{ label: 'bazar', value: 900 }, { label: 'Others', value: 800 }, { label: 'Gas', value: 700 }, { label: 'Wifi', value: 600 }, { label: 'Rent', value: 500 }, { label: 'Net', value: 400 }];
+    expect(slices(withOthers, 'Others').map(r => `${r.label}:${r.value}`)).toEqual(['bazar:900', 'Gas:700', 'Wifi:600', 'Rent:500', 'Others:1200']);
+    expect(slices(withOthers.slice(0, 3), 'Others').map(r => r.label)).toEqual(['bazar', 'Gas', 'Others']);
+  });
+  it('a day outside the month and a leaver mid-month', () => {
+    expect(runningSpend([row({ type: 'bazar', amount: 5, date: '2026-08-31' })], ['2026-09-01']).map(d => d.value)).toEqual([0]);
+    const m = (id: string, leftOn: string | null): MealMember => ({ id, joinedOn: '2026-09-01', leftOn, defaults: { b: true, l: true, d: true } });
+    expect(platesPerDay([m('a', '2026-09-01'), m('b', null)], [], ['2026-09-01', '2026-09-02']).map(d => d.value)).toEqual([6, 3]);
   });
 });

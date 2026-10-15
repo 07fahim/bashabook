@@ -37,7 +37,7 @@ function Tile({ label, value, note, tone = '' }: { label: string; value: string;
 /** '+4% vs Sept' for a closed month against the closed month before it; 'so far' while the month runs. */
 function delta(x: Dict['charts'], now: number, before: number | null, month: string | null, closed: boolean) {
   if (!closed) return { note: x.soFar, tone: '' };
-  if (before === null || before <= 0 || month === null) return { note: undefined, tone: '' };
+  if (now <= 0 || before === null || before <= 0 || month === null) return { note: undefined, tone: '' };
   const p = Math.round(((now - before) / before) * 100);
   return { note: x.vsLast.replace('{p}', `${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p)}%`).replace('{month}', short(month)), tone: p > 0 ? 'text-chili' : p < 0 ? 'text-leaf' : '' };
 }
@@ -64,7 +64,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
 
   // the days drawn: all of a past month, this month up to today
   const days = daysOfMonth(month), running = month === thisMonth;
-  const upTo = running ? Math.max(days.indexOf(today), 0) : days.length - 1;
+  const upTo = running ? days.indexOf(today) : days.length - 1;
   const mine = mo.result.perMember.find(p => p.id === me.memberId);
   const spend = spendByKind(mo.entries, x.others).map(r => ({ ...r, label: r.label === 'bazar' ? x.bazar : r.label }));
   const total = spend.reduce((a, r) => a + r.value, 0);
@@ -83,7 +83,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const before = past.at(-1)?.month === prev ? past.at(-1)! : null;
   const rateD = delta(x, mo.result.mealRate, before?.rate ?? null, before?.month ?? null, closed);
   const spendD = delta(x, total, before?.spend ?? null, before?.month ?? null, closed);
-  const axis = [0, 7, 14, 21, days.length - 1];
+  const axis = [0, 1, 2, 3, 4].map(k => Math.round((k * (days.length - 1)) / 4));   // five labels where the drawn days really are
 
   return (
     <>

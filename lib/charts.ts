@@ -38,10 +38,12 @@ export function runningSpend(entries: Entry[], days: string[]) {
 export const platesPerDay = (members: MealMember[], changes: MealChange[], days: string[]) =>
   days.map(d => { const h = headcount(members, changes, d); return { day: d, value: MEALS.reduce((a, m) => a + h[m], 0) }; });
 
-/** At most five slices for a ring: the biggest rows keep their names, the rest add up under `others`. */
+/** At most five slices for a ring: the biggest named rows keep their names, everything else (including rows already called
+ *  `others`) adds up under one `others` slice, so the legend never shows that word twice. */
 export function slices(rows: { label: string; value: number }[], others: string, n = 5) {
-  const sorted = rows.filter(r => r.value > 0).sort((a, b) => b.value - a.value);
-  if (sorted.length <= n) return sorted;
-  const rest = sorted.slice(n - 1).reduce((a, r) => a + r.value, 0);
-  return [...sorted.slice(0, n - 1), { label: others, value: rest }];
+  const named = rows.filter(r => r.value > 0 && r.label !== others).sort((a, b) => b.value - a.value);
+  const all = rows.reduce((a, r) => a + Math.max(r.value, 0), 0), namedSum = named.reduce((a, r) => a + r.value, 0);
+  const head = named.length + (all > namedSum ? 1 : 0) > n ? named.slice(0, n - 1) : named;   // at most n slices, the others slice included
+  const rest = all - head.reduce((a, r) => a + r.value, 0);
+  return [...head, ...(rest > 0 ? [{ label: others, value: rest }] : [])];
 }

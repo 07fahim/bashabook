@@ -110,14 +110,14 @@ export function Ring({ slices, fmt }: { slices: { label: string; value: number }
         <svg aria-hidden="true" className="size-full -rotate-90" viewBox="0 0 42 42">
           <circle className="stroke-paper" cx="21" cy="21" fill="none" r="15.9155" strokeWidth="5" />
           {total > 0 && slices.map((s, i) => (
-            <circle key={s.label} className={RING[i]} cx="21" cy="21" fill="none" r="15.9155" strokeDasharray={`${(s.value / total) * 100} ${100 - (s.value / total) * 100}`} strokeDashoffset={-starts[i]} strokeWidth="5" />
+            <circle key={i} className={RING[i]} cx="21" cy="21" fill="none" r="15.9155" strokeDasharray={`${(s.value / total) * 100} ${100 - (s.value / total) * 100}`} strokeDashoffset={-starts[i]} strokeWidth="5" />
           ))}
         </svg>
         <span className="absolute inset-0 flex items-center justify-center text-lg font-bold tabular-nums">{fmt(total)}</span>
       </div>
       <ul className="w-full min-w-0 flex-1 space-y-2 text-[15px]">
         {slices.map((s, i) => (
-          <li key={s.label} className="flex items-center gap-2">
+          <li key={i} className="flex items-center gap-2">
             <span aria-hidden="true" className={`size-3 flex-none rounded-sm ${SWATCH[i]}`} />
             <span className="min-w-0 flex-1 truncate" title={s.label}>{s.label}</span>
             <span className="tabular-nums">{fmt(s.value)}</span>
