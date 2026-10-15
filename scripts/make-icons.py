@@ -22,3 +22,6 @@ icon = icon.convert('RGB')
 for size, path in ((512, 'public/icon-512.png'), (192, 'public/icon-192.png'), (180, 'public/apple-icon.png')):
     icon.resize((size, size), Image.LANCZOS).save(path, optimize=True)
     print('wrote', path)
+# browsers ask for /favicon.ico on their own (and some pages carry no icon link): one file, three sizes
+icon.save('public/favicon.ico', sizes=[(16, 16), (32, 32), (48, 48)])
+print('wrote public/favicon.ico')

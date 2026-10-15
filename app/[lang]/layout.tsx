@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
   return {
     title: t.metaTitle,
     description: t.metaDesc,
-    icons: { icon: '/icon-192.png', apple: '/apple-icon.png' },
+    icons: { icon: [{ url: '/favicon.ico', sizes: '48x48' }, { url: '/icon-192.png', sizes: '192x192', type: 'image/png' }], apple: '/apple-icon.png' },
     alternates: { languages: { bn: '/bn', en: '/en' } },
   };
 }
