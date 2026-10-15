@@ -10,7 +10,7 @@ const bn = {
   charts: {
     myMeals: 'আমার মিল',
     mealsNote: '{n} মিল, প্রতি মিল {r}',
-    cost: 'এই মাসে আপনার খরচ',
+    cost: 'আপনার খরচ',
     earlier: 'আগের মাস থেকে',
     advances: 'অগ্রিম নেওয়া',
     corrections: 'সংশোধন',
@@ -635,7 +635,7 @@ const en: Dict = {
   charts: {
     myMeals: 'My meals',
     mealsNote: '{n} meals at {r} each',
-    cost: 'Your cost this month',
+    cost: 'Your cost',
     earlier: 'From earlier months',
     advances: 'Advances taken',
     corrections: 'Corrections',

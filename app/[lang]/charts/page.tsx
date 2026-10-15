@@ -107,7 +107,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
           </div>
           <Tile label={x.rate} value={fmtRate(mo.result.mealRate, totalMeals)} note={rateD.note} tone={rateD.tone} />
           <Tile label={x.spend} value={fmtTaka(total)} note={spendD.note} tone={spendD.tone} />
-          <Tile label={x.plates} value={String(plates.reduce((a, p) => a + p.plates, 0))} note={closed ? undefined : x.soFar} />
+          <Tile label={x.plates} value={self ? String(plates.reduce((a, p) => a + p.plates, 0)) : '—'} note={self && !closed ? x.soFar : undefined} />
           <Tile label={x.flatMoney} value={`${held < 0 ? '−' : ''}${fmtTaka(held)}`} note={x.holds.replace('{name}', holder)} tone={held < 0 ? 'text-chili' : ''} />
         </div>
 
@@ -134,7 +134,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
               <div className="mt-4"><HBars fmt={String} rows={plates.map(p => ({
                 key: p.meal, text: t.meals.names[p.meal], value: p.plates - p.guests, tail: p.guests, valueText: String(p.plates),
                 label: <>{t.meals.names[p.meal]}{p.guests > 0 && <span className="ml-1 text-[13px] text-muted">{x.guests.replace('{n}', String(p.guests))}</span>}</> }))} /></div>
-              {mine && <p className="mt-4 text-[15px] text-muted">{x.mealsNote.replace('{n}', fmtMeals(mo.meals.get(me.memberId) ?? 0)).replace('{r}', fmtRate(mo.result.mealRate, totalMeals))}</p>}
+              {mine && totalMeals > 0 && mo.result.mealRate > 0 && <p className="mt-4 text-[15px] text-muted">{x.mealsNote.replace('{n}', fmtMeals(mo.meals.get(me.memberId) ?? 0)).replace('{r}', fmtRate(mo.result.mealRate, totalMeals))}</p>}
             </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}
           </section>
           <section className={`${card} md:col-span-6`}>
@@ -165,7 +165,8 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
                 ] as [string, number][]).map(([k, v]): [string, number] => [k, mine.balance > 0 ? -v : v]).map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4 py-2"><dt>{k}</dt><dd className="whitespace-nowrap tabular-nums">{v > 0 ? '+' : ''}{fmtSigned(v)}</dd></div>
                 ))}
-                <div className={`flex justify-between gap-4 py-2 font-semibold ${b.tone}`}><dt>{b.tone === 'text-chili' ? x.tileOwe : b.tone === 'text-leaf' ? x.tileGet : x.tileEven}</dt><dd className="whitespace-nowrap tabular-nums">{fmtExact(mine.balance)}</dd></div>
+                {/* the receipt follows the exact sign (40 poisha is still owed), while the strip tile keeps the whole-taka headline */}
+                <div className={`flex justify-between gap-4 py-2 font-semibold ${mine.balance < 0 ? 'text-chili' : mine.balance > 0 ? 'text-leaf' : ''}`}><dt>{mine.balance < 0 ? x.tileOwe : mine.balance > 0 ? x.tileGet : x.tileEven}</dt><dd className="whitespace-nowrap tabular-nums">{fmtExact(mine.balance)}</dd></div>
               </dl>
               <Link href={`/${lang}/money${month !== thisMonth ? `?m=${month.slice(0, 7)}` : ''}`} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{t.money.breakdown}</Link>
             </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}

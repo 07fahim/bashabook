@@ -5,7 +5,7 @@ import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
 import { costRows, lastMonths, myPlates, runningSpend, slices, spendByKind } from './charts';
-import type { MealMember } from './meals';
+import type { MealChange, MealMember } from './meals';
 
 const row = (p: Partial<Entry> & Pick<Entry, 'type' | 'amount'>): Entry =>
   ({ id: 'x', status: 'ok', note: null, paidBy: null, memberId: null, split: null, selected: [], date: '2026-09-05', createdBy: 'c', forMonth: null, moves: null, heldBy: null, ...p } as Entry);
@@ -73,6 +73,11 @@ describe('the day series and the ring', () => {
     const me: MealMember = { id: 'a', joinedOn: '2026-09-02', leftOn: null, defaults: { b: false, l: true, d: true } };
     const out = myPlates(me, [{ memberId: 'a', date: '2026-09-02', meal: 'd', count: 3, guests: 2 }, { memberId: 'b', date: '2026-09-02', meal: 'd', count: 5, guests: 4 }], ['2026-09-01', '2026-09-02', '2026-09-03']);
     expect(out).toEqual([{ meal: 'b', plates: 0, guests: 0 }, { meal: 'l', plates: 2, guests: 0 }, { meal: 'd', plates: 4, guests: 2 }]);
+    // after my last day, and after the drawn days, nothing counts (guests included)
+    const left = { ...me, leftOn: '2026-09-02' };
+    const rows: MealChange[] = [{ memberId: 'a', date: '2026-09-02', meal: 'd', count: 3, guests: 2 }, { memberId: 'a', date: '2026-09-03', meal: 'd', count: 2, guests: 1 }];
+    expect(myPlates(left, rows, ['2026-09-01', '2026-09-02', '2026-09-03']).at(-1)).toEqual({ meal: 'd', plates: 3, guests: 2 });
+    expect(myPlates(me, rows, ['2026-09-01', '2026-09-02']).at(-1)).toEqual({ meal: 'd', plates: 3, guests: 2 });
   });
   it('a ring keeps four names and folds the rest', () => {
     const rows = Array.from({ length: 7 }, (_, i) => ({ label: `B${i}`, value: 70 - i * 10 }));
