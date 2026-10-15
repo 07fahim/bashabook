@@ -102,7 +102,7 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
       mealRate: info.rate ?? 0, fund: info.fund ?? 0, invariantOk: true, problems: [], lines: [],
       perMember: snap.map(s => ({ id: s.id, opening: s.opening, paidIn: s.paidIn, foodCost: s.foodCost, billShare: s.billShare, payouts: s.payouts, adjustments: s.adjustments, balance: s.balance })),
     };
-    return { flat, all, members, rooms, entries, removed, meals: new Map(snap.map(s => [s.id, s.meals])), guestMeals: new Map<string, number>(),
+    return { flat, all, members, rooms, entries, removed, changes, meals: new Map(snap.map(s => [s.id, s.meals])), guestMeals: new Map<string, number>(),
       result, first, info, earlierOpen, carriedFrom: null, closedMonths, days: new Map(snap.map(s => [s.id, s.days])), corrections };
   }
 
@@ -129,7 +129,7 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
     memberIds: [...ids], opening: new Map(carried.map(c => [c.id, c.balance])), openingFund: lastClosed?.fund ?? 0,
     weightedMeals: meals, daysPresent: days, roomOf, rooms, ledger: entries,
   });
-  return { flat, all, members, rooms, entries, removed, meals, guestMeals, result, first, info, earlierOpen,
+  return { flat, all, members, rooms, entries, removed, changes, meals, guestMeals, result, first, info, earlierOpen,
     carriedFrom: lastClosed?.month ?? null, closedMonths, days, corrections };
 }
 

@@ -69,3 +69,62 @@ export function Stacked({ rows, fmt }: { rows: Part[][]; fmt: (v: number) => str
     </div>
   );
 }
+
+/** A line climbing across the month on ruled paper, the way a khata page runs: the spend so far by day. Days after `upTo`
+ *  are left blank, and a dashed rule marks today while the month is still running. */
+export function Area({ points, upTo, running }: { points: { day: string; value: number }[]; upTo: number; running: boolean }) {
+  const n = points.length, max = Math.max(...points.slice(0, upTo + 1).map(p => p.value), 1);
+  const x = (i: number) => (i / (n - 1)) * 100, y = (v: number) => 38 - (v / max) * 34;
+  const line = points.slice(0, upTo + 1).map((p, i) => `${x(i)},${y(p.value)}`).join(' ');
+  return (
+    <svg aria-hidden="true" className="h-40 w-full sm:h-48" preserveAspectRatio="none" viewBox="0 0 100 40">
+      {[4, 15.33, 26.67, 38].map(r => <line key={r} className="stroke-line" vectorEffect="non-scaling-stroke" x1="0" x2="100" y1={r} y2={r} />)}
+      <polygon className="fill-turmeric opacity-15" points={`0,38 ${line} ${x(upTo)},38`} />
+      <polyline className="fill-none stroke-turmeric" fill="none" points={line} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      {running && <line className="stroke-ink" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" x1={x(upTo)} x2={x(upTo)} y1="2" y2="38" />}
+    </svg>
+  );
+}
+
+/** One thin bar per day of the month. */
+export function DayBars({ points, upTo }: { points: { day: string; value: number }[]; upTo: number }) {
+  const max = Math.max(...points.slice(0, upTo + 1).map(p => p.value), 1), w = points.length * 4;
+  return (
+    <svg aria-hidden="true" className="h-32 w-full" preserveAspectRatio="none" viewBox={`0 0 ${w} 40`}>
+      <line className="stroke-line" vectorEffect="non-scaling-stroke" x1="0" x2={w} y1="40" y2="40" />
+      {points.slice(0, upTo + 1).map((p, i) => <rect key={p.day} className="fill-turmeric" height={(p.value / max) * 38} width="3" x={i * 4 + 0.5} y={40 - (p.value / max) * 38} />)}
+    </svg>
+  );
+}
+
+const RING = ['stroke-turmeric', 'stroke-leaf', 'stroke-muted', 'stroke-chili', 'stroke-line'] as const;
+const SWATCH = ['bg-turmeric', 'bg-leaf', 'bg-muted', 'bg-chili', 'bg-line'] as const;
+
+/** A ring of up to five slices with the total in the middle and a legend beside it. */
+export function Ring({ slices, fmt }: { slices: { label: string; value: number }[]; fmt: (v: number) => string }) {
+  const total = slices.reduce((a, s) => a + s.value, 0);
+  const starts = slices.map((_, i) => slices.slice(0, i).reduce((a, s) => a + (s.value / total) * 100, 0));
+  return (
+    <div className="flex flex-col items-center gap-5 2xl:flex-row">
+      <div className="relative size-40 flex-none">
+        <svg aria-hidden="true" className="size-full -rotate-90" viewBox="0 0 42 42">
+          <circle className="stroke-paper" cx="21" cy="21" fill="none" r="15.9155" strokeWidth="5" />
+          {total > 0 && slices.map((s, i) => (
+            <circle key={s.label} className={RING[i]} cx="21" cy="21" fill="none" r="15.9155" strokeDasharray={`${(s.value / total) * 100} ${100 - (s.value / total) * 100}`} strokeDashoffset={-starts[i]} strokeWidth="5" />
+          ))}
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-lg font-bold tabular-nums">{fmt(total)}</span>
+      </div>
+      <ul className="w-full min-w-0 flex-1 space-y-2 text-[15px]">
+        {slices.map((s, i) => (
+          <li key={s.label} className="flex items-center gap-2">
+            <span aria-hidden="true" className={`size-3 flex-none rounded-sm ${SWATCH[i]}`} />
+            <span className="min-w-0 flex-1 truncate" title={s.label}>{s.label}</span>
+            <span className="tabular-nums">{fmt(s.value)}</span>
+            <span className="w-11 text-right text-[13px] text-muted tabular-nums">{total ? Math.round((s.value / total) * 100) : 0}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

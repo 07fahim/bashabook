@@ -4,7 +4,8 @@ import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
-import { costRows, lastMonths, spendByKind } from './charts';
+import { costRows, lastMonths, platesPerDay, runningSpend, slices, spendByKind } from './charts';
+import type { MealMember } from './meals';
 
 const row = (p: Partial<Entry> & Pick<Entry, 'type' | 'amount'>): Entry =>
   ({ id: 'x', status: 'ok', note: null, paidBy: null, memberId: null, split: null, selected: [], date: '2026-09-05', createdBy: 'c', forMonth: null, moves: null, heldBy: null, ...p } as Entry);
@@ -59,5 +60,23 @@ describe('lastMonths', { timeout: 30000 }, () => {
     expect(out.every(m => m.rate > 0)).toBe(true);
     expect((await lastMonths(db, f.flatId, '2026-10-01', 1)).map(m => m.month)).toEqual(['2026-08-01']);   // the newest n
     expect(await lastMonths(db, f.flatId, '2026-07-01')).toEqual([]);   // only months before the one asked
+  });
+});
+
+describe('the day series and the ring', () => {
+  it('spend climbs by date and ignores pending rows and corrections', () => {
+    const rows = [row({ type: 'bazar', amount: 100, date: '2026-09-01' }), row({ type: 'bill', amount: 50, date: '2026-09-03' }),
+      row({ type: 'deposit', amount: 999, date: '2026-09-02' }), row({ type: 'bazar', amount: 7, date: '2026-09-02', status: 'pending' }), row({ type: 'bazar', amount: 9, date: '2026-09-02', forMonth: '2026-08-01' })];
+    expect(runningSpend(rows, ['2026-09-01', '2026-09-02', '2026-09-03']).map(d => d.value)).toEqual([100, 100, 150]);
+  });
+  it('plates per day count everyone and their guests', () => {
+    const m = (id: string): MealMember => ({ id, joinedOn: '2026-09-01', leftOn: null, defaults: { b: true, l: true, d: true } });
+    const out = platesPerDay([m('a'), m('b')], [{ memberId: 'a', date: '2026-09-02', meal: 'd', count: 3 }], ['2026-09-01', '2026-09-02']);
+    expect(out.map(d => d.value)).toEqual([6, 8]);
+  });
+  it('a ring keeps four names and folds the rest', () => {
+    const rows = Array.from({ length: 7 }, (_, i) => ({ label: `B${i}`, value: 70 - i * 10 }));
+    expect(slices(rows, 'Others').map(r => `${r.label}:${r.value}`)).toEqual(['B0:70', 'B1:60', 'B2:50', 'B3:40', 'Others:60']);
+    expect(slices([{ label: 'x', value: 0 }, { label: 'y', value: 5 }], 'Others')).toEqual([{ label: 'y', value: 5 }]);
   });
 });
