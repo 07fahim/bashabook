@@ -53,7 +53,7 @@ const bn = {
     lookHint: 'শুধু আপনি দেখছেন। এগুলো প্রশ্ন, কোনো সিদ্ধান্ত নয়।',
     lookDup: '{d}: {t}-এর {type} {n} বার আছে। একই এন্ট্রি দুবার?',
     lookHigh: '{d}: {t}-এর বাজার। এই ফ্ল্যাটে আগে সবচেয়ে বড় ছিল {m}।',
-    lookMissing: '{note}: আগের মাসগুলোতে {day} তারিখের মধ্যে এসেছিল, এই মাসে এখনো আসেনি।',
+    lookMissing: '{note}: আগের মাসগুলোতে {day} তারিখের মধ্যে এসেছিল, এই মাসে নেই।',
     lookNone: 'কিছু চোখে পড়েনি।',
   },
   notices: {
@@ -694,7 +694,7 @@ const en: Dict = {
     lookHint: 'Only you see this. These are questions, not findings.',
     lookDup: '{d}: a {type} of {t} is saved {n} times. The same one twice?',
     lookHigh: '{d}: a bazar of {t}. The biggest this flat saved before was {m}.',
-    lookMissing: '{note}: in earlier months it was in by day {day}; not in yet this month.',
+    lookMissing: '{note}: in earlier months it was in by day {day}; not in this month.',
     lookNone: 'Nothing stands out.',
   },
   notices: {

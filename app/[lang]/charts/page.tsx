@@ -142,7 +142,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
               <p className="mt-1 text-[15px] text-muted">{x.lookHint}</p>
               {looks.length ? (
                 <ul className="mt-3 divide-y divide-line text-[15px]">
-                  {looks.map(l => <li key={l} className="py-2"><Link href={`/${lang}/money`} className={`underline-offset-4 hover:underline ${focus}`}>{l}</Link></li>)}
+                  {looks.map((l, i) => <li key={i} className="py-2"><Link href={`/${lang}/money#entries`} className={`underline-offset-4 hover:underline ${focus}`}>{l}</Link></li>)}
                 </ul>) : <p className="mt-3 text-muted">{x.lookNone}</p>}
             </section>)}
           <section className={`${card} md:col-span-12 lg:col-span-8`}>

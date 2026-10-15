@@ -17,7 +17,7 @@ export const balanceText = (x: Dict['money'], balance: number, closed = false) =
 
 /** A look-over question as one sentence: the day as Money shows it, the amount exact, a bill by its name. */
 export const lookText = (t: Dict, lang: Locale, l: Look) => l.kind === 'dup'
-  ? t.charts.lookDup.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{type}', l.note ? `${t.money.types.bill} ${l.note}` : t.money.types[l.type].toLowerCase()).replace('{n}', String(l.n))
+  ? t.charts.lookDup.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{type}', `${t.money.types[l.type].toLowerCase()}${l.note ? ` ${l.note}` : ''}`).replace('{n}', String(l.n))
   : l.kind === 'high' ? t.charts.lookHigh.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{m}', fmtExact(l.max))
   : t.charts.lookMissing.replace('{note}', l.note).replace('{day}', String(l.day));
 

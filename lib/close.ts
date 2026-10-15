@@ -36,14 +36,15 @@ export async function closeInfo(db: Db, flatId: string, today: string) {
   const month = await closableMonth(db, flatId, today);
   if (!month) return null;
   const mo = await loadMonth(db, flatId, month, today);
-  const total = await flatMoney(db, flatId, today), fund = mo.result.fund;
   // the count covers the later open months too, so an entry still waiting there (money handed over or received, not yet
   // tapped) blocks it as well: it is in the hand but not in the books. `pendingMonth`: where to go and fix the first one
-  const [p] = await db<{ n: number; m: string | null }>(
-    `select count(*)::int as n, min(month)::text as m from ledger where flat_id = $1 and status = 'pending' and month >= $2::date`, [flatId, month]);
+  const [total, [p], past] = await Promise.all([flatMoney(db, flatId, today), db<{ n: number; m: string | null }>(
+    `select count(*)::int as n, min(month)::text as m from ledger where flat_id = $1 and status = 'pending' and month >= $2::date`, [flatId, month]),
+    history(db, flatId, month)]);
+  const fund = mo.result.fund;
   // `later`: what the months after it added or spent since, so the card can say why the count differs from its own fund
   // questions about the month, never blockers: after the close only a correction can mend a twin or a bill that never came
-  const looks = worthALook(mo.entries, await history(db, flatId, month), today, true);
+  const looks = worthALook(mo.entries, past, today, true);
   return { month, fund, held: cashFrom(fund, total), later: total - fund, pending: p.n, pendingMonth: p.m ?? month,
     problems: mo.result.problems.length, looks };
 }

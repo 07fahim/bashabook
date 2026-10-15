@@ -24,7 +24,7 @@ export function CloseCard({ lang, x, c, collector, warn }: { lang: Locale; x: Di
         <div className="mt-4 max-w-prose">
           <h3 className="font-semibold">{x.closeLook}</h3>
           <ul className="mt-1 list-disc space-y-1 pl-5 text-[15px]">
-            {warn.map(w => <li key={w}><Link href={`/${lang}/money?m=${c.month.slice(0, 7)}`} className={`underline-offset-4 hover:underline ${link}`}>{w}</Link></li>)}
+            {warn.map((w, i) => <li key={i}><Link href={`/${lang}/money?m=${c.month.slice(0, 7)}#entries`} className={`inline-flex min-h-11 items-center ${link}`}>{w}</Link></li>)}
           </ul>
           <p className="mt-1 text-[15px] text-muted">{x.closeLookHint}</p>
         </div>

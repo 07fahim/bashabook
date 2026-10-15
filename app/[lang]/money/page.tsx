@@ -336,7 +336,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
             </>)}
           </section>
 
-          <section className={`flex flex-1 flex-col ${card}`}>
+          <section id="entries" className={`flex flex-1 flex-col scroll-mt-24 ${card}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xl font-bold">{x.entries}</h2>
               <Link href={href(month, !mine)} aria-current={mine ? 'true' : undefined} className={`inline-flex min-h-11 items-center rounded-full border border-muted px-4 font-semibold ${mine ? 'bg-turmeric text-on-turmeric border-turmeric' : ''} ${focus}`}>{x.onlyMine}</Link>
