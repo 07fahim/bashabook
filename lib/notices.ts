@@ -1,0 +1,53 @@
+import type { Db } from './db';
+
+export type Notice = {
+  at: string; kind: 'paid' | 'handover' | 'handoverDone' | 'closeMonth' | 'meal' | 'account';
+  actor: string | null; amount: number | null; date: string | null; meal: string | null; month: string | null;
+  detail: Record<string, unknown> | null; pending: boolean;
+};
+
+/** Every important thing addressed to one person, from rows the app already writes. $1 flat, $2 me, $3 am I the collector.
+ *  Pending rows carry their creation time, so an old unconfirmed deposit is not new again on every visit.
+ *  The meal row carries the change (own plate, and whether guests moved), not the stored state, so the text names what happened.
+ *  An account row by the app team has no by_member: its actor is null. */
+const SOURCES = `
+  select l.created_at as at, 'paid' as kind, m.name as actor, l.amount_poisha::int as amount, l.date::text as date, null::text as meal, null::text as month,
+         jsonb_build_object('type', l.type) as detail, true as pending
+    from ledger l join members m on m.flat_id = l.flat_id and m.id = l.member_id
+   where l.flat_id = $1 and l.status = 'pending' and ((l.type = 'deposit' and $3::boolean) or (l.type = 'payout' and l.member_id = $2))
+  union all
+  select h.created_at, 'handover', f.name, h.amount::int, null, null, null, null, true
+    from handovers h join members f on f.flat_id = h.flat_id and f.id = h.from_member
+   where h.flat_id = $1 and h.status = 'offered' and h.to_member = $2
+  union all
+  select h.decided_at, 'handoverDone', t.name, h.amount::int, null, null, null, jsonb_build_object('status', h.status), false
+    from handovers h join members t on t.flat_id = h.flat_id and t.id = h.to_member
+   where h.flat_id = $1 and h.status in ('accepted', 'declined') and h.from_member = $2
+  union all
+  select (mo.month + interval '1 month')::timestamp at time zone 'Asia/Dhaka', 'closeMonth', null, null, null, null, mo.month::text, null, false
+    from months mo
+   where mo.flat_id = $1 and $3::boolean and mo.status = 'open' and mo.month < date_trunc('month', (now() at time zone 'Asia/Dhaka'))::date
+  union all
+  select a.at, 'meal', b.name, null, split_part(a.entity_id, '|', 2), split_part(a.entity_id, '|', 3), null,
+         jsonb_build_object('own', (a.after->>'count')::int - coalesce((a.after->>'guests')::int, 0),
+                            'guestsChanged', coalesce((a.after->>'guests')::int, 0) <> coalesce((a.before->>'guests')::int, 0)), false
+    from audit_log a join members b on b.flat_id = a.flat_id and b.id = a.by_member
+   where a.flat_id = $1 and a.entity = 'meal_changes' and a.entity_id like $2::text || '|%' and split_part(a.entity_id, '|', 1) = $2::text
+     and a.by_member <> $2 and a.entity_id not like '%|away'
+  union all
+  select a.at, 'account', b.name, null, null, null, null, a.after, false
+    from audit_log a left join members b on b.flat_id = a.flat_id and b.id = a.by_member
+   where a.flat_id = $1 and a.entity = 'members' and a.entity_id = $2::text and a.by_member is distinct from $2 and not a.after ? 'added' and not a.after ? 'locked'`;
+
+export const listNotices = (db: Db, flatId: string, memberId: string, boss: boolean, limit = 50) => db<Notice>(
+  `select at::text as at, kind, actor, amount, date, meal, month, detail, pending from (${SOURCES}) n order by at desc limit $4::int`,
+  [flatId, memberId, boss, limit]);
+
+export const noticeCount = async (db: Db, flatId: string, memberId: string, boss: boolean) =>
+  (await db<{ n: number }>(
+    `select count(*)::int as n from (${SOURCES}) n where n.at > (select notices_seen_at from members where flat_id = $1 and id = $2)`,
+    [flatId, memberId, boss]))[0].n;
+
+export const markNoticesSeen = async (db: Db, flatId: string, memberId: string) => {
+  await db(`update members set notices_seen_at = now() where flat_id = $1 and id = $2`, [flatId, memberId]);
+};

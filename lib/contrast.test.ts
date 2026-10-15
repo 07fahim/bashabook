@@ -19,7 +19,7 @@ const ratio = (a: string, b: string) => {
 const pairs = [
   ['ink', 'paper'], ['ink', 'surface'], ['muted', 'paper'], ['muted', 'surface'],
   ['turmeric-ink', 'paper'], ['turmeric-ink', 'surface'], ['leaf', 'paper'], ['leaf', 'surface'],
-  ['chili', 'paper'], ['chili', 'surface'], ['on-turmeric', 'turmeric'],
+  ['chili', 'paper'], ['chili', 'surface'], ['on-turmeric', 'turmeric'], ['paper', 'chili'],
 ];
 
 describe.each([['light', light], ['dark', dark]] as const)('%s theme', (_, theme) => {

@@ -9,6 +9,7 @@ import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
 import { settleLines } from '@/lib/money';
 import { loadMonth, monthOf, toConfirm, type Entry } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
+import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
 import { correctionAction, entryAction, putBackAction, removeAction } from '../actions';
 import { CloseCard } from '../close-card';
@@ -36,6 +37,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), x = t.money, boss = me.role === 'manager';
+  const noticesP = noticeCount(db, me.flatId, me.memberId, me.role === 'manager');   // the bell's count, read alongside the page
   const today = todayDhaka(), thisMonth = monthOf(today);
   // ?m=2026-09 picks a month; never later than this month
   const asked = typeof sp.m === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m) ? `${sp.m}-01` : thisMonth;
@@ -106,7 +108,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
 
   return (
     <>
-      <Header t={t} lang={lang} path={withQuery('/money', sp)}><Nav t={t} lang={lang} current="money" showFlat={boss} /></Header>
+      <Header t={t} lang={lang} path={withQuery('/money', sp)} notices={await noticesP}><Nav t={t} lang={lang} current="money" showFlat={boss} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         {sp.why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{t.app.notSavedNote}</p>}
         <nav aria-label={x.monthNav} className="flex items-center justify-between gap-3">

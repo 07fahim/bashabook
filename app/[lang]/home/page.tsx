@@ -8,6 +8,7 @@ import { clearedBefore, listMembers } from '@/lib/auth';
 import { changedByOthers, countAtLock, loadMeals } from '@/lib/meals-db';
 import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
+import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
 import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
@@ -34,6 +35,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), a = t.app, m = t.meals;
+  const noticesP = noticeCount(db, me.flatId, me.memberId, me.role === 'manager');   // the bell's count, read alongside the page
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const [meals, people, mo, waiting, ho, byOthers, iCleared] = await Promise.all([
@@ -73,7 +75,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
 
   return (
     <>
-      <Header t={t} lang={lang} path="/home"><Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} /></Header>
+      <Header t={t} lang={lang} path="/home" notices={await noticesP}><Nav t={t} lang={lang} current="home" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         {why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{a.notSavedNote}</p>}
         <p className="text-muted">{me.flatName}</p>

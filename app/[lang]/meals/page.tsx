@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { addDays, firstWeek, indexChanges, isDate, isPresent, mealCount, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
 import { flatStart, loadHistory, loadMeals, myGuests, upcomingAway, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
+import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
 import { awayAction, cancelAwayAction, guestAction, otherMealAction, removeGuestsAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
@@ -29,6 +30,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), m = t.meals;
+  const noticesP = noticeCount(db, me.flatId, me.memberId, me.role === 'manager');   // the bell's count, read alongside the page
   const now = nowDhaka(), today = now.slice(0, 10);
   // which week to show: 0 = this week, up to 7 weeks ahead (changes are allowed up to 60 days out); back, read-only, so anyone
   // can check what they were counted for: 8 weeks (this month and last), never before the flat's first move-in
@@ -108,7 +110,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
 
   return (
     <>
-      <Header t={t} lang={lang} path={withQuery('/meals', sp)}><Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} /></Header>
+      <Header t={t} lang={lang} path={withQuery('/meals', sp)} notices={await noticesP}><Nav t={t} lang={lang} current="meals" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         {sp.why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{t.app.notSavedNote}</p>}
         <h1 className="font-display text-3xl font-bold">{m.mealsTitle}</h1>
