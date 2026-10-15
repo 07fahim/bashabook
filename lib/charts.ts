@@ -1,4 +1,5 @@
 import type { Db } from './db';
+import { headcount, MEALS, type MealChange, type MealMember } from './meals';
 import type { MemberResult } from './money';
 import type { Entry } from './money-db';
 
@@ -25,3 +26,24 @@ export const lastMonths = (db: Db, flatId: string, before: string, n = 6) => db<
 /** The collector's card: food and bills per person, biggest first; nobody with nothing. */
 export const costRows = (perMember: MemberResult[]) => perMember
   .map(p => ({ id: p.id, food: p.foodCost, bills: p.billShare })).filter(r => r.food + r.bills > 0).sort((a, b) => b.food + b.bills - a.food - a.bills);
+
+/** The flat's spend climbing through the month: for each day, every saved bazar and bill of the month dated up to it. */
+export function runningSpend(entries: Entry[], days: string[]) {
+  const ok = entries.filter(e => e.status === 'ok' && !e.forMonth && (e.type === 'bazar' || e.type === 'bill'));
+  let sum = 0;
+  return days.map(d => { sum += ok.filter(e => e.date === d).reduce((a, e) => a + e.amount, 0); return { day: d, value: sum }; });
+}
+
+/** Plates the cook made each day: everyone's three meals, guests included. */
+export const platesPerDay = (members: MealMember[], changes: MealChange[], days: string[]) =>
+  days.map(d => { const h = headcount(members, changes, d); return { day: d, value: MEALS.reduce((a, m) => a + h[m], 0) }; });
+
+/** At most five slices for a ring: the biggest named rows keep their names, everything else (including rows already called
+ *  `others`) adds up under one `others` slice, so the legend never shows that word twice. */
+export function slices(rows: { label: string; value: number }[], others: string, n = 5) {
+  const named = rows.filter(r => r.value > 0 && r.label !== others).sort((a, b) => b.value - a.value);
+  const all = rows.reduce((a, r) => a + Math.max(r.value, 0), 0), namedSum = named.reduce((a, r) => a + r.value, 0);
+  const head = named.length + (all > namedSum ? 1 : 0) > n ? named.slice(0, n - 1) : named;   // at most n slices, the others slice included
+  const rest = all - head.reduce((a, r) => a + r.value, 0);
+  return [...head, ...(rest > 0 ? [{ label: others, value: rest }] : [])];
+}

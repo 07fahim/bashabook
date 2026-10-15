@@ -1,15 +1,16 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { costRows, lastMonths, spendByKind } from '@/lib/charts';
+import { costRows, lastMonths, platesPerDay, runningSpend, slices, spendByKind } from '@/lib/charts';
 import { db } from '@/lib/db';
+import { flatMoney } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
 import { loadMonth, monthOf } from '@/lib/money-db';
 import { noticeCount } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
-import { HBars, Stacked, VBars } from '../bars';
-import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
+import { Area, DayBars, HBars, Ring, Stacked, VBars } from '../bars';
+import { getDictionary, hasLocale, type Dict } from '../dictionaries';
+import { fmtDay, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
 import { Header, withQuery } from '../header';
 import { balanceText } from '../money/bits';
 import { Nav } from '../nav';
@@ -20,9 +21,30 @@ export default function Charts({ params, searchParams }: PageProps<'/[lang]/char
 }
 
 const short = (month: string) => new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+const h2 = 'font-display text-xl font-bold';
 
-/** The month as bars: the same numbers as Money and Meals, read in ten seconds. A flatmate's page carries their own food,
- *  bills and paid-in only; the cost card with everyone's is rendered for the collector alone. */
+/** One number with its label and a line of context: the strip across the top. */
+function Tile({ label, value, note, tone = '' }: { label: string; value: string; note?: string; tone?: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+      <p className="text-[13px] font-semibold text-muted">{label}</p>
+      <p className={`mt-1 text-[28px] leading-tight font-bold tabular-nums ${tone}`}>{value}</p>
+      {note && <p className="mt-1 text-[13px] text-muted">{note}</p>}
+    </div>
+  );
+}
+
+/** '+4% vs Sept' for a closed month against the closed month before it; 'so far' while the month runs. */
+function delta(x: Dict['charts'], now: number, before: number | null, month: string | null, closed: boolean) {
+  if (!closed) return { note: x.soFar, tone: '' };
+  if (now <= 0 || before === null || before <= 0 || month === null) return { note: undefined, tone: '' };
+  const p = Math.round(((now - before) / before) * 100);
+  return { note: x.vsLast.replace('{p}', `${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p)}%`).replace('{month}', short(month)), tone: p > 0 ? 'text-chili' : p < 0 ? 'text-leaf' : '' };
+}
+
+/** The month as a dashboard: a strip of numbers, the spend climbing through the month, where it went, plates per day, then the
+ *  cards. Same numbers as Money and Meals. A flatmate's page carries their own food, bills and paid-in only; the cost card with
+ *  everyone's is rendered for the collector alone. */
 async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
   const sp = await searchParams;
@@ -40,19 +62,33 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const href = (m: string) => `/${lang}/charts${m !== thisMonth ? `?m=${m.slice(0, 7)}` : ''}`;
   const arrow = `inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-muted font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 ${focus}`;
 
+  // the days drawn: all of a past month, this month up to today
+  const days = daysOfMonth(month), running = month === thisMonth;
+  const upTo = running ? days.indexOf(today) : days.length - 1;
   const mine = mo.result.perMember.find(p => p.id === me.memberId);
   const spend = spendByKind(mo.entries, x.others).map(r => ({ ...r, label: r.label === 'bazar' ? x.bazar : r.label }));
+  const total = spend.reduce((a, r) => a + r.value, 0);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
   const meals = mo.members.map(p => ({ id: p.id, meals: mo.meals.get(p.id) ?? 0, guests: mo.guestMeals.get(p.id) ?? 0 })).sort((a, b) => b.meals - a.meals);
+  const plates = platesPerDay(mo.members, mo.changes, days), platesSoFar = plates.slice(0, upTo + 1);
+  const high = platesSoFar.reduce((a, p) => (p.value > a.value ? p : a), platesSoFar[0]), low = platesSoFar.reduce((a, p) => (p.value < a.value ? p : a), platesSoFar[0]);
+  const spent = runningSpend(mo.entries, days);
   const empty = !mo.entries.some(e => e.status === 'ok') && totalMeals === 0;
-  const h2 = 'font-display text-xl font-bold';
   const b = mine ? balanceText(t.money, mine.balance, closed) : null;
   const carried = mine ? mine.opening - mine.payouts + mine.adjustments : 0;   // what the bars cannot show: earlier months, advances, corrections
+  // money with the collector, as Money shows it (this month adds every open month up while an earlier one is still open)
+  const held = running && mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
+  const holder = closed && mo.info?.cash ? name(mo.info.cash.by) : mo.all.find(p => p.role === 'manager')?.name ?? '';
+  // the month before, for the deltas: only a closed month next to this one
+  const before = past.at(-1)?.month === prev ? past.at(-1)! : null;
+  const rateD = delta(x, mo.result.mealRate, before?.rate ?? null, before?.month ?? null, closed);
+  const spendD = delta(x, total, before?.spend ?? null, before?.month ?? null, closed);
+  const axis = [0, 1, 2, 3, 4].map(k => Math.round((k * (days.length - 1)) / 4));   // five labels where the drawn days really are
 
   return (
     <>
       <Header t={t} lang={lang} path={withQuery('/charts', sp)} notices={await noticesP}><Nav t={t} lang={lang} current="charts" showFlat={boss} /></Header>
-      <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-5xl md:px-8 md:pt-10 md:pb-16">
+      <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <nav aria-label={t.money.monthNav} className="flex items-center justify-between gap-3">
           <h1 className="font-display text-3xl font-bold">{fmtMonth(month)}</h1>
           <span className="flex gap-2">
@@ -64,8 +100,54 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
           </span>
         </nav>
         {empty && <p role="status" className="mt-4 text-muted">{x.none}</p>}
-        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-          <section className={card}>
+
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
+          <div className="col-span-2 sm:col-span-1">
+            {mine && b ? <Tile label={b.tone === 'text-chili' ? x.tileOwe : b.tone === 'text-leaf' ? x.tileGet : x.tileEven} value={fmtTaka(mine.balance)} note={closed ? undefined : x.soFar} tone={b.tone} />
+              : <Tile label={x.myMonth} value="—" note={t.money.notHere} />}
+          </div>
+          <Tile label={x.rate} value={fmtRate(mo.result.mealRate, totalMeals)} note={rateD.note} tone={rateD.tone} />
+          <Tile label={x.spend} value={fmtTaka(total)} note={spendD.note} tone={spendD.tone} />
+          <Tile label={x.plates} value={String(platesSoFar.reduce((a, p) => a + p.value, 0))} note={closed ? undefined : x.soFar} />
+          <Tile label={x.flatMoney} value={`${held < 0 ? '−' : ''}${fmtTaka(held)}`} note={x.holds.replace('{name}', holder)} tone={held < 0 ? 'text-chili' : ''} />
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-12 md:gap-6 lg:mt-6">
+          <section className={`${card} md:col-span-12 lg:col-span-8`}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <h2 className={h2}>{x.through}</h2>
+              <p className="text-[15px] text-muted">{x.throughNote.replace('{t}', fmtTaka(spent[upTo].value)).replace('{d}', fmtDay(days[upTo], lang))}</p>
+            </div>
+            <div className="mt-4"><Area points={spent} upTo={upTo} running={running} /></div>
+            <ol aria-hidden="true" className="mt-1 flex justify-between text-[13px] text-muted tabular-nums">
+              {axis.map(i => <li key={i}>{i + 1}</li>)}
+            </ol>
+            {running && <p className="mt-2 text-[13px] text-muted">- - - {x.today}</p>}
+          </section>
+          <section className={`${card} md:col-span-12 lg:col-span-4`}>
+            <h2 className={h2}>{x.whereWent}</h2>
+            <div className="mt-4"><Ring fmt={fmtTaka} slices={slices(spend, x.others)} /></div>
+          </section>
+
+          <section className={`${card} md:col-span-6`}>
+            <h2 className={h2}>{x.platesDay}</h2>
+            <div className="mt-4"><DayBars points={plates} upTo={upTo} /></div>
+            <ol aria-hidden="true" className="mt-1 flex justify-between text-[13px] text-muted tabular-nums">
+              {axis.map(i => <li key={i}>{i + 1}</li>)}
+            </ol>
+            <p className="mt-3 text-[15px] text-muted">{high.value === 0 ? x.noPlates
+              : x.highLow.replace('{n}', String(high.value)).replace('{d}', fmtDay(high.day, lang)).replace('{m}', String(low.value)).replace('{e}', fmtDay(low.day, lang))}</p>
+          </section>
+          <section className={`${card} md:col-span-6`}>
+            <h2 className={h2}>{x.lastMonths}</h2>
+            {past.length < 2 ? <p className="mt-2 text-muted">{x.needTwo}</p> : (
+              <div className="mt-4 grid gap-6 lg:grid-cols-2">
+                <div><h3 className="font-semibold">{x.rate}</h3><div className="mt-2"><VBars fmt={v => fmtRate(v, 1)} cols={past.map(p => ({ key: p.month, label: short(p.month), value: p.rate }))} /></div></div>
+                <div><h3 className="font-semibold">{x.spend}</h3><div className="mt-2"><VBars fmt={fmtTaka} cols={past.map(p => ({ key: p.month, label: short(p.month), value: p.spend }))} /></div></div>
+              </div>)}
+          </section>
+
+          <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.myMonth}</h2>
             {mine && b ? (<>
               <div className="mt-4"><Stacked fmt={fmtTaka} rows={[
@@ -77,27 +159,15 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
               <Link href={`/${lang}/money${month !== thisMonth ? `?m=${month.slice(0, 7)}` : ''}`} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{t.money.breakdown}</Link>
             </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}
           </section>
-          <section className={card}>
-            <h2 className={h2}>{x.whereWent}</h2>
-            <div className="mt-4"><HBars fmt={fmtTaka} rows={spend.map((r, i) => ({ key: String(i), label: r.label, text: r.label, value: r.value }))} /></div>
-            <p className="mt-4 text-[15px] text-muted">{x.rate}: {fmtRate(mo.result.mealRate, totalMeals)}</p>
-          </section>
-          <section className={card}>
+          <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.mealsPer}</h2>
             <div className="mt-4"><HBars fmt={fmtMeals} rows={meals.map(p => ({
               key: p.id, text: name(p.id), value: p.meals, tail: p.guests, strong: p.id === me.memberId,
               label: <>{name(p.id)}{p.guests > 0 && <span className="ml-1 text-[13px] text-muted">{x.guests.replace('{n}', fmtMeals(p.guests))}</span>}</> }))} /></div>
           </section>
-          <section className={card}>
-            <h2 className={h2}>{x.lastMonths}</h2>
-            {past.length < 2 ? <p className="mt-2 text-muted">{x.needTwo}</p> : (
-              <div className="mt-4 grid gap-6 lg:grid-cols-2">
-                <div><h3 className="font-semibold">{x.rate}</h3><div className="mt-2"><VBars fmt={v => fmtRate(v, 1)} cols={past.map(p => ({ key: p.month, label: short(p.month), value: p.rate }))} /></div></div>
-                <div><h3 className="font-semibold">{x.spend}</h3><div className="mt-2"><VBars fmt={fmtTaka} cols={past.map(p => ({ key: p.month, label: short(p.month), value: p.spend }))} /></div></div>
-              </div>)}
-          </section>
+
           {boss && (
-            <section className={`${card} md:col-span-2`}>
+            <section className={`${card} md:col-span-12`}>
               <h2 className={h2}>{x.costPer}</h2>
               <p className="mt-1 text-[15px] text-muted">{x.costHint}</p>
               <div className="mt-4"><HBars fmt={fmtTaka} tailColor="fill-muted" rows={costRows(mo.result.perMember).map(r => ({
