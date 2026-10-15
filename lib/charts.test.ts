@@ -70,6 +70,10 @@ describe('forecast', () => {
     // 10 days, ৳3,000 bazar; 30-day month -> ৳9,000; 300 meals -> ৳30 per meal; my 40 meals -> ৳1,200
     expect(forecast(300000, 10, 30, 30000, 4000)).toEqual({ rate: 3000, food: 120000 });
   });
+  it('appears on the seventh day, rounds to the poisha, and prices nobody at zero meals', () => {
+    expect(forecast(100, 7, 31, 3, 1)).toEqual({ rate: 14767, food: 148 });   // 100 × 31 ÷ 7 = 443 poisha over 0.03 meals
+    expect(forecast(300000, 10, 30, 30000, 0)).toEqual({ rate: 3000, food: 0 });
+  });
   it('nothing before a week, without bazar, or without meals', () => {
     expect(forecast(300000, 6, 30, 30000, 4000)).toBeNull();
     expect(forecast(0, 10, 30, 30000, 4000)).toBeNull();

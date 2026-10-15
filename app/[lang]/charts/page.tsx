@@ -84,12 +84,14 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const spendD = delta(x, total, before?.spend ?? null, before?.month ?? null, closed);
   const axis = [0, 1, 2, 3, 4].map(k => Math.round((k * (days.length - 1)) / 4));   // five labels where the drawn days really are
   // the month end at this pace: bazar so far stretched over the month, everyone's usual meals filling the days ahead, and my
-  // bills no lower than last closed month's share (the cook's pay lands late). Only while the month runs.
-  const whole = running ? weightedMeals(mo.members, mo.changes, month, mo.flat.weights) : new Map<string, number>();
-  const ahead = running ? forecast(spend[0].value, upTo + 1, days.length, [...whole.values()].reduce((a, b) => a + b, 0), whole.get(me.memberId) ?? 0) : null;
-  const lastBills = ahead && mine && mo.carriedFrom ? await billShareIn(db, me.flatId, me.memberId, mo.carriedFrom) : null;
-  const bills = mine ? Math.max(mine.billShare, lastBills ?? 0) : 0;
-  const ending = ahead && mine ? mine.opening + mine.paidIn - ahead.food - bills - mine.payouts + mine.adjustments : 0;
+  // bills no lower than last closed month's share (the cook's pay lands late). Only while the month runs, only for someone
+  // living here this month (a leaver's carried balance is not a bill to come). Signs follow the whole taka shown, as on Money.
+  const whole = running ? weightedMeals(mo.members, mo.changes, month, mo.flat.weights) : null;
+  const ahead = whole ? forecast(spend[0].value, upTo + 1, days.length, [...whole.values()].reduce((a, b) => a + b, 0), whole.get(me.memberId) ?? 0) : null;
+  const you = ahead && self && mine ? mine : null;
+  const lastBills = you && mo.carriedFrom ? await billShareIn(db, me.flatId, me.memberId, mo.carriedFrom) : null;
+  const bills = you ? Math.max(you.billShare, lastBills ?? 0) : 0;
+  const ending = ahead && you ? Math.round((you.opening + you.paidIn - ahead.food - bills - you.payouts + you.adjustments) / 100) : 0;
 
   return (
     <>
@@ -125,10 +127,10 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
               {ahead ? (<>
                 <dl className="mt-4 flex flex-wrap gap-x-10 gap-y-4">
                   <div><dt className="text-[13px] font-semibold text-muted">{x.rate}</dt><dd className="mt-1 text-[28px] leading-tight font-bold tabular-nums">{fmtRate(ahead.rate, 1)}</dd></div>
-                  {mine && <div><dt className="text-[13px] font-semibold text-muted">{x.cost}</dt><dd className="mt-1 text-[28px] leading-tight font-bold tabular-nums">{fmtTaka(ahead.food + bills)}</dd></div>}
+                  {you && <div><dt className="text-[13px] font-semibold text-muted">{x.cost}</dt><dd className="mt-1 text-[28px] leading-tight font-bold tabular-nums">{fmtTaka(ahead.food + bills)}</dd></div>}
                 </dl>
-                {mine && <p className={`mt-3 text-[15px] font-semibold ${ending < 0 ? 'text-chili' : ending > 0 ? 'text-leaf' : ''}`}>{(ending < 0 ? x.paceOwe : ending > 0 ? x.paceGet : x.paceEven).replace('{t}', fmtTaka(ending))}</p>}
-                <p className="mt-2 text-[13px] text-muted">{x.paceNote.replace('{d}', String(upTo + 1)).replace('{b}', lastBills !== null && lastBills > (mine?.billShare ?? 0) ? x.paceBillsLast : x.paceBillsSoFar)}</p>
+                {you && <p className={`mt-3 text-[15px] font-semibold ${ending < 0 ? 'text-chili' : ending > 0 ? 'text-leaf' : ''}`}>{(ending < 0 ? x.paceOwe : ending > 0 ? x.paceGet : x.paceEven).replace('{t}', fmtTaka(ending * 100))}</p>}
+                <p className="mt-2 text-[13px] text-muted">{x.paceNote.replace('{d}', String(upTo + 1)).replace('{b}', you && lastBills !== null && lastBills > you.billShare ? x.paceBillsLast : x.paceBillsSoFar)}</p>
               </>) : <p className="mt-2 text-muted">{x.paceWait}</p>}
             </section>)}
           <section className={`${card} md:col-span-12 lg:col-span-8`}>
