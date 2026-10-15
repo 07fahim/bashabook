@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { costRows, lastMonths, myPlates, runningSpend, slices, spendByKind } from '@/lib/charts';
+import { billShareIn, costRows, forecast, lastMonths, myPlates, runningSpend, slices, spendByKind } from '@/lib/charts';
 import { db } from '@/lib/db';
 import { flatMoney } from '@/lib/handover';
-import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
+import { addDays, daysOfMonth, todayDhaka, weightedMeals } from '@/lib/meals';
 import { loadMonth, monthOf } from '@/lib/money-db';
 import { noticeCount } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
@@ -83,6 +83,13 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const rateD = delta(x, mo.result.mealRate, before?.rate ?? null, before?.month ?? null, closed);
   const spendD = delta(x, total, before?.spend ?? null, before?.month ?? null, closed);
   const axis = [0, 1, 2, 3, 4].map(k => Math.round((k * (days.length - 1)) / 4));   // five labels where the drawn days really are
+  // the month end at this pace: bazar so far stretched over the month, everyone's usual meals filling the days ahead, and my
+  // bills no lower than last closed month's share (the cook's pay lands late). Only while the month runs.
+  const whole = running ? weightedMeals(mo.members, mo.changes, month, mo.flat.weights) : new Map<string, number>();
+  const ahead = running ? forecast(spend[0].value, upTo + 1, days.length, [...whole.values()].reduce((a, b) => a + b, 0), whole.get(me.memberId) ?? 0) : null;
+  const lastBills = ahead && mine && mo.carriedFrom ? await billShareIn(db, me.flatId, me.memberId, mo.carriedFrom) : null;
+  const bills = mine ? Math.max(mine.billShare, lastBills ?? 0) : 0;
+  const ending = ahead && mine ? mine.opening + mine.paidIn - ahead.food - bills - mine.payouts + mine.adjustments : 0;
 
   return (
     <>
@@ -112,6 +119,18 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-12 md:gap-6 lg:mt-6">
+          {running && (
+            <section className={`${card} md:col-span-12`}>
+              <h2 className={h2}>{x.pace}</h2>
+              {ahead ? (<>
+                <dl className="mt-4 flex flex-wrap gap-x-10 gap-y-4">
+                  <div><dt className="text-[13px] font-semibold text-muted">{x.rate}</dt><dd className="mt-1 text-[28px] leading-tight font-bold tabular-nums">{fmtRate(ahead.rate, 1)}</dd></div>
+                  {mine && <div><dt className="text-[13px] font-semibold text-muted">{x.cost}</dt><dd className="mt-1 text-[28px] leading-tight font-bold tabular-nums">{fmtTaka(ahead.food + bills)}</dd></div>}
+                </dl>
+                {mine && <p className={`mt-3 text-[15px] font-semibold ${ending < 0 ? 'text-chili' : ending > 0 ? 'text-leaf' : ''}`}>{(ending < 0 ? x.paceOwe : ending > 0 ? x.paceGet : x.paceEven).replace('{t}', fmtTaka(ending))}</p>}
+                <p className="mt-2 text-[13px] text-muted">{x.paceNote.replace('{d}', String(upTo + 1)).replace('{b}', lastBills !== null && lastBills > (mine?.billShare ?? 0) ? x.paceBillsLast : x.paceBillsSoFar)}</p>
+              </>) : <p className="mt-2 text-muted">{x.paceWait}</p>}
+            </section>)}
           <section className={`${card} md:col-span-12 lg:col-span-8`}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <h2 className={h2}>{x.through}</h2>

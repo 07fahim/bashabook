@@ -53,3 +53,16 @@ export function slices(rows: { label: string; value: number }[], others: string,
   const rest = all - head.reduce((a, r) => a + r.value, 0);
   return [...head, ...(rest > 0 ? [{ label: others, value: rest }] : [])];
 }
+
+/** The month end at the bazar pace so far: `bazar` over `elapsed` of `days` days, stretched over the whole month. `meals` and
+ *  `mine` are the whole month's weighted meals (the usual meals fill the days ahead). Null before a week of bazar, since one
+ *  big first bazar is not a pace. Poisha; a rough guide, never a bill. */
+export function forecast(bazar: number, elapsed: number, days: number, meals: number, mine: number) {
+  if (elapsed < 7 || bazar <= 0 || meals <= 0) return null;
+  const total = Math.round((bazar * days) / elapsed);
+  return { rate: Math.round((total * 100) / meals), food: Math.round((total * mine) / meals) };
+}
+
+/** One person's bill share in a closed month, from its snapshot; null when they had no row. */
+export const billShareIn = async (db: Db, flatId: string, memberId: string, month: string) =>
+  (await db<{ v: number }>(`select bill_share::int as v from month_balances where flat_id = $1 and member_id = $2 and month = $3`, [flatId, memberId, month]))[0]?.v ?? null;

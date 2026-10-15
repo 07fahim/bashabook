@@ -4,7 +4,7 @@ import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
-import { costRows, lastMonths, myPlates, runningSpend, slices, spendByKind } from './charts';
+import { billShareIn, costRows, forecast, lastMonths, myPlates, runningSpend, slices, spendByKind } from './charts';
 import type { MealChange, MealMember } from './meals';
 
 const row = (p: Partial<Entry> & Pick<Entry, 'type' | 'amount'>): Entry =>
@@ -60,6 +60,20 @@ describe('lastMonths', { timeout: 30000 }, () => {
     expect(out.every(m => m.rate > 0)).toBe(true);
     expect((await lastMonths(db, f.flatId, '2026-10-01', 1)).map(m => m.month)).toEqual(['2026-08-01']);   // the newest n
     expect(await lastMonths(db, f.flatId, '2026-07-01')).toEqual([]);   // only months before the one asked
+    expect(await billShareIn(db, f.flatId, ids.Tahsin, '2026-08-01')).toBe(5000);   // the gas bill, split equally between two
+    expect(await billShareIn(db, f.flatId, ids.Tahsin, '2026-09-01')).toBeNull();   // not closed, no snapshot
+  });
+});
+
+describe('forecast', () => {
+  it('stretches the bazar pace over the month and prices my meals at the ending rate', () => {
+    // 10 days, ৳3,000 bazar; 30-day month -> ৳9,000; 300 meals -> ৳30 per meal; my 40 meals -> ৳1,200
+    expect(forecast(300000, 10, 30, 30000, 4000)).toEqual({ rate: 3000, food: 120000 });
+  });
+  it('nothing before a week, without bazar, or without meals', () => {
+    expect(forecast(300000, 6, 30, 30000, 4000)).toBeNull();
+    expect(forecast(0, 10, 30, 30000, 4000)).toBeNull();
+    expect(forecast(300000, 10, 30, 0, 0)).toBeNull();
   });
 });
 
