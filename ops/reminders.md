@@ -28,3 +28,7 @@ How BashaBook's reminders work and what to check when they don't.
 - iPhone: only after Add to Home Screen (iOS 16.4+), then Turn on from the installed app. Not tested in the pilot.
 - VAPID keys: rotating them invalidates every subscription; everyone must turn reminders on again.
 - Environment: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`.
+
+## The bell (2026-10-15)
+
+The same events also show inside the app: the bell beside the theme button lists, newest first, deposits and payouts waiting for the person, a handover offer and its answer, a month ready to close (collector), meals someone changed for them, and account changes done to them (PIN reset, lock cleared, name, last day, brought back). It is a query over existing rows (`lib/notices.ts`), not a store; the only new column is `members.notices_seen_at` (migration 017), set when the person opens the bell. Unread = newer than that. Pending rows stay listed until resolved. The hour-before-lock reminder is push only.
