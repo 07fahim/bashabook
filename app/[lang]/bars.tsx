@@ -94,7 +94,7 @@ export function Ring({ slices, fmt }: { slices: { label: string; value: number }
   const total = slices.reduce((a, s) => a + s.value, 0);
   const starts = slices.map((_, i) => slices.slice(0, i).reduce((a, s) => a + (s.value / total) * 100, 0));
   return (
-    <div className="flex flex-col items-center gap-5 2xl:flex-row">
+    <div className="flex flex-col items-center gap-5">
       <div className="relative size-40 flex-none">
         <svg aria-hidden="true" className="size-full -rotate-90" viewBox="0 0 42 42">
           <circle className="stroke-paper" cx="21" cy="21" fill="none" r="15.9155" strokeWidth="5" />
@@ -108,7 +108,7 @@ export function Ring({ slices, fmt }: { slices: { label: string; value: number }
         {slices.map((s, i) => (
           <li key={i} className="flex items-center gap-2">
             <span aria-hidden="true" className={`size-3 flex-none rounded-sm ${SWATCH[i]}`} />
-            <span className="min-w-0 flex-1 break-words">{s.label}</span>
+            <span className="min-w-0 flex-1">{s.label}</span>
             <span className="tabular-nums">{fmt(s.value)}</span>
             <span className="w-11 text-right text-[13px] text-muted tabular-nums">{total ? Math.round((s.value / total) * 100) : 0}%</span>
           </li>
