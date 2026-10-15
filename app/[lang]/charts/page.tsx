@@ -99,7 +99,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const tone = (p: number) => (p < 0 ? 'text-chili' : p > 0 ? 'text-leaf' : '');
   const to = <svg aria-hidden="true" className="h-3 w-5 flex-none stroke-muted" fill="none" viewBox="0 0 20 12"><path d="M1 6h17m-4-4 4 4-4 4" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /></svg>;
   const pair = (label: string, now: string, end: string, endTone = '', nowTone = '') => (
-    <li key={label}>
+    <li>
       <p className="text-[13px] font-semibold text-muted">{label}</p>
       <p className="mt-1 flex items-baseline gap-2 tabular-nums">
         <span className={`text-[15px] ${nowTone || 'text-muted'}`}>{now}</span>{to}
@@ -150,7 +150,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
                 <ul className="mt-3 grid gap-5 sm:grid-cols-3">
                   {pair(x.rate, fmtRate(mo.result.mealRate, totalMeals), fmtRate(ahead.rate, 1))}
                   {you && pair(x.cost, fmtTaka(you.foodCost + you.billShare), fmtTaka(ahead.food + bills))}
-                  {you && pair(x.paceLine, fmtSigned(Math.round(you.balance / 100) * 100), fmtSigned(ending * 100), tone(ending), tone(Math.round(you.balance / 100)))}
+                  {you && b && pair(x.paceLine, `${b.tone === 'text-chili' ? '−' : ''}${fmtTaka(you.balance)}`, fmtSigned(ending * 100), tone(ending), b.tone)}
                 </ul>
                 <p className="mt-4 text-[13px] text-muted">{x.paceNote.replace('{d}', String(upTo + 1)).replace('{b}', you && lastBills !== null && lastBills > you.billShare ? x.paceBillsLast : x.paceBillsSoFar)}</p>
               </>) : <p className="mt-4 text-muted">{x.paceWait}</p>}
@@ -165,7 +165,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
                     <li key={i} className="flex items-start gap-3 py-3">
                       {/* the tag names the kind of question, so the eye sorts the list before reading a line */}
                       <span className="mt-2.5 flex-none rounded-full border border-line bg-paper px-2.5 text-[13px] font-semibold leading-6 whitespace-nowrap">{x.lookKinds[l.kind]}</span>
-                      <Link href={`/${lang}/money#entries`} className={`inline-flex min-h-11 min-w-0 items-center underline-offset-4 hover:underline ${focus}`}>{lookText(t, lang, l)}</Link>
+                      <Link href={`/${lang}/money#entries`} className={`block min-w-0 py-2.5 leading-6 underline-offset-4 hover:underline ${focus}`}>{lookText(t, lang, l)}</Link>
                     </li>))}
                 </ul>) : (
                 <p className="mt-3 flex items-center gap-2 text-muted">
