@@ -66,3 +66,41 @@ export function forecast(bazar: number, elapsed: number, days: number, meals: nu
 /** One person's bill share in a closed month, from its snapshot; null when they had no row. */
 export const billShareIn = async (db: Db, flatId: string, memberId: string, month: string) =>
   (await db<{ v: number }>(`select bill_share::int as v from month_balances where flat_id = $1 and member_id = $2 and month = $3`, [flatId, memberId, month]))[0]?.v ?? null;
+
+/** Every saved bazar and bill of the flat's last `n` closed months before `before`: the history the look-over compares against. */
+export const history = (db: Db, flatId: string, before: string, n = 12) => db<{ month: string; type: 'bazar' | 'bill'; amount: number; date: string; note: string | null }>(
+  `select month::text as month, type, amount_poisha::int as amount, date::text as date, note from ledger
+    where flat_id = $1 and status = 'ok' and for_month is null and type in ('bazar', 'bill')
+      and month in (select month from months where flat_id = $1 and status = 'closed' and month < $2 order by month desc limit $3::int) order by date`, [flatId, before, n]);
+
+export type Look = { kind: 'dup'; type: 'bazar' | 'bill'; date: string; amount: number; note: string | null; n: number } | { kind: 'high'; date: string; amount: number; max: number } | { kind: 'missing'; note: string; day: number };
+const noteKey = (n: string | null) => n?.trim().toLowerCase() ?? '';
+
+/** Questions for the collector about the running month, never findings: the same saved bazar or bill twice on one day; a bazar
+ *  bigger than any this flat saved in a closed month (after ten of them, so the first weeks do not shout); a bill note that
+ *  was in by a certain day in each of the last three closed months and is not in yet. Rules only, nothing leaves the app. */
+export function worthALook(entries: Entry[], past: { month: string; type: 'bazar' | 'bill'; amount: number; date: string; note: string | null }[], today: string): Look[] {
+  const ok = entries.filter(e => e.status === 'ok' && !e.forMonth && (e.type === 'bazar' || e.type === 'bill'));
+  const out: Look[] = [];
+  // a twin shares type, day, amount, who paid, and for a bill its name: two ৳500 bills on the 1st (Wi-Fi, gas) are not twins
+  const seen = new Map<string, { e: Entry; n: number }>();
+  for (const e of ok) { const k = `${e.type}|${e.date}|${e.amount}|${e.paidBy ?? ''}|${e.type === 'bill' ? noteKey(e.note) : ''}`; seen.set(k, { e, n: (seen.get(k)?.n ?? 0) + 1 }); }
+  for (const { e, n } of seen.values()) if (n > 1) out.push({ kind: 'dup', type: e.type as 'bazar' | 'bill', date: e.date, amount: e.amount, note: e.type === 'bill' ? e.note?.trim() ?? null : null, n });
+  const bazars = past.filter(p => p.type === 'bazar').map(p => p.amount);
+  if (bazars.length >= 10) { const max = Math.max(...bazars); for (const e of ok) if (e.type === 'bazar' && e.amount > max) out.push({ kind: 'high', date: e.date, amount: e.amount, max }); }
+  const months = [...new Set(past.map(p => p.month))].sort().slice(-3);
+  if (months.length === 3) {
+    const byNote = new Map<string, { note: string; days: number[] }>();   // the note as last typed, and its latest day in each month
+    for (const m of months) {
+      const latest = new Map<string, { note: string; day: number }>();
+      for (const p of past) if (p.month === m && p.type === 'bill' && noteKey(p.note)) {
+        const k = noteKey(p.note), day = Number(p.date.slice(8));
+        if ((latest.get(k)?.day ?? 0) < day) latest.set(k, { note: p.note!.trim(), day });
+      }
+      for (const [k, v] of latest) { const x = byNote.get(k) ?? { note: v.note, days: [] }; x.note = v.note; x.days.push(v.day); byNote.set(k, x); }
+    }
+    const here = new Set(ok.filter(e => e.type === 'bill').map(e => noteKey(e.note)));
+    for (const [k, x] of byNote) { const day = Math.max(...x.days); if (x.days.length === 3 && !here.has(k) && Number(today.slice(8)) > day) out.push({ kind: 'missing', note: x.note, day }); }
+  }
+  return out;
+}

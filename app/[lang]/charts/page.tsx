@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { billShareIn, costRows, forecast, lastMonths, myPlates, runningSpend, slices, spendByKind } from '@/lib/charts';
+import { billShareIn, costRows, forecast, history, lastMonths, myPlates, runningSpend, slices, spendByKind, worthALook, type Look } from '@/lib/charts';
 import { db } from '@/lib/db';
 import { flatMoney } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka, weightedMeals } from '@/lib/meals';
@@ -55,7 +55,8 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const today = todayDhaka(), thisMonth = monthOf(today);
   const asked = typeof sp.m === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m) ? `${sp.m}-01` : thisMonth;
   const month = asked > thisMonth ? thisMonth : asked;
-  const [mo, past] = await Promise.all([loadMonth(db, me.flatId, month, today), lastMonths(db, me.flatId, month)]);
+  const [mo, past, hist] = await Promise.all([loadMonth(db, me.flatId, month, today), lastMonths(db, me.flatId, month),
+    boss && month === thisMonth ? history(db, me.flatId, month) : []]);
   const closed = mo.info?.status === 'closed';
   const name = (id: string) => mo.all.find(p => p.id === id)?.name ?? '?';
   const prev = monthOf(addDays(month, -1)), next = addDays(daysOfMonth(month).at(-1)!, 1);
@@ -92,6 +93,12 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const lastBills = you && mo.carriedFrom ? await billShareIn(db, me.flatId, me.memberId, mo.carriedFrom) : null;
   const bills = you ? Math.max(you.billShare, lastBills ?? 0) : 0;
   const ending = ahead && you ? Math.round((you.opening + you.paidIn - ahead.food - bills - you.payouts + you.adjustments) / 100) : 0;
+  // the collector's look-over of the running month: rules on the flat's own saved rows, each line a question with a link to Money
+  const looks = boss && running ? worthALook(mo.entries, hist, today) : null;
+  const lookText = (l: Look) => l.kind === 'dup'
+    ? x.lookDup.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{type}', l.note ? `${t.money.types.bill} ${l.note}` : t.money.types[l.type].toLowerCase()).replace('{n}', String(l.n))
+    : l.kind === 'high' ? x.lookHigh.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{m}', fmtExact(l.max))
+    : x.lookMissing.replace('{note}', l.note).replace('{day}', String(l.day));
 
   return (
     <>
@@ -132,6 +139,15 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
                 {you && <p className={`mt-3 text-[15px] font-semibold ${ending < 0 ? 'text-chili' : ending > 0 ? 'text-leaf' : ''}`}>{(ending < 0 ? x.paceOwe : ending > 0 ? x.paceGet : x.paceEven).replace('{t}', fmtTaka(ending * 100))}</p>}
                 <p className="mt-2 text-[13px] text-muted">{x.paceNote.replace('{d}', String(upTo + 1)).replace('{b}', you && lastBills !== null && lastBills > you.billShare ? x.paceBillsLast : x.paceBillsSoFar)}</p>
               </>) : <p className="mt-2 text-muted">{x.paceWait}</p>}
+            </section>)}
+          {looks && (
+            <section className={`${card} md:col-span-12`}>
+              <h2 className={h2}>{x.look}</h2>
+              <p className="mt-1 text-[15px] text-muted">{x.lookHint}</p>
+              {looks.length ? (
+                <ul className="mt-3 divide-y divide-line text-[15px]">
+                  {looks.map(l => <li key={lookText(l)} className="py-2"><Link href={`/${lang}/money`} className={`underline-offset-4 hover:underline ${focus}`}>{lookText(l)}</Link></li>)}
+                </ul>) : <p className="mt-3 text-muted">{x.lookNone}</p>}
             </section>)}
           <section className={`${card} md:col-span-12 lg:col-span-8`}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
