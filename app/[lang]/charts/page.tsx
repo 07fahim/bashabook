@@ -95,10 +95,9 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const ending = ahead && you ? Math.round((you.opening + you.paidIn - ahead.food - bills - you.payouts + you.adjustments) / 100) : 0;
   // the collector's look-over of the running month: rules on the flat's own saved rows, each line a question with a link to Money
   const looks = boss && running ? worthALook(mo.entries, hist, today) : null;
-  const day = (d: string) => `${Number(d.slice(8))} ${new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })}`;
   const lookText = (l: Look) => l.kind === 'dup'
-    ? x.lookDup.replace('{d}', day(l.date)).replace('{t}', fmtExact(l.amount)).replace('{type}', t.money.types[l.type].toLowerCase()).replace('{n}', String(l.n))
-    : l.kind === 'high' ? x.lookHigh.replace('{d}', day(l.date)).replace('{t}', fmtExact(l.amount)).replace('{m}', fmtExact(l.max))
+    ? x.lookDup.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{type}', l.note ? `${t.money.types.bill} ${l.note}` : t.money.types[l.type].toLowerCase()).replace('{n}', String(l.n))
+    : l.kind === 'high' ? x.lookHigh.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{m}', fmtExact(l.max))
     : x.lookMissing.replace('{note}', l.note).replace('{day}', String(l.day));
 
   return (
@@ -147,7 +146,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
               <p className="mt-1 text-[15px] text-muted">{x.lookHint}</p>
               {looks.length ? (
                 <ul className="mt-3 divide-y divide-line text-[15px]">
-                  {looks.map((l, i) => <li key={i} className="py-2"><Link href={`/${lang}/money`} className={`underline-offset-4 hover:underline ${focus}`}>{lookText(l)}</Link></li>)}
+                  {looks.map(l => <li key={lookText(l)} className="py-2"><Link href={`/${lang}/money`} className={`underline-offset-4 hover:underline ${focus}`}>{lookText(l)}</Link></li>)}
                 </ul>) : <p className="mt-3 text-muted">{x.lookNone}</p>}
             </section>)}
           <section className={`${card} md:col-span-12 lg:col-span-8`}>

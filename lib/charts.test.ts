@@ -65,16 +65,21 @@ describe('lastMonths', { timeout: 30000 }, () => {
     // history: the closed months' saved bazar and bills only; the September correction for August stays out, September itself is open
     expect((await history(db, f.flatId, '2026-10-01')).map(r => [r.month, r.type, r.amount, r.note]))
       .toEqual([['2026-07-01', 'bazar', 20000, null], ['2026-07-01', 'bill', 10000, 'Gas'], ['2026-08-01', 'bazar', 30000, null], ['2026-08-01', 'bill', 10000, 'Gas']]);
+    expect((await history(db, f.flatId, '2026-10-01', 1)).map(r => r.month)).toEqual(['2026-08-01', '2026-08-01']);   // the newest n closed months
   });
 });
 
 describe('worthALook', () => {
   const past = (month: string, p: Partial<{ type: 'bazar' | 'bill'; amount: number; day: string; note: string | null }> = {}) =>
     ({ month, type: p.type ?? 'bazar', amount: p.amount ?? 1000, date: `${month.slice(0, 8)}${p.day ?? '05'}`, note: p.note ?? null });
-  it('the same saved entry twice on one day; a pending twin does not count', () => {
+  it('the same saved entry twice on one day; not two people paying the same, nor two monthly bills of one amount', () => {
     const rows = [row({ type: 'bazar', amount: 500, date: '2026-10-03' }), row({ type: 'bazar', amount: 500, date: '2026-10-03' }), row({ type: 'bazar', amount: 500, date: '2026-10-04' }),
-      row({ type: 'bill', amount: 700, date: '2026-10-03' }), row({ type: 'bill', amount: 700, date: '2026-10-03', status: 'pending' })];
-    expect(worthALook(rows, [], '2026-10-15')).toEqual([{ kind: 'dup', type: 'bazar', date: '2026-10-03', amount: 500, n: 2 }]);
+      row({ type: 'bazar', amount: 500, date: '2026-10-03', paidBy: 'p' }),
+      row({ type: 'bill', amount: 50000, date: '2026-10-01', note: 'Wi-Fi' }), row({ type: 'bill', amount: 50000, date: '2026-10-01', note: 'Gas' }),
+      row({ type: 'bill', amount: 70000, date: '2026-10-03', note: 'Gas' }), row({ type: 'bill', amount: 70000, date: '2026-10-03', note: 'gas ' }), row({ type: 'bill', amount: 70000, date: '2026-10-03', note: 'gas', forMonth: '2026-09-01' })];
+    expect(worthALook(rows, [], '2026-10-15')).toEqual([
+      { kind: 'dup', type: 'bazar', date: '2026-10-03', amount: 500, note: null, n: 2 },
+      { kind: 'dup', type: 'bill', date: '2026-10-03', amount: 70000, note: 'gas', n: 2 }]);
   });
   it('a bazar above every closed-month bazar, only once ten of them exist', () => {
     const nine = Array.from({ length: 9 }, () => past('2026-09-01', { amount: 2000 }));
