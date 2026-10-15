@@ -153,7 +153,8 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
                 [{ key: 'food', label: x.food, value: mine.foodCost, color: 'fill-turmeric', swatch: 'bg-turmeric' },
                  { key: 'bills', label: x.bills, value: mine.billShare, color: 'fill-muted', swatch: 'bg-muted' }],
                 [{ key: 'paid', label: x.paidIn, value: mine.paidIn, color: 'fill-leaf', swatch: 'bg-leaf' }]]} /></div>
-              {/* the receipt: every line adds to what you owe (+) or takes from it (−), so the result can be checked by hand */}
+              {/* the receipt: each line is signed the way the result reads (+ adds to what you owe, or + adds to what you get
+                  back when the month is in your favour), so the lines add up to the last one by hand */}
               <dl className="mt-4 divide-y divide-line text-[15px]">
                 {([
                   [x.cost, mine.foodCost + mine.billShare],
@@ -161,7 +162,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
                   [x.paidIn, -mine.paidIn],
                   ...(mine.opening ? [[x.earlier, -mine.opening]] : []),
                   ...(mine.adjustments ? [[x.corrections, -mine.adjustments]] : []),
-                ] as [string, number][]).map(([k, v]) => (
+                ] as [string, number][]).map(([k, v]): [string, number] => [k, mine.balance > 0 ? -v : v]).map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4 py-2"><dt>{k}</dt><dd className="whitespace-nowrap tabular-nums">{v > 0 ? '+' : ''}{fmtSigned(v)}</dd></div>
                 ))}
                 <div className={`flex justify-between gap-4 py-2 font-semibold ${b.tone}`}><dt>{b.tone === 'text-chili' ? x.tileOwe : b.tone === 'text-leaf' ? x.tileGet : x.tileEven}</dt><dd className="whitespace-nowrap tabular-nums">{fmtExact(mine.balance)}</dd></div>
