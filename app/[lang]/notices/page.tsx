@@ -10,17 +10,10 @@ import { fmtWhen } from '../format';
 import { noticeLine } from '../notice-line';
 import { Header } from '../header';
 import { Nav } from '../nav';
-import { card, focus, LongList, PageSkeleton } from '../ui';
+import { card, ICONS, insetFocus, LongList, PageSkeleton } from '../ui';
 
-/** Line icons per kind (24px grid): money, the handover, the month, a plate, a person. */
-const ICONS: Record<Notice['kind'], string> = {
-  paid: 'M3 7h15a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H3V7ZM3 7l12-4v4M16 13.5h2',
-  handover: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12.5l3 3 5-6',
-  handoverDone: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12.5l3 3 5-6',
-  closeMonth: 'M6 3h12v18l-3-2-3 2-3-2-3 2V3ZM9 8h6M9 12h6M9 16h3',
-  meal: 'M7 3v8M5 3v4a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9',
-  account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21a8 8 0 0 1 16 0',
-};
+/** Which icon each kind gets; a new kind without one fails to compile. A declined handover gets the wallet, not a tick. */
+const ICON: Record<Notice['kind'], keyof typeof ICONS> = { paid: 'wallet', handover: 'settle', handoverDone: 'wallet', closeMonth: 'bill', meal: 'meal', account: 'person' };
 
 export default function Notices({ params }: PageProps<'/[lang]/notices'>) {
   return <Suspense fallback={<PageSkeleton />}><Body params={params} /></Suspense>;
@@ -43,9 +36,9 @@ async function Body({ params }: Pick<PageProps<'/[lang]/notices'>, 'params'>) {
               const [text, href] = l!;
               return (
                 <li key={i}>
-                  <Link href={href} className={`flex min-h-11 items-center gap-3 rounded-lg py-3 ${focus}`}>
+                  <Link href={href} className={`flex min-h-11 items-center gap-3 rounded-lg py-3 ${insetFocus}`}>
                     <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-paper text-turmeric-ink" aria-hidden="true">
-                      <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={ICONS[n.kind]} /></svg>
+                      <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={ICONS[ICON[n.kind]]} /></svg>
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="font-semibold">{text}</span>
