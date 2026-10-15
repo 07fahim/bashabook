@@ -54,7 +54,6 @@ const bn = {
     lookDup: '{d}: {t}-এর {type} {n} বার আছে। একই এন্ট্রি দুবার?',
     lookHigh: '{d}: {t}-এর বাজার। এই ফ্ল্যাটে আগে সবচেয়ে বড় ছিল {m}।',
     lookMissing: '{note}: আগের মাসগুলোতে {day} তারিখের মধ্যে এসেছিল, এই মাসে নেই।',
-    lookNone: 'কিছু চোখে পড়েনি।',
     lookKinds: { dup: 'দুবার', high: 'সবচেয়ে বড়', missing: 'আসেনি' },
   },
   notices: {
@@ -696,7 +695,6 @@ const en: Dict = {
     lookDup: '{d}: a {type} of {t} is saved {n} times. The same one twice?',
     lookHigh: '{d}: a bazar of {t}. The biggest this flat saved before was {m}.',
     lookMissing: '{note}: in earlier months it was in by day {day}; not in this month.',
-    lookNone: 'Nothing stands out.',
     lookKinds: { dup: 'Saved twice', high: 'Biggest yet', missing: 'Not in' },
   },
   notices: {
