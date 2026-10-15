@@ -1,16 +1,16 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { costRows, lastMonths, platesPerDay, runningSpend, slices, spendByKind } from '@/lib/charts';
+import { costRows, lastMonths, myPlates, runningSpend, slices, spendByKind } from '@/lib/charts';
 import { db } from '@/lib/db';
 import { flatMoney } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
 import { loadMonth, monthOf } from '@/lib/money-db';
 import { noticeCount } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
-import { Area, DayBars, HBars, Ring, Stacked, VBars } from '../bars';
+import { Area, HBars, Ring, Stacked, VBars } from '../bars';
 import { getDictionary, hasLocale, type Dict } from '../dictionaries';
-import { fmtDay, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
+import { fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
 import { Header, withQuery } from '../header';
 import { balanceText } from '../money/bits';
 import { Nav } from '../nav';
@@ -70,12 +70,11 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const total = spend.reduce((a, r) => a + r.value, 0);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
   const meals = mo.members.map(p => ({ id: p.id, meals: mo.meals.get(p.id) ?? 0, guests: mo.guestMeals.get(p.id) ?? 0 })).sort((a, b) => b.meals - a.meals);
-  const plates = platesPerDay(mo.members, mo.changes, days), platesSoFar = plates.slice(0, upTo + 1);
-  const high = platesSoFar.reduce((a, p) => (p.value > a.value ? p : a), platesSoFar[0]), low = platesSoFar.reduce((a, p) => (p.value < a.value ? p : a), platesSoFar[0]);
+  const self = mo.members.find(p => p.id === me.memberId);
+  const plates = self ? myPlates(self, mo.changes, days.slice(0, upTo + 1)) : [];
   const spent = runningSpend(mo.entries, days);
   const empty = !mo.entries.some(e => e.status === 'ok') && totalMeals === 0;
   const b = mine ? balanceText(t.money, mine.balance, closed) : null;
-  const carried = mine ? mine.opening - mine.payouts + mine.adjustments : 0;   // what the bars cannot show: earlier months, advances, corrections
   // money with the collector, as Money shows it (this month adds every open month up while an earlier one is still open)
   const held = running && mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
   const holder = closed && mo.info?.cash ? name(mo.info.cash.by) : mo.all.find(p => p.role === 'manager')?.name ?? '';
@@ -108,7 +107,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
           </div>
           <Tile label={x.rate} value={fmtRate(mo.result.mealRate, totalMeals)} note={rateD.note} tone={rateD.tone} />
           <Tile label={x.spend} value={fmtTaka(total)} note={spendD.note} tone={spendD.tone} />
-          <Tile label={x.plates} value={String(platesSoFar.reduce((a, p) => a + p.value, 0))} note={closed ? undefined : x.soFar} />
+          <Tile label={x.plates} value={String(plates.reduce((a, p) => a + p.plates, 0))} note={closed ? undefined : x.soFar} />
           <Tile label={x.flatMoney} value={`${held < 0 ? '−' : ''}${fmtTaka(held)}`} note={x.holds.replace('{name}', holder)} tone={held < 0 ? 'text-chili' : ''} />
         </div>
 
@@ -130,13 +129,13 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
           </section>
 
           <section className={`${card} md:col-span-6`}>
-            <h2 className={h2}>{x.platesDay}</h2>
-            <div className="mt-4"><DayBars points={plates} upTo={upTo} /></div>
-            <ol aria-hidden="true" className="mt-1 flex justify-between text-[13px] text-muted tabular-nums">
-              {axis.map(i => <li key={i}>{i + 1}</li>)}
-            </ol>
-            <p className="mt-3 text-[15px] text-muted">{high.value === 0 ? x.noPlates
-              : x.highLow.replace('{n}', String(high.value)).replace('{d}', fmtDay(high.day, lang)).replace('{m}', String(low.value)).replace('{e}', fmtDay(low.day, lang))}</p>
+            <h2 className={h2}>{x.myMeals}</h2>
+            {self ? (<>
+              <div className="mt-4"><HBars fmt={String} rows={plates.map(p => ({
+                key: p.meal, text: t.meals.names[p.meal], value: p.plates - p.guests, tail: p.guests, valueText: String(p.plates),
+                label: <>{t.meals.names[p.meal]}{p.guests > 0 && <span className="ml-1 text-[13px] text-muted">{x.guests.replace('{n}', String(p.guests))}</span>}</> }))} /></div>
+              {mine && <p className="mt-4 text-[15px] text-muted">{x.mealsNote.replace('{n}', fmtMeals(mo.meals.get(me.memberId) ?? 0)).replace('{r}', fmtRate(mo.result.mealRate, totalMeals))}</p>}
+            </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}
           </section>
           <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.lastMonths}</h2>
@@ -154,8 +153,19 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
                 [{ key: 'food', label: x.food, value: mine.foodCost, color: 'fill-turmeric', swatch: 'bg-turmeric' },
                  { key: 'bills', label: x.bills, value: mine.billShare, color: 'fill-muted', swatch: 'bg-muted' }],
                 [{ key: 'paid', label: x.paidIn, value: mine.paidIn, color: 'fill-leaf', swatch: 'bg-leaf' }]]} /></div>
-              {carried !== 0 && <p className="mt-3 text-[15px] text-muted">{x.carried}: <span className="font-semibold whitespace-nowrap tabular-nums">{fmtSigned(carried)}</span></p>}
-              <p className={`mt-4 font-semibold ${b.tone}`}>{b.text}</p>
+              {/* the receipt: every line adds to what you owe (+) or takes from it (−), so the result can be checked by hand */}
+              <dl className="mt-4 divide-y divide-line text-[15px]">
+                {([
+                  [x.cost, mine.foodCost + mine.billShare],
+                  ...(mine.payouts ? [[x.advances, mine.payouts]] : []),
+                  [x.paidIn, -mine.paidIn],
+                  ...(mine.opening ? [[x.earlier, -mine.opening]] : []),
+                  ...(mine.adjustments ? [[x.corrections, -mine.adjustments]] : []),
+                ] as [string, number][]).map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-4 py-2"><dt>{k}</dt><dd className="whitespace-nowrap tabular-nums">{v > 0 ? '+' : ''}{fmtSigned(v)}</dd></div>
+                ))}
+                <div className={`flex justify-between gap-4 py-2 font-semibold ${b.tone}`}><dt>{b.tone === 'text-chili' ? x.tileOwe : b.tone === 'text-leaf' ? x.tileGet : x.tileEven}</dt><dd className="whitespace-nowrap tabular-nums">{fmtExact(mine.balance)}</dd></div>
+              </dl>
               <Link href={`/${lang}/money${month !== thisMonth ? `?m=${month.slice(0, 7)}` : ''}`} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{t.money.breakdown}</Link>
             </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}
           </section>

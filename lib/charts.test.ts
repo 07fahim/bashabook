@@ -4,7 +4,7 @@ import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
-import { costRows, lastMonths, platesPerDay, runningSpend, slices, spendByKind } from './charts';
+import { costRows, lastMonths, myPlates, runningSpend, slices, spendByKind } from './charts';
 import type { MealMember } from './meals';
 
 const row = (p: Partial<Entry> & Pick<Entry, 'type' | 'amount'>): Entry =>
@@ -69,10 +69,10 @@ describe('the day series and the ring', () => {
       row({ type: 'deposit', amount: 999, date: '2026-09-02' }), row({ type: 'bazar', amount: 7, date: '2026-09-02', status: 'pending' }), row({ type: 'bazar', amount: 9, date: '2026-09-02', forMonth: '2026-08-01' })];
     expect(runningSpend(rows, ['2026-09-01', '2026-09-02', '2026-09-03']).map(d => d.value)).toEqual([100, 100, 150]);
   });
-  it('plates per day count everyone and their guests', () => {
-    const m = (id: string): MealMember => ({ id, joinedOn: '2026-09-01', leftOn: null, defaults: { b: true, l: true, d: true } });
-    const out = platesPerDay([m('a'), m('b')], [{ memberId: 'a', date: '2026-09-02', meal: 'd', count: 3 }], ['2026-09-01', '2026-09-02']);
-    expect(out.map(d => d.value)).toEqual([6, 8]);
+  it('my plates per meal, guests marked, nothing before I moved in', () => {
+    const me: MealMember = { id: 'a', joinedOn: '2026-09-02', leftOn: null, defaults: { b: false, l: true, d: true } };
+    const out = myPlates(me, [{ memberId: 'a', date: '2026-09-02', meal: 'd', count: 3, guests: 2 }, { memberId: 'b', date: '2026-09-02', meal: 'd', count: 5, guests: 4 }], ['2026-09-01', '2026-09-02', '2026-09-03']);
+    expect(out).toEqual([{ meal: 'b', plates: 0, guests: 0 }, { meal: 'l', plates: 2, guests: 0 }, { meal: 'd', plates: 4, guests: 2 }]);
   });
   it('a ring keeps four names and folds the rest', () => {
     const rows = Array.from({ length: 7 }, (_, i) => ({ label: `B${i}`, value: 70 - i * 10 }));
@@ -83,9 +83,7 @@ describe('the day series and the ring', () => {
     expect(slices(withOthers, 'Others').map(r => `${r.label}:${r.value}`)).toEqual(['bazar:900', 'Gas:700', 'Wifi:600', 'Rent:500', 'Others:1200']);
     expect(slices(withOthers.slice(0, 3), 'Others').map(r => r.label)).toEqual(['bazar', 'Gas', 'Others']);
   });
-  it('a day outside the month and a leaver mid-month', () => {
+  it('a day outside the month stays out of the running spend', () => {
     expect(runningSpend([row({ type: 'bazar', amount: 5, date: '2026-08-31' })], ['2026-09-01']).map(d => d.value)).toEqual([0]);
-    const m = (id: string, leftOn: string | null): MealMember => ({ id, joinedOn: '2026-09-01', leftOn, defaults: { b: true, l: true, d: true } });
-    expect(platesPerDay([m('a', '2026-09-01'), m('b', null)], [], ['2026-09-01', '2026-09-02']).map(d => d.value)).toEqual([6, 3]);
   });
 });
