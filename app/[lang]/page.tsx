@@ -4,22 +4,13 @@ import { notFound } from 'next/navigation';
 import { getDictionary, hasLocale } from './dictionaries';
 import { Khata } from './khata';
 import { Header } from './header';
-import { focus } from './ui';
+import { focus, ICONS } from './ui';
 
 const h2 = 'font-display text-3xl font-bold';
 // contact links: a link shows only when it is set (null hides it), so a placeholder never looks like a real address
 const WHATSAPP: string | null = 'https://wa.me/8801852153575';
 const EMAIL: string | null = 'mailto:faiyazfahim743@gmail.com';
 
-/** Line icons for the feature cards (24px grid). */
-const ICONS = {
-  meal: 'M7 3v8M5 3v4a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9',
-  cook: 'M8 17v-4.2A3.5 3.5 0 0 1 9 6a3.5 3.5 0 0 1 6 0 3.5 3.5 0 0 1 1 6.8V17M8 17h8v4H8z',
-  bazar: 'M6 7h12l-1 13H7L6 7ZM9 7a3 3 0 0 1 6 0',
-  bill: 'M6 3h12v18l-3-2-3 2-3-2-3 2V3ZM9 8h6M9 12h6M9 16h3',
-  wallet: 'M3 7h15a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H3V7ZM3 7l12-4v4M16 13.5h2',
-  settle: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8 12.5l3 3 5-6',
-};
 
 export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const { lang } = await params;
