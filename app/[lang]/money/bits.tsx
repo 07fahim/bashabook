@@ -1,3 +1,4 @@
+import type { Look } from '@/lib/charts';
 import type { toConfirm } from '@/lib/money-db';
 import { confirmAction } from '../actions';
 import type { Dict, Locale } from '../dictionaries';
@@ -13,6 +14,12 @@ export const balanceText = (x: Dict['money'], balance: number, closed = false) =
     : r && balance < 0 ? { text: c.owe.replace('{t}', fmtTaka(balance)), tone: 'text-chili' }
     : { text: c.even, tone: '' };
 };
+
+/** A look-over question as one sentence: the day as Money shows it, the amount exact, a bill by its name. */
+export const lookText = (t: Dict, lang: Locale, l: Look) => l.kind === 'dup'
+  ? t.charts.lookDup.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{type}', l.note ? `${t.money.types.bill} ${l.note}` : t.money.types[l.type].toLowerCase()).replace('{n}', String(l.n))
+  : l.kind === 'high' ? t.charts.lookHigh.replace('{d}', fmtDay(l.date, lang)).replace('{t}', fmtExact(l.amount)).replace('{m}', fmtExact(l.max))
+  : t.charts.lookMissing.replace('{note}', l.note).replace('{day}', String(l.day));
 
 /** Money waiting for this person's tap: shown on Home, Money and the Flat tab until confirmed. */
 /** Pending money piles up if nobody taps: phones show three, then Show all; wider screens about three rows that scroll. Either

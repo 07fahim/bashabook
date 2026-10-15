@@ -20,7 +20,7 @@ import { fmtDay, fmtTaka, fmtTaka2, fmtTime } from '../format';
 import { DateField } from '../date-field';
 import { FocusHere } from '../focus-here';
 import { Header, withQuery } from '../header';
-import { ConfirmList } from '../money/bits';
+import { ConfirmList, lookText } from '../money/bits';
 import { Nav } from '../nav';
 import { ShareButton } from '../share-button';
 import { checkChip, field, Field, Fold, focus, Group, link, PinField, primary, secondary, PageSkeleton } from '../ui';
@@ -87,7 +87,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           {/* to do: the full width on a tablet (a third of it squeezes each payment to four lines); on a desktop its own
               column, stretched to the row so the waiting list scrolls inside a box as tall as the tools beside it */}
           <div className={`md:col-span-2 md:flex md:flex-col ${todo ? 'xl:col-span-1 xl:self-stretch' : 'xl:col-span-3'}`}>
-            {closing && <div className="mt-3"><CloseCard lang={lang} x={mn} c={closing} collector={me.name} /></div>}
+            {closing && <div className="mt-3"><CloseCard lang={lang} x={mn} c={closing} collector={me.name} warn={closing.looks.map(l => lookText(t, lang, l))} /></div>}
             {waiting.length > 0 && <div className="mt-3 md:flex-1"><ConfirmList fill lang={lang} a={t.app} x={mn} items={waiting} collector={me.name} /></div>}
             {!todo && <p className="mt-3 rounded-3xl border border-line bg-surface px-5 py-4 text-muted shadow-card md:mb-5">{mn.noPending}</p>}
           </div>

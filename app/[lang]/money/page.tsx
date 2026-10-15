@@ -22,7 +22,7 @@ import { PendingButton } from '../pending-button';
 import { PayerSelect } from '../payer-select';
 import { ShareButton } from '../share-button';
 import { card, checkChip, field, Field, focal, Fold, focus, link, LongList, PageSkeleton, primary } from '../ui';
-import { balanceText, ConfirmList } from './bits';
+import { balanceText, ConfirmList, lookText } from './bits';
 import { breakdownOf, breakdownText, pickWho, type Labels } from './breakdown';
 
 export default function Money({ params, searchParams }: PageProps<'/[lang]/money'>) {
@@ -126,7 +126,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           <p role="status" className="mt-4 rounded-2xl bg-paper p-4 font-semibold">{x.notClosedYet.replace('{month}', fmtMonth(mo.earlierOpen)).replace('{name}', collector.name)}</p>
         )}
 
-        {closing && closing.month === month && <div className="mt-6"><CloseCard lang={lang} x={x} c={closing} collector={collector.name} /></div>}
+        {closing && closing.month === month && <div className="mt-6"><CloseCard lang={lang} x={x} c={closing} collector={collector.name} warn={closing.looks.map(l => lookText(t, lang, l))} /></div>}
 
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={collector.name} /></div>}
 

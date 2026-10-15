@@ -4,6 +4,7 @@ import { addDays, daysOfMonth, editFrom } from './meals';
 import { CASH_KEYS, parseCash, type Cash } from './money';
 import { flatMoney } from './handover';
 import { addEntry, loadMonth, monthOf, openMonth, type Actor } from './money-db';
+import { history, worthALook } from './charts';
 
 export { CASH_KEYS, parseCash, type Cash };   // pure, in money.ts so the close card can use them in the browser
 
@@ -41,8 +42,10 @@ export async function closeInfo(db: Db, flatId: string, today: string) {
   const [p] = await db<{ n: number; m: string | null }>(
     `select count(*)::int as n, min(month)::text as m from ledger where flat_id = $1 and status = 'pending' and month >= $2::date`, [flatId, month]);
   // `later`: what the months after it added or spent since, so the card can say why the count differs from its own fund
+  // questions about the month, never blockers: after the close only a correction can mend a twin or a bill that never came
+  const looks = worthALook(mo.entries, await history(db, flatId, month), today, true);
   return { month, fund, held: cashFrom(fund, total), later: total - fund, pending: p.n, pendingMonth: p.m ?? month,
-    problems: mo.result.problems.length };
+    problems: mo.result.problems.length, looks };
 }
 
 /** The cash the collector must count to close a month whose own fund is `fund`, when every open month together holds `total`

@@ -76,10 +76,11 @@ export const history = (db: Db, flatId: string, before: string, n = 12) => db<{ 
 export type Look = { kind: 'dup'; type: 'bazar' | 'bill'; date: string; amount: number; note: string | null; n: number } | { kind: 'high'; date: string; amount: number; max: number } | { kind: 'missing'; note: string; day: number };
 const noteKey = (n: string | null) => n?.trim().toLowerCase() ?? '';
 
-/** Questions for the collector about the running month, never findings: the same saved bazar or bill twice on one day; a bazar
- *  bigger than any this flat saved in a closed month (after ten of them, so the first weeks do not shout); a bill note that
- *  was in by a certain day in each of the last three closed months and is not in yet. Rules only, nothing leaves the app. */
-export function worthALook(entries: Entry[], past: { month: string; type: 'bazar' | 'bill'; amount: number; date: string; note: string | null }[], today: string): Look[] {
+/** Questions for the collector about a month, never findings: the same saved bazar or bill twice on one day; a bazar bigger
+ *  than any this flat saved in a closed month (after ten of them, so the first weeks do not shout); a bill note that was in by
+ *  a certain day in each of the last three closed months and is not in yet (`ended`: the month is over, so not in at all).
+ *  Rules only, nothing leaves the app. */
+export function worthALook(entries: Entry[], past: { month: string; type: 'bazar' | 'bill'; amount: number; date: string; note: string | null }[], today: string, ended = false): Look[] {
   const ok = entries.filter(e => e.status === 'ok' && !e.forMonth && (e.type === 'bazar' || e.type === 'bill'));
   const out: Look[] = [];
   // a twin shares type, day, amount, who paid, and for a bill its name: two ৳500 bills on the 1st (Wi-Fi, gas) are not twins
@@ -100,7 +101,7 @@ export function worthALook(entries: Entry[], past: { month: string; type: 'bazar
       for (const [k, v] of latest) { const x = byNote.get(k) ?? { note: v.note, days: [] }; x.note = v.note; x.days.push(v.day); byNote.set(k, x); }
     }
     const here = new Set(ok.filter(e => e.type === 'bill').map(e => noteKey(e.note)));
-    for (const [k, x] of byNote) { const day = Math.max(...x.days); if (x.days.length === 3 && !here.has(k) && Number(today.slice(8)) > day) out.push({ kind: 'missing', note: x.note, day }); }
+    for (const [k, x] of byNote) { const day = Math.max(...x.days); if (x.days.length === 3 && !here.has(k) && (ended || Number(today.slice(8)) > day)) out.push({ kind: 'missing', note: x.note, day }); }
   }
   return out;
 }

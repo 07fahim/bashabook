@@ -18,8 +18,11 @@ describe('close probe', { timeout: 30000 }, () => {
     expect(await addEntry(db, f.flatId, nafis, e({ type: 'deposit', amount: 100000, memberId: ids.Nafis }))).toBe('ok');
     // Tahsin says he paid in October: pending until Nafis confirms
     expect(await addEntry(db, f.flatId, tahsin, e({ type: 'deposit', amount: 50000, memberId: ids.Tahsin, date: '2026-10-03' }))).toBe('ok');
+    // the same bazar saved twice in September: a question on the close card, not a blocker
+    for (let i = 0; i < 2; i++) expect(await addEntry(db, f.flatId, nafis, e({ type: 'bazar', amount: 45000, date: '2026-09-20' }))).toBe('ok');
     const info = await closeInfo(db, f.flatId, '2026-10-05');
     expect(info?.pending).toBe(1);
+    expect(info?.looks).toEqual([{ kind: 'dup', type: 'bazar', date: '2026-09-20', amount: 45000, note: null, n: 2 }]);
     const r = await closeMonth(db, f.flatId, nafis, '2026-09-01', '2026-10-05', { cash: info!.held, bkash: 0, nagad: 0, bank: 0 });
     expect(r.result).toBe('pending');
   });
