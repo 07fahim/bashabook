@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
-import { closeMonth } from './close';
+import { addCorrection, closeMonth } from './close';
 import { costRows, lastMonths, spendByKind } from './charts';
 
 const row = (p: Partial<Entry> & Pick<Entry, 'type' | 'amount'>): Entry =>
@@ -14,6 +15,9 @@ describe('spendByKind', () => {
       row({ type: 'bill', amount: 50, note: 'Gas' }), row({ type: 'bill', amount: 400, note: 'Rent' }), row({ type: 'bill', amount: 30, note: 'Gas' }),
       row({ type: 'bill', amount: 5, note: 'Rent', status: 'pending' }), row({ type: 'bazar', amount: 77, forMonth: '2026-08-01' })];
     expect(spendByKind(rows, 'Others')).toEqual([{ label: 'bazar', value: 300 }, { label: 'Rent', value: 400 }, { label: 'Gas', value: 80 }]);
+  });
+  it('a bill without a note counts under others', () => {
+    expect(spendByKind([row({ type: 'bill', amount: 10, note: '  ' }), row({ type: 'bill', amount: 5, note: null })], 'Others')).toEqual([{ label: 'bazar', value: 0 }, { label: 'Others', value: 15 }]);
   });
   it('caps bills at 8 rows and sums the rest as others', () => {
     const rows = Array.from({ length: 10 }, (_, i) => row({ type: 'bill', amount: 100 - i, note: `B${i}` }));
@@ -32,21 +36,28 @@ describe('costRows', () => {
 });
 
 describe('lastMonths', { timeout: 30000 }, () => {
-  it('closed months only, oldest first, with rate and spend', async () => {
+  it('closed months only, oldest first, limited, with rate and spend; a later correction stays out of its month', async () => {
     await migrate();
-    const f = await createFlat(db, { flatName: 'Flat 4B', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-08-01', lang: 'bn' });
+    const f = await createFlat(db, { flatName: 'Flat 4B', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-07-01', lang: 'bn' });
     const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
     const nafis = { memberId: ids.Nafis, role: 'manager' as const };
-    const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry => ({ date: '2026-08-05', note: null, paidBy: null, memberId: null, split: null, selected: [], ...p });
-    expect(await addEntry(db, f.flatId, nafis, e({ type: 'deposit', amount: 40000, memberId: ids.Tahsin }))).toBe('ok');
-    expect(await addEntry(db, f.flatId, nafis, e({ type: 'bazar', amount: 30000 }))).toBe('ok');
-    expect(await addEntry(db, f.flatId, nafis, e({ type: 'bill', amount: 10000, note: 'Gas', split: 'equal' }))).toBe('ok');
+    const e = (date: string, p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry => ({ date, note: null, paidBy: null, memberId: null, split: null, selected: [], ...p });
+    const month = async (m: string, bazar: number) => {
+      expect(await addEntry(db, f.flatId, nafis, e(`${m}-05`, { type: 'deposit', amount: bazar + 10000, memberId: ids.Tahsin }))).toBe('ok');
+      expect(await addEntry(db, f.flatId, nafis, e(`${m}-05`, { type: 'bazar', amount: bazar }))).toBe('ok');
+      expect(await addEntry(db, f.flatId, nafis, e(`${m}-05`, { type: 'bill', amount: 10000, note: 'Gas', split: 'equal' }))).toBe('ok');
+    };
+    await month('2026-07', 20000);
     expect(await lastMonths(db, f.flatId, '2026-10-01')).toEqual([]);   // still open
+    expect((await closeMonth(db, f.flatId, nafis, '2026-07-01', '2026-08-02', { cash: 0, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
+    await month('2026-08', 30000);
     expect((await closeMonth(db, f.flatId, nafis, '2026-08-01', '2026-09-02', { cash: 0, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
+    // September books a bazar Tahsin paid for August: August's own spend must not move
+    expect(await addCorrection(db, f.flatId, nafis, { id: randomUUID(), kind: 'bazar', forMonth: '2026-08-01', amount: 5000, paidBy: ids.Tahsin, note: 'egg receipt' }, '2026-09-03')).toBe('ok');
     const out = await lastMonths(db, f.flatId, '2026-10-01');
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ month: '2026-08-01', spend: 40000 });
-    expect(out[0].rate).toBeGreaterThan(0);
-    expect(await lastMonths(db, f.flatId, '2026-08-01')).toEqual([]);   // only months before the one asked
+    expect(out.map(m => [m.month, m.spend])).toEqual([['2026-07-01', 30000], ['2026-08-01', 40000]]);
+    expect(out.every(m => m.rate > 0)).toBe(true);
+    expect((await lastMonths(db, f.flatId, '2026-10-01', 1)).map(m => m.month)).toEqual(['2026-08-01']);   // the newest n
+    expect(await lastMonths(db, f.flatId, '2026-07-01')).toEqual([]);   // only months before the one asked
   });
 });

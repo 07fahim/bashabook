@@ -14,10 +14,11 @@ export function spendByKind(entries: Entry[], others: string) {
   return [{ label: 'bazar', value: bazar }, ...bills.slice(0, 8), ...(rest ? [{ label: others, value: rest }] : [])];
 }
 
-/** Each closed month before `before`, oldest first: its frozen meal rate and what the flat spent (saved bazar and bills). */
+/** Each closed month before `before`, oldest first: its frozen meal rate and what the flat spent (saved bazar and bills of the
+ *  month itself; a correction booked later for an earlier month stays out, as in spendByKind). */
 export const lastMonths = (db: Db, flatId: string, before: string, n = 6) => db<{ month: string; rate: number; spend: number }>(
   `select month::text as month, coalesce(meal_rate, 0)::int as rate,
-          (select coalesce(sum(amount_poisha), 0)::int from ledger l where l.flat_id = m.flat_id and l.month = m.month and l.status = 'ok' and l.type in ('bazar', 'bill')) as spend
+          (select coalesce(sum(amount_poisha), 0)::int from ledger l where l.flat_id = m.flat_id and l.month = m.month and l.status = 'ok' and l.type in ('bazar', 'bill') and l.for_month is null) as spend
      from (select * from months where flat_id = $1 and status = 'closed' and month < $2 order by month desc limit $3::int) m order by month`,
   [flatId, before, n]);
 

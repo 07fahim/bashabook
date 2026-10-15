@@ -8,7 +8,7 @@ const bn = {
   switchLang: 'English',
   themeToggle: 'লাইট বা ডার্ক থিম',
   charts: {
-    title: 'চার্ট',
+    carried: 'আগের মাস, অগ্রিম আর সংশোধন মিলিয়ে',
     myMonth: 'আমার মাস',
     food: 'খাবার',
     bills: 'বিল',
@@ -617,7 +617,7 @@ const en: Dict = {
   switchLang: 'বাংলা',
   themeToggle: 'Light or dark theme',
   charts: {
-    title: 'Charts',
+    carried: 'Earlier months, advances and corrections',
     myMonth: 'My month',
     food: 'Food',
     bills: 'Bills',

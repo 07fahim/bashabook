@@ -31,8 +31,9 @@ export function VBars({ cols, fmt }: { cols: { key: string; label: string; value
   const max = Math.max(...cols.map(c => c.value), 0);
   return (
     <ol className="flex items-end gap-2">
-      {cols.map(c => (
-        <li key={c.key} className="flex min-w-0 flex-1 flex-col items-center gap-1 text-[13px]">
+      {cols.map((c, i) => (
+        // six values do not fit a phone: the oldest columns beyond five show from sm up
+        <li key={c.key} className={`${i < cols.length - 5 ? 'hidden sm:flex' : 'flex'} min-w-0 flex-1 flex-col items-center gap-1 text-[13px]`}>
           <span className="tabular-nums">{fmt(c.value)}</span>
           {/* the bar box has its own height, so the tallest bar's label never climbs out of the chart */}
           <div className="flex h-28 w-full items-end">
@@ -47,17 +48,21 @@ export function VBars({ cols, fmt }: { cols: { key: string; label: string; value
   );
 }
 
-/** One bar in parts with a legend: food, bills, paid in. */
-export function Stacked({ parts, fmt }: { parts: { key: string; label: string; value: number; color: string; swatch: string }[]; fmt: (v: number) => string }) {
-  const max = parts.reduce((a, p) => a + p.value, 0);
-  const starts = parts.map((_, i) => parts.slice(0, i).reduce((a, p) => a + pct(p.value, max), 0));   // each part begins where the last ended
+/** Bars in parts on one scale, with one legend: a cost bar (food, bills) over a paid-in bar, so the eye compares the two. */
+export type Part = { key: string; label: string; value: number; color: string; swatch: string };
+export function Stacked({ rows, fmt }: { rows: Part[][]; fmt: (v: number) => string }) {
+  const max = Math.max(...rows.map(r => r.reduce((a, p) => a + p.value, 0)), 0);
   return (
     <div>
-      <svg aria-hidden="true" className="h-6 w-full" preserveAspectRatio="none" viewBox="0 0 100 6">
-        {parts.map((p, i) => <rect key={p.key} className={p.color} height="6" width={pct(p.value, max)} x={starts[i]} />)}
-      </svg>
+      {rows.map((parts, i) => {
+        const starts = parts.map((_, j) => parts.slice(0, j).reduce((a, p) => a + pct(p.value, max), 0));   // each part begins where the last ended
+        return (
+          <svg key={i} aria-hidden="true" className="mt-2 h-6 w-full first:mt-0" preserveAspectRatio="none" viewBox="0 0 100 6">
+            {parts.map((p, j) => <rect key={p.key} className={p.color} height="6" width={pct(p.value, max)} x={starts[j]} />)}
+          </svg>);
+      })}
       <ul className="mt-3 grid grid-cols-3 gap-2 text-[15px]">
-        {parts.map(p => (
+        {rows.flat().map(p => (
           <li key={p.key}><span aria-hidden="true" className={`mr-2 inline-block size-3 rounded-sm ${p.swatch}`} />{p.label}<span className="block font-semibold tabular-nums">{fmt(p.value)}</span></li>
         ))}
       </ul>

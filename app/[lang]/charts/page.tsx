@@ -9,11 +9,11 @@ import { noticeCount } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
 import { HBars, Stacked, VBars } from '../bars';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtMeals, fmtMonth, fmtRate, fmtTaka } from '../format';
+import { fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
 import { Header, withQuery } from '../header';
 import { balanceText } from '../money/bits';
 import { Nav } from '../nav';
-import { card, focus, PageSkeleton } from '../ui';
+import { card, focus, link, PageSkeleton } from '../ui';
 
 export default function Charts({ params, searchParams }: PageProps<'/[lang]/charts'>) {
   return <Suspense fallback={<PageSkeleton />}><Body params={params} searchParams={searchParams} /></Suspense>;
@@ -41,13 +41,13 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const arrow = `inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-muted font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 ${focus}`;
 
   const mine = mo.result.perMember.find(p => p.id === me.memberId);
-  const here = mo.members.some(p => p.id === me.memberId);
   const spend = spendByKind(mo.entries, x.others).map(r => ({ ...r, label: r.label === 'bazar' ? x.bazar : r.label }));
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
   const meals = mo.members.map(p => ({ id: p.id, meals: mo.meals.get(p.id) ?? 0, guests: mo.guestMeals.get(p.id) ?? 0 })).sort((a, b) => b.meals - a.meals);
-  const empty = spend.every(r => r.value === 0) && totalMeals === 0;
+  const empty = !mo.entries.some(e => e.status === 'ok') && totalMeals === 0;
   const h2 = 'font-display text-xl font-bold';
-  const b = mine && here ? balanceText(t.money, mine.balance, closed) : null;
+  const b = mine ? balanceText(t.money, mine.balance, closed) : null;
+  const carried = mine ? mine.opening - mine.payouts + mine.adjustments : 0;   // what the bars cannot show: earlier months, advances, corrections
 
   return (
     <>
@@ -68,16 +68,18 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
           <section className={card}>
             <h2 className={h2}>{x.myMonth}</h2>
             {mine && b ? (<>
-              <div className="mt-4"><Stacked fmt={fmtTaka} parts={[
-                { key: 'food', label: x.food, value: mine.foodCost, color: 'fill-turmeric', swatch: 'bg-turmeric' },
-                { key: 'bills', label: x.bills, value: mine.billShare, color: 'fill-muted', swatch: 'bg-muted' },
-                { key: 'paid', label: x.paidIn, value: mine.paidIn, color: 'fill-leaf', swatch: 'bg-leaf' }]} /></div>
+              <div className="mt-4"><Stacked fmt={fmtTaka} rows={[
+                [{ key: 'food', label: x.food, value: mine.foodCost, color: 'fill-turmeric', swatch: 'bg-turmeric' },
+                 { key: 'bills', label: x.bills, value: mine.billShare, color: 'fill-muted', swatch: 'bg-muted' }],
+                [{ key: 'paid', label: x.paidIn, value: mine.paidIn, color: 'fill-leaf', swatch: 'bg-leaf' }]]} /></div>
+              {carried !== 0 && <p className="mt-3 text-[15px] text-muted">{x.carried}: <span className="font-semibold whitespace-nowrap tabular-nums">{fmtSigned(carried)}</span></p>}
               <p className={`mt-4 font-semibold ${b.tone}`}>{b.text}</p>
+              <Link href={`/${lang}/money${month !== thisMonth ? `?m=${month.slice(0, 7)}` : ''}`} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{t.money.breakdown}</Link>
             </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}
           </section>
           <section className={card}>
             <h2 className={h2}>{x.whereWent}</h2>
-            <div className="mt-4"><HBars fmt={fmtTaka} rows={spend.map(r => ({ key: r.label, label: r.label, text: r.label, value: r.value }))} /></div>
+            <div className="mt-4"><HBars fmt={fmtTaka} rows={spend.map((r, i) => ({ key: String(i), label: r.label, text: r.label, value: r.value }))} /></div>
             <p className="mt-4 text-[15px] text-muted">{x.rate}: {fmtRate(mo.result.mealRate, totalMeals)}</p>
           </section>
           <section className={card}>
