@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { clearLock, createFlat, flatByCode, login, resetPin } from './auth';
+import { bringBack, clearLock, createFlat, flatByCode, login, renameMember, resetPin, setLeaving } from './auth';
+import { acceptHandover, flatMoney, offerHandover } from './handover';
 import { saveMeal } from './meals-db';
 import { addEntry, confirmEntry, openMonth, type NewEntry } from './money-db';
 import { listNotices, markNoticesSeen, noticeCount } from './notices';
@@ -72,6 +73,36 @@ describe('notices', { timeout: 60000 }, () => {
     await openMonth(db, flatId, '2026-09-01');
     expect(kinds(await listNotices(db, flatId, nafis, true))).toEqual(['closeMonth']);
     expect(await listNotices(db, flatId, tahsin, false)).toEqual([]);
+  });
+
+  it('a handover: the offer goes to the receiver, the answer to the old collector, nothing to a bystander', async () => {
+    const { flatId, nafis, tahsin, zarif, boss } = await flat();
+    expect(await offerHandover(db, flatId, boss, tahsin, await flatMoney(db, flatId, today), today)).toBe('ok');
+    expect(kinds(await listNotices(db, flatId, tahsin, false))).toEqual(['handover']);
+    expect(await listNotices(db, flatId, zarif, false)).toEqual([]);
+    expect(await listNotices(db, flatId, nafis, true)).toEqual([]);
+    const [{ id }] = await db<{ id: string }>(`select id from handovers where flat_id = $1 and status = 'offered'`, [flatId]);
+    expect(await acceptHandover(db, flatId, tahsin, id)).toBe('ok');
+    expect(await listNotices(db, flatId, tahsin, true)).toEqual([]);
+    const done = await listNotices(db, flatId, nafis, false);
+    expect(done.map(n => [n.kind, n.actor, n.detail, n.pending])).toEqual([['handoverDone', 'Tahsin', { status: 'accepted' }, false]]);
+  });
+
+  it('name, last day (set and taken back), brought back, a team PIN reset; newest first', async () => {
+    const { flatId, nafis, tahsin } = await flat();
+    expect(await renameMember(db, flatId, nafis, tahsin, 'Tahsin Ahmed')).toBe('ok');
+    expect(await setLeaving(db, flatId, nafis, tahsin, '2026-10-20', today)).toBe('ok');
+    expect(await setLeaving(db, flatId, nafis, tahsin, null, today)).toBe('ok');
+    expect(await setLeaving(db, flatId, nafis, tahsin, '2026-10-10', today)).toBe('ok');
+    expect(await bringBack(db, flatId, nafis, tahsin, '2026-10-12', '2026-10-01')).toBe('ok');   // two days after the last day
+    expect(await resetPin(db, flatId, nafis, '2468', { admin: 'fahim', reason: 'phone check' })).toBe(true);
+    const mine = await listNotices(db, flatId, tahsin, false);
+    expect(mine.map(n => [n.kind, n.actor, Object.keys(n.detail!)[0]])).toEqual([
+      ['account', 'Nafis', 'back'], ['account', 'Nafis', 'left'], ['account', 'Nafis', 'left'], ['account', 'Nafis', 'left'], ['account', 'Nafis', 'rename']]);
+    expect(mine[1].detail).toEqual({ left: '2026-10-10' });
+    expect(mine[2].detail).toEqual({ left: null });
+    const boss = await listNotices(db, flatId, nafis, true);
+    expect(boss.map(n => [n.kind, n.actor, 'pinReset' in n.detail!])).toEqual([['account', null, true]]);
   });
 
   it('another flat sees nothing', async () => {
