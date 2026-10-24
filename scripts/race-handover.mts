@@ -9,7 +9,8 @@ import { setDefaults, updateSettings } from '../lib/meals-db';
 import { db as appDb, type Db } from '../lib/db';
 
 const url = process.env.DATABASE_URL ?? '';
-if (!url.includes('ep-calm-shape')) throw new Error('not the plan6b-test branch; refusing');
+if (!new URL(url).hostname.startsWith('ep-muddy-mud-')) throw new Error('not the test copy; refusing');
+const TEST_FLAT = process.env.TEST_FLAT_CODE ?? '';   // join code of a flat with closed months on the test copy; the cascade check is skipped without it
 const sql = postgres(url, { max: 8, prepare: false, onnotice: () => {} });
 const db: Db = (t, p = []) => sql.unsafe(t, p as never[]) as never;
 
@@ -278,10 +279,10 @@ async function main() {
     if (label === 'no retry') check(`deadlock run (no retry): 40 rounds of 4 writers, no deadlocks`, Object.keys(errs).length === 0, { errs, details: [...details] });
     else check(`deadlock run (${label}): 40 rounds of 4 writers, no errors`, Object.keys(errs).length === 0, errs);
   }
-  // deleting a flat with closed months (Test Long on this copy), rolled back
-  {
-    const [{ c }] = await db<{ c: number }>(`select count(*)::int as c from months m join flats f on f.id = m.flat_id where f.join_code = 'JYVBKW' and m.status = 'closed'`);
-    const err = await sql.begin(async tx => { await tx.unsafe(`delete from flats where join_code = 'JYVBKW'`); throw new Error('undo'); })
+  // deleting a flat with closed months (TEST_FLAT_CODE on this copy), rolled back
+  if (TEST_FLAT) {
+    const [{ c }] = await db<{ c: number }>(`select count(*)::int as c from months m join flats f on f.id = m.flat_id where f.join_code = $1 and m.status = 'closed'`, [TEST_FLAT]);
+    const err = await sql.begin(async tx => { await tx.unsafe(`delete from flats where join_code = $1`, [TEST_FLAT]); throw new Error('undo'); })
       .then(() => null, e => (e.message === 'undo' ? null : `${e.code} ${e.message}`));
     check(`delete a flat with ${c} closed months (rolled back): ${err ?? 'cascade works'}`, err === null, err);
   }

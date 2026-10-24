@@ -10,7 +10,7 @@ import { addGuests, changedByOthers, cookAgain, noCooking, removeGuests, saveMea
 import { nowDhaka, type Meal } from '../lib/meals';
 
 const url = process.env.DATABASE_URL ?? '';
-if (!new URL(url).hostname.startsWith('ep-calm-shape-')) throw new Error('not the test copy; refusing');
+if (!new URL(url).hostname.startsWith('ep-muddy-mud-')) throw new Error('not the test copy; refusing');
 const sql = postgres(url, { max: 10, prepare: false, onnotice: () => {} });
 const db: Db = (t, p = []) => sql.unsafe(t, p as never[]) as never;   // no deadlock retry: every 40P01 is seen
 
