@@ -22,8 +22,8 @@ migration must be noticed the same day. Restore tested 2026-10-11: a branch of p
 migration 015 showed 014 as its last migration, with every flat and entry present, read through the app's own client.
 
 Trials nobody came back to are deleted on their own (since 2026-10-24, `runJobs` in `lib/jobs.ts`): a flat created more
-than 30 days ago where at most one person ever signed in, no money entry exists and nothing was written to the history for
-30 days. Any flat with two signed-in people or one money entry is never touched by this. The cron run logs the names it
+than 30 days ago where at most one person claimed a PIN, no money entry and no meal change ever existed, and nothing was
+written to the history for 30 days. Any flat with two claimed people, one money entry or one meal change is never touched by this. The cron run logs the names it
 removed (`purged` in the response, saved in cron-job.org's history).
 
 Also since 2026-10-24: anonymous actions are counted per connection and hour (`rate_limits`, `lib/rate-limit.ts`): 5 new

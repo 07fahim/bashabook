@@ -47,12 +47,14 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
     }
   }
 
-  // A trial nobody came back to: a month old, at most one person signed in, no money, nothing in the history for 30 days.
-  // One statement; the flat's rows cascade. ponytail: correlated subqueries over every flat each run, fine for hundreds.
+  // A trial nobody came back to: a month old, at most one person claimed a PIN, never a money entry or a meal change, nothing
+  // in the history for 30 days. One statement on the database clock (the columns are timestamptz; `now` here is a Dhaka string
+  // for the reminder windows); the flat's rows cascade. ponytail: correlated subqueries over every flat each run, fine for hundreds.
   out.purged = (await db<{ name: string }>(
     `delete from flats f where created_at < now() - interval '30 days'
        and (select count(*) from members where flat_id = f.id and pin_hash is not null) <= 1
        and not exists (select 1 from ledger where flat_id = f.id)
+       and not exists (select 1 from meal_changes where flat_id = f.id)
        and not exists (select 1 from audit_log where flat_id = f.id and at > now() - interval '30 days')
      returning name`)).map(r => r.name);
   return out;
