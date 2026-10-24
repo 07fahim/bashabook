@@ -5,6 +5,10 @@ describe('csv', () => {
   it('quotes a cell with a comma, a quote or a line break, and nothing else', () => {
     expect(csv([['a', 'b,c', 'say "hi"', 'two\nlines', 5]])).toBe('a,"b,c","say ""hi""","two\nlines",5');
   });
+
+  it('defuses a cell that a spreadsheet would read as a formula; negative amounts stay numbers', () => {
+    expect(csv([['=1+1', '+5', '@a', '-x', '-10.00', 'a=b']])).toBe("'=1+1,'+5,'@a,'-x,-10.00,a=b");
+  });
 });
 
 describe('monthCsv', () => {

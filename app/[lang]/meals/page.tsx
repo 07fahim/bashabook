@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { addDays, daysOfMonth, firstWeek, headcount, indexChanges, isDate, isPresent, mealCount, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
+import { addDays, daysOfMonth, firstWeek, headcount, indexChanges, isDate, isPresent, mealCount, mealDecision, MEALS, nowDhaka, ownPlate, type Meal } from '@/lib/meals';
 import { flatStart, loadHistory, loadMeals, myGuests, upcomingAway, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { noticeCount } from '@/lib/notices';
@@ -134,9 +134,8 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           <h2 className={h2}>{fmtMonth(gridDays[0])}</h2>
           <p className="mt-1 max-w-prose text-[15px] text-muted">{m.monthLead}</p>
           {(() => {
-            const idx = indexChanges(gridData.changes), gridSelf = gridData.members.find(x => x.id === me.memberId);
-            const start0 = Date.parse(week[0]) - w * 7 * 864e5;                                           // the Saturday that starts week 0
-            const weekOf = (d: string) => Math.floor((Date.parse(d) - start0) / 864e5 / 7);               // the ?week= that holds this day
+            const gridSelf = gridData.members.find(x => x.id === me.memberId);
+            const weekOf = (d: string) => Math.floor((Date.parse(d) - Date.parse(today)) / 864e5 / 7);   // the ?week= that holds this day: week 0 starts today
             const lead = (new Date(`${gridDays[0]}T00:00:00Z`).getUTCDay() + 1) % 7;                     // blanks before the 1st, Saturday first
             return (
               <ol className="mt-4 grid grid-cols-7 gap-1 text-center text-[13px] sm:gap-2">
@@ -144,7 +143,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                 {Array.from({ length: lead }, (_, i) => <li key={`lead${i}`} aria-hidden="true" />)}
                 {gridDays.map(d => {
                   const here = gridSelf ? isPresent(gridSelf, d) : false, n = weekOf(d), linkable = n >= back && n <= 7;
-                  const dots = MEALS.map(x => here && mealCount(gridSelf!, idx, d, x) > 0);
+                  const dots = MEALS.map(x => (gridSelf ? ownPlate(gridSelf, gridData.changes, d, x) : 0) > 0);
                   const guests = gridData.changes.filter(c => c.memberId === me.memberId && c.date === d).reduce((a, c) => a + c.guests, 0);
                   const hc = headcount(gridData.members, gridData.changes, d), plates = hc.b + hc.l + hc.d;
                   const label = m.cellLabel.replace('{d}', fmtDay(d, lang)).replace('{meals}', here ? MEALS.map((x, i) => `${m.names[x]} ${dots[i] ? m.on : m.off}`).join(', ') : m.notInFlatSelf).replace('{plates}', String(plates));

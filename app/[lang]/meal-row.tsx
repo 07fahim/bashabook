@@ -1,4 +1,4 @@
-import { indexChanges, isPresent, mealCount, MEALS, todayDhaka, type Decision } from '@/lib/meals';
+import { indexChanges, isPresent, mealCount, MEALS, ownPlate, todayDhaka, type Decision } from '@/lib/meals';
 import type { FlatInfo, Member, NoCook, SavedChange } from '@/lib/meals-db';
 import { setMealAction } from './actions';
 import { ChipButton } from './chip-button';
@@ -22,7 +22,7 @@ export function MealRow({ lang, m, meId, date, decision, flat, members, changes,
       {MEALS.map(meal => {
         const late = changes.some(c => c.memberId === meId && c.date === date && c.meal === meal && c.late);
         const count = mealCount(self, idx, date, meal);
-        const guests = changes.find(c => c.memberId === meId && c.date === date && c.meal === meal)?.guests ?? 0, own = count - guests;
+        const own = ownPlate(self, changes, date, meal), guests = count - own;
         const off = noCook.some(n => n.date === date && n.meal === meal);
         // a late change made on the meal's own day (surprise guest, the starter's fix) or after the night-before cutoff
         const badge = off ? m.noCook : late ? (date <= todayDhaka() ? m.lateSameDay : m.lateAfter.replace('{t}', fmtTime(flat.cutoff))) : null;
