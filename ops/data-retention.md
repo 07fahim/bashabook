@@ -21,6 +21,14 @@ history retention; checked 2026-10-11). The same 6 hours is all the undo there i
 migration must be noticed the same day. Restore tested 2026-10-11: a branch of production forked at a time 29 minutes before
 migration 015 showed 014 as its last migration, with every flat and entry present, read through the app's own client.
 
+Trials nobody came back to are deleted on their own (since 2026-10-24, `runJobs` in `lib/jobs.ts`): a flat created more
+than 30 days ago where at most one person ever signed in, no money entry exists and nothing was written to the history for
+30 days. Any flat with two signed-in people or one money entry is never touched by this. The cron run logs the names it
+removed (`purged` in the response, saved in cron-job.org's history).
+
+Also since 2026-10-24: anonymous actions are counted per connection and hour (`rate_limits`, `lib/rate-limit.ts`): 5 new
+flats, 120 code lookups, 60 PIN posts; past that the page says to wait an hour. A flat holds 30 names in all (`MAX_MEMBERS`).
+
 Before deleting: confirm the request with the collector on a verified number (as in `ops/collector-pin-recovery.md`) and,
 because the records belong to the whole flat, with one other flatmate. Tell them the data cannot be recovered afterwards. The flat's own history goes with it, so write the date, flat name, who asked and
 who confirmed in the app-team log (the script prints the line to paste).

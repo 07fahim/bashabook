@@ -80,3 +80,28 @@ describe('timed reminders', { timeout: 30000 }, () => {
     expect(authorized('Bearer abc', undefined)).toBe(false);
   });
 });
+
+describe('abandoned flats', { timeout: 30000 }, () => {
+  const age = async (flatId: string) => {
+    await db(`update flats set created_at = now() - interval '31 days' where id = $1`, [flatId]);
+    await db(`update audit_log set at = now() - interval '31 days' where flat_id = $1`, [flatId]);
+  };
+  const names = async () => (await db<{ name: string }>(`select name from flats where name in ('Trial', 'Two', 'Money', 'Busy', 'Young') order by name`)).map(r => r.name);
+  it('a month-old flat with one claimed person, no money and no activity is deleted; others stay', async () => {
+    await migrate();
+    const s = spy();
+    const old = await createFlat(db, { flatName: 'Trial', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-09-01', lang: 'en' });
+    const two = await createFlat(db, { flatName: 'Two', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-09-01', lang: 'en' });
+    const money = await createFlat(db, { flatName: 'Money', name: 'Nafis', pin: '1234', others: [], today: '2026-09-01', lang: 'en' });
+    const busy = await createFlat(db, { flatName: 'Busy', name: 'Nafis', pin: '1234', others: [], today: '2026-09-01', lang: 'en' });
+    await createFlat(db, { flatName: 'Young', name: 'Nafis', pin: '1234', others: [], today: '2026-10-01', lang: 'en' });
+    for (const f of [old, two, money, busy]) await age(f.flatId);
+    await db(`update members set pin_hash = 'x' where flat_id = $1 and pin_hash is null`, [two.flatId]);
+    await openMonth(db, money.flatId, '2026-09-01');
+    await addEntry(db, money.flatId, { memberId: money.memberId, role: 'manager' }, { type: 'bazar', amount: 50000, date: '2026-09-05', note: null, paidBy: null, memberId: null, split: null, selected: [] });
+    await db(`insert into audit_log (flat_id, entity, entity_id, after) values ($1, 'members', 'x', '{}')`, [busy.flatId]);
+    const r = await runJobs(db, '2026-10-05T12:00', s.send);
+    expect(r.purged).toEqual(['Trial']);
+    expect(await names()).toEqual(['Busy', 'Money', 'Two', 'Young']);
+  });
+});

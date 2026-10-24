@@ -255,3 +255,13 @@ describe('auth', { timeout: 30000 }, () => {
     expect(await addMember(db, flatId, 'Zarif', '2026-10-09', memberId)).toBe(true);
   });
 });
+
+describe('member cap', { timeout: 30000 }, () => {
+  it('a flat holds 30 names at most; the 31st is refused', async () => {
+    await migrate();
+    const { flatId, memberId } = await createFlat(db, { flatName: 'Cap', name: 'Nafis', pin: '1234', others: Array.from({ length: 28 }, (_, i) => `P${i}`), today: '2026-10-09', lang: 'en' });
+    expect(await addMember(db, flatId, 'P28', '2026-10-09', memberId)).toBe(true);     // the 30th
+    expect(await addMember(db, flatId, 'P29', '2026-10-09', memberId)).toBe(false);    // the 31st
+    expect((await db<{ n: number }>(`select count(*)::int as n from members where flat_id = $1`, [flatId]))[0].n).toBe(30);
+  });
+});

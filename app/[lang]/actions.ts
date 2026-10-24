@@ -4,7 +4,7 @@ import { refresh } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
-import { addMember, changePin, cleanName, cleanText, clearLock, clearedBefore, UUID, createFlat, isPin, login, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addMember, changePin, cleanName, cleanText, clearLock, clearedBefore, UUID, createFlat, isPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
@@ -18,6 +18,7 @@ import { depositMsg, handoverMsg, payoutMsg } from '@/lib/notify-text';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
 import { removePush, savePush, type PushSub } from '@/lib/push-db';
+import { allow, firstIp } from '@/lib/rate-limit';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
@@ -25,6 +26,8 @@ import { fmtDay, fmtExact, fmtMonth, fmtSigned } from './format';
 
 const str = (d: FormData, k: string) => String(d.get(k) ?? '');
 const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLocale(l) ? l : 'en'; };
+/** Anonymous actions are counted per connection and hour (lib/rate-limit): a script can't burn the database. */
+const ip = async () => firstIp((await headers()).get('x-forwarded-for'));
 
 export async function createFlatAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), e = getDictionary(lang).app.errors;
@@ -32,9 +35,10 @@ export async function createFlatAction(_: FormState, d: FormData): Promise<FormS
   const others = str(d, 'others').split('\n').map(s => s.trim()).filter(Boolean).map(cleanName);
   if (!flatName) return { error: e.flatName };
   if (!name) return { error: e.name };
-  if (others.includes(null) || others.length > 30) return { error: e.others };
+  if (others.includes(null) || others.length >= MAX_MEMBERS) return { error: e.others };
   if (!isPin(d.get('pin'))) return { error: e.pin };
   if (str(d, 'pin') !== str(d, 'pin2')) return { error: e.pinMatch };
+  if (!(await allow(db, `new:${await ip()}`, 5))) return { error: e.tooMany };
   const { memberId } = await createFlat(db, { flatName, name, pin: str(d, 'pin'), others: others as string[], today: todayDhaka(), lang });
   await startSession(memberId);
   redirect(`/${lang}/home`);
@@ -49,6 +53,7 @@ export async function loginAction(_: FormState, d: FormData): Promise<FormState>
   const pin = str(d, 'pin'), newPin = d.has('newPin') ? str(d, 'newPin') : null;
   if (!isPin(pin) || (newPin !== null && !isPin(newPin))) return { error: e.pin };
   if (d.has('pin2') && (newPin ?? pin) !== str(d, 'pin2')) return { error: e.pinMatch };
+  if (!(await allow(db, `pin:${await ip()}`, 60))) return { error: e.tooMany };
   const r = await login(db, str(d, 'code'), str(d, 'memberId'), pin, newPin);
   if ('error' in r) return { error: e[r.error] + (r.left ? ' ' + e.lastTries.replace('{n}', String(r.left)) : '') };
   await startSession(r.memberId);
@@ -68,7 +73,10 @@ export async function addMemberAction(_: FormState, d: FormData): Promise<FormSt
   const name = cleanName(d.get('name')), joinedOn = str(d, 'joinedOn');
   if (!name) return { error: a.errors.name };
   if (!isDate(joinedOn) || joinedOn < todayDhaka() || !editable(joinedOn, await openFrom(db, me.flatId, todayDhaka()))) return { error: getDictionary(lang).meals.errors.bad };
-  if (!(await addMember(db, me.flatId, name, joinedOn, me.memberId))) return { error: a.errors.nameTaken };
+  if (!(await addMember(db, me.flatId, name, joinedOn, me.memberId))) {
+    const [{ n }] = await db<{ n: number }>(`select count(*)::int as n from members where flat_id = $1`, [me.flatId]);
+    return { error: n >= MAX_MEMBERS ? a.errors.flatFull : a.errors.nameTaken };
+  }
   refresh();
   return { done: a.added };
 }

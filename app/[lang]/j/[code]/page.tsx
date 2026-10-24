@@ -1,9 +1,11 @@
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { flatByCode } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { todayDhaka } from '@/lib/meals';
+import { allow, firstIp } from '@/lib/rate-limit';
 import { ActionForm } from '../../action-form';
 import { loginAction } from '../../actions';
 import { getDictionary, hasLocale } from '../../dictionaries';
@@ -22,7 +24,9 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
   if (!hasLocale(lang)) notFound();
   const { m } = await searchParams;
   const t = getDictionary(lang), a = t.app;
-  const flat = await flatByCode(db, code);
+  // code lookups are counted per connection and hour, so a script can't guess codes or burn the database
+  const ok = await allow(db, `join:${firstIp((await headers()).get('x-forwarded-for'))}`, 120);
+  const flat = ok ? await flatByCode(db, code) : null;
   const me = flat?.members.find(x => x.id === m);
   const h1 = 'font-display text-3xl font-bold';
 
@@ -34,7 +38,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
         {!flat ? (
           <div>
             <h1 className={h1}>{a.joinTitle}</h1>
-            <p role="alert" className="mt-3 font-semibold text-chili">{a.errors.badCode}</p>
+            <p role="alert" className="mt-3 font-semibold text-chili">{ok ? a.errors.badCode : a.errors.tooMany}</p>
             <Link href={`/${lang}/join`} className={`mt-6 inline-flex min-h-11 items-center ${link}`}>{a.tryCode}</Link>
           </div>
         ) : !me ? (

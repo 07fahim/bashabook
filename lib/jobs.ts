@@ -20,7 +20,7 @@ const claim = async (db: Db, flatId: string, date: string, job: string) =>
  *  has 25 s, so ~80 due reminders per run. A pilot has a handful of flats; batch the claims if flats ever reach dozens. */
 export async function runJobs(db: Db, now: string, send: typeof sendPush = sendPush) {
   const today = now.slice(0, 10), tomorrow = addDays(today, 1), time = now.slice(11);
-  const out = { meal: 0, close: 0, sent: 0, gone: 0, failed: 0 };
+  const out = { meal: 0, close: 0, sent: 0, gone: 0, failed: 0, purged: [] as string[] };
   const add = (r: { sent: number; gone: number; failed: number }) => { out.sent += r.sent; out.gone += r.gone; out.failed += r.failed; };
 
   const meals = await db<{ id: string; cutoff: string; lang: Locale }>(
@@ -46,6 +46,15 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
       out.close++; add(await send(db, [f.collector], closeMsg(f.lang, f.month, f.pending)));
     }
   }
+
+  // A trial nobody came back to: a month old, at most one person signed in, no money, nothing in the history for 30 days.
+  // One statement; the flat's rows cascade. ponytail: correlated subqueries over every flat each run, fine for hundreds.
+  out.purged = (await db<{ name: string }>(
+    `delete from flats f where created_at < now() - interval '30 days'
+       and (select count(*) from members where flat_id = f.id and pin_hash is not null) <= 1
+       and not exists (select 1 from ledger where flat_id = f.id)
+       and not exists (select 1 from audit_log where flat_id = f.id and at > now() - interval '30 days')
+     returning name`)).map(r => r.name);
   return out;
 }
 

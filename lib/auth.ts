@@ -162,11 +162,17 @@ export async function clearLock(db: Db, flatId: string, memberId: string, by: st
 export const clearedBefore = async (db: Db, flatId: string, by: string) =>
   new Set((await db<{ id: string }>(`select m.id from members m where m.flat_id = $1 and ${CLEARED_BEFORE('$2')}`, [flatId, by])).map(r => r.id));
 
-/** The collector adds a name, moving in on `today` or later; the history says who added whom and from when. */
+/** A flat holds this many names in all (the product is for 8 to 10 people; the cap bounds reminder fan-out and the rows one
+ *  flat can create). ponytail: counts every row, so years of moving in and out eat into it; count the staying if a real flat hits it. */
+export const MAX_MEMBERS = 30;
+
+/** The collector adds a name, moving in on `today` or later; the history says who added whom and from when. False when the
+ *  name is taken for that stay or the flat is full. */
 export async function addMember(db: Db, flatId: string, name: string, today: string, by: string) {
   // the target must be named: one_manager_per_flat is deferrable (011) and can't be an on conflict arbiter
   const rows = await db(
-    `with m as (insert into members (flat_id, name, joined_on) values ($1, $2, $3) on conflict on constraint one_name_per_stay do nothing returning id, joined_on),
+    `with m as (insert into members (flat_id, name, joined_on) select $1, $2, $3 where (select count(*) from members where flat_id = $1) < ${MAX_MEMBERS}
+         on conflict on constraint one_name_per_stay do nothing returning id, joined_on),
      a as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'members', m.id::text, jsonb_build_object('added', m.joined_on::text), $4 from m)
      select id from m`, [flatId, name, today, by]);
   return rows.length > 0;
