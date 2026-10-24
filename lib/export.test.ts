@@ -7,7 +7,7 @@ describe('csv', () => {
   });
 
   it('defuses a cell that a spreadsheet would read as a formula; negative amounts stay numbers', () => {
-    expect(csv([['=1+1', '+5', '@a', '-x', '-10.00', 'a=b']])).toBe("'=1+1,'+5,'@a,'-x,-10.00,a=b");
+    expect(csv([['=1+1', '+5', '@a', '-x', '-10.00', 'a=b', '=a,b']])).toBe("'=1+1,'+5,'@a,'-x,-10.00,a=b,\"'=a,b\"");
   });
 });
 

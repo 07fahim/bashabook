@@ -4,7 +4,7 @@ export type CsvHead = Record<'date' | 'type' | 'note' | 'amount' | 'paidBy' | 'w
 export type CsvEntry = { date: string; type: string; note: string | null; amount: number; paidBy: string; who: string };
 export type CsvPerson = { name: string; meals: number; food: number; bills: number; paidIn: number; earlier: number; advances: number; corrections: number; line: number };
 
-// a leading = + @ or - (not a negative number) would run as a formula in a spreadsheet; the apostrophe marks text, as Excel does
+// a leading = + @ or - (not a negative number) would run as a formula in a spreadsheet; the apostrophe stops that (it stays visible)
 const cell = (v: string | number) => { const s = String(v), t = /^[=+@]|^-(?!\d)/.test(s) ? `'${s}` : s; return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
 export const csv = (rows: (string | number)[][]) => rows.map(r => r.map(cell).join(',')).join('\n');
 const taka = (p: number) => (p / 100).toFixed(2);

@@ -20,7 +20,9 @@ export async function GET(req: Request, ctx: RouteContext<'/[lang]/money/export'
   const body = monthCsv(x.csv,
     mo.entries.filter(e => e.status === 'ok').map(e => ({ date: e.date, type: x.types[e.type], amount: e.amount, paidBy: name(e.paidBy),
       note: [e.forMonth && x.correctionFor.replace('{month}', fmtMonth(e.forMonth)), e.note].filter(Boolean).join(' · ') || null,   // as Money shows it
-      who: e.type === 'adjustment' ? `${name(e.memberId)} → ${name(e.moves)}` : name(e.memberId) })),
+      who: e.type === 'adjustment' ? `${name(e.memberId)} → ${name(e.moves)}`   // as Money shows it: from → to
+        : e.type === 'deposit' ? (e.memberId === e.heldBy ? name(e.heldBy) : `${name(e.memberId)} → ${name(e.heldBy)}`)
+        : e.type === 'payout' ? `${name(e.heldBy)} → ${name(e.memberId)}` : name(e.memberId) })),
     mo.result.perMember.map(p => ({ name: name(p.id), meals: mo.meals.get(p.id) ?? 0, food: p.foodCost, bills: p.billShare, paidIn: p.paidIn, earlier: p.opening, advances: p.payouts, corrections: p.adjustments, line: p.balance })));
   return new Response(body, { headers: {
     'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="bashabook-${m}.csv"`, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
