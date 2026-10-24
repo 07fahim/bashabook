@@ -8,7 +8,7 @@ import { setAway, cancelAway, setDefaults, updateSettings } from '../lib/meals-d
 import { addRoom, openMonth, setRent } from '../lib/money-db';
 
 const url = process.env.DATABASE_URL ?? '';
-if (!new URL(url).hostname.startsWith('ep-calm-shape-')) throw new Error('not the test copy; refusing');
+if (!new URL(url).hostname.startsWith('ep-muddy-mud-')) throw new Error('not the test copy; refusing');
 const sql = postgres(url, { max: 12, prepare: false, onnotice: () => {} });
 const db: Db = (t, p = []) => sql.unsafe(t, p as never[]) as never;
 

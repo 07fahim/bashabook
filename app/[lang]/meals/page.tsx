@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { db } from '@/lib/db';
-import { addDays, firstWeek, indexChanges, isDate, isPresent, mealCount, mealDecision, MEALS, nowDhaka, type Meal } from '@/lib/meals';
+import { addDays, daysOfMonth, firstWeek, headcount, indexChanges, isDate, isPresent, mealCount, mealDecision, MEALS, nowDhaka, ownPlate, type Meal } from '@/lib/meals';
 import { flatStart, loadHistory, loadMeals, myGuests, upcomingAway, type HistoryRow } from '@/lib/meals-db';
 import { requireMember } from '@/lib/session';
 import { noticeCount } from '@/lib/notices';
@@ -37,11 +37,14 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const back = Math.max(-8, firstWeek(today, await flatStart(db, me.flatId)));
   const w = Math.min(7, Math.max(back, Math.trunc(Number(sp.week)) || 0));
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, 7 * w + i));
-  const [meals, history, aways, guestList] = await Promise.all([
+  // the month grid shows the month the week starts in, read whole alongside the week
+  const gridDays = daysOfMonth(`${week[0].slice(0, 7)}-01`);
+  const [meals, history, aways, guestList, gridData] = await Promise.all([
     loadMeals(db, me.flatId, week[0], week[6]),
     loadHistory(db, me.flatId, mine ? me.memberId : null, shownRows + 1),
     upcomingAway(db, me.flatId, me.memberId, addDays(today, 1)),
     myGuests(db, me.flatId, me.memberId, today),
+    loadMeals(db, me.flatId, gridDays[0], gridDays.at(-1)!),
   ]);
   const starter = meals.members.find(x => x.role === 'manager');
   const self = meals.members.find(x => x.id === me.memberId)!;
@@ -125,6 +128,42 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
         <div className="mt-4">
           <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={todayNote} {...meals} />
         </div>
+
+        {/* the month as a calendar: my three meals a day as dots, the flat's plates in the corner, each day a link to its week */}
+        <section className={card}>
+          <h2 className={h2}>{fmtMonth(gridDays[0])}</h2>
+          <p className="mt-1 max-w-prose text-[15px] text-muted">{m.monthLead}</p>
+          {(() => {
+            const gridSelf = gridData.members.find(x => x.id === me.memberId);
+            const weekOf = (d: string) => Math.floor((Date.parse(d) - Date.parse(today)) / 864e5 / 7);   // the ?week= that holds this day: week 0 starts today
+            const lead = (new Date(`${gridDays[0]}T00:00:00Z`).getUTCDay() + 1) % 7;                     // blanks before the 1st, Saturday first
+            return (
+              <ol className="mt-4 grid grid-cols-7 gap-1 text-center text-[13px] sm:gap-2">
+                {m.monthDays.map(d => <li key={d} aria-hidden="true" className="font-semibold text-muted">{d}</li>)}
+                {Array.from({ length: lead }, (_, i) => <li key={`lead${i}`} aria-hidden="true" />)}
+                {gridDays.map(d => {
+                  const here = gridSelf ? isPresent(gridSelf, d) : false, n = weekOf(d), linkable = n >= back && n <= 7;
+                  const dots = MEALS.map(x => (gridSelf ? ownPlate(gridSelf, gridData.changes, d, x) : 0) > 0);
+                  const guests = gridData.changes.filter(c => c.memberId === me.memberId && c.date === d).reduce((a, c) => a + c.guests, 0);
+                  const hc = headcount(gridData.members, gridData.changes, d), plates = hc.b + hc.l + hc.d;
+                  const label = m.cellLabel.replace('{d}', fmtDay(d, lang)).replace('{meals}', here ? MEALS.map((x, i) => `${m.names[x]} ${dots[i] ? m.on : m.off}`).join(', ') : m.notInFlatSelf).replace('{plates}', String(plates));
+                  const inner = (<>
+                    <span className={`block font-semibold ${d === today ? 'text-turmeric-ink' : ''}`}>{Number(d.slice(8))}</span>
+                    <span aria-hidden="true" className="mt-1 flex justify-center gap-1">
+                      {dots.map((on, i) => <span key={i} className={`size-2 rounded-full ${!here ? 'opacity-0' : on ? 'bg-turmeric' : 'border border-muted'}`} />)}
+                    </span>
+                    <span aria-hidden="true" className="mt-0.5 block text-[11px] leading-4 text-muted tabular-nums">{guests > 0 ? `+${guests} · ` : ''}{plates}</span>
+                  </>);
+                  const box = `block rounded-xl border py-1.5 ${d === today ? 'border-turmeric' : 'border-line'} ${here ? '' : 'opacity-50'}`;
+                  return (
+                    <li key={d}>
+                      {linkable ? <Link href={href(n, mine)} aria-label={label} className={`${box} hover:bg-paper ${focus}`}>{inner}</Link>
+                        : <span role="img" aria-label={label} className={box}>{inner}</span>}
+                    </li>);
+                })}
+              </ol>);
+          })()}
+        </section>
 
         <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-2 md:items-start lg:grid-cols-3 [&>*]:mt-0">
           <Fold title={m.guestTitle} lead={m.guestLead}>

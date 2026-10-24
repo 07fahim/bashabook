@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { addDays, countChanges, firstWeek, isDate, mealDecision, daysOfMonth, weightedMeals, daysPresent, headcount, isLocked, nowDhaka, plates, todayDhaka, type MealMember, type MealChange } from './meals';
+import { addDays, countChanges, firstWeek, isDate, mealDecision, daysOfMonth, weightedMeals, daysPresent, headcount, isLocked, nowDhaka, ownPlate, plates, todayDhaka, type MealMember, type MealChange } from './meals';
 
 const all = { b: true, l: true, d: true };
 const members: MealMember[] = [
@@ -23,6 +23,17 @@ describe('meals', () => {
     expect(w.get('A')).toBe(31 * 250 - 100 + 200);   // 7850
     expect(w.get('D')).toBe(21 * 200);                // joined day 11: 4200
     expect(daysPresent(members, '2026-10-01').get('D')).toBe(21);
+  });
+
+  it('tells my own plate apart from my guests', () => {
+    const changes: MealChange[] = [
+      { memberId: 'A', date: '2026-10-12', meal: 'd', count: 2, guests: 2 },   // off, two guests
+      { memberId: 'A', date: '2026-10-12', meal: 'l', count: 3, guests: 2 },   // eating, two guests
+    ];
+    expect(ownPlate(members[0], changes, '2026-10-12', 'd')).toBe(0);
+    expect(ownPlate(members[0], changes, '2026-10-12', 'l')).toBe(1);
+    expect(ownPlate(members[0], changes, '2026-10-12', 'b')).toBe(1);   // no change: the usual
+    expect(ownPlate(members[1], changes, '2026-10-05', 'l')).toBe(0);   // not here yet
   });
 
   it('counts plates for the cook', () => {

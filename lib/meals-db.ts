@@ -1,5 +1,5 @@
 import type { Db } from './db';
-import { addDays, countChanges, headcount, indexChanges, isLocked, isPresent, mealCount, mealDecision, type Decision, type Meal, type MealChange, type MealMember } from './meals';
+import { addDays, countChanges, headcount, indexChanges, isLocked, isPresent, mealCount, mealDecision, ownPlate, type Decision, type Meal, type MealChange, type MealMember } from './meals';
 
 export type FlatInfo = {
   name: string; cutoff: string; lang: 'bn' | 'en'; weights: Record<Meal, number>;
@@ -74,8 +74,8 @@ export async function currentPlates(db: Db, flatId: string, memberId: string, da
   const { members, changes } = await loadMeals(db, flatId, date, date);
   const self = members.find(m => m.id === memberId);
   if (!self || !isPresent(self, date)) return null;
-  const guests = changes.find(c => c.memberId === memberId && c.date === date && c.meal === meal)?.guests ?? 0;
-  return { own: mealCount(self, indexChanges(changes), date, meal) - guests, guests };
+  const own = ownPlate(self, changes, date, meal);
+  return { own, guests: mealCount(self, indexChanges(changes), date, meal) - own };
 }
 
 const blocked = async (db: Db, flatId: string, date: string, meal: Meal) =>

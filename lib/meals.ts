@@ -39,6 +39,13 @@ export function mealCount(m: MealMember, idx: Map<string, number>, date: string,
   return idx.get(key(m.id, date, meal)) ?? (m.defaults[meal] ? 1 : 0);
 }
 
+/** The member's own plate (0 or 1) for one meal: the saved count less its guests, else the usual. */
+export function ownPlate(m: MealMember, changes: MealChange[], date: string, meal: Meal): number {
+  if (!isPresent(m, date)) return 0;
+  const c = changes.find(c => c.memberId === m.id && c.date === date && c.meal === meal);
+  return c ? c.count - (c.guests ?? 0) : m.defaults[meal] ? 1 : 0;
+}
+
 /** Weighted meals per member for the month, in hundredths of a meal. Weights are hundredths too (b: 50 = 0.5).
  *  `upTo` stops the count at a day, for numbers so far. */
 export function weightedMeals(members: MealMember[], changes: MealChange[], month: string, weights: Record<Meal, number>, upTo = '9999-12-31'): Map<string, number> {
