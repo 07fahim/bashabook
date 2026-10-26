@@ -1,4 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react';
+import { CASH_KEYS } from '@/lib/money';
+import type { Method } from '@/lib/money-db';
 
 /** Line icons (24px grid) for the landing cards and the notices rows. */
 export const ICONS = {
@@ -37,11 +39,11 @@ export function Field({ label, hint, className = '', ...input }: { label: string
 }
 
 /** How money in or out was paid: four chips, none picked by default (optional). `labels` are the close card's cashMethods. */
-export const MethodField = ({ label, labels }: { label: string; labels: Record<'cash' | 'bkash' | 'nagad' | 'bank', string> }) => (
+export const MethodField = ({ label, labels }: { label: string; labels: Record<Method, string> }) => (
   <fieldset>
     <legend className="font-semibold">{label}</legend>
     <div className="mt-2 grid grid-cols-2 gap-2">
-      {(['cash', 'bkash', 'nagad', 'bank'] as const).map(k => (
+      {CASH_KEYS.map(k => (
         <label key={k} className={`${checkChip} px-3`}>
           <input type="radio" name="method" value={k} className="size-5 shrink-0 accent-on-turmeric" />{labels[k]}
         </label>

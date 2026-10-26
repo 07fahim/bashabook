@@ -137,11 +137,11 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
 
 /** Rows waiting for this person's tap: deposits for the collector, money handed to me for me. `name` = who the row is for. */
 export const toConfirm = (db: Db, flatId: string, memberId: string, boss: boolean) => db<{
-  id: string; type: 'deposit' | 'payout'; amount: number; date: string; note: string | null; name: string; paidTo: string | null;
+  id: string; type: 'deposit' | 'payout'; amount: number; date: string; note: string | null; method: Method | null; name: string; paidTo: string | null;
 }>(
   // paidTo: who held this money (received a deposit, or paid out a payout), named only when that is no longer the
   // collector (after a handover) — so a waiting entry is never relabelled to whoever collects today
-  `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.note, m.name
+  `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.note, l.method, m.name
      , (select hb.name from members hb where hb.id = l.held_by
          and hb.id is distinct from (select id from members where flat_id = l.flat_id and role = 'manager')) as "paidTo"
    from ledger l join members m on m.flat_id = l.flat_id and m.id = l.member_id

@@ -139,6 +139,14 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(await removeEntry(db, flatId, nafis, dep, TODAY)).toBe(true);
     expect(await putBack(db, flatId, ids.Nafis, dep, TODAY)).toBe(true);
     expect((await month()).entries.find(x => x.id === dep)?.method).toBe('bkash');
+    // the collector sees the way it came while it waits for the tap
+    expect((await toConfirm(db, flatId, ids.Nafis, true)).map(w => [w.amount, w.method])).toEqual([[20000, 'bkash']]);
+    // a removal record from before 019 has no method key: it still puts back, with none (guards PUT_BACK_COLUMNS too)
+    const pay = entries.find(x => x.type === 'payout')!.id;
+    expect(await removeEntry(db, flatId, nafis, pay, TODAY)).toBe(true);
+    await db(`update audit_log set before = before - 'method' where entity = 'ledger' and entity_id = $1 and after->>'removed' = 'true'`, [pay]);
+    expect(await putBack(db, flatId, ids.Nafis, pay, TODAY)).toBe(true);
+    expect((await month()).entries.find(x => x.id === pay)?.method).toBeNull();
   });
 
   it('only whoever added an entry or the collector removes it, and the removal stays visible', async () => {
