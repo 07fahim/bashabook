@@ -36,6 +36,20 @@ export function Field({ label, hint, className = '', ...input }: { label: string
   );
 }
 
+/** How money in or out was paid: four chips, none picked by default (optional). `labels` are the close card's cashMethods. */
+export const MethodField = ({ label, labels }: { label: string; labels: Record<'cash' | 'bkash' | 'nagad' | 'bank', string> }) => (
+  <fieldset>
+    <legend className="font-semibold">{label}</legend>
+    <div className="mt-2 grid grid-cols-2 gap-2">
+      {(['cash', 'bkash', 'nagad', 'bank'] as const).map(k => (
+        <label key={k} className={`${checkChip} px-3`}>
+          <input type="radio" name="method" value={k} className="size-5 shrink-0 accent-on-turmeric" />{labels[k]}
+        </label>
+      ))}
+    </div>
+  </fieldset>
+);
+
 export const PinField = (p: { label: string; name: string; autoComplete: string }) => (
   <Field type="password" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} required {...p} />
 );

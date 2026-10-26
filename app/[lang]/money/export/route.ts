@@ -19,7 +19,7 @@ export async function GET(req: Request, ctx: RouteContext<'/[lang]/money/export'
   const t = getDictionary(lang), x = t.money, name = (id: string | null) => (id ? mo.all.find(p => p.id === id)?.name ?? '?' : '');
   const body = monthCsv(x.csv,
     mo.entries.filter(e => e.status === 'ok').map(e => ({ date: e.date, type: x.types[e.type], amount: e.amount, paidBy: name(e.paidBy),
-      note: [e.forMonth && x.correctionFor.replace('{month}', fmtMonth(e.forMonth)), e.note].filter(Boolean).join(' · ') || null,   // as Money shows it
+      note: [e.forMonth && x.correctionFor.replace('{month}', fmtMonth(e.forMonth)), e.method && x.cashMethods[e.method], e.note].filter(Boolean).join(' · ') || null,   // as Money shows it
       who: e.type === 'adjustment' ? `${name(e.memberId)} → ${name(e.moves)}`   // as Money shows it: from → to
         : e.type === 'deposit' ? (e.memberId === e.heldBy ? name(e.heldBy) : `${name(e.memberId)} → ${name(e.heldBy)}`)
         : e.type === 'payout' ? `${name(e.heldBy)} → ${name(e.memberId)}` : name(e.memberId) })),

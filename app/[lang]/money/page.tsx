@@ -21,7 +21,7 @@ import { Nav } from '../nav';
 import { PendingButton } from '../pending-button';
 import { PayerSelect } from '../payer-select';
 import { ShareButton } from '../share-button';
-import { card, checkChip, field, Field, focal, Fold, focus, link, LongList, PageSkeleton, primary } from '../ui';
+import { card, checkChip, field, Field, focal, Fold, focus, link, LongList, MethodField, PageSkeleton, primary } from '../ui';
 import { balanceText, ConfirmList, lookText } from './bits';
 import { breakdownOf, breakdownText, pickWho, type Labels } from './breakdown';
 
@@ -207,6 +207,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 {!boss && <p className="mt-2 font-semibold">{x.forSomeone.replaceAll('{name}', collector.name)}</p>}
                 <ActionForm action={entryAction} className="mt-4" clearOnDone>
                   {hidden('deposit')}{amountDate}
+                  <MethodField label={x.method} labels={x.cashMethods} />
                   <Field label={x.noteRef} name="note" maxLength={100} />
                   <button className={primary}>{x.save}</button>
                 </ActionForm>
@@ -351,7 +352,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         <div className="flex items-start justify-between gap-x-3">
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold">{x.types[e.type]} · {who(e)}</p>
-                          {(e.forMonth || e.note) && <p className="text-[15px]">{[e.forMonth && x.correctionFor.replace('{month}', fmtMonth(e.forMonth)), e.note].filter(Boolean).join(' · ')}</p>}
+                          {(e.forMonth || e.method || e.note) && <p className="text-[15px]">{[e.forMonth && x.correctionFor.replace('{month}', fmtMonth(e.forMonth)), e.method && x.cashMethods[e.method], e.note].filter(Boolean).join(' · ')}</p>}
                           <p className="text-[15px] text-muted">
                             {x.addedBy.replace('{name}', name(e.createdBy))}
                             {e.status === 'pending' && <> · <span className="font-semibold text-ink">{x.pending}</span></>}
