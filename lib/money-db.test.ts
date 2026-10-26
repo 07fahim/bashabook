@@ -127,6 +127,28 @@ describe('money storage', { timeout: 30000 }, () => {
     expect([share.get(ids.Nafis), share.get(ids.Tahsin), share.get(ids.Zarif)]).toEqual([600000, 600000, 800000]);
   });
 
+  it('money in or out keeps how it was paid; a bazar or bill never has one; put back keeps it', async () => {
+    const { flatId, ids, as, nafis, month } = await flat();
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ type: 'deposit', amount: 20000, memberId: ids.Tahsin, method: 'bkash' }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 5000, memberId: ids.Zarif, method: 'cash' }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 1000, memberId: ids.Nafis }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 3000, method: 'nagad' }))).toBe('bad');
+    const { entries } = await month();
+    expect(entries.map(x => [x.type, x.amount, x.method]).sort()).toEqual([['deposit', 1000, null], ['deposit', 20000, 'bkash'], ['payout', 5000, 'cash']]);
+    const dep = entries.find(x => x.method === 'bkash')!.id;
+    expect(await removeEntry(db, flatId, nafis, dep, TODAY)).toBe(true);
+    expect(await putBack(db, flatId, ids.Nafis, dep, TODAY)).toBe(true);
+    expect((await month()).entries.find(x => x.id === dep)?.method).toBe('bkash');
+    // the collector sees the way it came while it waits for the tap
+    expect((await toConfirm(db, flatId, ids.Nafis, true)).map(w => [w.amount, w.method])).toEqual([[20000, 'bkash']]);
+    // a removal record from before 019 has no method key: it still puts back, with none (guards PUT_BACK_COLUMNS too)
+    const pay = entries.find(x => x.type === 'payout')!.id;
+    expect(await removeEntry(db, flatId, nafis, pay, TODAY)).toBe(true);
+    await db(`update audit_log set before = before - 'method' where entity = 'ledger' and entity_id = $1 and after->>'removed' = 'true'`, [pay]);
+    expect(await putBack(db, flatId, ids.Nafis, pay, TODAY)).toBe(true);
+    expect((await month()).entries.find(x => x.id === pay)?.method).toBeNull();
+  });
+
   it('only whoever added an entry or the collector removes it, and the removal stays visible', async () => {
     const { flatId, ids, as, nafis, month } = await flat();
     await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 50000, paidBy: ids.Tahsin }));

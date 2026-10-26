@@ -1,9 +1,11 @@
 import type { Db } from './db';
 import { daysOfMonth, daysPresent, isPresent, weightedMeals } from './meals';
 import { loadMeals } from './meals-db';
-import { monthBalances, type LedgerRow, type MonthResult, type Split } from './money';
+import { CASH_KEYS, monthBalances, type LedgerRow, type MonthResult, type Split } from './money';
 
-export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string; forMonth: string | null; moves: string | null; heldBy: string | null };
+export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string; forMonth: string | null; moves: string | null; heldBy: string | null; method: Method | null };
+/** How money in or out was paid (019): the same four places the close card counts. */
+export type Method = (typeof CASH_KEYS)[number];
 export type CashRecord = { cash: number; bkash: number; nagad: number; bank: number; expected: number; actual: number; difference: number; by: string };
 type Snap = { id: string; meals: number; days: number; opening: number; paidIn: number; foodCost: number; billShare: number; payouts: number; adjustments: number; balance: number };
 const snapshot = (db: Db, flatId: string, month: string) => db<Snap>(
@@ -42,11 +44,11 @@ export async function openMonth(db: Db, flatId: string, month: string) {
 /** One ledger row, its split people, its history row and (if `repeat`) its monthly template, all in one statement,
  *  so a bill can never be saved without the repeat the person ticked, or the other way round. Callers check the rules. */
 async function insertEntry(db: Db, flatId: string, by: string,
-  e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[] },
+  e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[]; method?: Method | null },
   status: 'ok' | 'pending', repeat: { split: Split; selected: string[] } | null = null) {
   return (await db(
-    `with l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by)
-       values (coalesce($15::uuid, gen_random_uuid()), $1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10)
+    `with l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by, method)
+       values (coalesce($15::uuid, gen_random_uuid()), $1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10, $16)
        on conflict (id) do nothing returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, l.id, x::uuid from l, json_array_elements_text($11::text::json) x),
      t as (insert into bill_templates (flat_id, name, amount_poisha, split, selected_member_ids)
@@ -54,7 +56,7 @@ async function insertEntry(db: Db, flatId: string, by: string,
      th as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'bill_templates', t.id::text, to_jsonb(t), $10 from t)
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), $10 from l returning 1`,
     [flatId, e.date, e.type, e.amount, e.paidBy, e.memberId, e.split, e.note, status, by, JSON.stringify(e.split === 'selected' ? e.selected : []),
-     repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null, e.id ?? null])).length > 0;   // false: this id was saved already
+     repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null, e.id ?? null, e.method ?? null])).length > 0;   // false: this id was saved already
 }
 
 /** Everything the money screens need for one month. The version is read first: closeMonth freezes only results computed
@@ -80,7 +82,7 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
   const members = all.filter(m => m.joinedOn <= end && (m.leftOn === null || m.leftOn >= month));
   const rooms = await db<Room>(`select id, name, rent_share_poisha::int as "rentShare" from rooms where flat_id = $1 order by name`, [flatId]);
   const select = `select l.id, l.type, l.amount_poisha::int as amount, l.paid_by_member_id as "paidBy", l.member_id as "memberId", l.split, l.status,
-       l.date::text as date, l.note, l.created_by as "createdBy", l.for_month::text as "forMonth", l.moves, l.held_by as "heldBy",
+       l.date::text as date, l.note, l.created_by as "createdBy", l.for_month::text as "forMonth", l.moves, l.held_by as "heldBy", l.method,
        (select coalesce(json_agg(s.member_id), '[]'::json) from bill_split_members s where s.ledger_id = l.id) as selected
      from ledger l`;
   const entries = await db<Entry>(`${select} where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
@@ -135,11 +137,11 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
 
 /** Rows waiting for this person's tap: deposits for the collector, money handed to me for me. `name` = who the row is for. */
 export const toConfirm = (db: Db, flatId: string, memberId: string, boss: boolean) => db<{
-  id: string; type: 'deposit' | 'payout'; amount: number; date: string; note: string | null; name: string; paidTo: string | null;
+  id: string; type: 'deposit' | 'payout'; amount: number; date: string; note: string | null; method: Method | null; name: string; paidTo: string | null;
 }>(
   // paidTo: who held this money (received a deposit, or paid out a payout), named only when that is no longer the
   // collector (after a handover) — so a waiting entry is never relabelled to whoever collects today
-  `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.note, m.name
+  `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.note, l.method, m.name
      , (select hb.name from members hb where hb.id = l.held_by
          and hb.id is distinct from (select id from members where flat_id = l.flat_id and role = 'manager')) as "paidTo"
    from ledger l join members m on m.flat_id = l.flat_id and m.id = l.member_id
@@ -155,6 +157,7 @@ export type NewEntry = {
   selected: string[];
   repeat?: boolean;               // bills, collector only: also copy it into every new month (from flat money)
   id?: string;                    // one-time id from the form: a retry with the same id records nothing new
+  method?: Method | null;         // deposit, payout: cash, bKash, Nagad or bank; null = not said
 };
 
 /** The first date an entry may have. Flatmates: this month. The collector: the oldest month still open, so a bazar found after
@@ -176,7 +179,7 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, t
   }
   if (!Number.isInteger(e.amount) || e.amount <= 0) return 'bad';
   if ((e.type === 'bill') !== (e.split !== null)) return 'bad';
-  if (moving ? !e.memberId || e.paidBy : e.memberId) return 'bad';
+  if (moving ? !e.memberId || e.paidBy : e.memberId || e.method) return 'bad';
   if (e.type === 'payout' && !boss) return 'bad';                                  // only the collector hands out flat money
   if (e.type === 'deposit' && !boss && e.memberId !== by.memberId) return 'bad';   // members deposit only for themselves
   if (e.repeat && (!boss || e.type !== 'bill')) return 'bad';                      // monthly bills are the collector's
@@ -351,10 +354,11 @@ export async function stopRepeat(db: Db, flatId: string, by: Actor, id: string) 
 }
 
 /** Every ledger column: a removal record missing any of them is never put back. A test keeps this in step with the table. */
-export const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at,for_month,moves,held_by';
-/** What a removal record must hold to be put back: every column a row had before migration 009 added the two correction ones
- *  and 011 added held_by (an older record puts back with held_by null, so the insert trigger fills the current collector). */
-const PUT_BACK_COLUMNS = LEDGER_COLUMNS.replace(',for_month,moves,held_by', '');
+export const LEDGER_COLUMNS = 'id,flat_id,month,type,amount_poisha,paid_by_member_id,member_id,split,date,note,trxid,status,version,created_by,created_at,for_month,moves,held_by,method';
+/** What a removal record must hold to be put back: every column a row had before migration 009 added the two correction ones,
+ *  011 added held_by (an older record puts back with held_by null, so the insert trigger fills the current collector) and 019
+ *  added method (an older record puts back with none). */
+const PUT_BACK_COLUMNS = LEDGER_COLUMNS.replace(',for_month,moves,held_by,method', '');
 
 /** Brings a removed entry back exactly as it was (same id, status, people), rebuilt only from its latest removal record.
  *  Whoever made that removal: only while it's still this month (`today` is the Dhaka date). The current collector: this

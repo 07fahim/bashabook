@@ -39,7 +39,7 @@ export function ConfirmList({ lang, x, a, items, collector, fill }: {
               {/* paidTo: who actually handed it out, never relabelled to the current collector after a handover */}
               {(w.type === 'payout' ? x.confirmGot.replace('{name}', w.paidTo ?? collector)
                 : w.paidTo ? x.confirmDepositTo.replace('{name}', w.name).replace('{to}', w.paidTo) : x.confirmDeposit.replace('{name}', w.name)).replace('{t}', fmtExact(w.amount))}
-              <span className="block text-[15px] text-muted">{fmtDay(w.date, lang)}{w.note ? ` · ${w.note}` : ''}</span>
+              <span className="block text-[15px] text-muted">{[fmtDay(w.date, lang), w.method && x.cashMethods[w.method], w.note].filter(Boolean).join(' · ')}</span>
             </span>
             {/* the form is the flex child: without shrink-0 a long name squeezes it and the button's label wraps */}
             <form action={confirmAction} className="sm:shrink-0">

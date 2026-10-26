@@ -408,13 +408,14 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
   if (type === 'bill' && !note) return { error: x.errors.name };
   if (split === 'selected' && !selected.length) return { error: x.errors.people };
   const moving = type === 'deposit' || type === 'payout';
-  const key = str(d, 'key');
+  const key = str(d, 'key'), method = moving ? pick(CASH_KEYS, str(d, 'method')) : null;
   const r = await unlessClosed(() => addEntry(db, me.flatId, me, {
     id: UUID.test(key) ? key : undefined,
     type, amount, date, note, split, selected,
     paidBy: moving || who === 'fund' ? null : who,
     memberId: moving ? who || me.memberId : null,
     repeat: type === 'bill' && d.get('repeat') === '1',   // saved with the bill in one statement
+    method,
   }, today));
   if (r !== 'ok' && r !== 'again') return { error: x.errors[r] };
   // money between two people waits for the receiver's tap: tell them after the response, never instead of it ('again' is the

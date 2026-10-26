@@ -23,7 +23,7 @@ import { Header, withQuery } from '../header';
 import { ConfirmList, lookText } from '../money/bits';
 import { Nav } from '../nav';
 import { ShareButton } from '../share-button';
-import { checkChip, field, Field, Fold, focus, Group, link, PinField, primary, secondary, PageSkeleton } from '../ui';
+import { checkChip, field, Field, Fold, focus, Group, link, MethodField, PinField, primary, secondary, PageSkeleton } from '../ui';
 
 type Props = PageProps<'/[lang]/manage'>;
 
@@ -110,6 +110,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                   </label>
                   <Field label={mn.amount} name="amount" inputMode="decimal" required placeholder="3000" />
                   <DateField lang={lang} label={mn.date} name="date" required min={monthOf(today)} max={today} defaultValue={today} />
+                  <MethodField label={mn.method} labels={mn.cashMethods} />
                   <Field label={mn.note} name="note" maxLength={100} />
                   <button className={primary}>{mn.save}</button>
                 </ActionForm>
