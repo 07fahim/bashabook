@@ -156,7 +156,7 @@ const bn = {
       'প্রত্যেকের নাম। মোবাইল নম্বর বা ছোট ছবি শুধু তখনই রাখি যদি কেউ নিজে দেয়। আপনার PIN আমরা রাখি না। শুধু তার একটা এলোমেলো রূপ রাখি যেটা থেকে আসল PIN বের করা যায় না।',
       'প্রতিটা ফ্ল্যাটের মিল, বাজার, বিল, জমা, ফ্ল্যাট থেকে দেওয়া টাকা আর কে কখন কী বদলেছে তার ইতিহাস।',
       'রিমাইন্ডার চালু করলে সেগুলো পাঠানোর জন্য আপনার ব্রাউজারের ঠিকানা।',
-      'কেউ যেন কোড বা PIN আন্দাজ করে ঢুকতে না পারে সেজন্য আপনার ইন্টারনেট (IP) ঠিকানা মোটামুটি 2 ঘণ্টা রাখি।',
+      'কোড বা PIN আন্দাজ করে ঢোকা ঠেকাতে আপনার ইন্টারনেট (IP) ঠিকানা মোটামুটি 2 ঘণ্টা রাখি।',
     ] },
     see: { h: 'কে দেখতে পায়', p: [
       'অ্যাপে শুধু আপনার ফ্ল্যাটের মানুষ। তারা ফ্ল্যাটের সব লেনদেন (জমাসহ), প্রত্যেকের ব্যালেন্স আর মিলের সংখ্যা, মিলের তালিকা, নাম আর কেউ ফোন নম্বর বা ছবি দিলে সেটা দেখতে পায়।',
@@ -165,7 +165,7 @@ const bn = {
       'বাসাবুক কারো তথ্য বিক্রি করে না আর কোনো বিজ্ঞাপন দেখায় না। আপনাদের টাকাও কখনো রাখে না।',
     ] },
     cookies: { h: 'কুকি আর আপনার ডিভাইস', p: [
-      'একটা কুকি এই ডিভাইসে আপনাকে 90 দিন পর্যন্ত সাইন ইন রাখে। লাইট না ডার্ক সেই পছন্দ শুধু আপনার ডিভাইসেই থাকে।',
+      'একটা কুকি এই ডিভাইসে আপনাকে 90 দিন পর্যন্ত সাইন ইন রাখে। লাইট বা ডার্ক থিমের পছন্দ শুধু আপনার ডিভাইসেই থাকে।',
     ] },
     analytics: { h: 'Google Analytics', p: [
       'কতজন সাইটে আসে তা গুনতে ওয়েবসাইটটা Google Analytics ব্যবহার করে। এটা আপনার ডিভাইসে নিজের একটা কুকি রাখে। ফ্ল্যাটের কোড লুকিয়ে Google-কে জানায় আপনি কোন পেজ খুলছেন। সাথে ডিভাইসের ধরন, ব্রাউজার আর আপনি মোটামুটি কোন এলাকা থেকে খুলছেন। আপনার নাম, ফোন নম্বর, টাকার অঙ্ক বা আপনি যা লেখেন তা কখনো যায় না।',
@@ -834,7 +834,7 @@ const en: Dict = {
     updated: 'Last updated 27 October 2026',
     lead: 'BashaBook keeps a shared flat’s meals and money. This page says what it stores, who can see it and how to remove it.',
     keep: { h: 'What we keep', p: [
-      'For each person: their name and a mobile number or a small photo only if they add one. We never store your PIN. We keep only a scrambled form of it that cannot be turned back into the PIN.',
+      'For each person: their name. A mobile number or a small photo only if they add one. We never store your PIN. We keep only a scrambled form of it that cannot be turned back into the PIN.',
       'For each flat: meals, bazar, bills, deposits, money paid out from the flat and a history of who changed what and when.',
       'Your browser’s address for reminders if you turn them on.',
       'Your internet (IP) address for about 2 hours to stop anyone guessing codes or PINs.',
@@ -854,9 +854,9 @@ const en: Dict = {
     how: 'How Google uses this data',
     optOut: 'Opt out of Google Analytics',
     remove: { h: 'Keeping and deleting', p: [
-      'A flat’s records stay while the flat uses BashaBook. Someone who moves out keeps their records too. That keeps past meals, bills and settlements right.',
+      'A flat’s records stay while the flat uses BashaBook. The records of someone who moves out stay too. That keeps past meals, bills and settlements right.',
       'You can remove your own phone number and photo in the app at any time.',
-      'The person who keeps the flat money can ask us to delete the whole flat. We confirm with them and one other flatmate and then delete everything. After 6 hours it cannot be recovered.',
+      'The person who keeps the flat money can ask us to delete the whole flat. We confirm with them and one other flatmate. Then we delete everything. After 6 hours it cannot be recovered.',
       'A trial flat nobody came back to is deleted on its own: one person signed up, there are no money or meal entries and nothing changed for 30 days.',
     ] },
     contact: { h: 'Questions', p: ['Message us on WhatsApp or by email.'] },
