@@ -8,8 +8,6 @@ import { focus, ICONS } from './ui';
 import { EMAIL, WHATSAPP } from './contacts';
 
 const h2 = 'font-display text-3xl font-bold';
-// contact links: a link shows only when it is set (null hides it), so a placeholder never looks like a real address
-
 
 export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const { lang } = await params;

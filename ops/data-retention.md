@@ -5,7 +5,7 @@ What BashaBook keeps, for how long, and how it is deleted. Decided 2026-10-11 fo
 ## What is kept
 
 - A flat's records (people, meals, money, history) are kept for as long as the flat uses the app. A month that has closed is
-  never changed; a person who moves out keeps their rows, because the flat's history and settlement need them. The landing page
+  never changed; a person who moves out keeps their rows, because the flat's history and settlement need them. The privacy page
   says this: a mover's records stay for the flat's history.
 - Personal data held per person: name, optional mobile number, optional small photo, PIN hash, sign-in sessions (90 days each).
   A person can remove their own photo and phone number in the app at any time; their name stays in the flat's records.

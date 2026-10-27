@@ -154,19 +154,21 @@ const bn = {
     lead: 'বাসাবুক একটা শেয়ার্ড ফ্ল্যাটের মিল আর টাকার হিসাব রাখে। এখানে লেখা আছে আমরা কী রাখি, কে দেখতে পায়, আর কীভাবে মুছে ফেলা যায়।',
     keep: { h: 'আমরা কী রাখি', p: [
       'প্রত্যেকের নাম। মোবাইল নম্বর বা ছোট ছবি শুধু তখনই, যদি কেউ নিজে দেয়। আপনার PIN আমরা রাখি না, শুধু তার একটা এলোমেলো রূপ রাখি, যেটা থেকে আসল PIN বের করা যায় না।',
-      'প্রতিটা ফ্ল্যাটের মিল, বাজার, বিল, জমা আর দেওয়া টাকা, আর কে কখন কী বদলেছে তার ইতিহাস।',
+      'প্রতিটা ফ্ল্যাটের মিল, বাজার, বিল, জমা আর ফ্ল্যাট থেকে দেওয়া টাকা, আর কে কখন কী বদলেছে তার ইতিহাস।',
       'রিমাইন্ডার চালু করলে, রিমাইন্ডার পাঠানোর জন্য আপনার ব্রাউজারের ঠিকানা।',
+      'কেউ যেন কোড বা PIN আন্দাজ করে ঢুকতে না পারে, সেজন্য আপনার ইন্টারনেট (IP) ঠিকানা, সর্বোচ্চ 2 ঘণ্টা।',
     ] },
     see: { h: 'কে দেখতে পায়', p: [
-      'শুধু আপনার ফ্ল্যাটের মানুষ। তারা ফ্ল্যাটের সব লেনদেন, মিলের তালিকা, নাম, আর কেউ ফোন নম্বর বা ছবি দিলে সেটা দেখতে পায়।',
-      'আপনার হিসাবের খুঁটিনাটি দেখতে পান আপনি আর যার কাছে ফ্ল্যাটের টাকা থাকে।',
+      'অ্যাপে শুধু আপনার ফ্ল্যাটের মানুষ। তারা ফ্ল্যাটের সব লেনদেন (জমাসহ), প্রত্যেকের ব্যালেন্স আর মিলের সংখ্যা, মিলের তালিকা, নাম, আর কেউ ফোন নম্বর বা ছবি দিলে সেটা দেখতে পায়।',
+      'আপনার হিসাবের লাইন ধরে খুঁটিনাটি দেখতে পান আপনি আর যার কাছে ফ্ল্যাটের টাকা থাকে।',
+      'বাসাবুক টিম তথ্যে হাত দেয় শুধু সার্ভিস চালাতে, যেমন PIN রিসেট বা আপনি চাইলে ফ্ল্যাট মুছে ফেলা। তথ্য রাখা থাকে Neon (ডাটাবেস) আর Vercel (হোস্টিং)-এর কাছে।',
       'বাসাবুক কারো তথ্য বিক্রি করে না, কোনো বিজ্ঞাপন দেখায় না, আর কখনো আপনাদের টাকা রাখে না।',
     ] },
     cookies: { h: 'কুকি আর আপনার ডিভাইস', p: [
-      'একটা কুকি এই ফোনে আপনাকে 90 দিন পর্যন্ত সাইন ইন রাখে। লাইট না ডার্ক, সেই পছন্দ শুধু আপনার ডিভাইসেই থাকে।',
+      'একটা কুকি এই ডিভাইসে আপনাকে 90 দিন পর্যন্ত সাইন ইন রাখে। লাইট না ডার্ক, সেই পছন্দ শুধু আপনার ডিভাইসেই থাকে।',
     ] },
     analytics: { h: 'Google Analytics', p: [
-      'কতজন সাইটে আসে তা গুনতে ওয়েবসাইটটা Google Analytics ব্যবহার করে। এটা আপনার ডিভাইসে নিজের একটা কুকি রাখে আর Google-কে জানায় আপনি কোন পেজ খুলছেন (ফ্ল্যাটের কোড লুকানো থাকে), সাথে ডিভাইসের ধরন, ব্রাউজার আর মোটামুটি কোন এলাকা থেকে। আপনার নাম, ফোন নম্বর, টাকার অঙ্ক বা আপনি যা লেখেন তা কখনো যায় না।',
+      'কতজন সাইটে আসে তা গুনতে ওয়েবসাইটটা Google Analytics ব্যবহার করে। এটা আপনার ডিভাইসে নিজের একটা কুকি রাখে আর Google-কে জানায় আপনি কোন পেজ খুলছেন (ফ্ল্যাটের কোড লুকানো থাকে), সাথে ডিভাইসের ধরন, ব্রাউজার আর আপনি মোটামুটি কোন এলাকা থেকে খুলছেন। আপনার নাম, ফোন নম্বর, টাকার অঙ্ক বা আপনি যা লেখেন তা কখনো যায় না।',
     ] },
     how: 'Google এই তথ্য কীভাবে ব্যবহার করে',
     optOut: 'Google Analytics বন্ধ রাখুন',
@@ -833,16 +835,18 @@ const en: Dict = {
     lead: 'BashaBook keeps a shared flat’s meals and money. This page says what it stores, who can see it, and how to remove it.',
     keep: { h: 'What we keep', p: [
       'For each person: their name, and a mobile number or a small photo only if they add one. Your PIN is never stored, only a scrambled form of it that cannot be turned back into the PIN.',
-      'For each flat: meals, bazar, bills, deposits and money handed out, and a history of who changed what and when.',
+      'For each flat: meals, bazar, bills, deposits and money paid out from the flat, and a history of who changed what and when.',
       'If you turn on reminders, your browser’s address for receiving them.',
+      'Your internet (IP) address, for at most 2 hours, to stop anyone guessing codes or PINs.',
     ] },
     see: { h: 'Who can see it', p: [
-      'Only the people in your flat. They see the flat’s entries, the meal list, names, and any phone number or photo someone added.',
-      'Your balance breakdown is shown to you and to the person who keeps the flat money.',
+      'In the app, only the people in your flat. They see the flat’s entries (deposits included), each person’s balance and meal count, the meal list, names, and any phone number or photo someone added.',
+      'Your line-by-line breakdown is shown to you and to the person who keeps the flat money.',
+      'The BashaBook team reaches the data only to run the service, such as a PIN reset or deleting a flat you ask us to. It is stored with Neon (database) and Vercel (hosting).',
       'BashaBook never sells data, shows no ads, and never holds your money.',
     ] },
     cookies: { h: 'Cookies and your device', p: [
-      'One cookie keeps you signed in on this phone for up to 90 days. Your light or dark choice is saved on your device only.',
+      'One cookie keeps you signed in on this device for up to 90 days. Your light or dark choice is saved on your device only.',
     ] },
     analytics: { h: 'Google Analytics', p: [
       'To count visits, the website uses Google Analytics. It stores its own cookie on your device and tells Google the pages you open (with flat codes hidden), your device type, browser and rough location. It never gets your name, phone number, amounts or anything you type.',

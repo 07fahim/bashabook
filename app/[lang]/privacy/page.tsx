@@ -7,7 +7,9 @@ import { focus } from '../ui';
 
 export async function generateMetadata({ params }: PageProps<'/[lang]/privacy'>): Promise<Metadata> {
   const { lang } = await params;
-  return hasLocale(lang) ? { title: `${getDictionary(lang).privacy.title} · BashaBook` } : {};
+  if (!hasLocale(lang)) return {};
+  const t = getDictionary(lang);
+  return { title: `${t.privacy.title} · ${t.brand}${t.brandAccent}` };
 }
 
 const link = `inline-flex min-h-11 items-center font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`;
@@ -17,7 +19,7 @@ export default async function Privacy({ params }: PageProps<'/[lang]/privacy'>) 
   if (!hasLocale(lang)) notFound();
   const t = getDictionary(lang), x = t.privacy;
   const section = ({ h, p }: { h: string; p: string[] }) => (
-    <section key={h} className="mt-10">
+    <section className="mt-10">
       <h2 className="text-xl font-bold">{h}</h2>
       {p.map(s => <p key={s} className="mt-3">{s}</p>)}
     </section>

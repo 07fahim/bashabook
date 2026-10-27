@@ -91,6 +91,8 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
             </div>
           </>
         )}
+        {/* flatmates arrive here from a join link and may never see the landing page's footer */}
+        <Link href={`/${lang}/privacy`} className={`mt-10 inline-flex min-h-11 items-center text-[15px] ${link}`}>{t.footer.privacyLink}</Link>
       </main>
     </>
   );
