@@ -8,7 +8,7 @@ mark = logo.crop((0, 0, 735, logo.height))   # the symbol ends at x=722, the wor
 # the transparent export was cut from a black background and keeps dark specks along its edges; the symbol itself has no
 # dark colour (orange, yellow, white), so any dark pixel is left-over background
 r, g, b, a = mark.split()
-mark.putalpha(ImageChops.multiply(a, ImageChops.lighter(ImageChops.lighter(r, g), b).point(lambda v: 255 if v >= 90 else 0)))
+mark.putalpha(ImageChops.multiply(a, ImageChops.lighter(ImageChops.lighter(r, g), b).point(lambda v: 255 if v >= 120 else 0)))
 mark = mark.crop(mark.getchannel('A').point(lambda a: 255 if a > 16 else 0).getbbox())  # ignore faint stray pixels
 
 # navbar mark: 64 px tall (2x for a 32 px slot), transparent
