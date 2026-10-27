@@ -9,7 +9,10 @@ What BashaBook keeps, for how long, and how it is deleted. Decided 2026-10-11 fo
   says this: a mover's records stay for the flat's history.
 - Personal data held per person: name, optional mobile number, optional small photo, PIN hash, sign-in sessions (90 days each).
   A person can remove their own photo and phone number in the app at any time; their name stays in the flat's records.
-- Nothing is copied anywhere else: no analytics, no export, no backup outside Neon's own point-in-time history.
+- Nothing of a flat's records is copied anywhere else: no backup outside Neon's own point-in-time history. The collector can
+  download a closed month as CSV. Since 2026-10-27 the live site sends page visits to Google Analytics 4 (only when
+  `NEXT_PUBLIC_GA_ID` is set, on Production): the page address with a join code hidden and no query string, plus what
+  Google's tag itself collects (cookies, device, rough location). No names, phones, amounts or form contents.
 
 ## Deleting a flat
 

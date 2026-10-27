@@ -39,7 +39,7 @@ Every flat has one person who holds the money and keeps the khata. BashaBook is 
 
 ## Privacy
 
-A flatmate sees the flat's entries and their own breakdown, never another person's food cost, bill share or deposits. Nothing is sent to any analytics or AI service. The app is free and says so; there is no plan behind it.
+A flatmate sees the flat's entries and their own breakdown, never another person's food cost, bill share or deposits. Nothing is sent to any AI service. The live site counts visits with Google Analytics, which sets its own cookies: page addresses only, with a join link's flat code hidden and no member ids, and never names, phone numbers, amounts or anything typed into the app. The app is free and says so; there is no plan behind it.
 
 ## Stack
 
