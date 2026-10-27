@@ -116,7 +116,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                 <p className="inline-block rounded-2xl rounded-tl-sm border border-line bg-surface px-4 py-2">{t.chat.ask}</p>
               </div>
               <div className="flex items-start gap-2">
-                <Image src="/logo-mark.png" alt="" width={31} height={32} className="mt-7 shrink-0" />
+                <Image src="/logo-mark.png" alt="" width={32} height={32} className="mt-7 shrink-0" />
                 <div className="w-full max-w-xs">
                   <p className="mb-1 text-[15px] text-muted">{t.chat.sender}</p>
                   <div className="rounded-2xl rounded-tl-sm bg-turmeric px-4 py-3 text-on-turmeric">

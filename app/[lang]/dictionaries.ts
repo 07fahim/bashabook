@@ -652,8 +652,8 @@ const bn = {
 export type Dict = typeof bn;
 
 const en: Dict = {
-  brand: 'BashaBook',
-  brandAccent: '',
+  brand: 'Basha',
+  brandAccent: 'Book',
   switchLang: 'বাংলা',
   themeToggle: 'Light or dark theme',
   charts: {

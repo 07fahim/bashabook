@@ -1,10 +1,14 @@
 """Cuts the B symbol out of the BashaBook logo and writes the navbar mark and app icons.
 Run from the repo root: python scripts/make-icons.py"""
-from PIL import Image
+from PIL import Image, ImageChops
 
 PAPER = '#FBF7F0'
-logo = Image.open('asset/BashaBook Warm Minimalist Logo.png').convert('RGBA')
-mark = logo.crop((0, 0, 700, logo.height))   # the symbol sits left of x=700, the wordmark right of it
+logo = Image.open('asset/BashaBook_English_transparent.png').convert('RGBA')
+mark = logo.crop((0, 0, 735, logo.height))   # the symbol ends at x=722, the wordmark starts at 748
+# the transparent export was cut from a black background and keeps dark specks along its edges; the symbol itself has no
+# dark colour (orange, yellow, white), so any dark pixel is left-over background
+r, g, b, a = mark.split()
+mark.putalpha(ImageChops.multiply(a, ImageChops.lighter(ImageChops.lighter(r, g), b).point(lambda v: 255 if v >= 120 else 0)))
 mark = mark.crop(mark.getchannel('A').point(lambda a: 255 if a > 16 else 0).getbbox())  # ignore faint stray pixels
 
 # navbar mark: 64 px tall (2x for a 32 px slot), transparent
