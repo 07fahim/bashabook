@@ -5,12 +5,9 @@ import { getDictionary, hasLocale } from './dictionaries';
 import { Khata } from './khata';
 import { Header } from './header';
 import { focus, ICONS } from './ui';
+import { EMAIL, WHATSAPP } from './contacts';
 
 const h2 = 'font-display text-3xl font-bold';
-// contact links: a link shows only when it is set (null hides it), so a placeholder never looks like a real address
-const WHATSAPP: string | null = 'https://wa.me/8801852153575';
-const EMAIL: string | null = 'mailto:faiyazfahim743@gmail.com';
-
 
 export default async function Landing({ params }: PageProps<'/[lang]'>) {
   const { lang } = await params;
@@ -187,9 +184,9 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                   {t.footer.email}
                 </a>
               )}
+              <Link href={`/${lang}/privacy`} className={`inline-flex min-h-11 items-center font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`}>{t.footer.privacyLink}</Link>
             </div>
           </div>
-          <p className="max-w-3xl">{t.footer.privacy}</p>
         </div>
       </footer>
     </>

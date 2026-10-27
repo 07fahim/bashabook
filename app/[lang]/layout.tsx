@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Hind_Siliguri } from 'next/font/google';
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
+import { Analytics } from './analytics';
 import { getDictionary, hasLocale, locales } from './dictionaries';
 import '../globals.css';
 
@@ -42,7 +44,11 @@ export default async function RootLayout({ children, params }: LayoutProps<'/[la
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-dvh bg-paper font-sans text-ink antialiased">{children}</body>
+      <body className="min-h-dvh bg-paper font-sans text-ink antialiased">
+        {children}
+        {/* set only on Production in Vercel: previews and local runs send nothing */}
+        {process.env.NEXT_PUBLIC_GA_ID && <Suspense fallback={null}><Analytics id={process.env.NEXT_PUBLIC_GA_ID} /></Suspense>}
+      </body>
     </html>
   );
 }

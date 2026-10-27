@@ -47,6 +47,9 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
     }
   }
 
+  // the privacy page promises an IP in a rate-limit count is kept about 2 hours, even when no visitor triggers allow()'s sweep
+  await db(`delete from rate_limits where hour < now() - interval '2 hours'`);
+
   // A trial nobody came back to: a month old, at most one person claimed a PIN, never a money entry or a meal change, nothing
   // in the history for 30 days. One statement on the database clock (the columns are timestamptz; `now` here is a Dhaka string
   // for the reminder windows); the flat's rows cascade. ponytail: correlated subqueries over every flat each run, fine for hundreds.
