@@ -156,7 +156,7 @@ const bn = {
       'প্রত্যেকের নাম। মোবাইল নম্বর বা ছোট ছবি শুধু তখনই, যদি কেউ নিজে দেয়। আপনার PIN আমরা রাখি না, শুধু তার একটা এলোমেলো রূপ রাখি, যেটা থেকে আসল PIN বের করা যায় না।',
       'প্রতিটা ফ্ল্যাটের মিল, বাজার, বিল, জমা আর ফ্ল্যাট থেকে দেওয়া টাকা, আর কে কখন কী বদলেছে তার ইতিহাস।',
       'রিমাইন্ডার চালু করলে, রিমাইন্ডার পাঠানোর জন্য আপনার ব্রাউজারের ঠিকানা।',
-      'কেউ যেন কোড বা PIN আন্দাজ করে ঢুকতে না পারে, সেজন্য আপনার ইন্টারনেট (IP) ঠিকানা, সর্বোচ্চ 2 ঘণ্টা।',
+      'কেউ যেন কোড বা PIN আন্দাজ করে ঢুকতে না পারে, সেজন্য আপনার ইন্টারনেট (IP) ঠিকানা, মোটামুটি 2 ঘণ্টা।',
     ] },
     see: { h: 'কে দেখতে পায়', p: [
       'অ্যাপে শুধু আপনার ফ্ল্যাটের মানুষ। তারা ফ্ল্যাটের সব লেনদেন (জমাসহ), প্রত্যেকের ব্যালেন্স আর মিলের সংখ্যা, মিলের তালিকা, নাম, আর কেউ ফোন নম্বর বা ছবি দিলে সেটা দেখতে পায়।',
@@ -837,7 +837,7 @@ const en: Dict = {
       'For each person: their name, and a mobile number or a small photo only if they add one. Your PIN is never stored, only a scrambled form of it that cannot be turned back into the PIN.',
       'For each flat: meals, bazar, bills, deposits and money paid out from the flat, and a history of who changed what and when.',
       'If you turn on reminders, your browser’s address for receiving them.',
-      'Your internet (IP) address, for at most 2 hours, to stop anyone guessing codes or PINs.',
+      'Your internet (IP) address, for about 2 hours, to stop anyone guessing codes or PINs.',
     ] },
     see: { h: 'Who can see it', p: [
       'In the app, only the people in your flat. They see the flat’s entries (deposits included), each person’s balance and meal count, the meal list, names, and any phone number or photo someone added.',
