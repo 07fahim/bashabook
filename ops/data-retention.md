@@ -30,7 +30,8 @@ written to the history for 30 days. Any flat with two claimed people, one money 
 removed (`purged` in the response, saved in cron-job.org's history).
 
 Also since 2026-10-24: anonymous actions are counted per connection and hour (`rate_limits`, `lib/rate-limit.ts`): 5 new
-flats, 120 code lookups, 60 PIN posts; past that the page says to wait an hour. A flat holds 30 names in all (`MAX_MEMBERS`).
+flats, 120 code lookups, 60 PIN posts; past that the page says to wait an hour. The counts hold the visitor's IP: each cron run deletes
+counts older than 2 hours (the privacy page promises about 2 hours); if the cron stops, they stay until the next anonymous visit. A flat holds 30 names in all (`MAX_MEMBERS`).
 
 Before deleting: confirm the request with the collector on a verified number (as in `ops/collector-pin-recovery.md`) and,
 because the records belong to the whole flat, with one other flatmate. Tell them the data cannot be recovered afterwards. The flat's own history goes with it, so write the date, flat name, who asked and
