@@ -22,7 +22,7 @@ export function Header({ t, lang, path, notices, children }: { t: Dict; lang: Lo
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
       <div className="flex items-center gap-8">
         <Link href={`/${lang}`} className={`flex min-h-11 items-center gap-2 font-display text-2xl font-bold ${focus}`}>
-          <Image src="/logo-mark.png" alt="" width={31} height={32} priority />
+          <Image src="/logo-mark.png" alt="" width={32} height={32} priority />
           <span>
             {t.brand}
             <span className="text-turmeric-ink">{t.brandAccent}</span>
