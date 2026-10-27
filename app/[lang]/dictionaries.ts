@@ -146,7 +146,7 @@ const bn = {
     tagline: 'বাসাবুক · শেয়ার্ড ফ্ল্যাটের হিসাব',
     whatsapp: 'হোয়াটসঅ্যাপে লিখুন',
     email: 'ইমেইল করুন',
-    privacy: 'আমরা নাম, মিল আর টাকার অঙ্ক রাখি। কেউ ফোন নম্বর বা ছবি দিলে শুধু সেটুকুও রাখি। কেউ চলে গেলেও তার মিল, বিল আর হিসাব ফ্ল্যাটের খাতায় থেকে যায়, যাতে আগের হিসাব ঠিক থাকে। বাসাবুক কখনো আপনাদের টাকা রাখে না। কতজন সাইটে আসে তা গুনতে আমরা Google Analytics আর তার কুকি ব্যবহার করি; সেখানে শুধু পেজের ঠিকানা যায়, আপনার নাম, ফোন বা টাকার অঙ্ক কখনো যায় না।',
+    privacy: 'আমরা নাম, মিল আর টাকার অঙ্ক রাখি। কেউ ফোন নম্বর বা ছবি দিলে শুধু সেটুকুও রাখি। কেউ চলে গেলেও তার মিল, বিল আর হিসাব ফ্ল্যাটের খাতায় থেকে যায়, যাতে আগের হিসাব ঠিক থাকে। বাসাবুক কখনো আপনাদের টাকা রাখে না। কতজন সাইটে আসে তা গুনতে আমরা Google Analytics আর তার কুকি ব্যবহার করি। সেখানে পেজের ঠিকানা আর ডিভাইসের ধরন যায়, আপনার নাম, ফোন বা টাকার অঙ্ক কখনো যায় না।',
   },
   app: {
     newTitle: 'নতুন ফ্ল্যাট খুলুন',
@@ -795,7 +795,7 @@ const en: Dict = {
     tagline: 'BashaBook · accounts for shared flats',
     whatsapp: 'Message us on WhatsApp',
     email: 'Email us',
-    privacy: 'We store names, meals and amounts, plus a phone number or photo only if someone adds one. When someone moves out, we keep their records as part of the flat’s financial history, so past meals, bills and settlements stay accurate. BashaBook never holds your money. To count visits we use Google Analytics and its cookies; it gets page addresses only, never your name, phone number or amounts.',
+    privacy: 'We store names, meals and amounts, plus a phone number or photo only if someone adds one. When someone moves out, we keep their records as part of the flat’s financial history, so past meals, bills and settlements stay accurate. BashaBook never holds your money. To count visits we use Google Analytics and its cookies. It gets page addresses and the kind of device, never your name, phone number or amounts.',
   },
   app: {
     newTitle: 'Create a flat',
