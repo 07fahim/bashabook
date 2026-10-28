@@ -97,7 +97,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
             {([[x.totalBazar, fmtTaka(total), ''], [b.count, String(bazars.length), ''],
               [b.withReceipt, b.nOfN.replace('{n}', String(bazars.filter(e => e.receiptV).length)).replace('{m}', String(bazars.length)), ''],
               [b.waiting, String(waiting.length), ''], [b.fix, String(fixing.length), fixing.length ? 'text-chili' : '']] as const).map(([k, v, tone], i) => (
-              <div key={k} className={`min-w-0 rounded-xl bg-paper p-3 ${i === 0 ? 'col-span-2 sm:col-span-1' : ''}`}>
+              <div key={k} className={`min-w-0 rounded-xl bg-paper p-3 ${i === 0 ? 'col-span-2 sm:col-span-1' : i === 4 ? 'sm:col-span-2 lg:col-span-1' : ''}`}>
                 <dt className="text-[15px] text-muted">{k}</dt>
                 <dd className={`text-xl font-bold tabular-nums [overflow-wrap:anywhere] xl:text-2xl ${tone}`}>{v}</dd>
               </div>
