@@ -21,7 +21,7 @@ A flat is deleted whole, on the collector's request, by the app team with `scrip
 `--apply`). One statement removes the flat and every row that belongs to it: people, rooms, months, entries, meals, history,
 handovers, sessions. Nothing of any other flat is touched (`lib/delete-flat.test.ts`). A deletion is final at once: Supabase free keeps no backup or history to bring it back. Nothing
 reverses any other mistake either: a wrong deletion or a bad migration is permanent. Until a nightly backup exists,
-run every `--apply` and every migration only after the dry run and the test copy. (On Neon until 2026-10-28 the window was
+run every `--apply` and every migration only after the dry run and the test copy (check the test copy is at the same migration as production first). (On Neon until 2026-10-28 the window was
 6 hours of point-in-time history, restore-tested 2026-10-11.)
 
 Trials nobody came back to are deleted on their own (since 2026-10-24, `runJobs` in `lib/jobs.ts`): a flat created more
