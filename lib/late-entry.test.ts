@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { db, migrate } from '../db/test-db';
+import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, entryFrom, loadMonth, openMonth, type NewEntry } from './money-db';
 import { closeMonth } from './close';
@@ -46,6 +46,7 @@ describe('a forgotten entry in a month that is still open', { timeout: 30000 }, 
     expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 100000, date: '2026-09-28' }), OCT2)).toBe('ok');
     const sep = await loadMonth(db, flatId, '2026-09-01', OCT2);
     expect([sep.entries.some(x => x.date === '2026-09-28' && x.type === 'bazar'), sep.result.fund]).toEqual([true, 200000]);
+    await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', OCT2, cash(200000))).result).toBe('ok');
     expect(await entryFrom(db, flatId, nafis, OCT2)).toBe('2026-10-01');
     await expect(addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 100, date: '2026-09-29' }))).rejects.toThrow('month_closed');

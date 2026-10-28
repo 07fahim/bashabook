@@ -125,7 +125,9 @@ export type Fix = { id: string; amount: number; date: string; paidBy: string | n
  *  entry's own month up to today, a payer living here that day, items not over the total; a bill keeps its name and split.
  *  One statement: the check row goes only together with the update (`l` needs `c`), so two fixes at once land once. The
  *  ledger trigger moves the month's version as for any money change. The history row keeps before and after, item lines
- *  included, and is marked `fixed` (may_check reads who fixed it last). Returns who sent it back, for the push. */
+ *  included, and is marked `fixed` (may_check reads who fixed it last). A flatmate fixes only an entry of this month (as
+ *  entryFrom and removeEntry), the collector any open month. Throws month_closed (the closed-month trigger) if the month
+ *  closed since it was sent back. Returns who sent it back, for the push. */
 export async function fixEntry(db: Db, flatId: string, by: Actor, f: Fix, today: string):
   Promise<{ result: 'ok'; marker: string; type: 'bazar' | 'bill'; amount: number } | { result: 'bad' | 'date' | 'gone' | 'items' | 'receipt' }> {
   if (!Number.isInteger(f.amount) || f.amount <= 0) return { result: 'bad' };
@@ -141,7 +143,8 @@ export async function fixEntry(db: Db, flatId: string, by: Actor, f: Fix, today:
     `with o as (select * from ledger where flat_id = $1 and id = $2 for no key update),
        oi as (select coalesce(jsonb_agg(jsonb_build_object('name', name, 'amount', amount_poisha) order by pos), '[]'::jsonb) as items
          from bazar_items where ledger_id = $2),
-       ok as (select o.* from o where ($4::boolean or o.created_by = $3) and date_trunc('month', $6::text::date)::date = o.month),
+       ok as (select o.* from o where ($4::boolean or (o.created_by = $3 and o.month = date_trunc('month', $11::text::date)::date))
+         and date_trunc('month', $6::text::date)::date = o.month),
        c as (delete from entry_checks where flat_id = $1 and ledger_id = $2 and state = 'fix' and exists (select 1 from ok) returning by_member),
        l as (update ledger x set amount_poisha = $5, date = $6::text::date, paid_by_member_id = $7, note = $8
          from ok where x.id = ok.id and exists (select 1 from c) returning x.*),
@@ -156,6 +159,12 @@ export async function fixEntry(db: Db, flatId: string, by: Actor, f: Fix, today:
            to_jsonb(l) || jsonb_build_object('items', $9::text::jsonb, 'fixed', true)
              || case when $10::bytea is null then '{}'::jsonb else '{"receipt":true}'::jsonb end, $3 from l, o)
      select c.by_member as marker, l.type, l.amount_poisha::int as amount from c, l`,
-    [flatId, f.id, by.memberId, by.role === 'manager', f.amount, f.date, f.paidBy, f.note, JSON.stringify(f.items), f.receipt ? Buffer.from(f.receipt) : null]);
+    [flatId, f.id, by.memberId, by.role === 'manager', f.amount, f.date, f.paidBy, f.note, JSON.stringify(f.items), f.receipt ? Buffer.from(f.receipt) : null, today]);
   return r ? { result: 'ok', ...r } : { result: 'bad' };
 }
+
+/** SQL (unaliased `ledger`): a row that keeps month `m` from closing. Money waiting for a tap, in this or a later open month
+ *  (the caller limits to month >= m): it is in the hand but not in the books. Or a bazar or bill of month `m` itself that
+ *  isn't Verified (waiting or Needs correction): a later month's are checked before that month closes. */
+export const blocksClose = (m: string) => `(status = 'pending' or (month = ${m} and type in ('bazar', 'bill')
+  and not exists (select 1 from entry_checks c where c.ledger_id = ledger.id and c.state = 'ok')))`;

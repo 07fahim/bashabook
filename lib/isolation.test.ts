@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { db, migrate } from '../db/test-db';
+import { checkAll, db, migrate } from '../db/test-db';
 import { addMember, bringBack, createFlat, createSession, deleteSession, listMembers, login, memberBySession, renameMember, resetPin, setLeaving } from './auth';
 import { addCorrection, closeMonth } from './close';
 import { acceptHandover, offerHandover } from './handover';
@@ -69,6 +69,7 @@ describe('flat isolation', { timeout: 60000 }, () => {
     expect(await setRoom(db, A.flatId, A.boss, A.other, roomA.id)).toBe(true);    // control
     // a correction for A's closed September: fine between A's own people, refused for B's (A's ledger gets one row, not two)
     expect(await addEntry(db, A.flatId, A.boss, e({ type: 'bazar', amount: 100, paidBy: A.other, date: '2026-09-05' }))).toBe('ok');
+    await checkAll(A.flatId);
     expect((await closeMonth(db, A.flatId, A.boss, SEP, today, noCash)).result).toBe('ok');
     expect(await addCorrection(db, A.flatId, A.boss, { id: randomUUID(), forMonth: SEP, amount: 100, note: 'x', kind: 'move', from: A.boss.memberId, to: A.other }, today)).toBe('ok');
     expect(await addCorrection(db, A.flatId, A.boss, { id: randomUUID(), forMonth: SEP, amount: 100, note: 'x', kind: 'move', from: B.other, to: B.boss.memberId }, today)).toBe('month');

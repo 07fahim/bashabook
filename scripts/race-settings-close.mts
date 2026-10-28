@@ -58,6 +58,8 @@ async function flat() {
   await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 400000, note: 'Rent', split: 'room' }));
   await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 900000 }));
   await openMonth(db, flatId, `${today.slice(0, 7)}-01`);
+  // 020: September's bazar and bill Verified, as the checkers would before a close
+  await db(`insert into entry_checks (flat_id, ledger_id, month, state) select flat_id, id, month, 'ok' from ledger where flat_id = $1 and type in ('bazar', 'bill') on conflict do nothing`, [flatId]);
   const close = async (d: Db = db, afterLoad?: () => Promise<void>) =>
     closeMonth(d, flatId, nafis, SEP, today, { cash: Math.max(0, await flatMoney(db, flatId, today)), bkash: 0, nagad: 0, bank: 0 }, afterLoad);
   const frozen = async () => (await db<{ rent: number; food: number }>(

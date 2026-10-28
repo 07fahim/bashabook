@@ -197,8 +197,7 @@ describe('the check', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
     const id = await add(nafis, { type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin });
     expect((await entryDetail(db, flatId, id, ids.Zarif, TODAY))!.d.mayCheck).toBe(true);
-    const info = (await closeInfo(db, flatId, TODAY))!;
-    expect((await closeMonth(db, flatId, nafis, '2026-09-01', TODAY, { cash: info.held, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
+    await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-09-01'::text::date`, [flatId]);   // a waiting entry blocks a real close
     expect((await entryDetail(db, flatId, id, ids.Zarif, TODAY))!.d.mayCheck).toBe(false);
   });
 
@@ -291,11 +290,31 @@ describe('Fix it', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
     const id = await add(nafis, { type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin });
     await checkEntry(db, flatId, as('Zarif'), id, 'fix', 'amount', TODAY);
-    const info = (await closeInfo(db, flatId, TODAY))!;
-    expect((await closeMonth(db, flatId, nafis, '2026-09-01', TODAY, { cash: info.held, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
+    await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-09-01'::text::date`, [flatId]);   // a sent-back entry blocks a real close
     await expect(fixEntry(db, flatId, nafis, { id, amount: 900, date: '2026-09-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null }, TODAY))
       .rejects.toThrow('month_closed');
     expect(await db(`select 1 from entry_checks where ledger_id = $1 and state = 'fix'`, [id])).toHaveLength(1);
+    expect((await db<{ a: number }>(`select amount_poisha::int as a from ledger where id = $1`, [id]))[0].a).toBe(1000);
+  });
+
+  it('a flatmate fixes only this month’s entry, as with adding and removing; the collector any open month', async () => {
+    const { flatId, ids, nafis, as } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
+    const id = randomUUID();
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ id, type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin }))).toBe('ok');   // no today: into September
+    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY);
+    const f: Fix = { id, amount: 900, date: '2026-09-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null };
+    expect((await fixEntry(db, flatId, as('Tahsin'), f, TODAY)).result).toBe('bad');
+    expect(await db(`select 1 from entry_checks where ledger_id = $1 and state = 'fix'`, [id])).toHaveLength(1);   // still sent back
+    expect((await fixEntry(db, flatId, nafis, f, TODAY)).result).toBe('ok');
+  });
+
+  it('another flat’s id with a real entry id: refused', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
+    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY);
+    const other = await createFlat(db, { flatName: 'Other', name: 'Rafi', pin: '1234', others: [], today: OCT, lang: 'bn' });
+    const f: Fix = { id, amount: 900, date: '2026-10-05', paidBy: null, note: null, items: [], receipt: null };
+    expect((await fixEntry(db, other.flatId, { memberId: other.memberId, role: 'manager' }, f, TODAY)).result).toBe('bad');
     expect((await db<{ a: number }>(`select amount_poisha::int as a from ledger where id = $1`, [id]))[0].a).toBe(1000);
   });
 });

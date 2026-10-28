@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { db, migrate, pg } from '../db/test-db';
+import { checkAll, db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal } from './meals-db';
 import { addEntry, confirmEntry, loadMonth, putBack, removeEntry, toConfirm, type NewEntry } from './money-db';
@@ -243,6 +243,7 @@ describe('handover in the app', { timeout: 30000 }, () => {
     expect(await flatMoney(db, flatId, '2026-09-10')).toBe(250000);
     expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 20000, date: '2026-10-02', memberId: ids.Zarif }))).toBe('ok');
     expect(await flatMoney(db, flatId, '2026-10-05')).toBe(270000);                 // September (not closed) + October
+    await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-05', { cash: 270000, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
     expect(await flatMoney(db, flatId, '2026-10-05')).toBe(270000);                 // a close changes nothing
     await db(`delete from ledger where flat_id = $1 and month = '2026-10-01'`, [flatId]);

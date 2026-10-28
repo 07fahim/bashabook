@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { blocksClose } from './bazar';
 import type { Db } from './db';
 import { addDays, daysOfMonth, editFrom } from './meals';
 import { CASH_KEYS, parseCash, type Cash } from './money';
@@ -37,9 +38,10 @@ export async function closeInfo(db: Db, flatId: string, today: string) {
   if (!month) return null;
   const mo = await loadMonth(db, flatId, month, today);
   // the count covers the later open months too, so an entry still waiting there (money handed over or received, not yet
-  // tapped) blocks it as well: it is in the hand but not in the books. `pendingMonth`: where to go and fix the first one
+  // tapped) blocks it as well: it is in the hand but not in the books; and a bazar or bill of this month not yet Verified.
+  // `pendingMonth`: where to go and fix the first one
   const [total, [p], past] = await Promise.all([flatMoney(db, flatId, today), db<{ n: number; m: string | null }>(
-    `select count(*)::int as n, min(month)::text as m from ledger where flat_id = $1 and status = 'pending' and month >= $2::date`, [flatId, month]),
+    `select count(*)::int as n, min(month)::text as m from ledger where flat_id = $1 and month >= $2::date and ${blocksClose('$2::date')}`, [flatId, month]),
     history(db, flatId, month)]);
   const fund = mo.result.fund;
   // `later`: what the months after it added or spent since, so the card can say why the count differs from its own fund
@@ -113,8 +115,9 @@ export async function closeMonth(db: Db, flatId: string, by: Actor, month: strin
   if (!mo.info || mo.earlierOpen) return out('order', expected);
   if (mo.info.status === 'closed') return out('closed', expected);
   // pending money in this or a later open month is in the hand but not in the books, so the count can't come out right: the
-  // close card blocks on it (closeInfo), and so does the statement below, whatever the card showed when it was opened
-  const [p] = await db<{ n: number }>(`select count(*)::int as n from ledger where flat_id = $1 and status = 'pending' and month >= $2::date`, [flatId, month]);
+  // close card blocks on it (closeInfo), and so does the statement below, whatever the card showed when it was opened; and a
+  // bazar or bill of this month not yet Verified
+  const [p] = await db<{ n: number }>(`select count(*)::int as n from ledger where flat_id = $1 and month >= $2::date and ${blocksClose('$2::date')}`, [flatId, month]);
   if (p.n > 0) return out('pending', expected);
   if (!mo.result.invariantOk) return out('problems', expected);
   // ponytail: the count is checked against later open months too, but only this month's version guards the close; an entry
@@ -130,7 +133,7 @@ export async function closeMonth(db: Db, flatId: string, by: Actor, month: strin
          where flat_id = $1 and month = $2::date and status = 'open' and version = $3
            and exists (select 1 from members where flat_id = $1 and id = $8 and role = 'manager')
            and not exists (select 1 from months e where e.flat_id = $1 and e.month < $2::date and e.status = 'open')
-           and not exists (select 1 from ledger where flat_id = $1 and month >= $2::date and status = 'pending')
+           and not exists (select 1 from ledger where flat_id = $1 and month >= $2::date and ${blocksClose('$2::date')})
          returning month),
        b as (insert into month_balances (flat_id, month, member_id, weighted_meals, days_present, opening, paid_in, food_cost, bill_share, payouts, adjustments, balance)
          select $1, m.month, (x->>'id')::uuid, (x->>'meals')::int, (x->>'days')::int, (x->>'opening')::bigint, (x->>'paidIn')::bigint,
