@@ -352,6 +352,17 @@ describe('Fix it', { timeout: 30000 }, () => {
     expect(await fixAskTo(db, flatId, own, ids.Zarif, day)).toBe(ids.Nafis);      // the collector's own
   });
 
+  it('an adder who has moved out is never asked to fix: Send back and the push go to the collector, whose list shows it', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const day = '2026-10-05';
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 2000, date: '2026-10-03' });   // flat money: Zarif checks it
+    await db(`update members set left_on = '2026-10-04' where id = $1`, [ids.Tahsin]);   // moved out before today
+    expect((await entryDetail(db, flatId, id, ids.Nafis, day))!.d.adderMayFix).toBe(false);
+    expect(await checkEntry(db, flatId, as('Zarif'), id, 'fix', 'amount', day)).not.toBeNull();
+    expect(await fixAskTo(db, flatId, id, ids.Zarif, day)).toBe(ids.Nafis);
+    expect((await toCheck(db, flatId, ids.Nafis, day)).map(r => r.id)).toContain(id);
+  });
+
   it('a fix posted for the other type (a stale form) is refused and keeps the item lines', async () => {
     const { flatId, ids, nafis, as, add } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin, items: [{ name: 'Rice', amount: 600 }] });

@@ -77,11 +77,11 @@ export async function checkEntry(db: Db, flatId: string, by: Actor, id: string, 
   return r ?? null;
 }
 
-/** SQL: could `me` fix ledger row `l` (its month row `mo`) today once it is sent back? Its month open, and the collector (any
- *  open month) or whoever added it in its own month: the rule fixEntry keeps. */
-const fixer = (me: string, today: string) => `(mo.status = 'open' and (exists (select 1 from members w
-  where w.flat_id = l.flat_id and w.id = ${me} and w.role = 'manager') or (l.created_by = ${me}
-  and l.month = date_trunc('month', ${today}::text::date)::date)))`;
+/** SQL: could `me` fix ledger row `l` (its month row `mo`) today once it is sent back? Its month open, `me` living here today
+ *  (as may_check and sign-in), and the collector (any open month) or whoever added it in its own month: the rule fixEntry keeps. */
+const fixer = (me: string, today: string) => `(mo.status = 'open' and exists (select 1 from members w
+  where w.flat_id = l.flat_id and w.id = ${me} and (w.left_on is null or w.left_on >= ${today}::text::date)
+  and (w.role = 'manager' or (l.created_by = ${me} and l.month = date_trunc('month', ${today}::text::date)::date))))`;
 /** SQL: may `me` Fix it on `l` now: sent back (its check `c`) and `fixer`. */
 const mayFix = (me: string, today: string) => `(c.state = 'fix' and ${fixer(me, today)})`;
 
@@ -98,7 +98,7 @@ export async function fixAskTo(db: Db, flatId: string, id: string, marker: strin
 
 /** Bazars and bills of open months for this person: waiting ones may_check lets them check (the collector: everyone else's;
  *  a flatmate: the collector's own, monthly bills included), and entries sent back that are theirs to fix, with the reason:
- *  their own, and for the collector also an earlier month's (its adder can't fix it any more). */
+ *  their own, and for the collector also any its adder can't fix (an earlier month's, or the adder moved out), as fixAskTo. */
 export const toCheck = (db: Db, flatId: string, memberId: string, today: string) => db<{
   id: string; type: 'bazar' | 'bill'; amount: number; date: string; note: string | null; state: 'fix' | null; reason: string | null;
 }>(
@@ -107,7 +107,7 @@ export const toCheck = (db: Db, flatId: string, memberId: string, today: string)
    left join entry_checks c on c.ledger_id = l.id
    where l.flat_id = $1 and l.type in ('bazar', 'bill') and l.status = 'ok'
      and ((c.ledger_id is null and may_check(l.id, $2, $3::text::date)) or (${mayFix('$2', '$3')}
-       and (l.created_by = $2 or l.month < date_trunc('month', $3::text::date)::date)))
+       and (l.created_by = $2 or not ${fixer('l.created_by', '$3')})))
    order by l.date, l.created_at`, [flatId, memberId, today]);
 
 export type Detail = {
