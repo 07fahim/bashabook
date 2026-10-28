@@ -1,4 +1,23 @@
-# BashaBook (বাসাবুক)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.png">
+    <img src=".github/assets/logo-light.png" alt="BashaBook (বাসাবুক)" width="420">
+  </picture>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5">
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4">
+  <img src="https://img.shields.io/badge/Postgres-Neon-4169E1?logo=postgresql&logoColor=white" alt="Postgres on Neon">
+  <img src="https://img.shields.io/badge/Vercel-Singapore-000000?logo=vercel&logoColor=white" alt="Vercel, Singapore">
+  <img src="https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white" alt="Installable web app">
+</p>
+
+<p align="center">
+  <a href="https://bashabook.fahimfaiyaz.dev"><img src=".github/assets/cover.jpg" alt="BashaBook on a laptop and a phone: your whole flat's accounts in one place" width="800"></a>
+</p>
 
 Shared-flat accounts for Bangladeshi flats of eight to ten people with a hired cook. Who ate how many plates, who paid for bazar and bills, what each person owes or gets back, and a month end that closes only when the cash in hand matches the books.
 
