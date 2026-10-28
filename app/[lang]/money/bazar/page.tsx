@@ -92,20 +92,17 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
         {/* one column at every width: the month's figures as a strip, Add bazar folded, then the list at full width, so no
             column ends far above its neighbour */}
         <div className="mt-6 flex flex-col gap-6 [&>details]:mt-0">
-          <div className={`grid grid-cols-2 gap-2 md:grid-cols-5 ${card}`}>
-            {([[x.totalBazar, fmtTaka(total), null, ''], [b.count, String(bazars.length), null, ''],
-              [b.withReceipt, b.nOfN.replace('{n}', String(bazars.filter(e => e.receiptV).length)).replace('{m}', String(bazars.length)), null, ''],
-              [b.waiting, String(waiting.length), 'waiting', ''], [b.fix, String(fixing.length), 'fix', fixing.length ? 'text-chili' : '']] as const).map(([k, v, f, tone], i) => {
-              const inner = (<>
-                <span className="block text-[15px] text-muted">{k}</span>
-                <span className={`block text-xl font-bold whitespace-nowrap tabular-nums md:text-2xl ${tone}`}>{v}</span>
-              </>);
-              const tile = `rounded-xl bg-paper p-3 ${i === 0 ? 'col-span-2 md:col-span-1' : ''}`;
-              // the two counts set the list's filter, as its pills do
-              return f ? <Link key={k} href={href(month, f)} aria-current={only === f ? 'true' : undefined}
-                className={`${tile} hover:ring-1 hover:ring-muted ${focus}`}>{inner}</Link> : <div key={k} className={tile}>{inner}</div>;
-            })}
-          </div>
+          {/* figures only: the pills on the list are the filter. Five across only from 1024 px, where a 7-digit total fits */}
+          <dl className={`grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 ${card}`}>
+            {([[x.totalBazar, fmtTaka(total), ''], [b.count, String(bazars.length), ''],
+              [b.withReceipt, b.nOfN.replace('{n}', String(bazars.filter(e => e.receiptV).length)).replace('{m}', String(bazars.length)), ''],
+              [b.waiting, String(waiting.length), ''], [b.fix, String(fixing.length), fixing.length ? 'text-chili' : '']] as const).map(([k, v, tone], i) => (
+              <div key={k} className={`min-w-0 rounded-xl bg-paper p-3 ${i === 0 ? 'col-span-2 sm:col-span-1' : ''}`}>
+                <dt className="text-[15px] text-muted">{k}</dt>
+                <dd className={`text-xl font-bold tabular-nums [overflow-wrap:anywhere] xl:text-2xl ${tone}`}>{v}</dd>
+              </div>
+            ))}
+          </dl>
           {open && (
             <Fold title={x.addBazar} lead={x.bazarLead}>
               <ActionForm action={entryAction} className="mt-4 md:max-w-xl" clearOnDone>
