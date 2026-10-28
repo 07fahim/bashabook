@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { itemsFor } from '@/lib/bazar';
+import { itemsFor, monthTotals } from '@/lib/bazar';
 import { db } from '@/lib/db';
 import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
 import { loadMonth, monthOf, type Entry } from '@/lib/money-db';
@@ -12,7 +12,7 @@ import { ActionForm } from '../../action-form';
 import { entryAction } from '../../actions';
 import { DateField } from '../../date-field';
 import { getDictionary, hasLocale } from '../../dictionaries';
-import { fmtDay, fmtExact, fmtMonth } from '../../format';
+import { fmtDay, fmtExact, fmtMonth, fmtTaka } from '../../format';
 import { Header, withQuery } from '../../header';
 import { ItemLines } from '../../item-lines';
 import { Nav } from '../../nav';
@@ -25,8 +25,10 @@ export default function BazarList({ params, searchParams }: PageProps<'/[lang]/m
   return <Suspense fallback={<PageSkeleton />}><Body params={params} searchParams={searchParams} /></Suspense>;
 }
 
-// date and buyer with what was bought | amount | receipt | check: a table on wider screens, one card per row on phones
-const cols = 'md:grid-cols-[minmax(0,1fr)_8rem_9rem_11rem]';
+// date and buyer with what was bought | amount | receipt | check: a table on wider screens, one card per row on phones. The
+// fixed columns fit a 7-digit amount, View receipt and Needs correction in both languages and leave the first column at
+// least 200 px on a 768 px tablet, where the list has the full width.
+const cols = 'md:grid-cols-[minmax(0,1fr)_7rem_8rem_10rem]';
 
 async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/bazar'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
@@ -51,14 +53,13 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
   const pill = (on: boolean) => `inline-flex min-h-11 items-center whitespace-nowrap rounded-full border px-4 font-semibold ${on ? 'border-turmeric bg-turmeric text-on-turmeric' : 'border-muted'} ${focus}`;
   // the same rule as Money's forms: this month for everyone; an earlier month still open for the collector only
   const open = month === thisMonth ? mo.info?.status !== 'closed' : boss && mo.info?.status === 'open';
-  // a flatmate's earlier month still open: no form and no closed note, so the list takes the whole width
-  const side = open || mo.info?.status === 'closed';
+  const total = monthTotals(mo.entries).bazar;
   const [dFrom, dTo] = month === thisMonth ? [thisMonth, today] : [month, daysOfMonth(month).at(-1)!];
   const row = (e: Entry) => {
     const its = items.get(e.id) ?? [];
     const what = its.length ? `${its.slice(0, 3).map(i => i.name).join(' · ')}${its.length > 3 ? ` +${its.length - 3}` : ''}` : e.note ?? '';
     return (
-      <li key={e.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-3 md:grid md:gap-4 ${cols}`}>
+      <li key={e.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-3 md:grid md:gap-4 md:py-2 ${cols}`}>
         <Link href={`/${lang}/money/bazar/${e.id}`} className={`flex min-h-11 min-w-0 basis-full flex-col justify-center rounded-lg md:basis-auto ${focus}`}>
           <span className="font-semibold text-turmeric-ink">{fmtDay(e.date, lang)} · {e.paidBy ? name(e.paidBy) : b.fund}</span>
           {what && <span className="block text-[15px] [overflow-wrap:anywhere]">{what}</span>}
@@ -86,11 +87,24 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
               : <Link href={href(next, only)} aria-label={x.nextMonth} className={arrow}>→</Link>}
           </span>
         </nav>
-        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {side && <div>
-            {open ? (
+        {mo.info?.status === 'closed' && <p className="mt-2 text-muted">{b.closedNote}</p>}
+        {/* from 1280 px the month's figures and Add bazar share a column beside the list; below that they come first and the
+            list keeps the full width for its table */}
+        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3 xl:items-start">
+          <div className="flex flex-col gap-6 [&>details]:mt-0">
+            <dl className={`grid grid-cols-2 gap-2 md:grid-cols-5 xl:grid-cols-2 ${card}`}>
+              {([[x.totalBazar, fmtTaka(total), ''], [b.count, String(bazars.length), ''],
+                [b.withReceipt, b.nOfN.replace('{n}', String(bazars.filter(e => e.receiptV).length)).replace('{m}', String(bazars.length)), ''],
+                [b.waiting, String(waiting.length), ''], [b.fix, String(fixing.length), fixing.length ? 'text-chili' : '']] as const).map(([k, v, tone], i) => (
+                <div key={k} className={`rounded-xl bg-paper p-3 ${i === 0 ? 'col-span-2 md:col-span-1 xl:col-span-2' : ''}`}>
+                  <dt className="text-[15px] text-muted">{k}</dt>
+                  <dd className={`text-xl font-bold tabular-nums [overflow-wrap:anywhere] md:text-2xl ${tone}`}>{v}</dd>
+                </div>
+              ))}
+            </dl>
+            {open && (
               <Fold title={x.addBazar} lead={x.bazarLead}>
-                <ActionForm action={entryAction} className="mt-4" clearOnDone>
+                <ActionForm action={entryAction} className="mt-4 md:max-w-xl xl:max-w-none" clearOnDone>
                   <input type="hidden" name="lang" value={lang} /><input type="hidden" name="type" value="bazar" /><input type="hidden" name="key" value={randomUUID()} />
                   <Field label={x.amount} name="amount" inputMode="decimal" required placeholder="2450" />
                   <DateField lang={lang} label={x.date} name="date" required min={dFrom} max={dTo} defaultValue={dTo} />
@@ -102,20 +116,20 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
                   <button className={primary}>{x.save}</button>
                 </ActionForm>
               </Fold>
-            ) : <p className="text-muted">{b.closedNote}</p>}
-          </div>}
-          <section className={`flex flex-col ${side ? 'lg:col-span-2' : 'md:col-span-2 lg:col-span-3'} ${card}`}>
+            )}
+          </div>
+          <section className={`xl:col-span-2 ${card}`}>
             <nav aria-label={b.filterLabel} className="flex flex-wrap gap-2">
               {([[null, b.all, bazars.length], ['waiting', b.waiting, waiting.length], ['fix', b.fix, fixing.length]] as const).map(([f, label, n]) => (
                 <Link key={label} href={href(month, f)} aria-current={only === f ? 'true' : undefined} className={pill(only === f)}>{label} ({n})</Link>
               ))}
             </nav>
-            {!shown.length ? <p className="mt-3 text-muted">{bazars.length ? b.noMatch : b.noBazar}</p> : (<>
-              <div aria-hidden="true" className={`mt-3 hidden gap-4 text-[15px] text-muted md:grid ${cols}`}>
-                <span>{b.what}</span><span className="text-right">{x.amount}</span><span>{b.receipt}</span><span>{b.status}</span>
-              </div>
-              <LongList fill label={b.list} keep={10} more={t.app.showAll.replace('{n}', String(shown.length))} less={t.app.showLess} items={shown.map(row)} />
-            </>)}
+            {!shown.length ? <p className="mt-3 text-muted">{bazars.length ? b.noMatch : b.noBazar}</p> : (
+              <LongList screen label={b.list} keep={10} more={t.app.showAll.replace('{n}', String(shown.length))} less={t.app.showLess} items={shown.map(row)}
+                head={<div aria-hidden="true" className={`hidden gap-4 border-b border-line pb-2 text-[15px] text-muted md:grid ${cols}`}>
+                  <span>{b.what}</span><span className="text-right">{x.amount}</span><span>{b.receipt}</span><span>{b.status}</span>
+                </div>} />
+            )}
           </section>
         </div>
       </main>

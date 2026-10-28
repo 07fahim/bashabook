@@ -81,11 +81,14 @@ export function Fold({ id, title, lead, level = 2, open, row, children }: { id?:
  *  column beside it; the absolute box adds no height of its own (at least 24rem, 16rem when `short`). `short`: about three rows, for a list
  *  that sits above a page's main content. Otherwise it stops at 70% of the screen.
  *  No tabIndex: browsers make a scroll box keyboard-focusable themselves, and on phones nothing here scrolls. */
-export function LongList({ items, keep, label, more, less, fill, short }: { items: ReactNode[]; keep: number; label: string; more: string; less: string; fill?: boolean; short?: boolean }) {
+/** `screen`: on wider screens the box may be as tall as the screen below the sticky header. `head`: a column header row that
+ *  stays on top while the rows scroll, in the same box so it lines up with them (scrollbar included). */
+export function LongList({ items, keep, label, more, less, fill, short, screen, head }: { items: ReactNode[]; keep: number; label: string; more: string; less: string; fill?: boolean; short?: boolean; screen?: boolean; head?: ReactNode }) {
   const list = 'divide-y divide-line';
   return (
     <div className={fill ? `mt-3 md:relative md:flex-1 ${short ? 'md:min-h-64' : 'md:min-h-96'}` : 'mt-3'}>
-      <div role="group" aria-label={label} className={`md:overflow-y-auto md:pr-3 md:[scrollbar-width:thin] ${fill ? 'md:absolute md:inset-0' : short ? 'md:max-h-64' : 'md:max-h-[70vh]'}`}>
+      <div role="group" aria-label={label} className={`md:overflow-y-auto md:pr-3 md:[scrollbar-width:thin] ${fill ? 'md:absolute md:inset-0' : short ? 'md:max-h-64' : screen ? 'md:max-h-[calc(100vh-5rem)]' : 'md:max-h-[70vh]'}`}>
+        {head && <div className="sticky top-0 z-[1] bg-surface">{head}</div>}
         <ul className={list}>{items.slice(0, keep)}</ul>
         {items.length > keep && (<>
           {/* between the first rows and the rest: one order for eyes, keyboards and screen readers (peer-open needs it first) */}
