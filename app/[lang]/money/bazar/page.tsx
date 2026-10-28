@@ -79,7 +79,8 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <Link href={`/${lang}/money${month !== thisMonth ? `?m=${month.slice(0, 7)}` : ''}`} className={`inline-flex min-h-11 items-center ${link}`}>{b.backMoney}</Link>
         <nav aria-label={x.monthNav} className="flex items-center justify-between gap-3">
-          <h1 className="font-display text-3xl font-bold">{b.list} · {fmtMonth(month)}</h1>
+          {/* a phone puts the month on its own line, so no line starts with the dot */}
+          <h1 className="font-display text-3xl font-bold">{b.list}<span className="block sm:inline"><span className="hidden sm:inline"> · </span>{fmtMonth(month)}</span></h1>
           <span className="flex gap-2">
             {month <= mo.first ? <span aria-disabled="true" aria-label={x.prevMonth} className={arrow}>←</span>
               : <Link href={href(prev, only)} aria-label={x.prevMonth} className={arrow}>←</Link>}
@@ -88,37 +89,39 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
           </span>
         </nav>
         {mo.info?.status === 'closed' && <p className="mt-2 text-muted">{b.closedNote}</p>}
-        {/* from 1280 px the month's figures and Add bazar share a column beside the list; below that they come first and the
-            list keeps the full width for its table */}
-        <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3 xl:items-start">
-          <div className="flex flex-col gap-6 [&>details]:mt-0">
-            <dl className={`grid grid-cols-2 gap-2 md:grid-cols-5 xl:grid-cols-2 ${card}`}>
-              {([[x.totalBazar, fmtTaka(total), ''], [b.count, String(bazars.length), ''],
-                [b.withReceipt, b.nOfN.replace('{n}', String(bazars.filter(e => e.receiptV).length)).replace('{m}', String(bazars.length)), ''],
-                [b.waiting, String(waiting.length), ''], [b.fix, String(fixing.length), fixing.length ? 'text-chili' : '']] as const).map(([k, v, tone], i) => (
-                <div key={k} className={`rounded-xl bg-paper p-3 ${i === 0 ? 'col-span-2 md:col-span-1 xl:col-span-2' : ''}`}>
-                  <dt className="text-[15px] text-muted">{k}</dt>
-                  <dd className={`text-xl font-bold tabular-nums [overflow-wrap:anywhere] md:text-2xl ${tone}`}>{v}</dd>
-                </div>
-              ))}
-            </dl>
-            {open && (
-              <Fold title={x.addBazar} lead={x.bazarLead}>
-                <ActionForm action={entryAction} className="mt-4 md:max-w-xl xl:max-w-none" clearOnDone>
-                  <input type="hidden" name="lang" value={lang} /><input type="hidden" name="type" value="bazar" /><input type="hidden" name="key" value={randomUUID()} />
-                  <Field label={x.amount} name="amount" inputMode="decimal" required placeholder="2450" />
-                  <DateField lang={lang} label={x.date} name="date" required min={dFrom} max={dTo} defaultValue={dTo} />
-                  <PayerSelect label={x.whoPaidShop} fundLabel={x.flatMoney.replace('{name}', collector.name)} today={dTo} initial={boss ? 'fund' : me.memberId}
-                    people={mo.members.filter(p => p.id !== collector.id).map(p => ({ id: p.id, name: p.name, joinedOn: p.joinedOn, leftOn: p.leftOn }))} />
-                  <ItemLines title={b.itemsTitle} hint={b.itemsHint} name={b.itemName} amount={b.itemAmount} add={b.addItem} />
-                  <ReceiptPicker label={b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} />
-                  <Field label={x.note} name="note" maxLength={100} />
-                  <button className={primary}>{x.save}</button>
-                </ActionForm>
-              </Fold>
-            )}
+        {/* one column at every width: the month's figures as a strip, Add bazar folded, then the list at full width, so no
+            column ends far above its neighbour */}
+        <div className="mt-6 flex flex-col gap-6 [&>details]:mt-0">
+          <div className={`grid grid-cols-2 gap-2 md:grid-cols-5 ${card}`}>
+            {([[x.totalBazar, fmtTaka(total), null, ''], [b.count, String(bazars.length), null, ''],
+              [b.withReceipt, b.nOfN.replace('{n}', String(bazars.filter(e => e.receiptV).length)).replace('{m}', String(bazars.length)), null, ''],
+              [b.waiting, String(waiting.length), 'waiting', ''], [b.fix, String(fixing.length), 'fix', fixing.length ? 'text-chili' : '']] as const).map(([k, v, f, tone], i) => {
+              const inner = (<>
+                <span className="block text-[15px] text-muted">{k}</span>
+                <span className={`block text-xl font-bold whitespace-nowrap tabular-nums md:text-2xl ${tone}`}>{v}</span>
+              </>);
+              const tile = `rounded-xl bg-paper p-3 ${i === 0 ? 'col-span-2 md:col-span-1' : ''}`;
+              // the two counts set the list's filter, as its pills do
+              return f ? <Link key={k} href={href(month, f)} aria-current={only === f ? 'true' : undefined}
+                className={`${tile} hover:ring-1 hover:ring-muted ${focus}`}>{inner}</Link> : <div key={k} className={tile}>{inner}</div>;
+            })}
           </div>
-          <section className={`xl:col-span-2 ${card}`}>
+          {open && (
+            <Fold title={x.addBazar} lead={x.bazarLead}>
+              <ActionForm action={entryAction} className="mt-4 md:max-w-xl" clearOnDone>
+                <input type="hidden" name="lang" value={lang} /><input type="hidden" name="type" value="bazar" /><input type="hidden" name="key" value={randomUUID()} />
+                <Field label={x.amount} name="amount" inputMode="decimal" required placeholder="2450" />
+                <DateField lang={lang} label={x.date} name="date" required min={dFrom} max={dTo} defaultValue={dTo} />
+                <PayerSelect label={x.whoPaidShop} fundLabel={x.flatMoney.replace('{name}', collector.name)} today={dTo} initial={boss ? 'fund' : me.memberId}
+                  people={mo.members.filter(p => p.id !== collector.id).map(p => ({ id: p.id, name: p.name, joinedOn: p.joinedOn, leftOn: p.leftOn }))} />
+                <ItemLines title={b.itemsTitle} hint={b.itemsHint} name={b.itemName} amount={b.itemAmount} add={b.addItem} />
+                <ReceiptPicker label={b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} />
+                <Field label={x.note} name="note" maxLength={100} />
+                <button className={primary}>{x.save}</button>
+              </ActionForm>
+            </Fold>
+          )}
+          <section className={card}>
             <nav aria-label={b.filterLabel} className="flex flex-wrap gap-2">
               {([[null, b.all, bazars.length], ['waiting', b.waiting, waiting.length], ['fix', b.fix, fixing.length]] as const).map(([f, label, n]) => (
                 <Link key={label} href={href(month, f)} aria-current={only === f ? 'true' : undefined} className={pill(only === f)}>{label} ({n})</Link>
