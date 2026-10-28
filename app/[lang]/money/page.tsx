@@ -353,8 +353,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   <ul className="divide-y divide-line">
                     {shown.filter(e => e.date === d).map(e => (
                       <li key={e.id} className="group py-3">
-                        <div className="flex items-start justify-between gap-x-3">
-                        <div className="min-w-0 flex-1">
+                        {/* the text keeps room for the widest chip (Needs correction); a big amount wraps under it instead */}
+                        <div className="flex flex-wrap items-start justify-between gap-x-3">
+                        <div className="min-w-36 flex-1">
                           <p className="font-semibold">{x.types[e.type]} · {who(e)}</p>
                           {(e.forMonth || e.method || e.note) && <p className="text-[15px]">{[e.forMonth && x.correctionFor.replace('{month}', fmtMonth(e.forMonth)), e.method && x.cashMethods[e.method], e.note].filter(Boolean).join(' · ')}</p>}
                           {(e.type === 'bazar' || e.type === 'bill') && (
