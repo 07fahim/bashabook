@@ -9,9 +9,9 @@ import { setDefaults, updateSettings } from '../lib/meals-db';
 import { db as appDb, type Db } from '../lib/db';
 
 const url = process.env.DATABASE_URL ?? '';
-if (!new URL(url).hostname.startsWith('ep-muddy-mud-')) throw new Error('not the test copy; refusing');
+if (new URL(url).username !== 'postgres.wgvoshlmhauxcymwdwjt') throw new Error('not the Supabase test project; refusing');   // the pooler host is shared with production
 const TEST_FLAT = process.env.TEST_FLAT_CODE ?? '';   // join code of a flat with closed months on the test copy; the cascade check is skipped without it
-const sql = postgres(url, { max: 8, prepare: false, onnotice: () => {} });
+const sql = postgres(url, { max: 8, prepare: false, ssl: 'require', onnotice: () => {} });
 const db: Db = (t, p = []) => sql.unsafe(t, p as never[]) as never;
 
 const results: string[] = [];
