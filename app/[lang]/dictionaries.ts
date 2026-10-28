@@ -678,6 +678,8 @@ const bn = {
       handChanged: 'এর মধ্যে টাকার হিসাব বদলেছে। নতুন অঙ্কটা দেখে আবার দিন।',
       handAlready: 'একজনকে টাকা বুঝিয়ে দেওয়ার অনুরোধ আগে থেকেই অপেক্ষায় আছে।',
       handRecipient: 'একে দেওয়া যাবে না: সে এখন থাকছে না বা চলে যাচ্ছে।',
+      items: 'জিনিসের দাম যোগ করে মোটের চেয়ে বেশি হতে পারে না। প্রতিটা দামের পাশে জিনিসের নাম লিখুন।',
+      receipt: 'রসিদের ছবিটা নেওয়া গেল না। অন্য একটা ছবি দিন।',
     },
   },
 };
@@ -1360,6 +1362,8 @@ const en: Dict = {
       handChanged: 'The flat money changed meanwhile. Check the new amount and offer again.',
       handAlready: 'A handover is already waiting.',
       handRecipient: "You can't hand over to this person: they don't live here now or are moving out.",
+      items: 'Item amounts can’t add up to more than the total. Each amount needs an item name.',
+      receipt: 'That receipt photo didn’t work. Try another photo.',
     },
   },
 };

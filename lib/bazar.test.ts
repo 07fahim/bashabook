@@ -4,11 +4,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
-import { addEntry, openMonth, type Actor, type NewEntry } from './money-db';
+import { itemsFor, monthTotals, otherItems, parseItems, receiptOf } from './bazar';
+import { addEntry, loadMonth, openMonth, putBack, removeEntry, type Actor, type NewEntry } from './money-db';
 
 const OCT = '2026-10-01', TODAY = '2026-10-09';
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
   ({ date: '2026-10-05', note: null, paidBy: null, memberId: null, split: null, selected: [], ...p });
+const jpeg = (n = 100) => Uint8Array.from({ length: n }, (_, i) => (i < 3 ? [0xff, 0xd8, 0xff][i] : i % 251));
 // the backfill block of 020, read from the migration itself
 const backfill = () => readFileSync(join(__dirname, '../db/migrations/020_bazar_check.sql'), 'utf8').split('-- backfill start')[1].split('-- backfill end')[0];
 
@@ -44,6 +46,10 @@ describe('bazar checks: the database', { timeout: 30000 }, () => {
     expect(await may(viaFund, 'Zarif')).toBe(false);
     expect(await may(viaFund, 'Nafis')).toBe(true);   // nobody else is left: the collector after all
     expect(await may(randomUUID(), 'Nafis')).toBeNull();
+    await db(`update members set left_on = $2::text::date where id = $1`, [ids.Zarif, TODAY]);   // moving out today: still here
+    expect(await may(viaFund, 'Zarif')).toBe(true);
+    await db(`update members set left_on = null, joined_on = '2026-10-10' where id = $1`, [ids.Zarif]);   // joins tomorrow: not yet
+    expect(await may(viaFund, 'Zarif')).toBe(false);
   });
 
   it('a flat of one: the collector checks their own', async () => {
@@ -60,5 +66,62 @@ describe('bazar checks: the database', { timeout: 30000 }, () => {
     const rows = await db<{ id: string; state: string; by: string | null }>(
       `select ledger_id as id, state, by_member as by from entry_checks where flat_id = $1 order by ledger_id`, [flatId]);
     expect(rows).toEqual([bazar, bill].sort().map(id => ({ id, state: 'ok', by: null })));
+  });
+});
+
+describe('bazar items and receipts', { timeout: 30000 }, () => {
+  it('reads item lines: empty lines skipped; a lone amount, a long name or a bad amount refused', () => {
+    expect(parseItems(['Rice', '', ' Oil '], ['450', '', ''])).toEqual([{ name: 'Rice', amount: 45000 }, { name: 'Oil', amount: null }]);
+    expect(parseItems(['', ''], ['', ''])).toEqual([]);
+    expect(parseItems([''], ['120'])).toBeNull();
+    expect(parseItems(['x'.repeat(41)], [''])).toBeNull();
+    expect(parseItems(['Rice'], ['abc'])).toBeNull();
+    expect(parseItems(Array.from({ length: 31 }, (_, i) => `x${i}`), [])).toBeNull();
+    expect(otherItems([{ name: 'Rice', amount: 45000 }, { name: 'Oil', amount: null }], 60000)).toBe(15000);
+    expect(otherItems([{ name: 'Oil', amount: null }], 60000)).toBe(0);   // no amounts at all: no Other items line
+  });
+
+  it('totals: paid in counts confirmed deposits; total spent is bazar plus bills whoever paid; corrections stay out', () => {
+    const r = (type: string, amount: number, status = 'ok', forMonth: string | null = null) => ({ type, amount, status, forMonth });
+    expect(monthTotals([r('deposit', 500), r('deposit', 300, 'pending'), r('bazar', 200), r('bill', 100), r('bazar', 50, 'ok', '2026-09-01'), r('payout', 70)]))
+      .toEqual({ bazar: 200, bills: 100, spent: 300, paidIn: 500 });
+  });
+
+  it('a bazar counts at once, before any check, and keeps its item lines and receipt', async () => {
+    const { flatId, ids, as, add } = await flat();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 90000, paidBy: ids.Tahsin, items: [{ name: 'Rice', amount: 50000 }, { name: 'Oil', amount: null }], receipt: jpeg() });
+    const mo = await loadMonth(db, flatId, OCT, TODAY);
+    expect(mo.result.perMember.reduce((a, m) => a + m.foodCost, 0)).toBe(90000);
+    const x = mo.entries.find(r => r.id === id)!;
+    expect(x.check).toBeNull();
+    expect(x.receiptV).toMatch(/^\d+$/);
+    expect((await itemsFor(db, flatId, OCT)).get(id)).toEqual([{ name: 'Rice', amount: 50000 }, { name: 'Oil', amount: null }]);
+    expect(Array.from((await receiptOf(db, flatId, id))!.slice(0, 3))).toEqual([0xff, 0xd8, 0xff]);
+  });
+
+  it('refuses item amounts over the total, a 31st line, items on a bill and a receipt that is not a small JPEG on a bazar or bill', async () => {
+    const { flatId, ids, nafis, as } = await flat();
+    const t = as('Tahsin'), bz = (p: Partial<NewEntry>) => e({ type: 'bazar', amount: 1000, paidBy: ids.Tahsin, ...p });
+    expect(await addEntry(db, flatId, t, bz({ items: [{ name: 'Rice', amount: 1001 }] }), TODAY)).toBe('items');
+    expect(await addEntry(db, flatId, t, bz({ items: Array.from({ length: 31 }, (_, i) => ({ name: `x${i}`, amount: null })) }), TODAY)).toBe('items');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 1000, note: 'Gas', split: 'equal', items: [{ name: 'x', amount: null }] }), TODAY)).toBe('bad');
+    expect(await addEntry(db, flatId, t, bz({ receipt: jpeg(250_001) }), TODAY)).toBe('receipt');
+    expect(await addEntry(db, flatId, t, bz({ receipt: Uint8Array.from([0x89, 0x50, 0x4e, 0x47]) }), TODAY)).toBe('receipt');
+    expect(await addEntry(db, flatId, t, e({ type: 'deposit', amount: 1000, memberId: ids.Tahsin, receipt: jpeg() }), TODAY)).toBe('receipt');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 1000, note: 'Gas', split: 'equal', receipt: jpeg(250_000) }), TODAY)).toBe('ok');   // 250 KB is the limit
+    expect(await db(`select 1 from ledger where flat_id = $1`, [flatId])).toHaveLength(1);
+  });
+
+  it('remove and put back keep the item lines, the receipt and the check', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const items = [{ name: 'Rice', amount: 50000 }, { name: 'Oil', amount: null }];
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 90000, paidBy: ids.Tahsin, items, receipt: jpeg() });
+    await db(`insert into entry_checks (flat_id, ledger_id, month, state, by_member) values ($1, $2, $3::text::date, 'ok', $4)`, [flatId, id, OCT, ids.Nafis]);
+    expect(await removeEntry(db, flatId, nafis, id, TODAY)).toBe(true);
+    expect((await itemsFor(db, flatId, OCT)).has(id)).toBe(false);
+    expect(await receiptOf(db, flatId, id)).not.toBeNull();
+    expect(await putBack(db, flatId, ids.Nafis, id, TODAY)).toBe(true);
+    expect((await itemsFor(db, flatId, OCT)).get(id)).toEqual(items);
+    expect((await loadMonth(db, flatId, OCT, TODAY)).entries.find(x => x.id === id)!.check).toBe('ok');
   });
 });
