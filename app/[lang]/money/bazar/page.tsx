@@ -64,7 +64,8 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
           {what && <span className="block text-[15px] [overflow-wrap:anywhere]">{what}</span>}
         </Link>
         <span className="font-bold tabular-nums md:text-right">{fmtExact(e.amount)}</span>
-        {e.receiptV ? <a href={`/api/receipt/${e.id}?v=${e.receiptV}`} target="_blank" rel="noopener" className={`inline-flex min-h-11 items-center ${link}`}>{b.viewReceipt}</a>
+        {e.receiptV ? <a href={`/api/receipt/${e.id}?v=${e.receiptV}`} target="_blank" rel="noopener" aria-label={`${b.viewReceipt}: ${x.types[e.type]} ${fmtExact(e.amount)} (${b.newTab})`}
+          className={`inline-flex min-h-11 items-center ${link}`}>{b.viewReceipt}</a>
           : <span className="text-[15px] text-muted">{b.noReceipt}</span>}
         <span><StatusChip state={e.check} b={b} /></span>
       </li>

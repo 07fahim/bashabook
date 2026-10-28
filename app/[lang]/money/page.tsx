@@ -361,7 +361,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                             <p className="flex flex-wrap items-center gap-x-3">
                               <Link href={`/${lang}/money/bazar/${e.id}`} aria-label={`${x.types[e.type]} ${fmtExact(e.amount)}: ${e.check === 'ok' ? x.bazar.ok : e.check === 'fix' ? x.bazar.fix : x.bazar.waiting}`}
                                 className={`inline-flex min-h-11 items-center rounded-full ${focus}`}><StatusChip state={e.check} b={x.bazar} /></Link>
-                              {e.receiptV && <a href={`/api/receipt/${e.id}?v=${e.receiptV}`} target="_blank" rel="noopener" className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{x.bazar.viewReceipt}</a>}
+                              {e.receiptV && <a href={`/api/receipt/${e.id}?v=${e.receiptV}`} target="_blank" rel="noopener" aria-label={`${x.bazar.viewReceipt}: ${x.types[e.type]} ${fmtExact(e.amount)} (${x.bazar.newTab})`}
+                                className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{x.bazar.viewReceipt}</a>}
                             </p>
                           )}
                           <p className="text-[15px] text-muted">

@@ -9,6 +9,10 @@ What BashaBook keeps, for how long, and how it is deleted. Decided 2026-10-11 fo
   says this: a mover's records stay for the flat's history.
 - Personal data held per person: name, optional mobile number, optional small photo, PIN hash, sign-in sessions (90 days each).
   A person can remove their own photo and phone number in the app at any time; their name stays in the flat's records.
+- Receipt photos (since migration 020): a small JPEG (at most 250 KB) per bazar or bill when someone adds one, seen by the
+  whole flat. `runJobs` deletes each 90 days after its month closed, and a removed entry's receipt and check as soon as its
+  month is closed. Receipts are left out of the nightly backup (`--exclude-table-data=receipts`): a restore brings back
+  every number, item line and check, never a photo.
 - A flat's records are copied into the nightly backup (below) and the collector's CSV of a closed month. Production moved from Neon to Supabase (free plan) on 2026-10-28;
   the free plan has no backups and no point-in-time restore (supabase.com/docs/guides/platform/backups, read 2026-10-28). Since 2026-10-27 the live site sends page visits to Google Analytics 4 (only when
   `NEXT_PUBLIC_GA_ID` is set, on Production): the page address with a join code hidden and no query string, plus what
@@ -19,7 +23,7 @@ What BashaBook keeps, for how long, and how it is deleted. Decided 2026-10-11 fo
 A flat is deleted whole, on the collector's request, by the app team with `scripts/delete-flat.mts` (dry run first, then
 `--apply`). One statement removes the flat and every row that belongs to it: people, rooms, months, entries, meals, history,
 handovers, sessions. Nothing of any other flat is touched (`lib/delete-flat.test.ts`). Since 2026-10-28 a nightly full copy of production is kept 7 days (private repo 07fahim/bashabook-backups:
-GitHub Actions at 03:30 Dhaka; IP rate-limit rows and sessions left out; each copy is restored into an empty Postgres 17
+GitHub Actions at 03:30 Dhaka; IP rate-limit rows, sessions and receipt photos left out; each copy is restored into an empty Postgres 17
 before it is kept). A deleted flat is gone for good within 7 days of deletion. A wrong deletion or a bad migration can be
 undone from the last copy. A full restore rolls every flat back to that night and loses entries made since. Restoring
 one flat alone is not scripted. No restore into Supabase has been tested yet: it needs `create extension btree_gist`
