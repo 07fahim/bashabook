@@ -79,9 +79,14 @@ export async function checkEntry(db: Db, flatId: string, by: Actor, id: string, 
 
 /** SQL: could `me` fix ledger row `l` (its month row `mo`) today once it is sent back? Its month open, `me` living here today
  *  (as may_check and sign-in), and the collector (any open month) or whoever added it in its own month: the rule fixEntry keeps. */
-const fixer = (me: string, today: string) => `(mo.status = 'open' and exists (select 1 from members w
-  where w.flat_id = l.flat_id and w.id = ${me} and (w.left_on is null or w.left_on >= ${today}::text::date)
-  and (w.role = 'manager' or (l.created_by = ${me} and l.month = date_trunc('month', ${today}::text::date)::date))))`;
+const fixer = (me: string, today: string) =>
+  `(mo.status = 'open' and ${adderHere(me, today, `l.created_by = ${me} and l.month = date_trunc('month', ${today}::text::date)::date`)})`;
+/** SQL: `me` lives here today and is the collector or `adder` holds. */
+const adderHere = (me: string, today: string, adder: string) => `exists (select 1 from members w where w.flat_id = l.flat_id and w.id = ${me}
+  and (w.left_on is null or w.left_on >= ${today}::text::date) and (w.role = 'manager' or (${adder})))`;
+/** SQL: may `me` add or change the receipt photo of `l` now (Late receipt): still waiting (no check `c`), its month open, and
+ *  the collector or whoever added it (any open month: no money moves), living here today. */
+const mayReceipt = (me: string, today: string) => `(c.ledger_id is null and mo.status = 'open' and ${adderHere(me, today, `l.created_by = ${me}`)})`;
 /** SQL: may `me` Fix it on `l` now: sent back (its check `c`) and `fixer`. */
 const mayFix = (me: string, today: string) => `(c.state = 'fix' and ${fixer(me, today)})`;
 
@@ -113,7 +118,7 @@ export const toCheck = (db: Db, flatId: string, memberId: string, today: string)
 export type Detail = {
   id: string; type: 'bazar' | 'bill'; amount: number; date: string; month: string; note: string | null; paidBy: string | null;
   createdBy: string; addedBy: string; addedAt: string; open: boolean; check: 'ok' | 'fix' | null; reason: string | null;
-  checkedBy: string | null; checkedAt: string | null; receiptV: string | null; mayCheck: boolean; mayFix: boolean; adderMayFix: boolean; items: Item[];
+  checkedBy: string | null; checkedAt: string | null; receiptV: string | null; mayCheck: boolean; mayFix: boolean; adderMayFix: boolean; mayAddReceipt: boolean; items: Item[];
 };
 /** One bazar or bill for its page: its lines, receipt and check, whether `me` may check it now (open month, no check yet, may_check) or fix it, whether its adder may fix it (Send back names
  *  them only then; else the collector fixes it, as fixAskTo), and the flat's people
@@ -126,6 +131,7 @@ export async function entryDetail(db: Db, flatId: string, id: string, me: string
        extract(epoch from r.created_at)::bigint::text as "receiptV", mo.status = 'open' and c.ledger_id is null
          and coalesce(may_check(l.id, $3, $4::text::date), false) as "mayCheck",
        coalesce(${mayFix('$3', '$4')}, false) as "mayFix", coalesce(${fixer('l.created_by', '$4')}, false) as "adderMayFix",
+       coalesce(${mayReceipt('$3', '$4')}, false) as "mayAddReceipt",
        (select coalesce(json_agg(json_build_object('name', i.name, 'amount', i.amount_poisha::int) order by i.pos), '[]'::json)
           from bazar_items i where i.ledger_id = l.id) as items
      from ledger l join members a on a.flat_id = l.flat_id and a.id = l.created_by
@@ -185,6 +191,25 @@ export async function fixEntry(db: Db, flatId: string, by: Actor, f: Fix, today:
      select c.by_member as marker, l.type, l.amount_poisha::int as amount from c, l`,
     [flatId, f.id, by.memberId, by.role === 'manager', f.amount, f.date, f.paidBy, f.note, JSON.stringify(f.items), f.receipt ? Buffer.from(f.receipt) : null, today]);
   return r ? { result: 'ok', ...r } : { result: 'bad' };
+}
+
+/** Late receipt: a receipt photo added or changed on a waiting bazar or bill (mayReceipt). Only `receipts` and a history row
+ *  are written, never `ledger`, so no version moves (a close card and a handover offer stay valid); created_at = now() so
+ *  phones fetch the new photo. One statement that locks the month row (no key update, as checkEntry) and needs it open, so
+ *  nothing lands on a month that just closed. */
+export async function addReceipt(db: Db, flatId: string, by: Actor, id: string, bytes: Uint8Array, today: string): Promise<'ok' | 'bad' | 'receipt'> {
+  if (!isJpeg(bytes, MAX_RECEIPT)) return 'receipt';
+  const r = await db(
+    `with e as (select l.id, l.month from ledger l join months mo on mo.flat_id = l.flat_id and mo.month = l.month
+         left join entry_checks c on c.ledger_id = l.id
+         where l.flat_id = $1 and l.id = $2 and l.type in ('bazar', 'bill') and l.status = 'ok' and ${mayReceipt('$3', '$5')}
+         for no key update of mo),
+       r as (insert into receipts (flat_id, ledger_id, month, photo) select $1, e.id, e.month, $4::bytea from e
+         on conflict (ledger_id) do update set photo = excluded.photo, created_at = now() returning ledger_id),
+       a as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
+         select $1, 'ledger', r.ledger_id::text, '{"receipt":true}'::jsonb, $3 from r)
+     select 1 from r`, [flatId, id, by.memberId, Buffer.from(bytes), today]);
+  return r.length ? 'ok' : 'bad';
 }
 
 /** SQL (unaliased `ledger`): a row that keeps month `m` from closing. Money waiting for a tap, in this or a later open month

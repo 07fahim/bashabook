@@ -10,7 +10,7 @@ import { monthOf } from '@/lib/money-db';
 import { noticeCount } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
 import { ActionForm } from '../../../action-form';
-import { checkAction, fixAction } from '../../../actions';
+import { checkAction, fixAction, receiptAction } from '../../../actions';
 import { DateField } from '../../../date-field';
 import { getDictionary, hasLocale } from '../../../dictionaries';
 import { dhakaDate, fmtDay, fmtExact, fmtWhen } from '../../../format';
@@ -124,6 +124,13 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
                 <Image src={src} alt={b.receiptAlt} width={960} height={1280} unoptimized className="mx-auto h-auto w-full rounded-xl lg:max-h-[calc(100vh-11rem)] lg:w-auto" />
               </a>
             ) : <p className="mt-2 text-muted">{b.noReceipt}</p>}
+            {d.mayAddReceipt && (
+              <ActionForm action={receiptAction} className="mt-4" clearOnDone>
+                {hidden()}
+                <ReceiptPicker label={src ? b.changeReceipt : b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} />
+                <button className={`${primary} sm:w-auto`}>{x.save}</button>
+              </ActionForm>
+            )}
           </section>
         </div>
       </main>

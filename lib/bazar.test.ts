@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
-import { checkEntry, entryDetail, fixAskTo, fixEntry, itemsFor, itemsOk, monthTotals, otherItems, parseItems, receiptOf, toCheck, type Fix } from './bazar';
+import { addReceipt, checkEntry, entryDetail, fixAskTo, fixEntry, itemsFor, itemsOk, monthTotals, otherItems, parseItems, receiptOf, toCheck, type Fix } from './bazar';
 import { closeMonth, closeInfo } from './close';
 import { acceptHandover, currentOffer, flatMoney, offerHandover } from './handover';
 import { addEntry, loadMonth, openMonth, putBack, removeEntry, type Actor, type NewEntry } from './money-db';
@@ -380,5 +380,67 @@ describe('Fix it', { timeout: 30000 }, () => {
     const f: Fix = { id, type: 'bazar', amount: 900, date: '2026-10-05', paidBy: null, note: null, items: [], receipt: null };
     expect((await fixEntry(db, other.flatId, { memberId: other.memberId, role: 'manager' }, f, TODAY)).result).toBe('bad');
     expect((await db<{ a: number }>(`select amount_poisha::int as a from ledger where id = $1`, [id]))[0].a).toBe(1000);
+  });
+});
+
+describe('late receipt', { timeout: 30000 }, () => {
+  const versions = (flatId: string) => db<{ m: number; o: number }>(`select (select version from months where flat_id = $1 and month = $2::text::date) as m,
+    (select offer_version from flats where id = $1) as o`, [flatId, OCT]);
+
+  it('while waiting, whoever added it or the collector adds or changes the photo; no version moves; the photo version does', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
+    const before = await versions(flatId);
+    expect(await addReceipt(db, flatId, as('Tahsin'), id, jpeg(), TODAY)).toBe('ok');
+    expect((await receiptOf(db, flatId, id))!.length).toBe(100);
+    await db(`update receipts set created_at = created_at - interval '1 hour' where ledger_id = $1`, [id]);   // added an hour ago
+    const v0 = (await entryDetail(db, flatId, id, ids.Tahsin, TODAY))!.d.receiptV!;
+    expect(await addReceipt(db, flatId, nafis, id, jpeg(150), TODAY)).toBe('ok');
+    expect((await receiptOf(db, flatId, id))!.length).toBe(150);
+    expect(Number((await entryDetail(db, flatId, id, ids.Tahsin, TODAY))!.d.receiptV)).toBeGreaterThan(Number(v0));
+    expect(await versions(flatId)).toEqual(before);
+    const log = await db<{ after: unknown; by: string }>(`select after, by_member as by from audit_log where entity_id = $1 and after ? 'receipt' order by id`, [id]);
+    expect(log).toEqual([{ after: { receipt: true }, by: ids.Tahsin }, { after: { receipt: true }, by: ids.Nafis }]);
+    const bill = await add(nafis, { type: 'bill', amount: 2000, note: 'Gas', split: 'equal' });   // a monthly bill: the collector's
+    expect(await addReceipt(db, flatId, nafis, bill, jpeg(), TODAY)).toBe('ok');
+  });
+
+  it('refused for another flatmate, an adder who moved out, a photo that is not a small JPEG, and a deposit', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
+    expect(await addReceipt(db, flatId, as('Zarif'), id, jpeg(), TODAY)).toBe('bad');
+    expect(await addReceipt(db, flatId, as('Tahsin'), id, jpeg(250_001), TODAY)).toBe('receipt');
+    expect(await addReceipt(db, flatId, as('Tahsin'), id, Uint8Array.from([1, 2, 3, 4]), TODAY)).toBe('receipt');
+    const dep = await add(as('Tahsin'), { type: 'deposit', amount: 1000, memberId: ids.Tahsin });
+    expect(await addReceipt(db, flatId, nafis, dep, jpeg(), TODAY)).toBe('bad');
+    await db(`update members set left_on = '2026-10-08' where id = $1`, [ids.Tahsin]);   // moved out before today
+    expect(await addReceipt(db, flatId, as('Tahsin'), id, jpeg(), TODAY)).toBe('bad');
+    expect(await receiptOf(db, flatId, id)).toBeNull();
+    expect(await addReceipt(db, flatId, nafis, id, jpeg(), TODAY)).toBe('ok');   // the collector still may
+  });
+
+  it('refused once checked (Verified or Needs correction), in a closed month and from another flat', async () => {
+    const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
+    const ok = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
+    const fix = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
+    await checkEntry(db, flatId, nafis, ok, 'ok', null, TODAY);
+    await checkEntry(db, flatId, nafis, fix, 'fix', 'amount', TODAY);
+    for (const id of [ok, fix]) for (const who of [as('Tahsin'), nafis]) expect(await addReceipt(db, flatId, who, id, jpeg(), TODAY)).toBe('bad');
+    const sep = await add(nafis, { type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin });
+    await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-09-01'::text::date`, [flatId]);   // a waiting entry blocks a real close
+    expect(await addReceipt(db, flatId, nafis, sep, jpeg(), TODAY)).toBe('bad');
+    const waiting = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
+    const other = await createFlat(db, { flatName: 'Other', name: 'Rafi', pin: '1234', others: [], today: OCT, lang: 'bn' });
+    expect(await addReceipt(db, other.flatId, { memberId: other.memberId, role: 'manager' }, waiting, jpeg(), TODAY)).toBe('bad');
+    expect(await db(`select 1 from receipts where ledger_id = any($1::uuid[])`, [[ok, fix, sep, waiting]])).toHaveLength(0);
+  });
+
+  it('the entry page offers it exactly where it saves', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
+    const may = async (who: string) => (await entryDetail(db, flatId, id, ids[who], TODAY))!.d.mayAddReceipt;
+    expect([await may('Tahsin'), await may('Nafis'), await may('Zarif')]).toEqual([true, true, false]);
+    await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY);
+    expect([await may('Tahsin'), await may('Nafis')]).toEqual([false, false]);
   });
 });

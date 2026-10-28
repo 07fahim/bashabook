@@ -5,7 +5,7 @@ import { headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
 import { addMember, changePin, cleanName, cleanText, clearLock, clearedBefore, UUID, createFlat, isPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
-import { checkEntry, fixAskTo, fixEntry, parseItems } from '@/lib/bazar';
+import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems } from '@/lib/bazar';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
@@ -500,6 +500,19 @@ export async function fixAction(_: FormState, d: FormData): Promise<FormState> {
     } catch (e) { console.warn('push failed', String(e)); }
   });
   redirect(`/${lang}/money/bazar/${id}?fixed=1`);
+}
+
+/** Late receipt: a photo added or changed on a waiting bazar or bill (the rules live in addReceipt). */
+export async function receiptAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireMember(lang, true);
+  const id = str(d, 'id'), bytes = fromDataUrl(str(d, 'receipt'));
+  if (!UUID.test(id)) return { error: x.errors.bad };
+  if (!bytes) return { error: x.errors.receipt };
+  const r = await addReceipt(db, me.flatId, me, id, bytes, todayDhaka());
+  if (r !== 'ok') return { error: x.errors[r] };
+  refresh();
+  return { done: x.saved };
 }
 
 /** Rent typed in taka; 0 is allowed (a room that pays no rent). */
