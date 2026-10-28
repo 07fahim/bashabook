@@ -79,8 +79,8 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <Link href={`/${lang}/money${month !== thisMonth ? `?m=${month.slice(0, 7)}` : ''}`} className={`inline-flex min-h-11 items-center ${link}`}>{b.backMoney}</Link>
         <nav aria-label={x.monthNav} className="flex items-center justify-between gap-3">
-          {/* a phone puts the month on its own line, so no line starts with the dot */}
-          <h1 className="font-display text-3xl font-bold">{b.list}<span className="block sm:inline"><span className="hidden sm:inline"> · </span>{fmtMonth(month)}</span></h1>
+          {/* a phone puts the month on its own line, so no line starts with the dot; under 375 px a smaller size keeps each part on one line beside the arrows */}
+          <h1 className="font-display text-3xl font-bold max-[399px]:text-2xl max-[374px]:text-xl">{b.list}<span className="block sm:inline"><span className="hidden sm:inline"> · </span>{fmtMonth(month)}</span></h1>
           <span className="flex gap-2">
             {month <= mo.first ? <span aria-disabled="true" aria-label={x.prevMonth} className={arrow}>←</span>
               : <Link href={href(prev, only)} aria-label={x.prevMonth} className={arrow}>←</Link>}
