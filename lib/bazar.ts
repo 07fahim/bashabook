@@ -84,7 +84,8 @@ const mayFix = (me: string, today: string) => `(c.state = 'fix' and mo.status = 
   and l.month = date_trunc('month', ${today}::text::date)::date)))`;
 
 /** Bazars and bills of open months for this person: waiting ones may_check lets them check (the collector: everyone else's;
- *  a flatmate: the collector's own, monthly bills included), and entries sent back that they may fix, with the reason. */
+ *  a flatmate: the collector's own, monthly bills included), and entries sent back that are theirs to fix, with the reason:
+ *  their own, and for the collector also an earlier month's (its adder can't fix it any more). */
 export const toCheck = (db: Db, flatId: string, memberId: string, today: string) => db<{
   id: string; type: 'bazar' | 'bill'; amount: number; date: string; note: string | null; state: 'fix' | null; reason: string | null;
 }>(
@@ -92,7 +93,8 @@ export const toCheck = (db: Db, flatId: string, memberId: string, today: string)
    from ledger l join months mo on mo.flat_id = l.flat_id and mo.month = l.month and mo.status = 'open'
    left join entry_checks c on c.ledger_id = l.id
    where l.flat_id = $1 and l.type in ('bazar', 'bill') and l.status = 'ok'
-     and ((c.ledger_id is null and may_check(l.id, $2, $3::text::date)) or ${mayFix('$2', '$3')})
+     and ((c.ledger_id is null and may_check(l.id, $2, $3::text::date)) or (${mayFix('$2', '$3')}
+       and (l.created_by = $2 or l.month < date_trunc('month', $3::text::date)::date)))
    order by l.date, l.created_at`, [flatId, memberId, today]);
 
 export type Detail = {
