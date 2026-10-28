@@ -8,6 +8,7 @@ import { createFlat } from '../lib/auth';
 import { checkEntry, fixEntry } from '../lib/bazar';
 import { closeMonth } from '../lib/close';
 import type { Db } from '../lib/db';
+import { deleteFlat } from '../lib/delete-flat';
 import { acceptHandover, flatMoney, offerHandover } from '../lib/handover';
 import { addEntry, openMonth, type Actor } from '../lib/money-db';
 
@@ -50,10 +51,12 @@ const after = (ms: number) => new Promise(r => setTimeout(r, ms));
 const [{ today }] = await db<{ today: string }>(`select ((now() at time zone 'Asia/Dhaka')::date)::text as today`);
 if (today < '2026-10-01') throw new Error('needs a Dhaka date on or after 1 October 2026');
 const SEP = '2026-09-01';
+const made: string[] = [];   // every flat this run makes, deleted at the end
 /** Nafis (collector), Tahsin, Zarif, all signed up; September and this month open; ৳50,000 deposited in September; `n` bazars
  *  in September, alternately added by Nafis from flat money (Tahsin or Zarif may check) and by Tahsin paying himself (Nafis may). */
 async function flat(n = 1) {
   const f = await createFlat(db, { flatName: `Race check ${randomUUID().slice(0, 6)}`, name: 'Nafis', pin: String(1000 + Math.floor(Math.random() * 9000)), others: ['Tahsin', 'Zarif'], today: SEP, lang: 'en' });
+  made.push(f.flatId);
   await db(`update members set pin_hash = 'x' where flat_id = $1 and pin_hash is null`, [f.flatId]);
   const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id])) as Record<'Nafis' | 'Tahsin' | 'Zarif', string>;
   const nafis: Actor = { memberId: ids.Nafis, role: 'manager' }, tahsin: Actor = { memberId: ids.Tahsin, role: 'member' }, zarif: Actor = { memberId: ids.Zarif, role: 'member' };
@@ -178,12 +181,16 @@ try {
       const out = await Promise.all([
         ...f.entries.map(async e => { await jitter(); return safe(checkEntry(db, f.flatId, e.byNafis ? f.zarif : f.nafis, e.id, 'ok', null, today)); }),
         (async () => { await jitter(); return safe(acceptHandover(db, f.flatId, f.ids.Tahsin, h.id)); })()]);
-      if (offered !== 'ok' || out.at(-1) !== 'ok') bad++;
+      // each check still lands once: the rule allows each checker before and after the handover
+      const per = await Promise.all(f.entries.map(async e => [await rows(e.id), await audits(e.id)]));
+      if (offered !== 'ok' || out.at(-1) !== 'ok' || out.slice(0, -1).some(r => !r || r === 'error') || per.some(([r, a]) => r !== 1 || a !== 1)) bad++;
     }
-    check(`D handover accept vs checks: ${ROUNDS} rounds × 6 checks, every accept ok`, bad === 0, { bad });
+    check(`D handover accept vs checks: ${ROUNDS} rounds × 6 checks, every accept ok, every check landed once`, bad === 0, { bad });
   }
 } catch (x) {
   check('no errors', false, String(x));
+} finally {
+  for (const id of made) await deleteFlat(db, id);
 }
 check(`no deadlocks (${deadlocks}) and no other errors (${errors})`, deadlocks === 0 && errors === 0);
 
