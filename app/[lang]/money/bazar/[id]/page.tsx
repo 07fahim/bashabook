@@ -117,11 +117,11 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
             )}
           </section>
           {/* beside a long Fix it form the receipt stays in view, whole: the photo is cut to the screen's height there */}
-          <section className={`${card} lg:sticky lg:top-24`}>
+          <section className={`${card} lg:sticky lg:top-20`}>
             <h2 className="text-xl font-bold">{b.receipt}</h2>
             {src ? (
               <a href={src} target="_blank" rel="noopener" className={`mt-3 block rounded-xl ${focus}`}>
-                <Image src={src} alt={b.receiptAlt} width={960} height={1280} unoptimized className="mx-auto h-auto w-full rounded-xl lg:max-h-[calc(100vh-13rem)] lg:w-auto" />
+                <Image src={src} alt={b.receiptAlt} width={960} height={1280} unoptimized className="mx-auto h-auto w-full rounded-xl lg:max-h-[calc(100vh-11rem)] lg:w-auto" />
               </a>
             ) : <p className="mt-2 text-muted">{b.noReceipt}</p>}
           </section>
