@@ -23,7 +23,8 @@ export function Header({ t, lang, path, notices, children }: { t: Dict; lang: Lo
       <div className="flex items-center gap-4 lg:gap-8">
         <Link href={`/${lang}`} className={`flex min-h-11 items-center gap-2 font-display text-2xl font-bold ${focus}`}>
           <Image src="/logo-mark.png" alt="" width={32} height={32} priority />
-          <span>
+          {/* under 360 px the name ran over the bell: the mark alone there, the name still read out */}
+          <span className="max-[359px]:sr-only">
             {t.brand}
             <span className="text-turmeric-ink">{t.brandAccent}</span>
           </span>
