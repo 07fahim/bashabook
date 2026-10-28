@@ -175,7 +175,7 @@ const bn = {
     remove: { h: 'কতদিন রাখি আর কীভাবে মোছা যায়', p: [
       'ফ্ল্যাট যতদিন বাসাবুক ব্যবহার করে ততদিন হিসাব থাকে। কেউ চলে গেলেও তার হিসাব থেকে যায় যাতে আগের মিল, বিল আর হিসাব মেলানো ঠিক থাকে।',
       'নিজের ফোন নম্বর আর ছবি আপনি অ্যাপ থেকে যেকোনো সময় মুছে দিতে পারেন।',
-      'যার কাছে ফ্ল্যাটের টাকা থাকে তিনি পুরো ফ্ল্যাট মুছে ফেলতে বলতে পারেন। আমরা তার সাথে আর আরেকজন ফ্ল্যাটমেটের সাথে কথা বলে নিশ্চিত হই। তারপর সব মুছে ফেলি। এরপর সেটা আর ফেরানো যায় না।',
+      'যার কাছে ফ্ল্যাটের টাকা থাকে তিনি পুরো ফ্ল্যাট মুছে ফেলতে বলতে পারেন। আমরা তার সাথে আর আরেকজন ফ্ল্যাটমেটের সাথে কথা বলে নিশ্চিত হই। তারপর সব মুছে ফেলি। ভুল হলে ফেরানোর জন্য প্রতি রাতে একটা কপি রাখি। সেটা আরও 7 দিন থাকে। তারপর আর ফেরানো যায় না।',
       'যে ট্রায়াল ফ্ল্যাটে কেউ ফিরে আসেনি সেটা নিজে থেকেই মুছে যায়: মাত্র একজন সাইন আপ করেছে, টাকা বা মিলের কোনো এন্ট্রি নেই আর 30 দিন কিছু বদলায়নি।',
     ] },
     contact: { h: 'কিছু জানার থাকলে', p: ['হোয়াটসঅ্যাপে বা ইমেইলে লিখুন।'] },
@@ -856,7 +856,7 @@ const en: Dict = {
     remove: { h: 'Keeping and deleting', p: [
       'A flat’s records stay while the flat uses BashaBook. The records of someone who moves out stay too. That keeps past meals, bills and settlements right.',
       'You can remove your own phone number and photo in the app at any time.',
-      'The person who keeps the flat money can ask us to delete the whole flat. We confirm with them and one other flatmate. Then we delete everything. After that it cannot be recovered.',
+      'The person who keeps the flat money can ask us to delete the whole flat. We confirm with them and one other flatmate. Then we delete everything. A nightly safety copy keeps it for 7 more days. After that it cannot be recovered.',
       'A trial flat nobody came back to is deleted on its own: one person signed up, there are no money or meal entries and nothing changed for 30 days.',
     ] },
     contact: { h: 'Questions', p: ['Message us on WhatsApp or by email.'] },

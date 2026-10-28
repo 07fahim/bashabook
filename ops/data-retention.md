@@ -9,7 +9,7 @@ What BashaBook keeps, for how long, and how it is deleted. Decided 2026-10-11 fo
   says this: a mover's records stay for the flat's history.
 - Personal data held per person: name, optional mobile number, optional small photo, PIN hash, sign-in sessions (90 days each).
   A person can remove their own photo and phone number in the app at any time; their name stays in the flat's records.
-- Nothing of a flat's records is copied anywhere else. Production moved from Neon to Supabase (free plan) on 2026-10-28;
+- A flat's records are copied only into the nightly backup (below). Production moved from Neon to Supabase (free plan) on 2026-10-28;
   the free plan has no backups and no point-in-time restore (supabase.com/docs/guides/platform/backups, read 2026-10-28). The collector can
   download a closed month as CSV. Since 2026-10-27 the live site sends page visits to Google Analytics 4 (only when
   `NEXT_PUBLIC_GA_ID` is set, on Production): the page address with a join code hidden and no query string, plus what
@@ -19,9 +19,12 @@ What BashaBook keeps, for how long, and how it is deleted. Decided 2026-10-11 fo
 
 A flat is deleted whole, on the collector's request, by the app team with `scripts/delete-flat.mts` (dry run first, then
 `--apply`). One statement removes the flat and every row that belongs to it: people, rooms, months, entries, meals, history,
-handovers, sessions. Nothing of any other flat is touched (`lib/delete-flat.test.ts`). A deletion is final at once: Supabase free keeps no backup or history to bring it back. Nothing
-reverses any other mistake either: a wrong deletion or a bad migration is permanent. Until a nightly backup exists,
-run every `--apply` and every migration only after the dry run and the test copy (check the test copy is at the same migration as production first). (On Neon until 2026-10-28 the window was
+handovers, sessions. Nothing of any other flat is touched (`lib/delete-flat.test.ts`). Since 2026-10-28 a nightly full copy of production (private repo
+07fahim/bashabook-backups, GitHub Actions at 03:30 Dhaka, restored into an empty Postgres 17 before it is kept; IP rate-limit
+rows and sessions left out) is kept 7 days, so a deleted flat is gone for good 7 days after deletion, and a wrong deletion
+or a bad migration can be undone from the last night's copy (entries since that copy are lost). Supabase free itself keeps
+no backup or history. Run every `--apply` and every migration only after the dry run and the test copy (check the test copy
+is at the same migration as production first). (On Neon until 2026-10-28 the window was
 6 hours of point-in-time history, restore-tested 2026-10-11.)
 
 Trials nobody came back to are deleted on their own (since 2026-10-24, `runJobs` in `lib/jobs.ts`): a flat created more
