@@ -308,6 +308,22 @@ describe('Fix it', { timeout: 30000 }, () => {
     expect((await fixEntry(db, flatId, nafis, f, TODAY)).result).toBe('ok');
   });
 
+  it('the list and the entry page offer Fix it only where it saves: the adder this month, the collector any open month', async () => {
+    const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
+    const day = '2026-10-05', sep = randomUUID();
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ id: sep, type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin }))).toBe('ok');
+    const oct = await add(as('Tahsin'), { type: 'bazar', amount: 2000, paidBy: ids.Tahsin });
+    const wait = await add(as('Tahsin'), { type: 'bazar', amount: 500, paidBy: ids.Tahsin });
+    for (const id of [sep, oct]) await checkEntry(db, flatId, nafis, id, 'fix', 'amount', day);
+    const listed = async (who: string) => (await toCheck(db, flatId, ids[who], day)).map(c => c.id);
+    expect(await listed('Tahsin')).toEqual([oct]);              // last month's: refused by fixEntry, so not listed
+    expect(await listed('Nafis')).toEqual([sep, oct, wait]);    // the collector fixes any open month; wait is his to check
+    expect(await listed('Zarif')).toEqual([]);
+    const mayFix = async (id: string, who: string) => (await entryDetail(db, flatId, id, ids[who], day))!.d.mayFix;
+    expect([await mayFix(sep, 'Tahsin'), await mayFix(sep, 'Nafis'), await mayFix(oct, 'Tahsin'), await mayFix(oct, 'Nafis'),
+      await mayFix(oct, 'Zarif'), await mayFix(wait, 'Tahsin')]).toEqual([false, true, true, true, false, false]);
+  });
+
   it('another flat’s id with a real entry id: refused', async () => {
     const { flatId, ids, nafis, as, add } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });

@@ -59,13 +59,13 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
                        and not exists (select 1 from entry_checks c where c.ledger_id = l.id))
          and not exists (select 1 from sent_jobs where flat_id = f.id and date = $1::date and job_type = 'check')`, [today]);
     for (const f of flats) {
-      if (!await claim(db, f.id, today, 'check')) continue;
       const people = await db<{ id: string; lang: Locale | null; n: number }>(
         `select m.id, m.language as lang, count(*)::int as n from members m
            join ledger l on l.flat_id = m.flat_id and l.type in ('bazar', 'bill') and l.status = 'ok'
            join months mo on mo.flat_id = l.flat_id and mo.month = l.month and mo.status = 'open'
          where m.flat_id = $1 and not exists (select 1 from entry_checks c where c.ledger_id = l.id) and may_check(l.id, m.id, $2::text::date)
          group by m.id, m.language`, [f.id, today]);
+      if (!people.length || !await claim(db, f.id, today, 'check')) continue;   // nobody may check today: tried again next run
       out.check++;
       for (const p of people) add(await send(db, [p.id], checkMsg(p.lang ?? f.lang, p.n)));
     }
