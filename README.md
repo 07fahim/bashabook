@@ -16,8 +16,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/user-attachments/assets/823c4a9c-1a36-43f2-86b0-076452d7e9e5"><img src=".github/assets/cover.jpg" alt="BashaBook on a laptop and a phone: your whole flat's accounts in one place" width="800"></a>
+  <a href="https://bashabook.fahimfaiyaz.dev"><img src=".github/assets/month-end.gif" alt="Month end in BashaBook: the collector counts the cash and sees it is short, the settle-up lines go to the flat's group chat, and the month exports as a CSV." width="800"></a>
 </p>
+
+Watch the full 60-second film, with sound:
 
 https://github.com/user-attachments/assets/823c4a9c-1a36-43f2-86b0-076452d7e9e5
 
