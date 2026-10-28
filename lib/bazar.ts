@@ -1,6 +1,7 @@
-import { cleanText } from './auth';
+import { cleanName, cleanText } from './auth';
 import type { Db } from './db';
 import { toPoisha } from './money';
+import type { Actor } from './money-db';
 
 /** One line of what a bazar bought: a name and, if written, what it cost (poisha). */
 export type Item = { name: string; amount: number | null };
@@ -11,10 +12,10 @@ export const MAX_ITEMS = 30;
 export function parseItems(names: string[], amounts: string[]): Item[] | null {
   const out: Item[] = [];
   for (let i = 0; i < Math.max(names.length, amounts.length); i++) {
-    const name = cleanText(names[i]), raw = (amounts[i] ?? '').trim();
-    if (!name && !raw) continue;
-    const amount = raw ? toPoisha(raw) : null;
-    if (!name || name.length > 40 || (raw && amount === null)) return null;
+    const text = cleanText(names[i]), raw = (amounts[i] ?? '').trim();
+    if (!text && !raw) continue;
+    const name = cleanName(text), amount = raw ? toPoisha(raw) : null;
+    if (!name || (raw && amount === null)) return null;
     out.push({ name, amount });
   }
   return out.length <= MAX_ITEMS ? out : null;
@@ -22,7 +23,7 @@ export function parseItems(names: string[], amounts: string[]): Item[] | null {
 
 /** Item amounts may add up to less than the total (the rest is Other items), never more. */
 export const itemsOk = (items: Item[], total: number) => items.length <= MAX_ITEMS
-  && items.every(i => i.name.length >= 1 && i.name.length <= 40 && (i.amount === null || (Number.isInteger(i.amount) && i.amount > 0)))
+  && items.every(i => cleanName(i.name) === i.name && (i.amount === null || (Number.isInteger(i.amount) && i.amount > 0)))
   && items.reduce((a, i) => a + (i.amount ?? 0), 0) <= total;
 
 /** What the item lines leave of the total, shown as Other items: only when some line has an amount. */
@@ -48,4 +49,69 @@ export const itemsFor = async (db: Db, flatId: string, month: string) => new Map
 export async function receiptOf(db: Db, flatId: string, ledgerId: string) {
   const [r] = await db<{ photo: Uint8Array }>(`select photo from receipts where flat_id = $1 and ledger_id = $2`, [flatId, ledgerId]);
   return r?.photo ?? null;
+}
+
+/** Verified ('ok') or Needs correction ('fix', with a reason) on a waiting bazar or bill, by someone may_check allows today.
+ *  One statement. It locks the entry's month row (no key update, as month_touch does) without bumping its version and needs
+ *  the month open: a close running now finishes first and this then finds the month closed and writes nothing; a handover
+ *  offer and a close card stay valid. `not exists` reads before the insert, so a check tapped while a Fix it is saving never
+ *  waits on that entry's row (no deadlock with the fix's month lock) and writes nothing. A second tap, or two checkers at
+ *  once: the row is there, nothing is written. Returns the entry for the push, or null. */
+export async function checkEntry(db: Db, flatId: string, by: Actor, id: string, state: 'ok' | 'fix', note: string | null, today: string) {
+  const reason = state === 'fix' ? note?.trim() || null : null;
+  if (state === 'fix' && (!reason || reason.length > 100)) return null;
+  const [r] = await db<{ adder: string; type: 'bazar' | 'bill'; amount: number }>(
+    `with m as (select mo.month from months mo join ledger l on l.flat_id = mo.flat_id and l.month = mo.month
+         where l.flat_id = $1 and l.id = $2 and l.type in ('bazar', 'bill') and l.status = 'ok' and mo.status = 'open'
+         for no key update of mo),
+       c as (insert into entry_checks (flat_id, ledger_id, month, state, note, by_member)
+         select $1, $2, m.month, $4, $5, $3 from m
+         where not exists (select 1 from entry_checks where ledger_id = $2) and may_check($2, $3, $6::text::date)
+         on conflict (ledger_id) do nothing returning *),
+       a as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
+         select $1, 'ledger', c.ledger_id::text, jsonb_build_object('checked', c.state)
+           || case when c.note is null then '{}'::jsonb else jsonb_build_object('note', c.note) end, $3 from c)
+     select l.created_by as adder, l.type, l.amount_poisha::int as amount from c join ledger l on l.id = c.ledger_id`,
+    [flatId, id, by.memberId, state, reason, today]);
+  return r ?? null;
+}
+
+/** Bazars and bills of open months for this person: waiting ones may_check lets them check (the collector: everyone else's;
+ *  a flatmate: the collector's own, monthly bills included), and their own entries sent back to fix, with the reason. */
+export const toCheck = (db: Db, flatId: string, memberId: string, today: string) => db<{
+  id: string; type: 'bazar' | 'bill'; amount: number; date: string; note: string | null; state: 'fix' | null; reason: string | null;
+}>(
+  `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.note, c.state, c.note as reason
+   from ledger l join months mo on mo.flat_id = l.flat_id and mo.month = l.month and mo.status = 'open'
+   left join entry_checks c on c.ledger_id = l.id
+   where l.flat_id = $1 and l.type in ('bazar', 'bill') and l.status = 'ok'
+     and ((c.ledger_id is null and may_check(l.id, $2, $3::text::date)) or (c.state = 'fix' and l.created_by = $2))
+   order by l.date, l.created_at`, [flatId, memberId, today]);
+
+export type Detail = {
+  id: string; type: 'bazar' | 'bill'; amount: number; date: string; month: string; note: string | null; paidBy: string | null;
+  createdBy: string; addedBy: string; addedAt: string; open: boolean; check: 'ok' | 'fix' | null; reason: string | null;
+  checkedBy: string | null; checkedAt: string | null; receiptV: string | null; mayCheck: boolean; items: Item[];
+};
+/** One bazar or bill for its page: its lines, receipt and check, whether `me` may check it today, and the flat's people
+ *  (Fix it's Who paid). Null for anything not a bazar or bill of this flat. */
+export async function entryDetail(db: Db, flatId: string, id: string, me: string, today: string) {
+  const [d] = await db<Detail>(
+    `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.month::text as month, l.note, l.paid_by_member_id as "paidBy",
+       l.created_by as "createdBy", a.name as "addedBy", l.created_at::text as "addedAt", mo.status = 'open' as open,
+       c.state as "check", c.note as reason, cb.name as "checkedBy", c.at::text as "checkedAt",
+       extract(epoch from r.created_at)::bigint::text as "receiptV", coalesce(may_check(l.id, $3, $4::text::date), false) as "mayCheck",
+       (select coalesce(json_agg(json_build_object('name', i.name, 'amount', i.amount_poisha::int) order by i.pos), '[]'::json)
+          from bazar_items i where i.ledger_id = l.id) as items
+     from ledger l join members a on a.flat_id = l.flat_id and a.id = l.created_by
+       join months mo on mo.flat_id = l.flat_id and mo.month = l.month
+       left join entry_checks c on c.ledger_id = l.id
+       left join members cb on cb.flat_id = c.flat_id and cb.id = c.by_member
+       left join receipts r on r.flat_id = l.flat_id and r.ledger_id = l.id
+     where l.flat_id = $1 and l.id = $2 and l.type in ('bazar', 'bill') and l.status = 'ok'`, [flatId, id, me, today]);
+  if (!d) return null;
+  const people = await db<{ id: string; name: string; joinedOn: string; leftOn: string | null; collector: boolean }>(
+    `select id, name, joined_on::text as "joinedOn", left_on::text as "leftOn", role = 'manager' as collector
+     from members where flat_id = $1 order by name`, [flatId]);
+  return { d, people };
 }

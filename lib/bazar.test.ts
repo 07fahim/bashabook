@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
-import { itemsFor, monthTotals, otherItems, parseItems, receiptOf } from './bazar';
+import { checkEntry, entryDetail, itemsFor, itemsOk, monthTotals, otherItems, parseItems, receiptOf, toCheck } from './bazar';
+import { closeMonth, closeInfo } from './close';
+import { acceptHandover, currentOffer, flatMoney, offerHandover } from './handover';
 import { addEntry, loadMonth, openMonth, putBack, removeEntry, type Actor, type NewEntry } from './money-db';
 
 const OCT = '2026-10-01', TODAY = '2026-10-09';
@@ -79,6 +81,9 @@ describe('bazar items and receipts', { timeout: 30000 }, () => {
     expect(parseItems(Array.from({ length: 31 }, (_, i) => `x${i}`), [])).toBeNull();
     expect(otherItems([{ name: 'Rice', amount: 45000 }, { name: 'Oil', amount: null }], 60000)).toBe(15000);
     expect(otherItems([{ name: 'Oil', amount: null }], 60000)).toBe(0);   // no amounts at all: no Other items line
+    expect(itemsOk([{ name: 'Rice', amount: 100 }], 100)).toBe(true);
+    expect(itemsOk([{ name: 'Rice‮', amount: null }], 100)).toBe(false);   // a bidi or control character: not as cleaned
+    expect(itemsOk([{ name: ' Rice', amount: null }], 100)).toBe(false);
   });
 
   it('totals: paid in counts confirmed deposits; total spent is bazar plus bills whoever paid; corrections stay out', () => {
@@ -122,6 +127,68 @@ describe('bazar items and receipts', { timeout: 30000 }, () => {
     expect(await receiptOf(db, flatId, id)).not.toBeNull();
     expect(await putBack(db, flatId, ids.Nafis, id, TODAY)).toBe(true);
     expect((await itemsFor(db, flatId, OCT)).get(id)).toEqual(items);
+    expect(await receiptOf(db, flatId, id)).not.toBeNull();
     expect((await loadMonth(db, flatId, OCT, TODAY)).entries.find(x => x.id === id)!.check).toBe('ok');
+  });
+});
+
+describe('the check', { timeout: 30000 }, () => {
+  it('a check moves no version, so a waiting handover survives it; a second tap writes nothing', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    await db(`update members set pin_hash = 'x' where flat_id = $1`, [flatId]);   // only a claimed name can take the money
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 90000, paidBy: ids.Tahsin });
+    expect(await offerHandover(db, flatId, nafis, ids.Zarif, await flatMoney(db, flatId, TODAY), TODAY)).toBe('ok');
+    const versions = () => db<{ m: number; o: number }>(`select (select version from months where flat_id = $1 and month = $2::text::date) as m,
+      (select offer_version from flats where id = $1) as o`, [flatId, OCT]);
+    const before = await versions();
+    expect(await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY)).toEqual({ adder: ids.Tahsin, type: 'bazar', amount: 90000 });
+    expect(await versions()).toEqual(before);
+    expect(await checkEntry(db, flatId, nafis, id, 'fix', 'again', TODAY)).toBeNull();
+    expect(await acceptHandover(db, flatId, ids.Zarif, (await currentOffer(db, flatId))!.id)).toBe('ok');
+    const log = await db<{ after: unknown }>(`select after from audit_log where flat_id = $1 and entity_id = $2 and after ? 'checked'`, [flatId, id]);
+    expect(log.map(l => l.after)).toEqual([{ checked: 'ok' }]);
+  });
+
+  it('only someone may_check allows; Needs correction needs a reason and shows to the adder with it', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const fund = await add(nafis, { type: 'bazar', amount: 50000 });   // flat money: the collector's own spending
+    const own = await add(as('Tahsin'), { type: 'bazar', amount: 30000, paidBy: ids.Tahsin, date: '2026-10-06' });
+    expect((await toCheck(db, flatId, ids.Nafis, TODAY)).map(c => c.id)).toEqual([own]);
+    expect((await toCheck(db, flatId, ids.Zarif, TODAY)).map(c => c.id)).toEqual([fund]);
+    expect(await checkEntry(db, flatId, nafis, fund, 'ok', null, TODAY)).toBeNull();          // never their own spending
+    expect(await checkEntry(db, flatId, as('Zarif'), own, 'ok', null, TODAY)).toBeNull();     // the collector's to check
+    expect(await checkEntry(db, flatId, nafis, own, 'fix', '  ', TODAY)).toBeNull();         // a reason is required
+    expect(await checkEntry(db, flatId, nafis, own, 'fix', 'Rice was ৳500', TODAY)).toEqual({ adder: ids.Tahsin, type: 'bazar', amount: 30000 });
+    expect(await toCheck(db, flatId, ids.Tahsin, TODAY)).toEqual([
+      expect.objectContaining({ id: fund, state: null }), expect.objectContaining({ id: own, state: 'fix', reason: 'Rice was ৳500' })]);
+    expect(await checkEntry(db, flatId, as('Tahsin'), fund, 'ok', null, TODAY)).not.toBeNull();
+    expect(await toCheck(db, flatId, ids.Zarif, TODAY)).toEqual([]);
+    const [a] = await db<{ after: unknown }>(`select after from audit_log where entity_id = $1 and after ? 'checked'`, [own]);
+    expect(a.after).toEqual({ checked: 'fix', note: 'Rice was ৳500' });
+  });
+
+  it('a check needs its month open: nothing lands on a closed month', async () => {
+    const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
+    const id = await add(nafis, { type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin });   // a late entry, by the collector
+    expect(await checkEntry(db, flatId, as('Zarif'), id, 'ok', null, TODAY)).not.toBeNull();
+    const info = (await closeInfo(db, flatId, TODAY))!;
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', TODAY, { cash: info.held, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
+    await db(`delete from entry_checks where ledger_id = $1`, [id]);   // as if never checked
+    expect(await checkEntry(db, flatId, as('Zarif'), id, 'ok', null, TODAY)).toBeNull();
+    expect(await db(`select 1 from entry_checks where ledger_id = $1`, [id])).toHaveLength(0);
+    expect(await toCheck(db, flatId, ids.Zarif, TODAY)).toEqual([]);
+  });
+
+  it('the entry page reads items, receipt, check and whether I may check it', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 90000, paidBy: ids.Tahsin, items: [{ name: 'Rice', amount: 50000 }], receipt: jpeg() });
+    const mine = (await entryDetail(db, flatId, id, ids.Nafis, TODAY))!;
+    expect(mine.d).toMatchObject({ type: 'bazar', amount: 90000, open: true, check: null, mayCheck: true, addedBy: 'Tahsin', items: [{ name: 'Rice', amount: 50000 }] });
+    expect(mine.d.receiptV).toMatch(/^\d+$/);
+    expect(mine.people.map(p => p.name)).toEqual(['Nafis', 'Tahsin', 'Zarif']);
+    expect((await entryDetail(db, flatId, id, ids.Zarif, TODAY))!.d.mayCheck).toBe(false);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'Rice was ৳450', TODAY);
+    expect((await entryDetail(db, flatId, id, ids.Tahsin, TODAY))!.d).toMatchObject({ check: 'fix', reason: 'Rice was ৳450', checkedBy: 'Nafis' });
+    expect(await entryDetail(db, flatId, randomUUID(), ids.Nafis, TODAY)).toBeNull();
   });
 });
