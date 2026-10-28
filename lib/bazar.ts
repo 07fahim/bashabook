@@ -138,7 +138,7 @@ export async function entryDetail(db: Db, flatId: string, id: string, me: string
   return { d, people };
 }
 
-export type Fix = { id: string; amount: number; date: string; paidBy: string | null; note: string | null; items: Item[]; receipt: Uint8Array | null };
+export type Fix = { id: string; type: 'bazar' | 'bill'; amount: number; date: string; paidBy: string | null; note: string | null; items: Item[]; receipt: Uint8Array | null };
 
 /** Fix it, on an entry sent back with Needs correction: whoever added it or the collector saves new values and it waits for a
  *  check again. Same id, so its items, receipt and history stay attached. The rules of adding: an amount, a date in the
@@ -155,7 +155,8 @@ export async function fixEntry(db: Db, flatId: string, by: Actor, f: Fix, today:
   if (f.receipt && !isJpeg(f.receipt, MAX_RECEIPT)) return { result: 'receipt' };
   const [e] = await db<{ type: 'bazar' | 'bill'; month: string }>(
     `select type, month::text as month from ledger where flat_id = $1 and id = $2 and type in ('bazar', 'bill')`, [flatId, f.id]);
-  if (!e || (e.type === 'bill' && (!f.note || f.items.length))) return { result: 'bad' };
+  // the posted type must be the entry's own: a stale bill form on a bazar would post no item lines and wipe them
+  if (!e || e.type !== f.type || (e.type === 'bill' && (!f.note || f.items.length))) return { result: 'bad' };
   if (f.date > today || `${f.date.slice(0, 8)}01` !== e.month) return { result: 'date' };
   if (f.paidBy && !(await db(`select 1 from members where flat_id = $1 and id = $2 and joined_on <= $3::text::date
       and (left_on is null or left_on >= $3::text::date)`, [flatId, f.paidBy, f.date])).length) return { result: 'gone' };

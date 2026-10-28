@@ -115,7 +115,7 @@ describe('flat isolation', { timeout: 60000 }, () => {
     expect(await checkEntry(db, A.flatId, A.boss, id, 'fix', 'x', today)).toBeNull();
     expect(await checkEntry(db, B.flatId, A.boss, id, 'fix', 'x', today)).toBeNull();   // A's collector named in B's flat
     expect(await checkEntry(db, B.flatId, B.boss, id, 'fix', 'x', today)).not.toBeNull();   // control
-    expect((await fixEntry(db, A.flatId, A.boss, { id, amount: 100, date: '2026-10-05', paidBy: null, note: null, items: [], receipt: null }, today)).result).toBe('bad');
+    expect((await fixEntry(db, A.flatId, A.boss, { id, type: 'bazar', amount: 100, date: '2026-10-05', paidBy: null, note: null, items: [], receipt: null }, today)).result).toBe('bad');
     expect(await db(`select 1 from entry_checks where ledger_id = $1 and state = 'fix'`, [id])).toHaveLength(1);
   });
 });

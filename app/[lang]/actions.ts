@@ -490,7 +490,7 @@ export async function fixAction(_: FormState, d: FormData): Promise<FormState> {
   const { items, receipt, badReceipt } = extras(d, type);
   if (items === null) return { error: x.errors.items };
   if (badReceipt) return { error: x.errors.receipt };
-  const r = await unlessClosed(() => fixEntry(db, me.flatId, me, { id, amount, date, paidBy: who === 'fund' ? null : who, note, items, receipt }, todayDhaka()));
+  const r = await unlessClosed(() => fixEntry(db, me.flatId, me, { id, type, amount, date, paidBy: who === 'fund' ? null : who, note, items, receipt }, todayDhaka()));
   if (r === 'closed') return { error: x.errors.closed };
   if (r.result !== 'ok') return { error: x.errors[r.result] };
   if (r.marker !== me.memberId) after(async () => {

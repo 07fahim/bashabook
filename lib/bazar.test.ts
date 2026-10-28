@@ -217,7 +217,7 @@ describe('Fix it', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, as, add, may } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 100000, paidBy: ids.Tahsin, receipt: jpeg(),
       items: [{ name: 'Rice', amount: 60000 }, { name: 'Dal', amount: 20000 }, { name: 'Oil', amount: null }] });
-    const fix = (p: Partial<Fix> = {}): Fix => ({ id, amount: 90000, date: '2026-10-06', paidBy: ids.Tahsin, note: 'fixed', items: [{ name: 'Rice', amount: 60000 }], receipt: null, ...p });
+    const fix = (p: Partial<Fix> = {}): Fix => ({ id, type: 'bazar', amount: 90000, date: '2026-10-06', paidBy: ids.Tahsin, note: 'fixed', items: [{ name: 'Rice', amount: 60000 }], receipt: null, ...p });
     expect((await fixEntry(db, flatId, as('Tahsin'), fix(), TODAY)).result).toBe('bad');   // waiting: nothing to fix
     await checkEntry(db, flatId, nafis, id, 'fix', 'Rice was ৳500', TODAY);
     expect((await fixEntry(db, flatId, as('Zarif'), fix(), TODAY)).result).toBe('bad');    // not theirs
@@ -243,7 +243,7 @@ describe('Fix it', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, as, add, may } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
     await checkEntry(db, flatId, nafis, id, 'fix', 'wrong day', TODAY);
-    expect((await fixEntry(db, flatId, nafis, { id, amount: 1000, date: '2026-10-04', paidBy: ids.Tahsin, note: null, items: [], receipt: null }, TODAY)).result).toBe('ok');
+    expect((await fixEntry(db, flatId, nafis, { id, type: 'bazar', amount: 1000, date: '2026-10-04', paidBy: ids.Tahsin, note: null, items: [], receipt: null }, TODAY)).result).toBe('ok');
     expect([await may(id, 'Nafis'), await may(id, 'Tahsin'), await may(id, 'Zarif')]).toEqual([false, false, true]);
   });
 
@@ -251,7 +251,7 @@ describe('Fix it', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, as, add } = await flat();
     const id = await add(as('Tahsin'), { type: 'bill', amount: 2000, note: 'Gas', split: 'selected', selected: [ids.Tahsin, ids.Zarif], paidBy: ids.Tahsin, receipt: jpeg() });
     await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY);
-    const f: Fix = { id, amount: 2500, date: '2026-10-05', paidBy: ids.Tahsin, note: 'Gas', items: [], receipt: jpeg(200) };
+    const f: Fix = { id, type: 'bill', amount: 2500, date: '2026-10-05', paidBy: ids.Tahsin, note: 'Gas', items: [], receipt: jpeg(200) };
     expect((await fixEntry(db, flatId, as('Tahsin'), { ...f, note: null }, TODAY)).result).toBe('bad');                     // a bill keeps a name
     expect((await fixEntry(db, flatId, as('Tahsin'), { ...f, items: [{ name: 'x', amount: null }] }, TODAY)).result).toBe('bad');
     await db(`update members set left_on = '2026-10-03' where id = $1`, [ids.Zarif]);
@@ -266,7 +266,7 @@ describe('Fix it', { timeout: 30000 }, () => {
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin, receipt: jpeg() });
     await db(`update receipts set created_at = created_at - interval '1 hour' where ledger_id = $1`, [id]);   // added an hour ago
     const v = async () => (await entryDetail(db, flatId, id, ids.Tahsin, TODAY))!.d.receiptV!;
-    const f: Fix = { id, amount: 1000, date: '2026-10-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null };
+    const f: Fix = { id, type: 'bazar', amount: 1000, date: '2026-10-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null };
     const v0 = await v();
     await checkEntry(db, flatId, nafis, id, 'fix', 'photo', TODAY);
     expect((await fixEntry(db, flatId, as('Tahsin'), f, TODAY)).result).toBe('ok');
@@ -280,7 +280,7 @@ describe('Fix it', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, as, add } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
     await checkEntry(db, flatId, nafis, id, 'fix', 'photo', TODAY);
-    const f: Fix = { id, amount: 1000, date: '2026-10-05', paidBy: ids.Tahsin, note: null, items: [], receipt: jpeg(250_001) };
+    const f: Fix = { id, type: 'bazar', amount: 1000, date: '2026-10-05', paidBy: ids.Tahsin, note: null, items: [], receipt: jpeg(250_001) };
     expect((await fixEntry(db, flatId, as('Tahsin'), f, TODAY)).result).toBe('receipt');
     expect((await fixEntry(db, flatId, as('Tahsin'), { ...f, amount: 0, receipt: null }, TODAY)).result).toBe('bad');
     expect(await db(`select 1 from entry_checks where ledger_id = $1`, [id])).toHaveLength(1);   // still sent back
@@ -291,7 +291,7 @@ describe('Fix it', { timeout: 30000 }, () => {
     const id = await add(nafis, { type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin });
     await checkEntry(db, flatId, as('Zarif'), id, 'fix', 'amount', TODAY);
     await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-09-01'::text::date`, [flatId]);   // a sent-back entry blocks a real close
-    await expect(fixEntry(db, flatId, nafis, { id, amount: 900, date: '2026-09-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null }, TODAY))
+    await expect(fixEntry(db, flatId, nafis, { id, type: 'bazar', amount: 900, date: '2026-09-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null }, TODAY))
       .rejects.toThrow('month_closed');
     expect(await db(`select 1 from entry_checks where ledger_id = $1 and state = 'fix'`, [id])).toHaveLength(1);
     expect((await db<{ a: number }>(`select amount_poisha::int as a from ledger where id = $1`, [id]))[0].a).toBe(1000);
@@ -302,7 +302,7 @@ describe('Fix it', { timeout: 30000 }, () => {
     const id = randomUUID();
     expect(await addEntry(db, flatId, as('Tahsin'), e({ id, type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin }))).toBe('ok');   // no today: into September
     await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY);
-    const f: Fix = { id, amount: 900, date: '2026-09-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null };
+    const f: Fix = { id, type: 'bazar', amount: 900, date: '2026-09-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null };
     expect((await fixEntry(db, flatId, as('Tahsin'), f, TODAY)).result).toBe('bad');
     expect(await db(`select 1 from entry_checks where ledger_id = $1 and state = 'fix'`, [id])).toHaveLength(1);   // still sent back
     expect((await fixEntry(db, flatId, nafis, f, TODAY)).result).toBe('ok');
@@ -341,12 +341,21 @@ describe('Fix it', { timeout: 30000 }, () => {
     expect(await fixAskTo(db, flatId, own, ids.Zarif, day)).toBe(ids.Nafis);      // the collector's own
   });
 
+  it('a fix posted for the other type (a stale form) is refused and keeps the item lines', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin, items: [{ name: 'Rice', amount: 600 }] });
+    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY);
+    const f: Fix = { id, type: 'bill', amount: 900, date: '2026-10-05', paidBy: ids.Tahsin, note: 'Gas', items: [], receipt: null };
+    expect((await fixEntry(db, flatId, as('Tahsin'), f, TODAY)).result).toBe('bad');
+    expect((await itemsFor(db, flatId, OCT)).get(id)).toEqual([{ name: 'Rice', amount: 600 }]);
+  });
+
   it('another flat’s id with a real entry id: refused', async () => {
     const { flatId, ids, nafis, as, add } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
     await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY);
     const other = await createFlat(db, { flatName: 'Other', name: 'Rafi', pin: '1234', others: [], today: OCT, lang: 'bn' });
-    const f: Fix = { id, amount: 900, date: '2026-10-05', paidBy: null, note: null, items: [], receipt: null };
+    const f: Fix = { id, type: 'bazar', amount: 900, date: '2026-10-05', paidBy: null, note: null, items: [], receipt: null };
     expect((await fixEntry(db, other.flatId, { memberId: other.memberId, role: 'manager' }, f, TODAY)).result).toBe('bad');
     expect((await db<{ a: number }>(`select amount_poisha::int as a from ledger where id = $1`, [id]))[0].a).toBe(1000);
   });
