@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
-import { checkEntry, entryDetail, fixEntry, itemsFor, itemsOk, monthTotals, otherItems, parseItems, receiptOf, toCheck, type Fix } from './bazar';
+import { checkEntry, entryDetail, fixAskTo, fixEntry, itemsFor, itemsOk, monthTotals, otherItems, parseItems, receiptOf, toCheck, type Fix } from './bazar';
 import { closeMonth, closeInfo } from './close';
 import { acceptHandover, currentOffer, flatMoney, offerHandover } from './handover';
 import { addEntry, loadMonth, openMonth, putBack, removeEntry, type Actor, type NewEntry } from './money-db';
@@ -324,6 +324,21 @@ describe('Fix it', { timeout: 30000 }, () => {
     const mayFix = async (id: string, who: string) => (await entryDetail(db, flatId, id, ids[who], day))!.d.mayFix;
     expect([await mayFix(sep, 'Tahsin'), await mayFix(sep, 'Nafis'), await mayFix(oct, 'Tahsin'), await mayFix(oct, 'Nafis'),
       await mayFix(oct, 'Zarif'), await mayFix(wait, 'Tahsin')]).toEqual([false, true, true, true, false, false]);
+  });
+
+  it('Needs correction tells whoever may fix it: the adder this month, else the collector; never the one who marked it', async () => {
+    const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
+    const day = '2026-10-05', sep = randomUUID(), sepFund = randomUUID();
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ id: sep, type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin }))).toBe('ok');
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ id: sepFund, type: 'bazar', amount: 1000, date: '2026-09-05' }))).toBe('ok');   // flat money: Zarif checks it
+    const oct = await add(as('Tahsin'), { type: 'bazar', amount: 2000, paidBy: ids.Tahsin });
+    const own = await add(nafis, { type: 'bazar', amount: 700, date: '2026-10-04' });   // flat money: a flatmate checks it
+    for (const id of [sep, oct]) expect(await checkEntry(db, flatId, nafis, id, 'fix', 'amount', day)).not.toBeNull();
+    for (const id of [sepFund, own]) expect(await checkEntry(db, flatId, as('Zarif'), id, 'fix', 'amount', day)).not.toBeNull();
+    expect(await fixAskTo(db, flatId, oct, ids.Nafis, day)).toBe(ids.Tahsin);      // this month: the adder fixes it
+    expect(await fixAskTo(db, flatId, sep, ids.Nafis, day)).toBeNull();            // last month: the collector, who marked it
+    expect(await fixAskTo(db, flatId, sepFund, ids.Zarif, day)).toBe(ids.Nafis);  // last month, Zarif marked it: the collector
+    expect(await fixAskTo(db, flatId, own, ids.Zarif, day)).toBe(ids.Nafis);      // the collector's own
   });
 
   it('another flat’s id with a real entry id: refused', async () => {

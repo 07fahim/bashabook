@@ -83,6 +83,17 @@ const mayFix = (me: string, today: string) => `(c.state = 'fix' and mo.status = 
   where w.flat_id = l.flat_id and w.id = ${me} and w.role = 'manager') or (l.created_by = ${me}
   and l.month = date_trunc('month', ${today}::text::date)::date)))`;
 
+/** Who a Needs correction push goes to: whoever added it if they may fix it (mayFix), else the collector; never `marker`,
+ *  the one who marked it. Null: nobody. */
+export async function fixAskTo(db: Db, flatId: string, id: string, marker: string, today: string) {
+  const [r] = await db<{ to: string | null }>(
+    `select case when ${mayFix('l.created_by', '$3')} then l.created_by
+       else (select id from members where flat_id = l.flat_id and role = 'manager') end as to
+     from ledger l join months mo on mo.flat_id = l.flat_id and mo.month = l.month left join entry_checks c on c.ledger_id = l.id
+     where l.flat_id = $1 and l.id = $2`, [flatId, id, today]);
+  return r?.to && r.to !== marker ? r.to : null;
+}
+
 /** Bazars and bills of open months for this person: waiting ones may_check lets them check (the collector: everyone else's;
  *  a flatmate: the collector's own, monthly bills included), and entries sent back that are theirs to fix, with the reason:
  *  their own, and for the collector also an earlier month's (its adder can't fix it any more). */
