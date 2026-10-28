@@ -326,6 +326,17 @@ describe('Fix it', { timeout: 30000 }, () => {
       await mayFix(oct, 'Zarif'), await mayFix(wait, 'Tahsin')]).toEqual([false, true, true, true, false, false]);
   });
 
+  it('Send back names the adder only if they could fix it: this month’s flatmate entry or the collector’s, not last month’s', async () => {
+    const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
+    const day = '2026-10-05', sep = randomUUID(), sepOwn = randomUUID();
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ id: sep, type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ id: sepOwn, type: 'bazar', amount: 1000, date: '2026-09-05' }))).toBe('ok');
+    const oct = await add(as('Tahsin'), { type: 'bazar', amount: 2000, paidBy: ids.Tahsin });
+    // read while still waiting, as the checker sees the page; the same whoever looks
+    const adder = async (id: string, who: string) => (await entryDetail(db, flatId, id, ids[who], day))!.d.adderMayFix;
+    expect([await adder(oct, 'Nafis'), await adder(oct, 'Zarif'), await adder(sep, 'Nafis'), await adder(sepOwn, 'Zarif')]).toEqual([true, true, false, true]);
+  });
+
   it('Needs correction tells whoever may fix it: the adder this month, else the collector; never the one who marked it', async () => {
     const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
     const day = '2026-10-05', sep = randomUUID(), sepFund = randomUUID();

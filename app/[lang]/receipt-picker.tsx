@@ -28,14 +28,15 @@ export function ReceiptPicker({ label, change, added, failed }: { label: string;
       g.fillRect(0, 0, c.width, c.height);   // a transparent PNG would turn black as JPEG
       g.drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
+      if (!out.current) return;   // the form went away while the photo loaded
       // base64 is 4/3 of the bytes; a busy photo steps its quality down rather than being refused by the server
       let q = 0.7, s = c.toDataURL('image/jpeg', q);
       while ((s.length - 23) * 0.75 > MAX && q > 0.35) s = c.toDataURL('image/jpeg', (q -= 0.1));
-      out.current!.value = s;
+      out.current.value = s;
       setState('added');
     };
     // a photo the phone can't open (some HEIC files): nothing is sent, and the line below says so
-    img.onerror = () => { URL.revokeObjectURL(url); out.current!.value = ''; setState('failed'); };
+    img.onerror = () => { URL.revokeObjectURL(url); if (!out.current) return; out.current.value = ''; setState('failed'); };
     img.src = url;
   };
   return (

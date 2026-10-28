@@ -59,7 +59,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
     const what = its.length ? `${its.slice(0, 3).map(i => i.name).join(' · ')}${its.length > 3 ? ` +${its.length - 3}` : ''}` : e.note ?? '';
     return (
       <li key={e.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-3 md:grid md:gap-4 ${cols}`}>
-        <Link href={`/${lang}/money/bazar/${e.id}`} className={`min-w-0 basis-full rounded-lg md:basis-auto ${focus}`}>
+        <Link href={`/${lang}/money/bazar/${e.id}`} className={`flex min-h-11 min-w-0 basis-full flex-col justify-center rounded-lg md:basis-auto ${focus}`}>
           <span className="font-semibold text-turmeric-ink">{fmtDay(e.date, lang)} · {e.paidBy ? name(e.paidBy) : b.fund}</span>
           {what && <span className="block text-[15px] [overflow-wrap:anywhere]">{what}</span>}
         </Link>

@@ -83,11 +83,13 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
                   <ActionForm action={checkAction} className="mt-3">
                     {hidden('fix')}
                     <Field label={b.reason} name="note" required maxLength={100} />
-                    <button className={primary}>{b.sendBack.replace('{name}', d.addedBy)}</button>
+                    <button className={primary}>{d.adderMayFix ? b.sendBack.replace('{name}', d.addedBy) : b.sendBackPlain}</button>
                   </ActionForm>
                 </details>
               </div>
             )}
+            {/* their own entry sent back, but too late for them to fix (an earlier month): say who will */}
+            {d.open && d.check === 'fix' && !d.mayFix && d.createdBy === me.memberId && <p className="mt-5 font-semibold">{b.othersFix.replace('{name}', collector.name)}</p>}
             {d.mayFix && (
               <div className="mt-6 border-t border-line pt-5">
                 <h2 className="text-lg font-bold">{b.fixIt}</h2>

@@ -77,11 +77,13 @@ export async function checkEntry(db: Db, flatId: string, by: Actor, id: string, 
   return r ?? null;
 }
 
-/** SQL: may `me` Fix it on ledger row `l` (its check `c`, its month row `mo`) today? Sent back, its month open, and the
- *  collector (any open month) or whoever added it in its own month: the rule fixEntry keeps. */
-const mayFix = (me: string, today: string) => `(c.state = 'fix' and mo.status = 'open' and (exists (select 1 from members w
+/** SQL: could `me` fix ledger row `l` (its month row `mo`) today once it is sent back? Its month open, and the collector (any
+ *  open month) or whoever added it in its own month: the rule fixEntry keeps. */
+const fixer = (me: string, today: string) => `(mo.status = 'open' and (exists (select 1 from members w
   where w.flat_id = l.flat_id and w.id = ${me} and w.role = 'manager') or (l.created_by = ${me}
   and l.month = date_trunc('month', ${today}::text::date)::date)))`;
+/** SQL: may `me` Fix it on `l` now: sent back (its check `c`) and `fixer`. */
+const mayFix = (me: string, today: string) => `(c.state = 'fix' and ${fixer(me, today)})`;
 
 /** Who a Needs correction push goes to: whoever added it if they may fix it (mayFix), else the collector; never `marker`,
  *  the one who marked it. Null: nobody. */
@@ -111,9 +113,10 @@ export const toCheck = (db: Db, flatId: string, memberId: string, today: string)
 export type Detail = {
   id: string; type: 'bazar' | 'bill'; amount: number; date: string; month: string; note: string | null; paidBy: string | null;
   createdBy: string; addedBy: string; addedAt: string; open: boolean; check: 'ok' | 'fix' | null; reason: string | null;
-  checkedBy: string | null; checkedAt: string | null; receiptV: string | null; mayCheck: boolean; mayFix: boolean; items: Item[];
+  checkedBy: string | null; checkedAt: string | null; receiptV: string | null; mayCheck: boolean; mayFix: boolean; adderMayFix: boolean; items: Item[];
 };
-/** One bazar or bill for its page: its lines, receipt and check, whether `me` may check it now (open month, no check yet, may_check) or fix it, and the flat's people
+/** One bazar or bill for its page: its lines, receipt and check, whether `me` may check it now (open month, no check yet, may_check) or fix it, whether its adder may fix it (Send back names
+ *  them only then; else the collector fixes it, as fixAskTo), and the flat's people
  *  (Fix it's Who paid). Null for anything not a bazar or bill of this flat. */
 export async function entryDetail(db: Db, flatId: string, id: string, me: string, today: string) {
   const [d] = await db<Detail>(
@@ -122,7 +125,7 @@ export async function entryDetail(db: Db, flatId: string, id: string, me: string
        c.state as "check", c.note as reason, cb.name as "checkedBy", c.at::text as "checkedAt",
        extract(epoch from r.created_at)::bigint::text as "receiptV", mo.status = 'open' and c.ledger_id is null
          and coalesce(may_check(l.id, $3, $4::text::date), false) as "mayCheck",
-       coalesce(${mayFix('$3', '$4')}, false) as "mayFix",
+       coalesce(${mayFix('$3', '$4')}, false) as "mayFix", coalesce(${fixer('l.created_by', '$4')}, false) as "adderMayFix",
        (select coalesce(json_agg(json_build_object('name', i.name, 'amount', i.amount_poisha::int) order by i.pos), '[]'::json)
           from bazar_items i where i.ledger_id = l.id) as items
      from ledger l join members a on a.flat_id = l.flat_id and a.id = l.created_by

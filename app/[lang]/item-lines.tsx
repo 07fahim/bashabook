@@ -12,6 +12,11 @@ export function ItemLines({ initial = [], title, hint, name, amount, add }: {
 }) {
   const [n, setN] = useState(Math.max(initial.length, 1)), box = useRef<HTMLDivElement>(null), grew = useRef(false);
   useEffect(() => {
+    const form = box.current?.closest('form'), back = () => setN(Math.max(initial.length, 1));
+    form?.addEventListener('reset', back);   // a cleared form (after a save) goes back to its first lines
+    return () => form?.removeEventListener('reset', back);
+  }, [initial.length]);
+  useEffect(() => {
     if (!grew.current) return;
     grew.current = false;
     box.current?.querySelectorAll<HTMLInputElement>('input[name=itemName]')[n - 1]?.focus();
