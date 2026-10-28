@@ -24,7 +24,7 @@ export function ActionForm({ action, children, className, clearOnDone }: { actio
         startTransition(() => run(data));
       }}
     >
-      <fieldset aria-busy={pending} className="space-y-5 aria-busy:pointer-events-none aria-busy:opacity-60">{children}</fieldset>
+      <fieldset aria-busy={pending} className="min-w-0 space-y-5 aria-busy:pointer-events-none aria-busy:opacity-60">{children}</fieldset>
       {state?.error && <p role="alert" className="mt-4 font-semibold text-chili">{state.error}</p>}
       {state?.confirm && (
         <label className="mt-3 flex min-h-11 items-start gap-3 font-semibold">

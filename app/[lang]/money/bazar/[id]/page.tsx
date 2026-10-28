@@ -53,7 +53,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
       <Header t={t} lang={lang} path={`/money/bazar/${d.id}`} notices={await noticesP}><Nav t={t} lang={lang} current="money" showFlat={boss} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <Link href={d.type === 'bazar' ? `/${lang}/money/bazar${q}` : `/${lang}/money${q}#entries`} className={`inline-flex min-h-11 items-center ${link}`}>{d.type === 'bazar' ? b.back : b.backMoney}</Link>
-        <div className="mt-2 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="mt-2 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
           <section className={focal}>
             <h1 className="font-display text-3xl font-bold">{x.types[d.type]} · {fmtExact(d.amount)}</h1>
             <p className="mt-1 text-muted [overflow-wrap:anywhere]">{[fmtDay(d.date, lang), d.paidBy ? x.paidBy.replace('{name}', name(d.paidBy)) : x.fundPaid, d.note].filter(Boolean).join(' · ')}</p>
@@ -83,7 +83,8 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
                   <ActionForm action={checkAction} className="mt-3">
                     {hidden('fix')}
                     <Field label={b.reason} name="note" required maxLength={100} />
-                    <button className={primary}>{d.adderMayFix ? b.sendBack.replace('{name}', d.addedBy) : b.sendBackPlain}</button>
+                    {/* a 40-character name would wrap the pill on a 320 px phone: cut on screen, read out whole */}
+                    <button className={primary}><span className="truncate">{d.adderMayFix ? b.sendBack.replace('{name}', d.addedBy) : b.sendBackPlain}</span></button>
                   </ActionForm>
                 </details>
               </div>
@@ -110,11 +111,12 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
               </div>
             )}
           </section>
-          <section className={card}>
+          {/* beside a long Fix it form the receipt stays in view, whole: the photo is cut to the screen's height there */}
+          <section className={`${card} lg:sticky lg:top-24`}>
             <h2 className="text-xl font-bold">{b.receipt}</h2>
             {src ? (
               <a href={src} target="_blank" rel="noopener" className={`mt-3 block rounded-xl ${focus}`}>
-                <Image src={src} alt={b.receiptAlt} width={960} height={1280} unoptimized className="h-auto w-full rounded-xl" />
+                <Image src={src} alt={b.receiptAlt} width={960} height={1280} unoptimized className="mx-auto h-auto w-full rounded-xl lg:max-h-[calc(100vh-13rem)] lg:w-auto" />
               </a>
             ) : <p className="mt-2 text-muted">{b.noReceipt}</p>}
           </section>
