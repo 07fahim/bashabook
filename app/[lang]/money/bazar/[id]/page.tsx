@@ -83,8 +83,13 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
                   <ActionForm action={checkAction} className="mt-3">
                     {hidden('fix')}
                     <Field label={b.reason} name="note" required maxLength={100} />
-                    {/* a 40-character name would wrap the pill on a 320 px phone: cut on screen, read out whole */}
-                    <button className={primary}><span className="truncate">{d.adderMayFix ? b.sendBack.replace('{name}', d.addedBy) : b.sendBackPlain}</span></button>
+                    {/* a 40-character name would wrap the pill on a 320 px phone: only the name is cut on screen (the verb stays, in
+                        both word orders) and it is read out whole */}
+                    <button className={primary}>{d.adderMayFix ? (
+                      <span className="flex min-w-0 whitespace-pre">
+                        <span>{b.sendBack.split('{name}')[0]}</span><span className="truncate">{d.addedBy}</span><span>{b.sendBack.split('{name}')[1]}</span>
+                      </span>
+                    ) : b.sendBackPlain}</button>
                   </ActionForm>
                 </details>
               </div>
