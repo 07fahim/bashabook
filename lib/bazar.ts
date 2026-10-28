@@ -2,6 +2,7 @@ import { cleanName, cleanText } from './auth';
 import type { Db } from './db';
 import { toPoisha } from './money';
 import type { Actor } from './money-db';
+import { isJpeg, MAX_RECEIPT } from './photo';
 
 /** One line of what a bazar bought: a name and, if written, what it cost (poisha). */
 export type Item = { name: string; amount: number | null };
@@ -58,7 +59,7 @@ export async function receiptOf(db: Db, flatId: string, ledgerId: string) {
  *  waits on that entry's row (no deadlock with the fix's month lock) and writes nothing. A second tap, or two checkers at
  *  once: the row is there, nothing is written. Returns the entry for the push, or null. */
 export async function checkEntry(db: Db, flatId: string, by: Actor, id: string, state: 'ok' | 'fix', note: string | null, today: string) {
-  const reason = state === 'fix' ? note?.trim() || null : null;
+  const reason = state === 'fix' ? cleanText(note) || null : null;
   if (state === 'fix' && (!reason || reason.length > 100)) return null;
   const [r] = await db<{ adder: string; type: 'bazar' | 'bill'; amount: number }>(
     `with m as (select mo.month from months mo join ledger l on l.flat_id = mo.flat_id and l.month = mo.month
@@ -93,14 +94,15 @@ export type Detail = {
   createdBy: string; addedBy: string; addedAt: string; open: boolean; check: 'ok' | 'fix' | null; reason: string | null;
   checkedBy: string | null; checkedAt: string | null; receiptV: string | null; mayCheck: boolean; items: Item[];
 };
-/** One bazar or bill for its page: its lines, receipt and check, whether `me` may check it today, and the flat's people
+/** One bazar or bill for its page: its lines, receipt and check, whether `me` may check it now (open month, no check yet, may_check), and the flat's people
  *  (Fix it's Who paid). Null for anything not a bazar or bill of this flat. */
 export async function entryDetail(db: Db, flatId: string, id: string, me: string, today: string) {
   const [d] = await db<Detail>(
     `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.month::text as month, l.note, l.paid_by_member_id as "paidBy",
        l.created_by as "createdBy", a.name as "addedBy", l.created_at::text as "addedAt", mo.status = 'open' as open,
        c.state as "check", c.note as reason, cb.name as "checkedBy", c.at::text as "checkedAt",
-       extract(epoch from r.created_at)::bigint::text as "receiptV", coalesce(may_check(l.id, $3, $4::text::date), false) as "mayCheck",
+       extract(epoch from r.created_at)::bigint::text as "receiptV", mo.status = 'open' and c.ledger_id is null
+         and coalesce(may_check(l.id, $3, $4::text::date), false) as "mayCheck",
        (select coalesce(json_agg(json_build_object('name', i.name, 'amount', i.amount_poisha::int) order by i.pos), '[]'::json)
           from bazar_items i where i.ledger_id = l.id) as items
      from ledger l join members a on a.flat_id = l.flat_id and a.id = l.created_by
@@ -114,4 +116,46 @@ export async function entryDetail(db: Db, flatId: string, id: string, me: string
     `select id, name, joined_on::text as "joinedOn", left_on::text as "leftOn", role = 'manager' as collector
      from members where flat_id = $1 order by name`, [flatId]);
   return { d, people };
+}
+
+export type Fix = { id: string; amount: number; date: string; paidBy: string | null; note: string | null; items: Item[]; receipt: Uint8Array | null };
+
+/** Fix it, on an entry sent back with Needs correction: whoever added it or the collector saves new values and it waits for a
+ *  check again. Same id, so its items, receipt and history stay attached. The rules of adding: an amount, a date in the
+ *  entry's own month up to today, a payer living here that day, items not over the total; a bill keeps its name and split.
+ *  One statement: the check row goes only together with the update (`l` needs `c`), so two fixes at once land once. The
+ *  ledger trigger moves the month's version as for any money change. The history row keeps before and after, item lines
+ *  included, and is marked `fixed` (may_check reads who fixed it last). Returns who sent it back, for the push. */
+export async function fixEntry(db: Db, flatId: string, by: Actor, f: Fix, today: string):
+  Promise<{ result: 'ok'; marker: string; type: 'bazar' | 'bill'; amount: number } | { result: 'bad' | 'date' | 'gone' | 'items' | 'receipt' }> {
+  if (!Number.isInteger(f.amount) || f.amount <= 0) return { result: 'bad' };
+  if (!itemsOk(f.items, f.amount)) return { result: 'items' };
+  if (f.receipt && !isJpeg(f.receipt, MAX_RECEIPT)) return { result: 'receipt' };
+  const [e] = await db<{ type: 'bazar' | 'bill'; month: string }>(
+    `select type, month::text as month from ledger where flat_id = $1 and id = $2 and type in ('bazar', 'bill')`, [flatId, f.id]);
+  if (!e || (e.type === 'bill' && (!f.note || f.items.length))) return { result: 'bad' };
+  if (f.date > today || `${f.date.slice(0, 8)}01` !== e.month) return { result: 'date' };
+  if (f.paidBy && !(await db(`select 1 from members where flat_id = $1 and id = $2 and joined_on <= $3::text::date
+      and (left_on is null or left_on >= $3::text::date)`, [flatId, f.paidBy, f.date])).length) return { result: 'gone' };
+  const [r] = await db<{ marker: string; type: 'bazar' | 'bill'; amount: number }>(
+    `with o as (select * from ledger where flat_id = $1 and id = $2 for no key update),
+       oi as (select coalesce(jsonb_agg(jsonb_build_object('name', name, 'amount', amount_poisha) order by pos), '[]'::jsonb) as items
+         from bazar_items where ledger_id = $2),
+       ok as (select o.* from o where ($4::boolean or o.created_by = $3) and date_trunc('month', $6::text::date)::date = o.month),
+       c as (delete from entry_checks where flat_id = $1 and ledger_id = $2 and state = 'fix' and exists (select 1 from ok) returning by_member),
+       l as (update ledger x set amount_poisha = $5, date = $6::text::date, paid_by_member_id = $7, note = $8
+         from ok where x.id = ok.id and exists (select 1 from c) returning x.*),
+       d as (delete from bazar_items where ledger_id = $2 and pos >= json_array_length($9::text::json) and exists (select 1 from l)),
+       i as (insert into bazar_items (flat_id, ledger_id, pos, name, amount_poisha)
+         select $1, l.id, x.n - 1, x.v->>'name', (x.v->>'amount')::bigint from l, json_array_elements($9::text::json) with ordinality x(v, n)
+         on conflict (ledger_id, pos) do update set name = excluded.name, amount_poisha = excluded.amount_poisha),
+       r as (insert into receipts (flat_id, ledger_id, month, photo) select $1, l.id, l.month, $10::bytea from l where $10::bytea is not null
+         on conflict (ledger_id) do update set photo = excluded.photo, created_at = now()),
+       a as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
+         select $1, 'ledger', l.id::text, to_jsonb(o) || jsonb_build_object('items', (select items from oi)),
+           to_jsonb(l) || jsonb_build_object('items', $9::text::jsonb, 'fixed', true)
+             || case when $10::bytea is null then '{}'::jsonb else '{"receipt":true}'::jsonb end, $3 from l, o)
+     select c.by_member as marker, l.type, l.amount_poisha::int as amount from c, l`,
+    [flatId, f.id, by.memberId, by.role === 'manager', f.amount, f.date, f.paidBy, f.note, JSON.stringify(f.items), f.receipt ? Buffer.from(f.receipt) : null]);
+  return r ? { result: 'ok', ...r } : { result: 'bad' };
 }
