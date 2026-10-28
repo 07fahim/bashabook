@@ -16,8 +16,10 @@
 </p>
 
 <p align="center">
-  <a href="https://bashabook.fahimfaiyaz.dev"><img src=".github/assets/cover.jpg" alt="BashaBook on a laptop and a phone: your whole flat's accounts in one place" width="800"></a>
+  <a href="https://github.com/user-attachments/assets/823c4a9c-1a36-43f2-86b0-076452d7e9e5"><img src=".github/assets/cover.jpg" alt="BashaBook on a laptop and a phone: your whole flat's accounts in one place" width="800"></a>
 </p>
+
+https://github.com/user-attachments/assets/823c4a9c-1a36-43f2-86b0-076452d7e9e5
 
 Shared-flat accounts for Bangladeshi flats of eight to ten people with a hired cook. Who ate how many plates, who paid for bazar and bills, what each person owes or gets back, and a month end that closes only when the cash in hand matches the books.
 
