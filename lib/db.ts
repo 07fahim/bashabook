@@ -3,11 +3,13 @@ import postgres from 'postgres';
 /** Runs one parameterised query and returns its rows. Tests pass a PGlite one. */
 export type Db = <T = Record<string, unknown>>(text: string, params?: unknown[]) => Promise<T[]>;
 
-// prepare: false keeps it working through Neon's pooled connection string.
+// prepare: false keeps it working through a transaction pooler (Supabase's, Neon's).
+// ssl: 'require' encrypts the connection whatever the URL says: postgres.js defaults to plain text, and Supabase's pooler
+// string has no sslmode (its certificate is from Supabase's own CA, so not verify-full).
 // connect_timeout: a database that can't be reached fails in 10 s (default 30): a faster error page.
-const sql = postgres(process.env.DATABASE_URL!, { prepare: false, onnotice: () => {}, connect_timeout: 10 });
+const sql = postgres(process.env.DATABASE_URL!, { prepare: false, ssl: 'require', onnotice: () => {}, connect_timeout: 10 });
 // A query that hangs after connecting is cut off at 8 s (error 57014 → the error page) instead of running until Vercel kills
-// the function. Neon's pooler refuses statement_timeout as a connection setting, so each query runs in its own transaction
+// the function. A transaction pooler refuses statement_timeout as a connection setting, so each query runs in its own transaction
 // with `set local`, pipelined: one extra round trip (about a millisecond inside the region), and the pooled session is left
 // as it was. Probed on the test copy 2026-10-12.
 const run = async (text: string, params: unknown[]) =>

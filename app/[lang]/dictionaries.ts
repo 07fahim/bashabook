@@ -161,7 +161,7 @@ const bn = {
     see: { h: 'কে দেখতে পায়', p: [
       'অ্যাপে শুধু আপনার ফ্ল্যাটের মানুষ। তারা ফ্ল্যাটের সব লেনদেন (জমাসহ), প্রত্যেকের ব্যালেন্স আর মিলের সংখ্যা, মিলের তালিকা, নাম আর কেউ ফোন নম্বর বা ছবি দিলে সেটা দেখতে পায়।',
       'আপনার হিসাবের লাইন ধরে খুঁটিনাটি দেখতে পান আপনি আর যার কাছে ফ্ল্যাটের টাকা থাকে।',
-      'বাসাবুক টিম তথ্যে হাত দেয় শুধু সার্ভিস চালাতে, যেমন PIN রিসেট বা আপনি চাইলে ফ্ল্যাট মুছে ফেলা। তথ্য রাখা থাকে Neon (ডাটাবেস) আর Vercel (হোস্টিং)-এর কাছে।',
+      'বাসাবুক টিম তথ্যে হাত দেয় শুধু সার্ভিস চালাতে, যেমন PIN রিসেট বা আপনি চাইলে ফ্ল্যাট মুছে ফেলা। তথ্য রাখা থাকে Supabase (ডাটাবেস) আর Vercel (হোস্টিং)-এর কাছে।',
       'বাসাবুক কারো তথ্য বিক্রি করে না আর কোনো বিজ্ঞাপন দেখায় না। আপনাদের টাকাও কখনো রাখে না।',
     ] },
     cookies: { h: 'কুকি আর আপনার ডিভাইস', p: [
@@ -842,7 +842,7 @@ const en: Dict = {
     see: { h: 'Who can see it', p: [
       'Only the people in your flat see it in the app. They see the flat’s entries (deposits included), each person’s balance and meal count, the meal list, names and any phone number or photo someone added.',
       'Your line-by-line breakdown is shown to you and to the person who keeps the flat money.',
-      'The BashaBook team reaches the data only to run the service, such as a PIN reset or deleting a flat you ask us to. It is stored with Neon (database) and Vercel (hosting).',
+      'The BashaBook team reaches the data only to run the service, such as a PIN reset or deleting a flat you ask us to. It is stored with Supabase (database) and Vercel (hosting).',
       'BashaBook never sells data or shows ads. It never holds your money either.',
     ] },
     cookies: { h: 'Cookies and your device', p: [
