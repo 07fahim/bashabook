@@ -150,7 +150,7 @@ const bn = {
   },
   privacy: {
     title: 'প্রাইভেসি পলিসি',
-    updated: 'শেষ আপডেট: 27 October 2026',
+    updated: 'শেষ আপডেট: 28 October 2026',
     lead: 'বাসাবুক একটা শেয়ার্ড ফ্ল্যাটের মিল আর টাকার হিসাব রাখে। এখানে লেখা আছে আমরা কী রাখি, কে দেখতে পায় আর কীভাবে মুছে ফেলা যায়।',
     keep: { h: 'আমরা কী রাখি', p: [
       'প্রত্যেকের নাম। মোবাইল নম্বর বা ছোট ছবি শুধু তখনই রাখি যদি কেউ নিজে দেয়। আপনার PIN আমরা রাখি না। শুধু তার একটা এলোমেলো রূপ রাখি যেটা থেকে আসল PIN বের করা যায় না।',
@@ -175,7 +175,7 @@ const bn = {
     remove: { h: 'কতদিন রাখি আর কীভাবে মোছা যায়', p: [
       'ফ্ল্যাট যতদিন বাসাবুক ব্যবহার করে ততদিন হিসাব থাকে। কেউ চলে গেলেও তার হিসাব থেকে যায় যাতে আগের মিল, বিল আর হিসাব মেলানো ঠিক থাকে।',
       'নিজের ফোন নম্বর আর ছবি আপনি অ্যাপ থেকে যেকোনো সময় মুছে দিতে পারেন।',
-      'যার কাছে ফ্ল্যাটের টাকা থাকে তিনি পুরো ফ্ল্যাট মুছে ফেলতে বলতে পারেন। আমরা তার সাথে আর আরেকজন ফ্ল্যাটমেটের সাথে কথা বলে নিশ্চিত হই। তারপর সব মুছে ফেলি। 6 ঘণ্টা পরে সেটা আর ফেরানো যায় না।',
+      'যার কাছে ফ্ল্যাটের টাকা থাকে তিনি পুরো ফ্ল্যাট মুছে ফেলতে বলতে পারেন। আমরা তার সাথে আর আরেকজন ফ্ল্যাটমেটের সাথে কথা বলে নিশ্চিত হই। তারপর সব মুছে ফেলি। এরপর সেটা আর ফেরানো যায় না।',
       'যে ট্রায়াল ফ্ল্যাটে কেউ ফিরে আসেনি সেটা নিজে থেকেই মুছে যায়: মাত্র একজন সাইন আপ করেছে, টাকা বা মিলের কোনো এন্ট্রি নেই আর 30 দিন কিছু বদলায়নি।',
     ] },
     contact: { h: 'কিছু জানার থাকলে', p: ['হোয়াটসঅ্যাপে বা ইমেইলে লিখুন।'] },
@@ -831,7 +831,7 @@ const en: Dict = {
   },
   privacy: {
     title: 'Privacy policy',
-    updated: 'Last updated 27 October 2026',
+    updated: 'Last updated 28 October 2026',
     lead: 'BashaBook keeps a shared flat’s meals and money. This page says what it stores, who can see it and how to remove it.',
     keep: { h: 'What we keep', p: [
       'For each person: their name. A mobile number or a small photo only if they add one. We never store your PIN. We keep only a scrambled form of it that cannot be turned back into the PIN.',
@@ -856,7 +856,7 @@ const en: Dict = {
     remove: { h: 'Keeping and deleting', p: [
       'A flat’s records stay while the flat uses BashaBook. The records of someone who moves out stay too. That keeps past meals, bills and settlements right.',
       'You can remove your own phone number and photo in the app at any time.',
-      'The person who keeps the flat money can ask us to delete the whole flat. We confirm with them and one other flatmate. Then we delete everything. After 6 hours it cannot be recovered.',
+      'The person who keeps the flat money can ask us to delete the whole flat. We confirm with them and one other flatmate. Then we delete everything. After that it cannot be recovered.',
       'A trial flat nobody came back to is deleted on its own: one person signed up, there are no money or meal entries and nothing changed for 30 days.',
     ] },
     contact: { h: 'Questions', p: ['Message us on WhatsApp or by email.'] },

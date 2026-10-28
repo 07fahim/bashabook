@@ -9,7 +9,8 @@ What BashaBook keeps, for how long, and how it is deleted. Decided 2026-10-11 fo
   says this: a mover's records stay for the flat's history.
 - Personal data held per person: name, optional mobile number, optional small photo, PIN hash, sign-in sessions (90 days each).
   A person can remove their own photo and phone number in the app at any time; their name stays in the flat's records.
-- Nothing of a flat's records is copied anywhere else: no backup outside Neon's own point-in-time history. The collector can
+- Nothing of a flat's records is copied anywhere else. Production moved from Neon to Supabase (free plan) on 2026-10-28;
+  the free plan has no backups and no point-in-time restore (supabase.com/docs/guides/platform/backups, read 2026-10-28). The collector can
   download a closed month as CSV. Since 2026-10-27 the live site sends page visits to Google Analytics 4 (only when
   `NEXT_PUBLIC_GA_ID` is set, on Production): the page address with a join code hidden and no query string, plus what
   Google's tag itself collects (cookies, device, rough location). No names, phones, amounts or form contents.
@@ -18,11 +19,10 @@ What BashaBook keeps, for how long, and how it is deleted. Decided 2026-10-11 fo
 
 A flat is deleted whole, on the collector's request, by the app team with `scripts/delete-flat.mts` (dry run first, then
 `--apply`). One statement removes the flat and every row that belongs to it: people, rooms, months, entries, meals, history,
-handovers, sessions. Nothing of any other flat is touched (`lib/delete-flat.test.ts`). The deletion also leaves Neon's
-point-in-time history after its retention window, so a request is final after that window. The window is **6 hours** on this project (Neon free plan,
-history retention; checked 2026-10-11). The same 6 hours is all the undo there is for any mistake: a wrong deletion or a bad
-migration must be noticed the same day. Restore tested 2026-10-11: a branch of production forked at a time 29 minutes before
-migration 015 showed 014 as its last migration, with every flat and entry present, read through the app's own client.
+handovers, sessions. Nothing of any other flat is touched (`lib/delete-flat.test.ts`). A deletion is final at once: Supabase free keeps no backup or history to bring it back. Nothing
+reverses any other mistake either: a wrong deletion or a bad migration is permanent. Until a nightly backup exists,
+run every `--apply` and every migration only after the dry run and the test copy. (On Neon until 2026-10-28 the window was
+6 hours of point-in-time history, restore-tested 2026-10-11.)
 
 Trials nobody came back to are deleted on their own (since 2026-10-24, `runJobs` in `lib/jobs.ts`): a flat created more
 than 30 days ago where at most one person claimed a PIN, no money entry and no meal change ever existed, and nothing was

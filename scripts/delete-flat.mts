@@ -11,7 +11,7 @@ const [code, name] = apply ? args.slice(0, -1) : args;
 if (!code || !name) { console.log('usage: <join code> "<flat name>" [--apply]'); process.exit(1); }
 
 const host = new URL(process.env.DATABASE_URL ?? '').hostname.split('.')[0];
-console.log(`database: ${host} (${host.startsWith('ep-muddy-mud-') ? 'TEST COPY' : 'PRODUCTION'})`);
+console.log(`database: ${host} ${new URL(process.env.DATABASE_URL ?? "").username} (${host.startsWith('ep-muddy-mud-') ? 'TEST COPY' : 'PRODUCTION'})`);
 const [f] = await db<{ id: string; name: string; created: string }>(`select id, name, created_at::text as created from flats where join_code = $1`, [code.toUpperCase()]);
 if (!f) { console.log('no flat with that join code'); process.exit(1); }
 if (f.name !== name) { console.log(`refused: that code belongs to "${f.name}", not "${name}"`); process.exit(1); }
