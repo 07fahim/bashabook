@@ -10,7 +10,7 @@ const args = process.argv.slice(2), apply = args.at(-1) === '--apply';
 const [code, name, reason, admin] = apply ? args.slice(0, -1) : args;
 if (!code || !name || !reason?.trim() || !admin?.trim()) { console.log('usage: <join code> "<name>" "<reason>" "<your name>" [--apply]'); process.exit(1); }
 
-console.log(`database: ${new URL(process.env.DATABASE_URL ?? '').hostname.split('.')[0]}`);
+{ const u = new URL(process.env.DATABASE_URL ?? ''); console.log(`database: ${u.hostname.split('.')[0]} ${u.username}`); }
 const [f] = await db<{ id: string; name: string }>(`select id, name from flats where join_code = $1`, [code.toUpperCase()]);
 const [m] = f ? await db<{ id: string }>(`select id from members where flat_id = $1 and name = $2 and left_on is null`, [f.id, name]) : [];
 if (!f || !m) { console.log('no such flat or person living there'); process.exit(1); }

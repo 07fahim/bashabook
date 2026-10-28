@@ -12,7 +12,7 @@ const args = process.argv.slice(2), apply = args.at(-1) === '--apply';
 const [code, name, reason, admin] = apply ? args.slice(0, -1) : args;
 if (!code || !name || !reason?.trim() || !admin?.trim()) { console.log('usage: <join code> "<collector name>" "<reason>" "<your name>" [--apply]'); process.exit(1); }
 
-console.log(`database: ${new URL(process.env.DATABASE_URL ?? '').hostname.split('.')[0]}`);
+{ const u = new URL(process.env.DATABASE_URL ?? ''); console.log(`database: ${u.hostname.split('.')[0]} ${u.username}`); }
 const [f] = await db<{ id: string; name: string }>(`select id, name from flats where join_code = $1`, [code.toUpperCase()]);
 if (!f) { console.log('no flat with that join code'); process.exit(1); }
 const [c] = await db<{ id: string; name: string; sessions: number; locked: boolean }>(

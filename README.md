@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5">
   <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4">
-  <img src="https://img.shields.io/badge/Postgres-Neon-4169E1?logo=postgresql&logoColor=white" alt="Postgres on Neon">
+  <img src="https://img.shields.io/badge/Postgres-Supabase-4169E1?logo=postgresql&logoColor=white" alt="Postgres on Supabase">
   <img src="https://img.shields.io/badge/Vercel-Singapore-000000?logo=vercel&logoColor=white" alt="Vercel, Singapore">
   <img src="https://img.shields.io/badge/PWA-installable-5A0FC8?logo=pwa&logoColor=white" alt="Installable web app">
 </p>
@@ -138,13 +138,13 @@ Limits: a flat holds up to 30 names, counting people who moved out. Creating fla
 
 ## Stack
 
-Next.js 16 (App Router, server components and actions), React 19, TypeScript, Tailwind CSS 4, Postgres on Neon through postgres.js with plain SQL migrations, bcryptjs for PINs, web-push for reminders. Charts are hand-drawn SVG; there is no chart or UI library. Six runtime dependencies.
+Next.js 16 (App Router, server components and actions), React 19, TypeScript, Tailwind CSS 4, Postgres on Supabase through postgres.js with plain SQL migrations, bcryptjs for PINs, web-push for reminders. Charts are hand-drawn SVG; there is no chart or UI library. Six runtime dependencies.
 
 ```mermaid
 flowchart TD
   B["Phone or laptop browser: the website and the installed app, with a service worker for reminders"]
   V["Next.js on Vercel, Singapore: pages, server actions, the money and meals engines"]
-  D[("Postgres on Neon")]
+  D[("Postgres on Supabase")]
   P["Browser push service"]
   C["cron-job.org, every 5 minutes"]
   G["Google Analytics 4"]
