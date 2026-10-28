@@ -19,11 +19,13 @@ What BashaBook keeps, for how long, and how it is deleted. Decided 2026-10-11 fo
 
 A flat is deleted whole, on the collector's request, by the app team with `scripts/delete-flat.mts` (dry run first, then
 `--apply`). One statement removes the flat and every row that belongs to it: people, rooms, months, entries, meals, history,
-handovers, sessions. Nothing of any other flat is touched (`lib/delete-flat.test.ts`). Since 2026-10-28 a nightly full copy of production (private repo
-07fahim/bashabook-backups, GitHub Actions at 03:30 Dhaka, restored into an empty Postgres 17 before it is kept; IP rate-limit
-rows and sessions left out) is kept 7 days, so a deleted flat is gone for good 7 days after deletion, and a wrong deletion
-or a bad migration can be undone from the last night's copy (entries since that copy are lost). Supabase free itself keeps
-no backup or history. Run every `--apply` and every migration only after the dry run and the test copy (check the test copy
+handovers, sessions. Nothing of any other flat is touched (`lib/delete-flat.test.ts`). Since 2026-10-28 a nightly full copy of production is kept 7 days (private repo 07fahim/bashabook-backups:
+GitHub Actions at 03:30 Dhaka; IP rate-limit rows and sessions left out; each copy is restored into an empty Postgres 17
+before it is kept). A deleted flat is gone for good within 7 days of deletion. A wrong deletion or a bad migration can be
+undone from the last copy, but a full restore rolls every flat back to that night and loses entries made since; restoring
+one flat alone is not scripted, and no restore into Supabase has been tested yet (it needs `create extension btree_gist`
+first, see the backup repo README). A downloaded dump is deleted after use: no copy may outlive the 7 days. Supabase free
+itself keeps no backup or history. Run every `--apply` and every migration only after the dry run and the test copy (check the test copy
 is at the same migration as production first). (On Neon until 2026-10-28 the window was
 6 hours of point-in-time history, restore-tested 2026-10-11.)
 
@@ -37,7 +39,7 @@ flats, 120 code lookups, 60 PIN posts; past that the page says to wait an hour. 
 counts older than 2 hours (the privacy page promises about 2 hours); if the cron stops, they stay until the next anonymous visit. A flat holds 30 names in all (`MAX_MEMBERS`).
 
 Before deleting: confirm the request with the collector on a verified number (as in `ops/collector-pin-recovery.md`) and,
-because the records belong to the whole flat, with one other flatmate. Tell them the data cannot be recovered afterwards. The flat's own history goes with it, so write the date, flat name, who asked and
+because the records belong to the whole flat, with one other flatmate. Tell them it can still be restored from the nightly copy for up to 7 days, then never. The flat's own history goes with it, so write the date, flat name, who asked and
 who confirmed in the app-team log (the script prints the line to paste).
 
 ## Not offered in the pilot

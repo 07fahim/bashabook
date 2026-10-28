@@ -161,7 +161,7 @@ const bn = {
     see: { h: 'কে দেখতে পায়', p: [
       'অ্যাপে শুধু আপনার ফ্ল্যাটের মানুষ। তারা ফ্ল্যাটের সব লেনদেন (জমাসহ), প্রত্যেকের ব্যালেন্স আর মিলের সংখ্যা, মিলের তালিকা, নাম আর কেউ ফোন নম্বর বা ছবি দিলে সেটা দেখতে পায়।',
       'আপনার হিসাবের লাইন ধরে খুঁটিনাটি দেখতে পান আপনি আর যার কাছে ফ্ল্যাটের টাকা থাকে।',
-      'বাসাবুক টিম তথ্যে হাত দেয় শুধু সার্ভিস চালাতে, যেমন PIN রিসেট বা আপনি চাইলে ফ্ল্যাট মুছে ফেলা। তথ্য রাখা থাকে Supabase (ডাটাবেস) আর Vercel (হোস্টিং)-এর কাছে।',
+      'বাসাবুক টিম তথ্যে হাত দেয় শুধু সার্ভিস চালাতে, যেমন PIN রিসেট বা আপনি চাইলে ফ্ল্যাট মুছে ফেলা। তথ্য রাখা থাকে Supabase (ডাটাবেস) আর Vercel (হোস্টিং)-এর কাছে। প্রতি রাতের একটা কপি GitHub-এ 7 দিন পর্যন্ত থাকে।',
       'বাসাবুক কারো তথ্য বিক্রি করে না আর কোনো বিজ্ঞাপন দেখায় না। আপনাদের টাকাও কখনো রাখে না।',
     ] },
     cookies: { h: 'কুকি আর আপনার ডিভাইস', p: [
@@ -175,8 +175,9 @@ const bn = {
     remove: { h: 'কতদিন রাখি আর কীভাবে মোছা যায়', p: [
       'ফ্ল্যাট যতদিন বাসাবুক ব্যবহার করে ততদিন হিসাব থাকে। কেউ চলে গেলেও তার হিসাব থেকে যায় যাতে আগের মিল, বিল আর হিসাব মেলানো ঠিক থাকে।',
       'নিজের ফোন নম্বর আর ছবি আপনি অ্যাপ থেকে যেকোনো সময় মুছে দিতে পারেন।',
-      'যার কাছে ফ্ল্যাটের টাকা থাকে তিনি পুরো ফ্ল্যাট মুছে ফেলতে বলতে পারেন। আমরা তার সাথে আর আরেকজন ফ্ল্যাটমেটের সাথে কথা বলে নিশ্চিত হই। তারপর সব মুছে ফেলি। ভুল হলে ফেরানোর জন্য প্রতি রাতে একটা কপি রাখি। সেটা আরও 7 দিন থাকে। তারপর আর ফেরানো যায় না।',
+      'যার কাছে ফ্ল্যাটের টাকা থাকে তিনি পুরো ফ্ল্যাট মুছে ফেলতে বলতে পারেন। আমরা তার সাথে আর আরেকজন ফ্ল্যাটমেটের সাথে কথা বলে নিশ্চিত হই। তারপর সব মুছে ফেলি।',
       'যে ট্রায়াল ফ্ল্যাটে কেউ ফিরে আসেনি সেটা নিজে থেকেই মুছে যায়: মাত্র একজন সাইন আপ করেছে, টাকা বা মিলের কোনো এন্ট্রি নেই আর 30 দিন কিছু বদলায়নি।',
+      'যা কিছু মুছে ফেলা হয় সেটা আমাদের রাতের কপিতে আরও 7 দিন পর্যন্ত থাকে। তারপর আর ফেরানো যায় না।',
     ] },
     contact: { h: 'কিছু জানার থাকলে', p: ['হোয়াটসঅ্যাপে বা ইমেইলে লিখুন।'] },
   },
@@ -842,7 +843,7 @@ const en: Dict = {
     see: { h: 'Who can see it', p: [
       'Only the people in your flat see it in the app. They see the flat’s entries (deposits included), each person’s balance and meal count, the meal list, names and any phone number or photo someone added.',
       'Your line-by-line breakdown is shown to you and to the person who keeps the flat money.',
-      'The BashaBook team reaches the data only to run the service, such as a PIN reset or deleting a flat you ask us to. It is stored with Supabase (database) and Vercel (hosting).',
+      'The BashaBook team reaches the data only to run the service, such as a PIN reset or deleting a flat you ask us to. It is stored with Supabase (database) and Vercel (hosting). A nightly safety copy is kept on GitHub for up to 7 days.',
       'BashaBook never sells data or shows ads. It never holds your money either.',
     ] },
     cookies: { h: 'Cookies and your device', p: [
@@ -856,8 +857,9 @@ const en: Dict = {
     remove: { h: 'Keeping and deleting', p: [
       'A flat’s records stay while the flat uses BashaBook. The records of someone who moves out stay too. That keeps past meals, bills and settlements right.',
       'You can remove your own phone number and photo in the app at any time.',
-      'The person who keeps the flat money can ask us to delete the whole flat. We confirm with them and one other flatmate. Then we delete everything. A nightly safety copy keeps it for 7 more days. After that it cannot be recovered.',
+      'The person who keeps the flat money can ask us to delete the whole flat. We confirm with them and one other flatmate. Then we delete everything.',
       'A trial flat nobody came back to is deleted on its own: one person signed up, there are no money or meal entries and nothing changed for 30 days.',
+      'Anything deleted or removed stays in our nightly safety copy for up to 7 days. After that it cannot be recovered.',
     ] },
     contact: { h: 'Questions', p: ['Message us on WhatsApp or by email.'] },
   },
