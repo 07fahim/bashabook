@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+import { toCheck } from '@/lib/bazar';
 import { db } from '@/lib/db';
 import { flatMoney, myLatestHandover } from '@/lib/handover';
 import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka, plates, type Meal } from '@/lib/meals';
@@ -19,7 +20,7 @@ import { countText, fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka, fmtTaka2, fmtT
 import { Header } from '../header';
 import { LockChange } from '../lock-change';
 import { MealRow } from '../meal-row';
-import { balanceText, ConfirmList } from '../money/bits';
+import { balanceText, CheckList, ConfirmList } from '../money/bits';
 import { Nav } from '../nav';
 import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
@@ -38,12 +39,13 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   const noticesP = noticeCount(db, me.flatId, me.memberId, me.role === 'manager');   // the bell's count, read alongside the page
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const [meals, people, mo, waiting, ho, byOthers, iCleared] = await Promise.all([
+  const [meals, people, mo, waiting, ho, byOthers, iCleared, checks] = await Promise.all([
     loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId),
     loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId, me.role === 'manager'),
     myLatestHandover(db, me.flatId, me.memberId),
     changedByOthers(db, me.flatId, me.memberId, today),
     clearedBefore(db, me.flatId, me.memberId),
+    toCheck(db, me.flatId, me.memberId, today),
   ]);
   const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
@@ -107,6 +109,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
         {why === 'role' && <p role="status" className="mt-4 font-semibold text-chili">{a.roleLostNote}</p>}
         {justCleared && <p role="status" className="mt-4 font-semibold text-leaf">{a.lockCleared.replace('{name}', justCleared.name)}</p>}
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={starter?.name ?? ''} /></div>}
+        {checks.length > 0 && <div className="mt-6"><CheckList lang={lang} a={t.app} x={x} items={checks} /></div>}
         {/* someone locked after wrong PINs: anyone here clears a flatmate's lock (the PIN stays); the collector's permanent
             lock is the app team's job (a timed one opens by itself, so no card). Up here, not in the Flatmates fold, so it
             is seen exactly when it matters. Never one's own card (a wrong current PIN can lock someone still signed in). */}

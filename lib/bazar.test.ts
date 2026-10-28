@@ -353,7 +353,7 @@ describe('Fix it', { timeout: 30000 }, () => {
   });
 
   it('an adder who has moved out is never asked to fix: Send back and the push go to the collector, whose list shows it', async () => {
-    const { flatId, ids, nafis, as, add } = await flat();
+    const { flatId, ids, as, add } = await flat();
     const day = '2026-10-05';
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 2000, date: '2026-10-03' });   // flat money: Zarif checks it
     await db(`update members set left_on = '2026-10-04' where id = $1`, [ids.Tahsin]);   // moved out before today

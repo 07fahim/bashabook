@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+import { monthTotals, toCheck } from '@/lib/bazar';
 import { closeInfo } from '@/lib/close';
 import { db } from '@/lib/db';
 import { flatMoney, handoverHistory } from '@/lib/handover';
@@ -20,16 +21,15 @@ import { Header, withQuery } from '../header';
 import { Nav } from '../nav';
 import { PendingButton } from '../pending-button';
 import { PayerSelect } from '../payer-select';
+import { ReceiptPicker } from '../receipt-picker';
 import { ShareButton } from '../share-button';
 import { card, checkChip, field, Field, focal, Fold, focus, link, LongList, MethodField, PageSkeleton, primary } from '../ui';
-import { balanceText, ConfirmList, lookText } from './bits';
+import { balanceText, CheckList, ConfirmList, lookText, StatusChip } from './bits';
 import { breakdownOf, breakdownText, pickWho, type Labels } from './breakdown';
 
 export default function Money({ params, searchParams }: PageProps<'/[lang]/money'>) {
   return <Suspense fallback={<PageSkeleton />}><MoneyBody params={params} searchParams={searchParams} /></Suspense>;
 }
-
-const sum = (rows: Entry[]) => rows.reduce((a, e) => a + e.amount, 0);
 
 async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
@@ -42,19 +42,19 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   // ?m=2026-09 picks a month; never later than this month
   const asked = typeof sp.m === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m) ? `${sp.m}-01` : thisMonth;
   const month = asked > thisMonth ? thisMonth : asked, mine = sp.mine === '1';
-  const [mo, waiting, closing, history] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss),
-    boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null, handoverHistory(db, me.flatId)]);   // the card only shows on the month to close
+  const [mo, waiting, closing, history, checks] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss),
+    boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null, handoverHistory(db, me.flatId), toCheck(db, me.flatId, me.memberId, today)]);   // the card only shows on the month to close
   const closed = mo.info?.status === 'closed';
   // money with the collector: a month's own fund, but for this month what they hold now. While last month is still open,
   // this month's own fund starts from 0, so it would show a false gap: add up every open month instead (flatMoney)
   const held = month === thisMonth && mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
   const name = (id: string | null) => mo.all.find(p => p.id === id)?.name ?? '?';
   const collector = mo.all.find(p => p.role === 'manager')!;
+  const totals = monthTotals(mo.entries), waitingBazar = mo.entries.filter(e => e.type === 'bazar' && !e.check).length;
   const prev = monthOf(addDays(month, -1)), next = addDays(daysOfMonth(month).at(-1)!, 1);
   const href = (m: string, only: boolean, who?: string) => `/${lang}/money?${new URLSearchParams({ ...(m !== thisMonth ? { m: m.slice(0, 7) } : {}), ...(only ? { mine: '1' } : {}), ...(who ? { who } : {}) })}`;
   const arrow = `inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-muted font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 ${focus}`;
 
-  const ok = mo.entries.filter(e => e.status === 'ok');
   // ?who= : the collector opens someone else's "How this adds up" (to explain or settle it, e.g. with someone moving out).
   // Only the collector, and only a person in this flat's month: anyone else, or an unknown id, gets their own.
   const whoId = pickWho(boss, me.memberId, sp.who, mo.result.perMember);
@@ -130,6 +130,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
         {closing && closing.month === month && <div className="mt-6"><CloseCard lang={lang} x={x} c={closing} collector={collector.name} warn={closing.looks.map(l => lookText(t, lang, l))} /></div>}
 
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={collector.name} /></div>}
+        {checks.length > 0 && <div className="mt-6"><CheckList lang={lang} a={t.app} x={x} items={checks} /></div>}
 
         {/* desktop: my balance and the three forms on the left; the flat summary over the entries on the right, two thirds wide,
             so both sides grow downward together and no column leaves a hole */}
@@ -160,15 +161,17 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               </>)}
               {whoId && <Link href={`${href(month, mine)}#balance`} scroll={false} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{x.of.back}</Link>}
             </section>
+            {/* Add bazar lives on the Bazar list, with its item lines and receipt; the count says what still waits */}
+            <Link href={`/${lang}/money/bazar${month !== thisMonth ? `?m=${month.slice(0, 7)}` : ''}`}
+              className={`mt-3 flex min-h-11 items-center justify-between gap-4 ${card} hover:bg-paper ${focus}`}>
+              <span className="min-w-0">
+                <span className="block text-lg font-bold">{x.bazar.list}</span>
+                <span className={`block text-[15px] ${waitingBazar ? 'font-semibold text-turmeric-ink' : 'text-muted'}`}>{waitingBazar ? x.bazar.waitingN.replace('{n}', String(waitingBazar)) : x.bazar.listLead}</span>
+              </span>
+              <span aria-hidden="true" className="text-2xl leading-none text-muted">→</span>
+            </Link>
             {(month === thisMonth ? !closed : boss && mo.info?.status === 'open') && (<>
               {month !== thisMonth && <p className="max-w-prose text-[15px] text-muted">{x.lateLead.replaceAll('{month}', fmtMonth(month))}</p>}
-              <Fold title={x.addBazar} lead={x.bazarLead}>
-                <ActionForm action={entryAction} className="mt-4" clearOnDone>
-                  {hidden('bazar')}{amountDate}{whoPaid(x.whoPaidShop)}
-                  <Field label={x.note} name="note" maxLength={100} />
-                  <button className={primary}>{x.save}</button>
-                </ActionForm>
-              </Fold>
               <Fold title={x.addBill} lead={x.billLead}>
                 <ActionForm action={entryAction} className="mt-4" clearOnDone>
                   {hidden('bill')}
@@ -199,6 +202,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       <span><span className="font-semibold">{x.repeat}</span><span className="block text-[15px] text-muted">{x.repeatHint}</span></span>
                     </label>
                   )}
+                  <ReceiptPicker label={x.bazar.addReceipt} change={x.bazar.changeReceipt} added={x.bazar.receiptAdded} failed={x.bazar.receiptFailed} />
                   <button className={primary}>{x.save}</button>
                 </ActionForm>
               </Fold>
@@ -288,8 +292,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
           <div className="flex flex-col gap-6 lg:col-span-2">
           <section className={card}>
             <h2 className="text-xl font-bold">{x.summary}</h2>
-            <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 lg:grid-cols-4">
-              {([[x.totalBazar, fmtTaka(sum(ok.filter(e => e.type === 'bazar' && !e.forMonth)))], [x.totalBills, fmtTaka(sum(ok.filter(e => e.type === 'bill' && !e.forMonth)))],
+            <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 lg:grid-cols-3">
+              {([[x.totalBazar, fmtTaka(totals.bazar)], [x.totalBills, fmtTaka(totals.bills)], [x.totalSpent, fmtTaka(totals.spent)], [x.paidInMonth, fmtTaka(totals.paidIn)],
                 [x.mealRate, fmtRate(mo.result.mealRate, totalMeals), (month === thisMonth ? (totalMeals === 100 ? x.mealSoFar : x.mealsSoFar) : totalMeals === 100 ? x.mealsOne : x.mealsN).replace('{n}', fmtMeals(totalMeals))],
                 [x.withName.replace('{name}', holder), `${held < 0 ? '−' : ''}${fmtTaka(held)}`]] as const).map(([k, v, sub]) => (
                 <div key={k} className="rounded-xl bg-paper p-3">
@@ -353,6 +357,13 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold">{x.types[e.type]} · {who(e)}</p>
                           {(e.forMonth || e.method || e.note) && <p className="text-[15px]">{[e.forMonth && x.correctionFor.replace('{month}', fmtMonth(e.forMonth)), e.method && x.cashMethods[e.method], e.note].filter(Boolean).join(' · ')}</p>}
+                          {(e.type === 'bazar' || e.type === 'bill') && (
+                            <p className="flex flex-wrap items-center gap-x-3">
+                              <Link href={`/${lang}/money/bazar/${e.id}`} aria-label={`${x.types[e.type]} ${fmtExact(e.amount)}: ${e.check === 'ok' ? x.bazar.ok : e.check === 'fix' ? x.bazar.fix : x.bazar.waiting}`}
+                                className={`inline-flex min-h-11 items-center rounded-full ${focus}`}><StatusChip state={e.check} b={x.bazar} /></Link>
+                              {e.receiptV && <a href={`/api/receipt/${e.id}?v=${e.receiptV}`} target="_blank" rel="noopener" className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{x.bazar.viewReceipt}</a>}
+                            </p>
+                          )}
                           <p className="text-[15px] text-muted">
                             {x.addedBy.replace('{name}', name(e.createdBy))}
                             {e.status === 'pending' && <> · <span className="font-semibold text-ink">{x.pending}</span></>}
