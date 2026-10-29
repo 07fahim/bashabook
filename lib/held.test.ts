@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkAll, confirmAll, db, migrate } from '../db/test-db';
+import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, loadMonth, openMonth, type NewEntry } from './money-db';
 import { closeInfo, closeMonth } from './close';
@@ -19,7 +19,6 @@ async function flat(octBazar: number) {
   const nafis = { memberId: ids.Nafis, role: 'manager' as const };
   await openMonth(db, f.flatId, '2026-09-01');
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'deposit', amount: 300000, memberId: ids.Tahsin }))).toBe('ok');
-  await confirmAll(f.flatId);   // Tahsin's Yes
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'bazar', amount: 100000 }))).toBe('ok');
   await openMonth(db, f.flatId, '2026-10-01');
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'bazar', amount: octBazar, date: OCT2 }))).toBe('ok');
@@ -50,7 +49,7 @@ describe('money held across open months', { timeout: 30000 }, () => {
 
   it('an entry still waiting in October blocks September’s close and says where it is', async () => {
     const { flatId, nafis } = await flat(50000);
-    const [t] = await db<{ id: string }>(`select id from members where flat_id = $1 and name = 'Tahsin'`, [flatId]);
+    const [t] = await db<{ id: string }>(`update members set pin_hash = 'x' where flat_id = $1 and name = 'Tahsin' returning id`, [flatId]);   // Tahsin has joined: he answers
     expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 50000, date: OCT2, memberId: t.id }))).toBe('ok');   // waits for Tahsin’s tap
     await checkAll(flatId);
     expect(await closeInfo(db, flatId, OCT2)).toMatchObject({ month: '2026-09-01', pending: 1, pendingMonth: '2026-10-01' });

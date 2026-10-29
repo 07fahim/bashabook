@@ -1,13 +1,14 @@
 // Real-Postgres races for Plan 7 item 1 (room, rent and weight changes while an ended month is open), Neon test copy only.
 // Each case checks the end state in month_balances: if the close wins, a later change never alters the closed month; if the
 // change wins, the close either uses it or returns 'changed' and closes with it on retry.
+import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { createFlat } from '../lib/auth';
 import { closeMonth } from '../lib/close';
 import type { Db } from '../lib/db';
 import { flatMoney } from '../lib/handover';
 import { setDefaults, updateSettings } from '../lib/meals-db';
-import { addEntry, addRoom, openMonth, setRoom, type NewEntry } from '../lib/money-db';
+import { addEntry, addRoom, confirmEntry, openMonth, setRoom, type NewEntry } from '../lib/money-db';
 
 const url = process.env.DATABASE_URL ?? '';
 if (new URL(url).username !== 'postgres.wgvoshlmhauxcymwdwjt') throw new Error('not the Supabase test project; refusing');   // the pooler host is shared with production
@@ -54,7 +55,9 @@ async function flat() {
   await openMonth(db, flatId, SEP);
   const big = (await addRoom(db, flatId, nafis, 'Big', 300000)) as string, small = (await addRoom(db, flatId, nafis, 'Small', 100000)) as string;
   for (const [who, r] of [['Nafis', big], ['Tahsin', small], ['Zarif', small]] as const) await setRoom(db, flatId, nafis, ids[who], r);
-  await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 1300000, memberId: ids.Tahsin }));
+  const paid = randomUUID();
+  await addEntry(db, flatId, nafis, e({ id: paid, type: 'deposit', amount: 1300000, memberId: ids.Tahsin }));
+  if (!await confirmEntry(db, flatId, { memberId: ids.Tahsin, role: 'member' }, paid)) throw new Error('Tahsin could not confirm');   // Money received waits for his Yes
   await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 400000, note: 'Rent', split: 'room' }));
   await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 900000 }));
   await openMonth(db, flatId, `${today.slice(0, 7)}-01`);

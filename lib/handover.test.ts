@@ -266,6 +266,16 @@ describe('handover in the app', { timeout: 30000 }, () => {
     expect(await collector()).toEqual([ids.Tahsin]);
   });
 
+  it('money from or to a flatmate who has not joined never blocks a handover', async () => {
+    const { flatId, ids } = await flat();
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const };
+    await db(`update members set pin_hash = null where id = $1`, [ids.Zarif]);   // Zarif hasn't joined
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 20000, date: '2026-09-03', memberId: ids.Zarif }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 5000, date: '2026-09-03', memberId: ids.Zarif }))).toBe('ok');
+    expect(await pendingCount(db, flatId)).toBe(0);
+    expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 15000, '2026-09-10')).toBe('ok');
+  });
+
   it('offer and accept through the app, history, a second handover', async () => {
     const { flatId, ids, collector } = await flat();
     const nafis = { memberId: ids.Nafis, role: 'manager' as const }, tahsin = { memberId: ids.Tahsin, role: 'manager' as const };

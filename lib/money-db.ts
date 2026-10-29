@@ -6,7 +6,8 @@ import { CASH_KEYS, monthBalances, type LedgerRow, type MonthResult, type Split 
 import { isJpeg, MAX_RECEIPT } from './photo';
 
 export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string; forMonth: string | null; moves: string | null; heldBy: string | null; method: Method | null;
-  check: 'ok' | 'fix' | null; receiptV: string | null };   // 020: null check = waiting; receiptV: the receipt's ?v= (null = none)
+  check: 'ok' | 'fix' | null; receiptV: string | null;   // 020: null check = waiting; receiptV: the receipt's ?v= (null = none)
+  notJoined: boolean };   // counted at once because the other person hadn't joined yet (marked in its first history row)
 /** How money in or out was paid (019): the same four places the close card counts. */
 export type Method = (typeof CASH_KEYS)[number];
 export type CashRecord = { cash: number; bkash: number; nagad: number; bank: number; expected: number; actual: number; difference: number; by: string };
@@ -47,7 +48,7 @@ export async function openMonth(db: Db, flatId: string, month: string) {
 /** One ledger row, its split people, its item lines, its receipt, its history row and (if `repeat`) its monthly template, all
  *  in one statement, so a bill can never be saved without the repeat the person ticked, nor a bazar without its lines. Callers check the rules. */
 async function insertEntry(db: Db, flatId: string, by: string,
-  e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[]; method?: Method | null; items?: Item[]; receipt?: Uint8Array | null },
+  e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[]; method?: Method | null; items?: Item[]; receipt?: Uint8Array | null; notJoined?: boolean },
   status: 'ok' | 'pending', repeat: { split: Split; selected: string[] } | null = null) {
   return (await db(
     `with l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by, method, held_by)
@@ -61,14 +62,15 @@ async function insertEntry(db: Db, flatId: string, by: string,
        select $1, $8, $4, $12, array(select json_array_elements_text($13::text::json)::uuid) from l where $14::boolean returning *),
      th as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'bill_templates', t.id::text, to_jsonb(t), $10 from t)
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text,
-       to_jsonb(l) || case when json_array_length($17::text::json) > 0 then jsonb_build_object('items', $17::text::jsonb) else '{}'::jsonb end, $10
+       to_jsonb(l) || case when json_array_length($17::text::json) > 0 then jsonb_build_object('items', $17::text::jsonb) else '{}'::jsonb end
+         || case when $20::boolean then '{"atOnce":"notJoined"}'::jsonb else '{}'::jsonb end, $10
      from l returning 1`,
     [flatId, e.date, e.type, e.amount, e.paidBy, e.memberId, e.split, e.note, status, by, JSON.stringify(e.split === 'selected' ? e.selected : []),
      repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null, e.id ?? null, e.method ?? null,
      JSON.stringify(e.items ?? []), e.receipt ? Buffer.from(e.receipt) : null,
      // Money received is held by the collector who wrote it: the 011 trigger would give a waiting deposit whoever collects at
      // insert time, wrong if a handover lands between this person's role check and the save. null: the trigger decides.
-     e.type === 'deposit' && e.memberId !== by ? by : null])).length > 0;   // false: this id was saved already
+     e.type === 'deposit' && e.memberId !== by ? by : null, e.notJoined ?? false])).length > 0;   // false: this id was saved already
 }
 
 /** Everything the money screens need for one month. The version is read first: closeMonth freezes only results computed
@@ -97,6 +99,8 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
        l.date::text as date, l.note, l.created_by as "createdBy", l.for_month::text as "forMonth", l.moves, l.held_by as "heldBy", l.method,
        (select c.state from entry_checks c where c.ledger_id = l.id) as "check",
        (select extract(epoch from r.created_at)::bigint::text from receipts r where r.flat_id = l.flat_id and r.ledger_id = l.id) as "receiptV",
+       exists (select 1 from audit_log a where a.flat_id = l.flat_id and a.entity_id = l.id::text and a.entity = 'ledger'
+         and a.after->>'atOnce' = 'notJoined') as "notJoined",
        (select coalesce(json_agg(s.member_id), '[]'::json) from bill_split_members s where s.ledger_id = l.id) as selected
      from ledger l`;
   const entries = await db<Entry>(`${select} where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
@@ -153,7 +157,7 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
 
 /** SQL over a ledger row `l`: who answers it while it waits (Yes or That's not right). A deposit someone wrote for themselves
  *  (I paid): the collector. Anything else (Money received or Give money, written by the collector): the person it is for.
- *  confirmEntry, rejectEntry, toConfirm, confirmerOf and the bell all use this, so they never disagree. Callers also require
+ *  confirmEntry, rejectEntry, toConfirm and confirmerOf all use this, so they never disagree. Callers also require
  *  `l.created_by <> <me>`: nobody answers their own entry. */
 export const CONFIRMER = `case when l.type = 'deposit' and l.created_by = l.member_id
   then (select c.id from members c where c.flat_id = l.flat_id and c.role = 'manager') else l.member_id end`;
@@ -226,9 +230,9 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, t
   if (e.type === 'deposit' && !boss && e.memberId !== by.memberId) return 'bad';   // members deposit only for themselves
   if (e.repeat && (!boss || e.type !== 'bill')) return 'bad';                      // monthly bills are the collector's
   const month = monthOf(e.date), end = daysOfMonth(month).at(-1)!;
-  const here = await db<{ id: string; joinedOn: string; leftOn: string | null; roomId: string | null; gone: boolean }>(
+  const here = await db<{ id: string; joinedOn: string; leftOn: string | null; roomId: string | null; gone: boolean; notJoined: boolean }>(
     `select id, joined_on::text as "joinedOn", left_on::text as "leftOn", room_id as "roomId",
-       left_on < (now() at time zone 'Asia/Dhaka')::date as gone from members
+       left_on < (now() at time zone 'Asia/Dhaka')::date as gone, pin_hash is null as "notJoined" from members
      where flat_id = $1 and joined_on <= $3 and (left_on is null or left_on >= $2)`, [flatId, month, end]);
   let split = e.split, selected = e.split === 'selected' ? e.selected : [];
   if (split === 'here') {
@@ -256,12 +260,15 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, t
   // money between two people waits for whoever didn't write it (CONFIRMER): the collector for a flatmate's own deposit, the
   // person for money the collector wrote as received from or given to them. Someone who has moved out can't sign in to
   // answer, so then it counts at once: the collector's entry is the record. The collector's own deposit always counts at once.
+  // So does money with someone who hasn't joined yet (can't sign in either): marked notJoined, so it stays visible after they join.
   const gone = here.some(m => m.id === e.memberId && m.gone) || (owed.some(o => o.id === e.memberId) && !here.some(m => m.id === e.memberId));
-  const pending = (e.type === 'deposit' && !boss) || (moving && e.memberId !== by.memberId && !gone);
+  const waits = (e.type === 'deposit' && !boss) || (moving && e.memberId !== by.memberId && !gone);
+  const notJoined = waits && e.memberId !== by.memberId && here.some(m => m.id === e.memberId && m.notJoined);   // they would answer
+  const pending = waits && !notJoined;
   await openMonth(db, flatId, month);
   // a repeated "everyone living here" bill becomes "everyone, by days": the people living here change month to month
   const repeat = e.repeat ? (split === 'selected' && e.split !== 'here' ? { split: 'selected' as const, selected } : { split: e.split === 'here' ? 'equal' as const : split!, selected: [] }) : null;
-  return await insertEntry(db, flatId, by.memberId, { ...e, split, selected }, pending ? 'pending' : 'ok', repeat) ? 'ok' : 'again';
+  return await insertEntry(db, flatId, by.memberId, { ...e, split, selected, notJoined }, pending ? 'pending' : 'ok', repeat) ? 'ok' : 'again';
 }
 
 /** Yes: by whoever answers it (CONFIRMER), only while it waits; never the writer. */

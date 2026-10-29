@@ -15,6 +15,7 @@ async function flat() {
   await migrate();
   const f = await createFlat(db, { flatName: 'Flat 4B', name: 'Nafis', pin: '1234', others: ['Tahsin', 'Zarif'], today: OCT, lang: 'bn' });
   const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
+  await db(`update members set pin_hash = 'x' where flat_id = $1 and pin_hash is null`, [f.flatId]);   // everyone has joined: money between two people waits
   const nafis = { memberId: ids.Nafis, role: 'manager' as const };
   const as = (name: string) => ({ memberId: ids[name], role: 'member' as const });
   const month = () => loadMonth(db, f.flatId, OCT, TODAY);
@@ -455,10 +456,11 @@ describe('money storage', { timeout: 30000 }, () => {
     expect((await toConfirm(db, flatId, ids.Tahsin)).find(w => w.id === got)).toMatchObject({ name: 'Nafis', forMe: true });   // named by who wrote it
     expect((await toConfirm(db, flatId, ids.Tahsin)).find(w => w.id === gave)).toMatchObject({ name: 'Nafis', forMe: false });
     expect((await toConfirm(db, flatId, ids.Nafis))[0]).toMatchObject({ name: 'Zarif', forMe: false });
-    // the push goes to whoever answers, asked the right thing
-    expect(await confirmerOf(db, flatId, got)).toMatchObject({ id: ids.Tahsin, kind: 'gave' });
-    expect(await confirmerOf(db, flatId, paid)).toMatchObject({ id: ids.Nafis, kind: 'deposit' });
-    expect(await confirmerOf(db, flatId, gave)).toMatchObject({ id: ids.Tahsin, kind: 'payout' });
+    // the push goes to whoever answers, asked the right thing, in their language (null = the flat's)
+    await db(`update members set language = 'en' where id = $1`, [ids.Tahsin]);
+    expect(await confirmerOf(db, flatId, got)).toEqual({ id: ids.Tahsin, lang: 'en', kind: 'gave' });
+    expect(await confirmerOf(db, flatId, paid)).toEqual({ id: ids.Nafis, lang: null, kind: 'deposit' });
+    expect(await confirmerOf(db, flatId, gave)).toEqual({ id: ids.Tahsin, lang: 'en', kind: 'payout' });
     expect(await confirmEntry(db, flatId, nafis, got)).toBe(false);          // the writer never answers their own
     expect(await confirmEntry(db, flatId, as('Zarif'), got)).toBe(false);    // nor a third person
     expect(await confirmEntry(db, flatId, as('Zarif'), paid)).toBe(false);
@@ -490,9 +492,13 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(await rejectEntry(db, flatId, as('Tahsin'), got)).toBeNull();     // someone acted first
     expect(await confirmEntry(db, flatId, as('Tahsin'), got)).toBe(false);
     expect(await rejectEntry(db, flatId, nafis, paid)).toBe(ids.Zarif);      // the collector on an I paid
+    const handed = randomUUID();
+    await addEntry(db, flatId, nafis, e({ id: handed, type: 'payout', amount: 7000, memberId: ids.Tahsin }));
+    expect(await rejectEntry(db, flatId, nafis, handed)).toBeNull();               // the collector can't reject their own Give money
+    expect(await rejectEntry(db, flatId, as('Tahsin'), handed)).toBe(ids.Nafis);   // the person it was given to can
     const after = await month();
     expect(after.entries).toEqual([]);
-    expect(after.removed.map(r => [r.type, r.amount, r.by, r.rejected]).sort()).toEqual([['deposit', 15000, 'Tahsin', true], ['deposit', 30000, 'Nafis', true]]);
+    expect(after.removed.map(r => [r.type, r.amount, r.by, r.rejected]).sort()).toEqual([['deposit', 15000, 'Tahsin', true], ['deposit', 30000, 'Nafis', true], ['payout', 7000, 'Tahsin', true]]);
     // a confirmed entry is never rejected
     await addEntry(db, flatId, nafis, e({ id: done, type: 'payout', amount: 500, memberId: ids.Tahsin }));
     expect(await confirmEntry(db, flatId, as('Tahsin'), done)).toBe(true);
@@ -522,5 +528,25 @@ describe('money storage', { timeout: 30000 }, () => {
     const id = randomUUID();
     expect(await addEntry(db, flatId, nafis, e({ id, type: 'deposit', amount: 5000, memberId: ids.Tahsin }))).toBe('ok');
     expect((await db<{ h: string; s: string }>(`select held_by as h, status as s from ledger where id = $1`, [id]))[0]).toEqual({ h: ids.Nafis, s: 'pending' });
+  });
+  it('money from or to someone who has not joined counts at once, marked so; the mark stays after they join', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await db(`update members set pin_hash = null where id = $1`, [ids.Zarif]);   // Zarif hasn't joined: he can't sign in to answer
+    const dep = randomUUID(), pay = randomUUID(), waits = randomUUID(), later = randomUUID(), own = randomUUID();
+    expect(await addEntry(db, flatId, nafis, e({ id: dep, type: 'deposit', amount: 20000, memberId: ids.Zarif }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ id: pay, type: 'payout', amount: 5000, memberId: ids.Zarif }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ id: waits, type: 'deposit', amount: 1000, memberId: ids.Tahsin }))).toBe('ok');   // Tahsin has joined
+    expect(await addEntry(db, flatId, nafis, e({ id: own, type: 'deposit', amount: 2000, memberId: ids.Nafis }))).toBe('ok');      // the collector's own
+    const rows = async (...xs: string[]) => { const m = await month(); return xs.map(id => { const r = m.entries.find(x => x.id === id); return [r?.status, r?.notJoined]; }); };
+    expect(await rows(dep, pay, waits, own)).toEqual([['ok', true], ['ok', true], ['pending', false], ['ok', false]]);
+    expect((await month()).result.fund).toBe(20000 - 5000 + 2000);
+    expect(await confirmerOf(db, flatId, dep)).toBeNull();
+    await db(`update members set pin_hash = 'x' where id = $1`, [ids.Zarif]);   // Zarif joins
+    expect(await addEntry(db, flatId, nafis, e({ id: later, type: 'deposit', amount: 3000, memberId: ids.Zarif }))).toBe('ok');
+    expect(await rows(dep, pay, later)).toEqual([['ok', true], ['ok', true], ['pending', false]]);
+    // removed and put back, it keeps its mark
+    expect(await removeEntry(db, flatId, nafis, dep, TODAY)).toBe(true);
+    expect(await putBack(db, flatId, ids.Nafis, dep, TODAY)).toBe(true);
+    expect(await rows(dep)).toEqual([['ok', true]]);
   });
 });
