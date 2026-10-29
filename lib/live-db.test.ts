@@ -40,10 +40,22 @@ describe('live pings (migration 022)', { timeout: 30000 }, () => {
     const a = await mk('Live D'), b = await mk('Live E');
     await clear();
     await pg.transaction(async tx => {
-      await tx.query(`update rooms set name = name || '' where flat_id = $1`, [a.flatId]);
+      await tx.query(`insert into rooms (flat_id, name, rent_share_poisha) values ($1, 'W', 100)`, [a.flatId]);
       await tx.query(`insert into rooms (flat_id, name, rent_share_poisha) values ($1, 'X', 100), ($1, 'Y', 100), ($2, 'Z', 100)`, [a.flatId, b.flatId]);
     });
     expect((await sent()).map(s => s.topic).sort()).toEqual([await topicOf(a.flatId), await topicOf(b.flatId)].sort());
+  });
+
+  it('sends again for the next write: once per transaction, not once per session', async () => {
+    const a = await mk('Live I');
+    await clear();
+    await db(`insert into rooms (flat_id, name, rent_share_poisha) values ($1, 'P', 100)`, [a.flatId]);
+    await db(`insert into rooms (flat_id, name, rent_share_poisha) values ($1, 'Q', 100)`, [a.flatId]);
+    expect((await sent()).map(s => s.topic)).toEqual([await topicOf(a.flatId), await topicOf(a.flatId)]);
+  });
+
+  it('has the trigger on all 14 tables a page shows', async () => {
+    expect((await db<{ n: number }>(`select count(*)::int as n from pg_trigger where tgname = 'live_ping'`))[0].n).toBe(14);
   });
 
   it('sends nothing when the Notices page marks itself seen, nor for an update that changes nothing', async () => {
@@ -67,12 +79,14 @@ describe('live pings (migration 022)', { timeout: 30000 }, () => {
     }
   });
 
-  it('gives the flat a new topic with a new join code', async () => {
+  it('gives the flat a new topic with a new join code, and tells pages on the old topic once', async () => {
     const a = await mk('Live H');
     const before = await topicOf(a.flatId);
+    await clear();
     expect(await newFlatCode(db, a.flatId, { memberId: a.memberId, role: 'manager' })).toBeTruthy();
     const after = await topicOf(a.flatId);
     expect(after).toMatch(/^[0-9a-f]{32}$/);
     expect(after).not.toBe(before);
+    expect((await sent()).map(s => [s.topic, s.event, s.payload])).toEqual([[before, 'changed', {}], [after, 'changed', {}]]);
   });
 });

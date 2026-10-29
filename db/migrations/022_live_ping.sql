@@ -12,6 +12,13 @@ declare
 begin
   -- nothing a page shows changed: the Notices page marks itself seen on every visit, a signal there would refresh it forever
   if tg_op = 'UPDATE' and to_jsonb(new) - 'notices_seen_at' = to_jsonb(old) - 'notices_seen_at' then return null; end if;
+  -- a new join code gave a new topic: pages still on the old one reload once and pick up the new one
+  if tg_op = 'UPDATE' and to_jsonb(old)->>'live_topic' is distinct from to_jsonb(new)->>'live_topic' then
+    begin
+      perform realtime.send('{}'::jsonb, 'changed', to_jsonb(old)->>'live_topic', false);
+    exception when others then null;
+    end;
+  end if;
   if tg_op = 'DELETE' then r := to_jsonb(old); else r := to_jsonb(new); end if;
   f := case when tg_table_name = 'flats' then r->>'id' else r->>'flat_id' end;
   -- once per flat per transaction: a month close writes hundreds of rows and sends one signal
