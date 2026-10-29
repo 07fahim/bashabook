@@ -110,7 +110,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
 
   return (
     <>
-      <Header t={t} lang={lang} path={withQuery('/money', sp)} notices={await noticesP}><Nav t={t} lang={lang} current="money" showFlat={boss} /></Header>
+      <Header t={t} lang={lang} path={withQuery('/money', sp)} notices={await noticesP}><Nav t={t} lang={lang} topic={me.liveTopic} current="money" showFlat={boss} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         {sp.why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{t.app.notSavedNote}</p>}
         <nav aria-label={x.monthNav} className="flex items-center justify-between gap-3">
