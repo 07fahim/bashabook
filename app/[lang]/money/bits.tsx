@@ -1,10 +1,12 @@
+import Link from 'next/link';
+import type { toCheck } from '@/lib/bazar';
 import type { Look } from '@/lib/charts';
 import type { toConfirm } from '@/lib/money-db';
 import { confirmAction } from '../actions';
 import type { Dict, Locale } from '../dictionaries';
 import { fmtDay, fmtExact, fmtTaka } from '../format';
 import { PendingButton } from '../pending-button';
-import { alertCard, LongList, secondary } from '../ui';
+import { alertCard, link, LongList, secondary } from '../ui';
 
 /** 'You get back ৳380 so far' in leaf, 'You owe ৳210 so far' in chili; a closed month drops 'so far'. */
 export const balanceText = (x: Dict['money'], balance: number, closed = false) => {
@@ -49,6 +51,33 @@ export function ConfirmList({ lang, x, a, items, collector, fill }: {
             </form>
           </li>
         ))} />
+    </section>
+  );
+}
+
+/** A bazar's or bill's check state as a chip: the word says it, the colour only repeats it. */
+export const StatusChip = ({ state, b }: { state: 'ok' | 'fix' | null; b: Dict['money']['bazar'] }) => (
+  <span className={`inline-flex min-h-8 shrink-0 items-center whitespace-nowrap rounded-full border px-3 text-[15px] font-semibold ${state === 'ok' ? 'border-leaf text-leaf' : state === 'fix' ? 'border-chili text-chili' : 'border-muted'}`}>
+    {state === 'ok' ? b.ok : state === 'fix' ? b.fix : b.waiting}
+  </span>
+);
+
+/** Bazars and bills for this person: to check, or their own sent back to fix (with the reason). Each opens its page. Shown
+ *  on Home and Money beside Waiting for you; like it, three rows on phones, a short scroll box on wider screens. */
+export function CheckList({ lang, x, a, items }: { lang: Locale; x: Dict['money']; a: Dict['app']; items: Awaited<ReturnType<typeof toCheck>> }) {
+  if (!items.length) return null;
+  const b = x.bazar;
+  return (
+    <section className={alertCard}>
+      <h2 className="text-xl font-bold">{b.checkTitle} ({items.length})</h2>
+      <LongList short label={b.checkTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(c => (
+        <li key={c.id} className="py-2">
+          <Link href={`/${lang}/money/bazar/${c.id}`} className={`inline-flex min-h-11 items-center ${link}`}>{x.types[c.type]} · {fmtExact(c.amount)}</Link>
+          <span className="block text-[15px] text-muted [overflow-wrap:anywhere]">
+            {[fmtDay(c.date, lang), c.state === 'fix' ? b.toFix.replace('{reason}', c.reason ?? '') : b.toCheck, c.note].filter(Boolean).join(' · ')}
+          </span>
+        </li>
+      ))} />
     </section>
   );
 }

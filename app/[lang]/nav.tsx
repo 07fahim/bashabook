@@ -15,7 +15,7 @@ export function Nav({ t, lang, current, showFlat }: { t: Dict; lang: Locale; cur
             <Link
               href={`/${lang}/${tab}`}
               aria-current={tab === current ? 'page' : undefined}
-              className={`flex min-h-12 items-center justify-center rounded-full font-semibold md:min-h-11 md:px-5 ${tab === current ? 'bg-turmeric text-on-turmeric' : 'text-muted hover:bg-paper hover:text-ink'} ${focus}`}
+              className={`flex min-h-12 items-center justify-center rounded-full font-semibold md:min-h-11 md:px-3 lg:px-5 ${tab === current ? 'bg-turmeric text-on-turmeric' : 'text-muted hover:bg-paper hover:text-ink'} ${focus}`}
             >
               {t.meals.tabs[tab]}
             </Link>

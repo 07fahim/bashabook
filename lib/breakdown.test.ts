@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { db, migrate } from '../db/test-db';
+import { checkAll, db, migrate } from '../db/test-db';
 import { getDictionary } from '../app/[lang]/dictionaries';
 import { breakdownOf, breakdownText, pickWho, type Labels } from '../app/[lang]/money/breakdown';
 import { createFlat } from './auth';
@@ -58,6 +58,7 @@ describe('someone else’s breakdown, shared by the collector', { timeout: 30000
   it('closed month: from the frozen snapshot, and the text says it is final', async () => {
     const { flatId, ids, nafis } = await flat();
     const held = await flatMoney(db, flatId, OCT2);
+    await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, SEP, OCT2, { cash: held, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
     const mo = await loadMonth(db, flatId, SEP, OCT2);
     const b = breakdownOf(mo, ids.Tahsin, x, x.of, SEP);

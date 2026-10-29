@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { db, migrate } from '../db/test-db';
+import { checkAll, db, migrate } from '../db/test-db';
 import { addMember, bringBack, createFlat, createSession, deleteSession, listMembers, login, memberBySession, renameMember, resetPin, setLeaving } from './auth';
+import { checkEntry, entryDetail, fixEntry, itemsFor, receiptOf, receiptVersion, toCheck } from './bazar';
 import { addCorrection, closeMonth } from './close';
 import { acceptHandover, offerHandover } from './handover';
 import { setOtherMeal } from './meals-db';
@@ -69,6 +70,7 @@ describe('flat isolation', { timeout: 60000 }, () => {
     expect(await setRoom(db, A.flatId, A.boss, A.other, roomA.id)).toBe(true);    // control
     // a correction for A's closed September: fine between A's own people, refused for B's (A's ledger gets one row, not two)
     expect(await addEntry(db, A.flatId, A.boss, e({ type: 'bazar', amount: 100, paidBy: A.other, date: '2026-09-05' }))).toBe('ok');
+    await checkAll(A.flatId);
     expect((await closeMonth(db, A.flatId, A.boss, SEP, today, noCash)).result).toBe('ok');
     expect(await addCorrection(db, A.flatId, A.boss, { id: randomUUID(), forMonth: SEP, amount: 100, note: 'x', kind: 'move', from: A.boss.memberId, to: A.other }, today)).toBe('ok');
     expect(await addCorrection(db, A.flatId, A.boss, { id: randomUUID(), forMonth: SEP, amount: 100, note: 'x', kind: 'move', from: B.other, to: B.boss.memberId }, today)).toBe('month');
@@ -99,6 +101,23 @@ describe('flat isolation', { timeout: 60000 }, () => {
     expect(await acceptHandover(db, A.flatId, A.other, h.id)).toBe('gone');
     expect(await acceptHandover(db, B.flatId, A.other, h.id)).toBe('notYou');
     expect((await db<{ name: string; role: string }>(`select name, role from members where id = $1`, [B.other]))[0]).toEqual({ name: 'Rafi', role: 'member' });
+  });
+
+  it('bazar checks, fixes, item lines and receipts never cross a flat, even with the other flat’s ids', async () => {
+    const { A, B } = await two();
+    const id = randomUUID(), jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 1]);
+    expect(await addEntry(db, B.flatId, B.member, e({ id, type: 'bazar', amount: 20000, paidBy: B.other, items: [{ name: 'Rice', amount: null }], receipt: jpeg }), today)).toBe('ok');
+    expect(await receiptOf(db, A.flatId, id)).toBeNull();
+    expect(await receiptOf(db, B.flatId, id)).not.toBeNull();   // control
+    expect(await entryDetail(db, A.flatId, id, A.boss.memberId, today)).toBeNull();
+    expect((await itemsFor(db, A.flatId, OCT)).size).toBe(0);
+    expect(await toCheck(db, A.flatId, A.boss.memberId, today)).toEqual([]);
+    const rv = await receiptVersion(db, B.flatId, id);   // the photo B's page shows: only the flat can refuse
+    expect(await checkEntry(db, A.flatId, A.boss, id, 'fix', 'x', today, rv)).toBeNull();
+    expect(await checkEntry(db, B.flatId, A.boss, id, 'fix', 'x', today, rv)).toBeNull();   // A's collector named in B's flat
+    expect(await checkEntry(db, B.flatId, B.boss, id, 'fix', 'x', today, rv)).not.toBeNull();   // control
+    expect((await fixEntry(db, A.flatId, A.boss, { id, type: 'bazar', amount: 100, date: '2026-10-05', paidBy: null, note: null, items: [], receipt: null }, today)).result).toBe('bad');
+    expect(await db(`select 1 from entry_checks where ledger_id = $1 and state = 'fix'`, [id])).toHaveLength(1);
   });
 });
 

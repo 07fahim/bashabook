@@ -20,9 +20,10 @@ export function Header({ t, lang, path, notices, children }: { t: Dict; lang: Lo
   return (
     <header className="border-b border-line md:sticky md:top-0 md:z-20 md:bg-paper">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
-      <div className="flex items-center gap-8">
-        <Link href={`/${lang}`} className={`flex min-h-11 items-center gap-2 font-display text-2xl font-bold ${focus}`}>
-          <Image src="/logo-mark.png" alt="" width={32} height={32} priority />
+      <div className="flex items-center gap-4 lg:gap-8">
+        {/* under 375 px the name ran over the bell at full size: a smaller name and tighter controls there, so it stays */}
+        <Link href={`/${lang}`} className={`flex min-h-11 items-center gap-2 font-display text-2xl font-bold max-[374px]:gap-1 max-[374px]:text-lg ${focus}`}>
+          <Image src="/logo-mark.png" alt="" width={32} height={32} priority className="max-[374px]:size-7" />
           <span>
             {t.brand}
             <span className="text-turmeric-ink">{t.brandAccent}</span>
@@ -30,7 +31,7 @@ export function Header({ t, lang, path, notices, children }: { t: Dict; lang: Lo
         </Link>
         {children}
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 max-[374px]:gap-0">
         {notices !== undefined && (
           <Link
             href={`/${lang}/notices`}
@@ -45,7 +46,7 @@ export function Header({ t, lang, path, notices, children }: { t: Dict; lang: Lo
           </Link>
         )}
         <ThemeToggle label={t.themeToggle} />
-        <Link href={`/${other}${path}`} hrefLang={other} lang={other} className={`inline-flex min-h-11 items-center px-3 text-muted underline-offset-4 hover:underline ${focus}`}>
+        <Link href={`/${other}${path}`} hrefLang={other} lang={other} className={`inline-flex min-h-11 min-w-11 items-center justify-center px-3 max-[374px]:px-1 text-muted underline-offset-4 hover:underline ${focus}`}>
           {t.switchLang}
         </Link>
       </div>

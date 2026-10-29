@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
 import { addMember, changePin, cleanName, cleanText, clearLock, clearedBefore, UUID, createFlat, isPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems, receiptVersion } from '@/lib/bazar';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
@@ -14,7 +15,7 @@ import {
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
 import { addEntry, addRoom, confirmEntry, endedOpenMonth, monthOf, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
-import { depositMsg, handoverMsg, payoutMsg } from '@/lib/notify-text';
+import { depositMsg, fixAskMsg, fixedMsg, handoverMsg, payoutMsg } from '@/lib/notify-text';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
 import { removePush, savePush, type PushSub } from '@/lib/push-db';
@@ -393,6 +394,13 @@ async function back(lang: string, why?: 'notSaved'): Promise<void> {
   redirect(s ? `${path}?${s}` : path, RedirectType.replace);
 }
 
+/** The item lines and receipt photo a bazar or bill form posts (020). items null: a bad line; badReceipt: a photo that isn't a JPEG data URL. */
+const extras = (d: FormData, type: string) => {
+  const items = type === 'bazar' ? parseItems(d.getAll('itemName').map(String), d.getAll('itemAmount').map(String)) : [];
+  const raw = str(d, 'receipt'), receipt = raw ? fromDataUrl(raw) : null;
+  return { items, receipt, badReceipt: !!raw && !receipt };
+};
+
 /** Every money entry form. `who`: for bazar and bills who paid ('fund' = flat money); for deposits and payouts the other person. */
 export async function entryAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
@@ -407,6 +415,9 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
   if (type === 'bill' && !split) return { error: x.errors.bad };
   if (type === 'bill' && !note) return { error: x.errors.name };
   if (split === 'selected' && !selected.length) return { error: x.errors.people };
+  const { items, receipt, badReceipt } = extras(d, type);
+  if (items === null) return { error: x.errors.items };
+  if (badReceipt) return { error: x.errors.receipt };
   const moving = type === 'deposit' || type === 'payout';
   const key = str(d, 'key'), method = moving ? pick(CASH_KEYS, str(d, 'method')) : null;
   const r = await unlessClosed(() => addEntry(db, me.flatId, me, {
@@ -415,7 +426,7 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
     paidBy: moving || who === 'fund' ? null : who,
     memberId: moving ? who || me.memberId : null,
     repeat: type === 'bill' && d.get('repeat') === '1',   // saved with the bill in one statement
-    method,
+    method, items, receipt,
   }, today));
   if (r !== 'ok' && r !== 'again') return { error: x.errors[r] };
   // money between two people waits for the receiver's tap: tell them after the response, never instead of it ('again' is the
@@ -443,6 +454,68 @@ export async function removeAction(d: FormData) {
   const lang = langOf(d), me = await requireMember(lang, true), id = str(d, 'id');
   const ok = UUID.test(id) && await unlessClosed(() => removeEntry(db, me.flatId, me, id, todayDhaka())) === true;
   return back(lang, ok ? undefined : 'notSaved');
+}
+
+/** Verified or Needs correction on a bazar or bill (the rules live in checkEntry). Needs correction tells whoever may fix it (fixAskTo). */
+export async function checkAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireMember(lang, true);
+  const id = str(d, 'id'), state = pick(['ok', 'fix'] as const, str(d, 'state')), note = cleanText(str(d, 'note')).slice(0, 100) || null, today = todayDhaka();
+  if (!UUID.test(id) || !state) return { error: x.errors.bad };
+  if (state === 'fix' && !note) return { error: x.errors.fixReason };
+  const rv = str(d, 'rv'), r = await checkEntry(db, me.flatId, me, id, state, note, today, rv);
+  refresh();   // a refusal redraws the page too: the new photo, or the check someone else made
+  if (!r) return { error: (await receiptVersion(db, me.flatId, id)) !== rv ? x.errors.photoChanged : x.errors.notChecked };
+  if (state === 'fix') after(async () => {
+    try {
+      const to = await fixAskTo(db, me.flatId, id, me.memberId, today);
+      if (!to) return;
+      const [m] = await db<{ lang: Locale | null }>(`select language as lang from members where flat_id = $1 and id = $2`, [me.flatId, to]);
+      await sendPush(db, [to], fixAskMsg(m?.lang ?? me.lang, me.name, r.type, id));
+    } catch (e) { console.warn('push failed', String(e)); }
+  });
+  return { done: x.saved };
+}
+
+/** Fix it on an entry sent back (the rules live in fixEntry). Tells whoever sent it back; the page then shows it waiting. */
+export async function fixAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireMember(lang, true);
+  const id = str(d, 'id'), type = pick(['bazar', 'bill'] as const, str(d, 'type')), amount = toPoisha(str(d, 'amount')), date = str(d, 'date'), who = str(d, 'who');
+  if (!UUID.test(id) || !type || (who !== 'fund' && !UUID.test(who))) return { error: x.errors.bad };
+  if (amount === null) return { error: x.errors.amount };
+  if (!isDate(date)) return { error: x.errors.date };
+  const note = cleanText(str(d, 'note')).slice(0, 100) || null;
+  if (type === 'bill' && !note) return { error: x.errors.name };
+  const { items, receipt, badReceipt } = extras(d, type);
+  if (items === null) return { error: x.errors.items };
+  if (badReceipt) return { error: x.errors.receipt };
+  const r = await unlessClosed(() => fixEntry(db, me.flatId, me, { id, type, amount, date, paidBy: who === 'fund' ? null : who, note, items, receipt }, todayDhaka()));
+  if (r === 'closed') return { error: x.errors.closed };
+  if (r.result !== 'ok') return { error: x.errors[r.result] };
+  if (r.marker !== me.memberId) after(async () => {
+    try {
+      const [m] = await db<{ lang: Locale | null }>(`select language as lang from members where flat_id = $1 and id = $2`, [me.flatId, r.marker]);
+      await sendPush(db, [r.marker], fixedMsg(m?.lang ?? me.lang, me.name, r.type, id));
+    } catch (e) { console.warn('push failed', String(e)); }
+  });
+  redirect(`/${lang}/money/bazar/${id}?fixed=1`);
+}
+
+/** Late receipt: a photo added or changed on a waiting bazar or bill (the rules live in addReceipt). */
+export async function receiptAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), x = getDictionary(lang).money;
+  const me = await requireMember(lang, true);
+  const id = str(d, 'id'), raw = str(d, 'receipt'), bytes = fromDataUrl(raw);
+  if (!UUID.test(id)) return { error: x.errors.bad };
+  if (!raw) return { error: x.errors.noPhoto };
+  if (!bytes) return { error: x.errors.receipt };
+  const r = await addReceipt(db, me.flatId, me, id, bytes, todayDhaka());
+  if (r === 'receipt') return { error: x.errors.receipt };
+  // no refresh on a refusal: the redraw would drop the receipt form and this message with it; the next load catches up
+  if (r === 'bad') return { error: x.errors.receiptLate };
+  refresh();
+  return { done: x.saved };
 }
 
 /** Rent typed in taka; 0 is allowed (a room that pays no rent). */

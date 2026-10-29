@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { db, migrate } from '../db/test-db';
+import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
@@ -50,8 +50,10 @@ describe('lastMonths', { timeout: 30000 }, () => {
     };
     await month('2026-07', 20000);
     expect(await lastMonths(db, f.flatId, '2026-10-01')).toEqual([]);   // still open
+    await checkAll(f.flatId);
     expect((await closeMonth(db, f.flatId, nafis, '2026-07-01', '2026-08-02', { cash: 0, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
     await month('2026-08', 30000);
+    await checkAll(f.flatId);
     expect((await closeMonth(db, f.flatId, nafis, '2026-08-01', '2026-09-02', { cash: 0, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
     // September books a bazar Tahsin paid for August: August's own spend must not move
     expect(await addCorrection(db, f.flatId, nafis, { id: randomUUID(), kind: 'bazar', forMonth: '2026-08-01', amount: 5000, paidBy: ids.Tahsin, note: 'egg receipt' }, '2026-09-03')).toBe('ok');

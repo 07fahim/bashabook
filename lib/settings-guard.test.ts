@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { db, migrate } from '../db/test-db';
+import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { setDefaults, updateSettings } from './meals-db';
 import { addEntry, addRoom, loadMonth, openMonth, putBack, removeEntry, setRent, setRoom, type NewEntry } from './money-db';
@@ -107,6 +107,7 @@ describe('settings changes while an ended month is still open', { timeout: 30000
 
   it('after September closes the same changes go ahead without asking, and September stays as it closed', async () => {
     const { flatId, ids, nafis, big, fund, tahsin } = await flat();
+    await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, SEP, OCT2, cash(await fund()))).result).toBe('ok');
     expect(await setRoom(db, flatId, nafis, ids.Tahsin, big, fix(false))).toBe(true);
     expect(await updateSettings(db, flatId, ids.Nafis, { cutoff: '22:00', weights: W1 }, OCT2_NOW, false)).toBe('ok');

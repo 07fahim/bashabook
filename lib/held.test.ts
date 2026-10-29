@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { db, migrate } from '../db/test-db';
+import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, loadMonth, openMonth, type NewEntry } from './money-db';
 import { closeInfo, closeMonth } from './close';
@@ -29,6 +29,7 @@ describe('money held across open months', { timeout: 30000 }, () => {
   it('item 2: closing September counts the ৳1,500 actually held, not September’s ৳2,000', async () => {
     const { flatId, nafis } = await flat(50000);
     expect(await closeInfo(db, flatId, OCT2)).toMatchObject({ month: '2026-09-01', fund: 200000, held: 150000, later: -50000 });
+    await checkAll(flatId);
     const wrong = await closeMonth(db, flatId, nafis, '2026-09-01', OCT2, cash(200000));
     expect([wrong.result, wrong.expected]).toEqual(['cash', 150000]);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', OCT2, cash(150000))).result).toBe('ok');
@@ -41,6 +42,7 @@ describe('money held across open months', { timeout: 30000 }, () => {
   it('item 2: when October was overspent from the collector’s own pocket, the count to close September is ৳0', async () => {
     const { flatId, nafis } = await flat(250000);   // ৳2,500 bazar in October: ৳500 more than the flat had
     expect(await closeInfo(db, flatId, OCT2)).toMatchObject({ fund: 200000, held: 0, later: -250000 });
+    await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', OCT2, cash(0))).result).toBe('ok');
     expect((await loadMonth(db, flatId, '2026-10-01', OCT2)).result.fund).toBe(-50000);   // the flat owes the collector ৳500
   });
@@ -49,6 +51,7 @@ describe('money held across open months', { timeout: 30000 }, () => {
     const { flatId, nafis } = await flat(50000);
     const [t] = await db<{ id: string }>(`select id from members where flat_id = $1 and name = 'Tahsin'`, [flatId]);
     expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 50000, date: OCT2, memberId: t.id }))).toBe('ok');   // waits for Tahsin’s tap
+    await checkAll(flatId);
     expect(await closeInfo(db, flatId, OCT2)).toMatchObject({ month: '2026-09-01', pending: 1, pendingMonth: '2026-10-01' });
   });
 

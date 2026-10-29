@@ -8,8 +8,8 @@ import type { Db } from '../lib/db';
 import { deleteFlat } from '../lib/delete-flat';
 
 const url = process.env.DATABASE_URL ?? '';
-if (!new URL(url).hostname.startsWith('ep-muddy-mud-')) throw new Error('not the test copy; refusing');
-const sql = postgres(url, { max: 10, prepare: false, onnotice: () => {} });
+if (new URL(url).username !== 'postgres.wgvoshlmhauxcymwdwjt') throw new Error('not the Supabase test project; refusing');   // the pooler host is shared with production
+const sql = postgres(url, { max: 10, prepare: false, ssl: 'require', onnotice: () => {} });
 const db: Db = (t, p = []) => sql.unsafe(t, p as never[]) as never;
 
 async function main() {

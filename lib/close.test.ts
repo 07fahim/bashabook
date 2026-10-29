@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { db, migrate } from '../db/test-db';
+import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal, setDefaults } from './meals-db';
 import { addEntry, addRoom, loadMonth, openMonth, setRoom, type NewEntry } from './money-db';
@@ -105,6 +105,7 @@ describe('closing a month', { timeout: 30000 }, () => {
     const tahsin = { memberId: ids.Tahsin, role: 'member' as const };
     expect((await closeMonth(db, flatId, tahsin, '2026-09-01', '2026-10-01', cash(180000))).result).toBe('notCollector');
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-09-30', cash(180000))).result).toBe('early');
+    await checkAll(flatId);
     const bad = await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(179900));
     expect([bad.result, bad.expected, bad.actual]).toEqual(['cash', 180000, 179900]);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', { cash: 100000, bkash: 50000, nagad: 30000, bank: 0 })).result).toBe('ok');
@@ -130,6 +131,7 @@ describe('closing a month', { timeout: 30000 }, () => {
     const after = await loadMonth(db, flatId, '2026-09-01', '2026-10-02');
     expect([after.result.fund, bal(after) - bal(before)]).toEqual([0, 50000]);
     expect(await db(`select 1 from ledger where flat_id = $1 and type = 'deposit'`, [flatId])).toHaveLength(1);
+    await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-02', cash(0))).result).toBe('ok');
   });
 
@@ -178,6 +180,7 @@ describe('closing a month', { timeout: 30000 }, () => {
   it('two months: carried exactly once, settled to zero, the collector included', async () => {
     const { flatId, ids, nafis } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 90000, paidBy: ids.Tahsin }));   // Tahsin +600, everyone -300
+    await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(0))).result).toBe('ok');
     const sep = Object.fromEntries((await db<{ id: string; b: number }>(`select member_id as id, balance::int as b from month_balances where flat_id = $1`, [flatId])).map(r => [r.id, r.b]));
     expect([sep[ids.Nafis], sep[ids.Tahsin], sep[ids.Zarif]]).toEqual([-30000, 60000, -30000]);
@@ -215,6 +218,7 @@ describe('corrections', { timeout: 30000 }, () => {
   async function closedSeptember() {
     const t = await flat();
     await addEntry(db, t.flatId, t.nafis, e({ type: 'bazar', amount: 90000, paidBy: t.ids.Tahsin }));   // out of pocket: fund stays 0
+    await checkAll(t.flatId);
     expect((await closeMonth(db, t.flatId, t.nafis, '2026-09-01', '2026-10-02', cash(0))).result).toBe('ok');
     return t;
   }
@@ -259,6 +263,7 @@ describe('corrections', { timeout: 30000 }, () => {
     const { flatId, ids, nafis } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 300000, paidBy: ids.Zarif }));   // Zarif +2,250: he is here 20 of September's 30 days, so his share is 750
     await db(`update members set left_on = '2026-09-20' where id = $1`, [ids.Zarif]);
+    await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(0))).result).toBe('ok');
     const zarif = async () => (await loadMonth(db, flatId, '2026-10-01', '2026-10-05')).result.perMember.find(p => p.id === ids.Zarif);
     expect((await zarif())!.balance).toBe(225000);
@@ -281,6 +286,7 @@ describe('corrections', { timeout: 30000 }, () => {
     const { flatId, ids, nafis } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 300000, paidBy: ids.Zarif }));
     await db(`update members set left_on = '2026-09-20' where id = $1`, [ids.Zarif]);
+    await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(0))).result).toBe('ok');
     await openMonth(db, flatId, '2026-10-01');   // October stays open into November
     expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 225000, memberId: ids.Zarif, date: '2026-11-03' }))).toBe('ok');

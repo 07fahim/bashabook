@@ -10,8 +10,8 @@ import { setDefaults, updateSettings } from '../lib/meals-db';
 import { addEntry, addRoom, openMonth, setRoom, type NewEntry } from '../lib/money-db';
 
 const url = process.env.DATABASE_URL ?? '';
-if (!new URL(url).hostname.startsWith('ep-muddy-mud-')) throw new Error('not the test copy; refusing');
-const sql = postgres(url, { max: 10, prepare: false, onnotice: () => {} });
+if (new URL(url).username !== 'postgres.wgvoshlmhauxcymwdwjt') throw new Error('not the Supabase test project; refusing');   // the pooler host is shared with production
+const sql = postgres(url, { max: 10, prepare: false, ssl: 'require', onnotice: () => {} });
 const db: Db = (t, p = []) => sql.unsafe(t, p as never[]) as never;   // no deadlock retry: every 40P01 is seen
 
 const results: string[] = [];
@@ -58,6 +58,8 @@ async function flat() {
   await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 400000, note: 'Rent', split: 'room' }));
   await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 900000 }));
   await openMonth(db, flatId, `${today.slice(0, 7)}-01`);
+  // 020: September's bazar and bill Verified, as the checkers would before a close
+  await db(`insert into entry_checks (flat_id, ledger_id, month, state) select flat_id, id, month, 'ok' from ledger where flat_id = $1 and type in ('bazar', 'bill') on conflict do nothing`, [flatId]);
   const close = async (d: Db = db, afterLoad?: () => Promise<void>) =>
     closeMonth(d, flatId, nafis, SEP, today, { cash: Math.max(0, await flatMoney(db, flatId, today)), bkash: 0, nagad: 0, bank: 0 }, afterLoad);
   const frozen = async () => (await db<{ rent: number; food: number }>(

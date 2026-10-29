@@ -1,9 +1,13 @@
 import type { Db } from './db';
 
 export const MAX_PHOTO = 60_000;
+/** A receipt (020): long side 1280 px at JPEG quality 0.7 on the phone. Measured 2026-10-29 with the picker's code in Chromium on
+ *  40 sample slips and one phone photo of three slips: median 80 KB, largest 227 KB, all readable; a full 12 MP camera original
+ *  is not measured yet (the picker steps the quality down if one passes this). */
+export const MAX_RECEIPT = 250_000;
 
-/** A JPEG as the app's picker makes it (starts FF D8 FF), at most 60 KB. Anything else is refused. */
-export const isJpeg = (b: Uint8Array) => b.length > 3 && b.length <= MAX_PHOTO && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+/** A JPEG as the app's pickers make it (starts FF D8 FF), at most `max` bytes (a profile photo: 60 KB). Anything else is refused. */
+export const isJpeg = (b: Uint8Array, max = MAX_PHOTO) => b.length > 3 && b.length <= max && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
 
 /** The picker's data URL as bytes, or null for anything that isn't a base64 JPEG data URL. */
 export function fromDataUrl(s: string) {

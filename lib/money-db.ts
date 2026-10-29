@@ -1,9 +1,12 @@
+import { itemsOk, type Item } from './bazar';
 import type { Db } from './db';
 import { daysOfMonth, daysPresent, isPresent, weightedMeals } from './meals';
 import { loadMeals } from './meals-db';
 import { CASH_KEYS, monthBalances, type LedgerRow, type MonthResult, type Split } from './money';
+import { isJpeg, MAX_RECEIPT } from './photo';
 
-export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string; forMonth: string | null; moves: string | null; heldBy: string | null; method: Method | null };
+export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string; forMonth: string | null; moves: string | null; heldBy: string | null; method: Method | null;
+  check: 'ok' | 'fix' | null; receiptV: string | null };   // 020: null check = waiting; receiptV: the receipt's ?v= (null = none)
 /** How money in or out was paid (019): the same four places the close card counts. */
 export type Method = (typeof CASH_KEYS)[number];
 export type CashRecord = { cash: number; bkash: number; nagad: number; bank: number; expected: number; actual: number; difference: number; by: string };
@@ -41,22 +44,28 @@ export async function openMonth(db: Db, flatId: string, month: string) {
     [flatId, month]);
 }
 
-/** One ledger row, its split people, its history row and (if `repeat`) its monthly template, all in one statement,
- *  so a bill can never be saved without the repeat the person ticked, or the other way round. Callers check the rules. */
+/** One ledger row, its split people, its item lines, its receipt, its history row and (if `repeat`) its monthly template, all
+ *  in one statement, so a bill can never be saved without the repeat the person ticked, nor a bazar without its lines. Callers check the rules. */
 async function insertEntry(db: Db, flatId: string, by: string,
-  e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[]; method?: Method | null },
+  e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[]; method?: Method | null; items?: Item[]; receipt?: Uint8Array | null },
   status: 'ok' | 'pending', repeat: { split: Split; selected: string[] } | null = null) {
   return (await db(
     `with l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by, method)
        values (coalesce($15::uuid, gen_random_uuid()), $1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10, $16)
        on conflict (id) do nothing returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, l.id, x::uuid from l, json_array_elements_text($11::text::json) x),
+     i as (insert into bazar_items (flat_id, ledger_id, pos, name, amount_poisha)
+       select $1, l.id, x.n - 1, x.v->>'name', (x.v->>'amount')::bigint from l, json_array_elements($17::text::json) with ordinality x(v, n)),
+     r as (insert into receipts (flat_id, ledger_id, month, photo) select $1, l.id, l.month, $18::bytea from l where $18::bytea is not null),
      t as (insert into bill_templates (flat_id, name, amount_poisha, split, selected_member_ids)
        select $1, $8, $4, $12, array(select json_array_elements_text($13::text::json)::uuid) from l where $14::boolean returning *),
      th as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'bill_templates', t.id::text, to_jsonb(t), $10 from t)
-     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), $10 from l returning 1`,
+     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text,
+       to_jsonb(l) || case when json_array_length($17::text::json) > 0 then jsonb_build_object('items', $17::text::jsonb) else '{}'::jsonb end, $10
+     from l returning 1`,
     [flatId, e.date, e.type, e.amount, e.paidBy, e.memberId, e.split, e.note, status, by, JSON.stringify(e.split === 'selected' ? e.selected : []),
-     repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null, e.id ?? null, e.method ?? null])).length > 0;   // false: this id was saved already
+     repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null, e.id ?? null, e.method ?? null,
+     JSON.stringify(e.items ?? []), e.receipt ? Buffer.from(e.receipt) : null])).length > 0;   // false: this id was saved already
 }
 
 /** Everything the money screens need for one month. The version is read first: closeMonth freezes only results computed
@@ -83,6 +92,8 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
   const rooms = await db<Room>(`select id, name, rent_share_poisha::int as "rentShare" from rooms where flat_id = $1 order by name`, [flatId]);
   const select = `select l.id, l.type, l.amount_poisha::int as amount, l.paid_by_member_id as "paidBy", l.member_id as "memberId", l.split, l.status,
        l.date::text as date, l.note, l.created_by as "createdBy", l.for_month::text as "forMonth", l.moves, l.held_by as "heldBy", l.method,
+       (select c.state from entry_checks c where c.ledger_id = l.id) as "check",
+       (select extract(epoch from r.created_at)::bigint::text from receipts r where r.flat_id = l.flat_id and r.ledger_id = l.id) as "receiptV",
        (select coalesce(json_agg(s.member_id), '[]'::json) from bill_split_members s where s.ledger_id = l.id) as selected
      from ledger l`;
   const entries = await db<Entry>(`${select} where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
@@ -158,6 +169,8 @@ export type NewEntry = {
   repeat?: boolean;               // bills, collector only: also copy it into every new month (from flat money)
   id?: string;                    // one-time id from the form: a retry with the same id records nothing new
   method?: Method | null;         // deposit, payout: cash, bKash, Nagad or bank; null = not said
+  items?: Item[];                 // bazar only: what was bought (020)
+  receipt?: Uint8Array | null;    // bazar, bill: the receipt photo, a small JPEG (020)
 };
 
 /** The first date an entry may have. Flatmates: this month. The collector: the oldest month still open, so a bazar found after
@@ -171,13 +184,18 @@ export async function entryFrom(db: Db, flatId: string, by: Actor, today: string
 /** Adds an entry if the rules allow it. 'rooms' = rent by room asked before rooms and rents are set. With `today` (every form
  *  does), the date must lie from entryFrom to today ('date'), and only an entry in this month may repeat monthly. */
 /** 'again': the same entry (same id) was saved before, so nothing new went in: the form's retry, not an error. */
-export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, today?: string): Promise<'ok' | 'again' | 'bad' | 'rooms' | 'gone' | 'date'> {
+export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, today?: string): Promise<'ok' | 'again' | 'bad' | 'rooms' | 'gone' | 'date' | 'items' | 'receipt'> {
   const boss = by.role === 'manager', moving = e.type === 'deposit' || e.type === 'payout';
   if (today !== undefined) {
     if (e.date > today || e.date < await entryFrom(db, flatId, by, today)) return 'date';
     if (e.repeat && monthOf(e.date) !== monthOf(today)) return 'bad';   // a forgotten bill from last month never starts a monthly one
   }
   if (!Number.isInteger(e.amount) || e.amount <= 0) return 'bad';
+  // 020: item lines only on a bazar and never over its total; a receipt only on a bazar or bill, a small JPEG
+  const items = e.items ?? [];
+  if (items.length && e.type !== 'bazar') return 'bad';
+  if (!itemsOk(items, e.amount)) return 'items';
+  if (e.receipt && ((e.type !== 'bazar' && e.type !== 'bill') || !isJpeg(e.receipt, MAX_RECEIPT))) return 'receipt';
   if ((e.type === 'bill') !== (e.split !== null)) return 'bad';
   if (moving ? !e.memberId || e.paidBy : e.memberId || e.method) return 'bad';
   if (e.type === 'payout' && !boss) return 'bad';                                  // only the collector hands out flat money
@@ -248,8 +266,9 @@ export async function removeEntry(db: Db, flatId: string, by: Actor, id: string,
        and ($4::boolean or (created_by = $3 and (type <> 'deposit' or status = 'pending'))) returning *)
      insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
      select $1, 'ledger', l.id::text,
-       -- the picked people are deleted with the entry, so they are kept in the record too
-       to_jsonb(l) || jsonb_build_object('selected', (select coalesce(jsonb_agg(sm.member_id), '[]') from bill_split_members sm where sm.ledger_id = l.id)),
+       -- the picked people and item lines are deleted with the entry, so they are kept in the record too
+       to_jsonb(l) || jsonb_build_object('selected', (select coalesce(jsonb_agg(sm.member_id), '[]') from bill_split_members sm where sm.ledger_id = l.id),
+         'items', (select coalesce(jsonb_agg(jsonb_build_object('name', i.name, 'amount', i.amount_poisha) order by i.pos), '[]') from bazar_items i where i.ledger_id = l.id)),
        '{"removed":true}', $3 from l returning 1`,
     [flatId, id, by.memberId, by.role === 'manager', monthOf(today)]);
   return r.length > 0;
@@ -381,7 +400,10 @@ export async function putBack(db: Db, flatId: string, by: string, id: string, to
          )),
      l as (insert into ledger select (jsonb_populate_record(null::ledger, ok.before)).* from ok on conflict do nothing returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id)
-       select $1, l.id, x::uuid from l, ok, jsonb_array_elements_text(coalesce(ok.before->'selected', '[]'::jsonb)) x)
+       select $1, l.id, x::uuid from l, ok, jsonb_array_elements_text(coalesce(ok.before->'selected', '[]'::jsonb)) x),
+     i as (insert into bazar_items (flat_id, ledger_id, pos, name, amount_poisha)
+       select $1, l.id, x.n - 1, x.v->>'name', (x.v->>'amount')::bigint
+       from l, ok, jsonb_array_elements(coalesce(ok.before->'items', '[]'::jsonb)) with ordinality x(v, n))
      insert into audit_log (flat_id, entity, entity_id, after, by_member)
      select $1, 'ledger', l.id::text, to_jsonb(l) || '{"putBack":true}', $3 from l returning 1`,
     [flatId, id, by, monthOf(today), PUT_BACK_COLUMNS]);

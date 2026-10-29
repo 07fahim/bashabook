@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { db, migrate } from '../db/test-db';
+import { checkAll, db, migrate } from '../db/test-db';
 import { cleanName, createFlat } from './auth';
 import { addCorrection, closableMonth, closeMonth, coverGap } from './close';
 import { isDate } from './meals';
@@ -23,6 +23,7 @@ describe('audit fixes', { timeout: 60000 }, () => {
   it('a month nobody opened still gets its monthly bills and its turn to close', async () => {
     const f = await flat([SEP]);
     expect(await addEntry(db, f.flatId, f.boss, e({ type: 'bill', amount: 1000000, note: 'Rent', paidBy: f.memberId, split: 'equal', repeat: true }), '2026-09-05')).toBe('ok');
+    await checkAll(f.flatId);
     expect((await closeMonth(db, f.flatId, f.boss, SEP, '2026-10-02', noCash)).result).toBe('ok');
     await openMonth(db, f.flatId, NOV);   // nobody touched the app in October
     expect((await db<{ m: string }>(`select month::text as m from months where flat_id = $1 order by month`, [f.flatId])).map(x => x.m)).toEqual([SEP, OCT, NOV]);
@@ -75,6 +76,7 @@ describe('audit fixes', { timeout: 60000 }, () => {
     const f = await flat();
     await db(`update members set left_on = '2026-09-30' where id = $1`, [f.tahsin]);
     expect(await addEntry(db, f.flatId, f.boss, e({ type: 'bazar', amount: 20000, paidBy: f.memberId }), '2026-09-05')).toBe('ok');
+    await checkAll(f.flatId);
     expect((await closeMonth(db, f.flatId, f.boss, SEP, '2026-10-02', noCash)).result).toBe('ok');
     expect((await closeMonth(db, f.flatId, f.boss, OCT, '2026-11-02', noCash)).result).toBe('ok');
     await openMonth(db, f.flatId, NOV);
