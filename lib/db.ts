@@ -15,13 +15,19 @@ const sql = postgres(process.env.DATABASE_URL!, { prepare: false, ssl: 'require'
 // as it was. Probed on the test copy 2026-10-12.
 const run = async (text: string, params: unknown[]) =>
   (await sql.begin(t => [t.unsafe('set local statement_timeout = 8000'), t.unsafe(text, params as never[])]))[1] as never;
-// Postgres cancels one side of a deadlock (40P01) and rolls its statement back whole; every app write is one statement,
-// so running it once more is safe. Writers lock month rows in varying orders, so a rare deadlock can't be ruled out
-// by lock order alone; this covers it.
-export const db: Db = async (text, params = []) => {
-  try { return await run(text, params); }
-  catch (e) {
-    if ((e as { code?: string }).code !== '40P01') throw e;
-    return await run(text, params);
+// Two errors where nothing was written, so running again is safe:
+// - a deadlock (40P01): Postgres rolls one side's statement back whole and every app write is one statement; writers lock
+//   month rows in varying orders, so a rare one can't be ruled out by lock order alone. Once more.
+// - a reset on BEGIN (ECONNRESET): a pooled connection that died unnoticed (a Wi-Fi drop, a frozen serverless instance) fails
+//   before anything ran; each try retires one dead connection (the pool holds 10). Up to 10 more.
+// Never again on a reset at COMMIT or CONNECTION_CLOSED mid-transaction: the write may have landed (.git/sdd/econnreset-report.md).
+export const withRetry = (go: typeof run): Db => async (text, params = []) => {
+  for (let i = 0; ; i++) {
+    try { return await go(text, params); }
+    catch (e) {
+      const { code, query } = e as { code?: string; query?: string };
+      if (!(code === 'ECONNRESET' && query?.startsWith('begin') && i < 10) && !(code === '40P01' && i === 0)) throw e;
+    }
   }
 };
+export const db = withRetry(run);
