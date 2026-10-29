@@ -154,6 +154,19 @@ describe('live', () => {
     vi.advanceTimersByTime(300); expect(refresh).toHaveBeenCalledTimes(1);
   });
 
+  it('gives up on a socket stuck connecting after 10 s', () => {
+    const { f } = start(undefined, true);
+    vi.advanceTimersByTime(9999); expect(f.socks[0].closed).toBe(false);
+    vi.advanceTimersByTime(1); expect(f.socks[0].closed).toBe(true);
+    vi.advanceTimersByTime(1000); expect(f.socks).toHaveLength(2);
+  });
+
+  it('stop during a backoff wait never reconnects', () => {
+    const { f, stop } = start();
+    f.socks[0].close(); stop();
+    vi.advanceTimersByTime(60000); expect(f.socks).toHaveLength(1);
+  });
+
   it('stops for good: no reconnect, no refresh', () => {
     const { f, refresh, stop } = start();
     const s = f.socks[0]; joined(f, s);

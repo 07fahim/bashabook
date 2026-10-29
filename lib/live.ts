@@ -49,9 +49,9 @@ export function live(o: { url: string; key: string; topic: string; open: (url: s
       s.send(JSON.stringify({ topic, event, payload, ref: r, ...(topic === ch ? { join_ref: '1' } : {}) }));
       return r;
     };
+    joinBy = setTimeout(() => drop(s), 10000);   // covers both the open and the join
     s.onopen = () => {
       send(ch, 'phx_join', { config: { broadcast: { self: false }, presence: { key: '' }, postgres_changes: [], private: false }, access_token: o.key });
-      joinBy = setTimeout(() => drop(s), 10000);
       beat = setInterval(() => { if (unanswered) drop(s); else unanswered = send('phoenix', 'heartbeat', {}); }, 20000);
     };
     s.onmessage = e => {
