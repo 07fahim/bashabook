@@ -105,7 +105,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
                   <summary className={`${secondary} cursor-pointer list-none sm:inline-flex sm:w-auto [&::-webkit-details-marker]:hidden`}>{b.fix}</summary>
                   <ActionForm action={checkAction} className="mt-3">
                     {hidden('fix')}
-                    <Field label={b.reason} name="note" required maxLength={100} />
+                    <Field label={b.reason} hint={b.reasonHint} name="note" required maxLength={100} />
                     {/* a 40-character name would wrap the pill on a 320 px phone: only the name is cut on screen (the verb stays, in
                         both word orders) and it is read out whole */}
                     <button className={primary}>{d.adderMayFix ? (
