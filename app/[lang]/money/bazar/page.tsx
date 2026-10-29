@@ -57,7 +57,9 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
   const [dFrom, dTo] = month === thisMonth ? [thisMonth, today] : [month, daysOfMonth(month).at(-1)!];
   const row = (e: Entry) => {
     const its = items.get(e.id) ?? [];
-    const what = its.length ? `${its.slice(0, 3).map(i => i.name).join(' · ')}${its.length > 3 ? ` +${its.length - 3}` : ''}` : e.note ?? '';
+    // a correction counts for an earlier month, so the Total bazar tile leaves it out: its label says why
+    const what = [e.forMonth && x.correctionFor.replace('{month}', fmtMonth(e.forMonth)),
+      its.length ? `${its.slice(0, 3).map(i => i.name).join(' · ')}${its.length > 3 ? ` +${its.length - 3}` : ''}` : e.note].filter(Boolean).join(' · ');
     return (
       <li key={e.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 py-3 md:grid md:gap-4 md:py-2 ${cols}`}>
         <Link href={`/${lang}/money/bazar/${e.id}`} className={`flex min-h-11 min-w-0 basis-full flex-col justify-center rounded-lg md:basis-auto ${focus}`}>
