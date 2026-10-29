@@ -6,20 +6,24 @@ alter table flats add column live_topic text not null default replace(gen_random
 
 create function live_ping() returns trigger language plpgsql as $$
 declare
+  n jsonb;   -- each row is turned into json once: members and receipts carry photo bytes
+  o jsonb;
   r jsonb;
   f text;
   t text;
 begin
+  if tg_op <> 'DELETE' then n := to_jsonb(new); end if;
+  if tg_op <> 'INSERT' then o := to_jsonb(old); end if;
   -- nothing a page shows changed: the Notices page marks itself seen on every visit, a signal there would refresh it forever
-  if tg_op = 'UPDATE' and to_jsonb(new) - 'notices_seen_at' = to_jsonb(old) - 'notices_seen_at' then return null; end if;
+  if tg_op = 'UPDATE' and n - 'notices_seen_at' = o - 'notices_seen_at' then return null; end if;
   -- a new join code gave a new topic: pages still on the old one reload once and pick up the new one
-  if tg_op = 'UPDATE' and to_jsonb(old)->>'live_topic' is distinct from to_jsonb(new)->>'live_topic' then
+  if tg_op = 'UPDATE' and tg_table_name = 'flats' and o->>'live_topic' is distinct from n->>'live_topic' then
     begin
-      perform realtime.send('{}'::jsonb, 'changed', to_jsonb(old)->>'live_topic', false);
+      perform realtime.send('{}'::jsonb, 'changed', o->>'live_topic', false);
     exception when others then null;
     end;
   end if;
-  if tg_op = 'DELETE' then r := to_jsonb(old); else r := to_jsonb(new); end if;
+  r := coalesce(n, o);
   f := case when tg_table_name = 'flats' then r->>'id' else r->>'flat_id' end;
   -- once per flat per transaction: a month close writes hundreds of rows and sends one signal
   if f is null or strpos(coalesce(current_setting('live.sent', true), ''), f) > 0 then return null; end if;
