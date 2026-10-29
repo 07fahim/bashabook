@@ -508,6 +508,7 @@ export async function receiptAction(_: FormState, d: FormData): Promise<FormStat
   const me = await requireMember(lang, true);
   const id = str(d, 'id'), raw = str(d, 'receipt'), bytes = fromDataUrl(raw);
   if (!UUID.test(id)) return { error: x.errors.bad };
+  if (!raw) return { error: x.errors.noPhoto };
   if (!bytes) return { error: x.errors.receipt };
   const r = await addReceipt(db, me.flatId, me, id, bytes, todayDhaka());
   if (r !== 'ok') return { error: x.errors[r] };
