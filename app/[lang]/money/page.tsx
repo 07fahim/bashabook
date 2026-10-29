@@ -417,7 +417,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         <form action={putBackAction}>
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="id" value={rm.id} />
-                          <button aria-label={`${x.putBack}: ${x.types[rm.type]} ${fmtTaka(rm.amount)}`} className={`min-h-11 px-2 ${link}`}>{x.putBack}</button>
+                          <PendingButton aria-label={`${x.putBack}: ${x.types[rm.type]} ${fmtTaka(rm.amount)}`} className={`min-h-11 px-2 ${link}`}>{x.putBack}</PendingButton>
                         </form>
                       )}
                     </span>
