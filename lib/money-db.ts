@@ -45,6 +45,14 @@ export async function openMonth(db: Db, flatId: string, month: string) {
     [flatId, month]);
 }
 
+/** A form's key becomes the entry's id, so two taps save once. An id any flat's ledger had and has no more (removed) is
+ *  refused: its check and receipt stay with the id for Put back, and a new entry under it, here or in another flat, would take them. */
+export async function retiredId(db: Db, id: string) {
+  const [r] = await db<{ gone: boolean }>(`select exists (select 1 from audit_log where entity = 'ledger' and entity_id = $1::uuid::text)
+    and not exists (select 1 from ledger where id = $1::uuid) as gone`, [id]);
+  return r.gone;
+}
+
 /** One ledger row, its split people, its item lines, its receipt, its history row and (if `repeat`) its monthly template, all
  *  in one statement, so a bill can never be saved without the repeat the person ticked, nor a bazar without its lines. Callers check the rules. */
 async function insertEntry(db: Db, flatId: string, by: string,
@@ -52,7 +60,9 @@ async function insertEntry(db: Db, flatId: string, by: string,
   status: 'ok' | 'pending', repeat: { split: Split; selected: string[] } | null = null) {
   return (await db(
     `with l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by, method, held_by)
-       values (coalesce($15::uuid, gen_random_uuid()), $1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10, $16, $19::uuid)
+       select coalesce($15::uuid, gen_random_uuid()), $1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10, $16, $19::uuid
+       -- retiredId, here in the statement: a removal landing after any earlier read can't free the id (its history row is old)
+       where $15::uuid is null or not exists (select 1 from audit_log where entity = 'ledger' and entity_id = $15::uuid::text)
        on conflict (id) do nothing returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, l.id, x::uuid from l, json_array_elements_text($11::text::json) x),
      i as (insert into bazar_items (flat_id, ledger_id, pos, name, amount_poisha)
@@ -268,7 +278,8 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, t
   await openMonth(db, flatId, month);
   // a repeated "everyone living here" bill becomes "everyone, by days": the people living here change month to month
   const repeat = e.repeat ? (split === 'selected' && e.split !== 'here' ? { split: 'selected' as const, selected } : { split: e.split === 'here' ? 'equal' as const : split!, selected: [] }) : null;
-  return await insertEntry(db, flatId, by.memberId, { ...e, split, selected, notJoined }, pending ? 'pending' : 'ok', repeat) ? 'ok' : 'again';
+  return await insertEntry(db, flatId, by.memberId, { ...e, split, selected, notJoined }, pending ? 'pending' : 'ok', repeat) ? 'ok'
+    : e.id && await retiredId(db, e.id) ? 'bad' : 'again';
 }
 
 /** Yes: by whoever answers it (CONFIRMER), only while it waits; never the writer. */

@@ -146,6 +146,40 @@ describe('bazar items and receipts', { timeout: 30000 }, () => {
     expect(await receiptOf(db, flatId, id)).not.toBeNull();
     expect((await loadMonth(db, flatId, OCT, TODAY)).entries.find(x => x.id === id)!.check).toBe('ok');
   });
+
+  it('a removed entry’s id is refused for a new entry: it would take the old check and receipt', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 10000, paidBy: ids.Tahsin, receipt: jpeg() });
+    expect(await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY, await receiptVersion(db, flatId, id))).not.toBeNull();
+    expect(await removeEntry(db, flatId, as('Tahsin'), id, TODAY)).toBe(true);
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ id, type: 'bazar', amount: 1000000, paidBy: ids.Tahsin }), TODAY)).toBe('bad');
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ id: id.toUpperCase(), type: 'bazar', amount: 1000000, paidBy: ids.Tahsin }), TODAY)).toBe('bad');
+    const m = await loadMonth(db, flatId, OCT, TODAY);
+    expect(m.entries.some(x => x.id === id)).toBe(false);
+    expect(m.removed.some(x => x.id === id)).toBe(true);
+    // the same for a removed entry nobody checked, and for another flat's removed id
+    const plain = await add(as('Tahsin'), { type: 'bazar', amount: 500, paidBy: ids.Tahsin });
+    expect(await removeEntry(db, flatId, as('Tahsin'), plain, TODAY)).toBe(true);
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ id: plain, type: 'bazar', amount: 900, paidBy: ids.Tahsin }), TODAY)).toBe('bad');
+    const other = await flat(['Rafi']);   // another flat: its check would show here after a Put back
+    expect(await addEntry(db, other.flatId, other.nafis, e({ id: plain, type: 'bazar', amount: 9000 }), TODAY)).toBe('bad');
+    expect(await putBack(db, flatId, ids.Tahsin, plain, TODAY)).toBe(true);
+    // a double tap of a saved entry stays 'again'
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ id: await add(as('Tahsin'), { type: 'bazar', amount: 700, paidBy: ids.Tahsin }), type: 'bazar', amount: 700, paidBy: ids.Tahsin }), TODAY)).toBe('again');
+  });
+
+  it('a remove that lands just before the save still refuses the old id', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 10000, paidBy: ids.Tahsin });
+    expect(await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY, await receiptVersion(db, flatId, id))).not.toBeNull();
+    let removed = false;   // the remove commits after every earlier read of this save, right before its insert
+    const racing: typeof db = async (text, params) => {
+      if (!removed && text.includes('insert into ledger')) { removed = true; expect(await removeEntry(db, flatId, as('Tahsin'), id, TODAY)).toBe(true); }
+      return db(text, params);
+    };
+    expect(await addEntry(racing, flatId, as('Tahsin'), e({ id, type: 'bazar', amount: 1000000, paidBy: ids.Tahsin }), TODAY)).toBe('bad');
+    expect((await loadMonth(db, flatId, OCT, TODAY)).entries.some(x => x.id === id)).toBe(false);
+  });
 });
 
 describe('the check', { timeout: 30000 }, () => {

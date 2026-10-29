@@ -4,7 +4,7 @@ import type { Db } from './db';
 import { addDays, daysOfMonth, editFrom } from './meals';
 import { CASH_KEYS, parseCash, type Cash } from './money';
 import { flatMoney } from './handover';
-import { addEntry, loadMonth, monthOf, openMonth, type Actor } from './money-db';
+import { addEntry, loadMonth, monthOf, openMonth, retiredId, type Actor } from './money-db';
 import { history, worthALook } from './charts';
 
 export { CASH_KEYS, parseCash, type Cash };   // pure, in money.ts so the close card can use them in the browser
@@ -165,13 +165,15 @@ export async function addCorrection(db: Db, flatId: string, by: Actor, c: Correc
   if (people.some(p => !p)) return 'bad';   // a cost with no payer would come out of flat money
   // the frozen weights the cost is split by must not all be 0, else nobody would pay it ('selected': the people are checked below)
   const weigh = move || selected.length ? null : c.kind === 'bill' && c.split === 'equal' ? 'days' : 'meals';
+  if (await retiredId(db, c.id)) return 'bad';
   await openMonth(db, flatId, monthOf(today));   // the correction is booked in this month
   const r = await db(
     `with ok as (select 1 from months where flat_id = $1 and month = $2::date and status = 'closed'
          and (select count(distinct member_id) from month_balances where flat_id = $1 and month = $2::date and days_present > 0
               and member_id in (select json_array_elements_text($3::text::json)::uuid)) = (select count(distinct x) from json_array_elements_text($3::text::json) x)
          and ($15::text is null or (select sum(case when $15::text = 'days' then days_present else weighted_meals end) from month_balances
-              where flat_id = $1 and month = $2::date) > 0)),
+              where flat_id = $1 and month = $2::date) > 0)
+         and not exists (select 1 from audit_log where entity = 'ledger' and entity_id = $4::uuid::text)),   -- retiredId, race-proof
        l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, moves, split, date, note, status, created_by, for_month)
          select $4::uuid, $1, date_trunc('month', $5::date)::date, $6, $7, $8::uuid, $9::uuid, $10::uuid, $11, $5::date, $12, 'ok', $13, $2::date from ok
          on conflict (id) do nothing returning *),
@@ -181,5 +183,5 @@ export async function addCorrection(db: Db, flatId: string, by: Actor, c: Correc
      move ? null : c.paidBy, move ? c.from : null, move ? c.to : null, c.kind === 'bill' ? c.split : null, note, by.memberId, JSON.stringify(selected), weigh]);
   if (r.length) return 'ok';
   // a retry finds its own row; anything else means the month or the people were wrong
-  return (await db(`select 1 from ledger where flat_id = $1 and id = $2`, [flatId, c.id])).length ? 'ok' : 'month';
+  return (await db(`select 1 from ledger where flat_id = $1 and id = $2`, [flatId, c.id])).length ? 'ok' : await retiredId(db, c.id) ? 'bad' : 'month';
 }

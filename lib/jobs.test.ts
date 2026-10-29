@@ -195,7 +195,7 @@ describe('abandoned flats', { timeout: 30000 }, () => {
     await addEntry(db, money.flatId, { memberId: money.memberId, role: 'manager' }, { type: 'bazar', amount: 50000, date: '2026-09-05', note: null, paidBy: null, memberId: null, split: null, selected: [] });
     await db(`insert into audit_log (flat_id, entity, entity_id, after) values ($1, 'members', 'x', '{}')`, [busy.flatId]);
     const r = await runJobs(db, '2026-10-05T12:00', s.send);
-    expect(r.purged).toEqual(['Trial']);
+    expect(r.purged).toBe(1);
     expect(await names()).toEqual(['Busy', 'Meals', 'Money', 'Two', 'Young']);
   });
 });
