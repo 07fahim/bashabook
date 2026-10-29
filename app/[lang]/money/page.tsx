@@ -378,9 +378,10 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="font-bold tabular-nums">{fmtExact(e.amount)}</span>
-                          {/* a waiting entry someone else wrote is answered in Waiting for you (That’s not right tells them), not removed here */}
+                          {/* a waiting entry someone else wrote is answered in Waiting for you (That’s not right tells them), not removed here;
+                              the collector still removes one nobody can answer (both people moved out after a role change) */}
                           {!closed && (month === thisMonth || e.status === 'pending' || boss) && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending')))
-                            && (e.status !== 'pending' || e.createdBy === me.memberId) && (
+                            && (e.status !== 'pending' || e.createdBy === me.memberId || (boss && !waiting.some(w => w.id === e.id))) && (
                             <details>
                               <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtExact(e.amount)}, ${fmtDay(e.date, lang)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
                             </details>
