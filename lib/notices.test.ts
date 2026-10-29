@@ -46,6 +46,17 @@ describe('notices', { timeout: 60000 }, () => {
     expect(await listNotices(db, flatId, nafis, true)).toEqual([]);
   });
 
+  it('money the collector wrote for me is mine, named by who wrote it; never in the writer’s own bell', async () => {
+    const { flatId, nafis, tahsin, boss } = await flat();
+    expect(await addEntry(db, flatId, boss, e({ type: 'deposit', amount: 20000, date: today, memberId: tahsin }))).toBe('ok');   // Money received from Tahsin
+    expect(await addEntry(db, flatId, boss, e({ type: 'payout', amount: 5000, date: today, memberId: tahsin }))).toBe('ok');    // Give money to Tahsin
+    const mine = await listNotices(db, flatId, tahsin, false);
+    expect(mine).toHaveLength(2);
+    expect(mine.find(n => n.detail?.type === 'deposit')).toMatchObject({ kind: 'paid', actor: 'Nafis', amount: 20000, detail: { gave: true } });
+    expect(mine.find(n => n.detail?.type === 'payout')).toMatchObject({ kind: 'paid', actor: 'Nafis', amount: 5000, detail: { gave: false } });
+    expect(await listNotices(db, flatId, nafis, true)).toEqual([]);
+  });
+
   it('someone changing my meal is mine; my own tap is not', async () => {
     const { flatId, nafis, tahsin } = await flat();
     await saveMeal(db, flatId, nafis, { memberId: tahsin, date: '2026-10-10', meal: 'd', count: 0, guests: 0 }, false);

@@ -1,4 +1,5 @@
 import type { Db } from './db';
+import { CONFIRMER } from './money-db';
 
 export type Notice = {
   at: string; kind: 'paid' | 'handover' | 'handoverDone' | 'closeMonth' | 'meal' | 'account';
@@ -6,15 +7,15 @@ export type Notice = {
   detail: Record<string, unknown> | null; pending: boolean;
 };
 
-/** Every important thing addressed to one person, from rows the app already writes. $1 flat, $2 me, $3 am I the collector.
+/** Every important thing addressed to one person, from rows the app already writes. $1 flat, $2 me, $3 am I the collector. A waiting money row is mine when I answer it (CONFIRMER); its actor is whoever wrote it.
  *  Pending rows carry their creation time, so an old unconfirmed deposit is not new again on every visit.
  *  The meal row carries the change (own plate, and whether guests moved), not the stored state, so the text names what happened.
  *  An account row by the app team has no by_member: its actor is null. */
 const SOURCES = `
-  select l.created_at as at, 'paid' as kind, m.name as actor, l.amount_poisha::int as amount, l.date::text as date, null::text as meal, null::text as month,
-         jsonb_build_object('type', l.type) as detail, true as pending
-    from ledger l join members m on m.flat_id = l.flat_id and m.id = l.member_id
-   where l.flat_id = $1 and l.status = 'pending' and ((l.type = 'deposit' and $3::boolean) or (l.type = 'payout' and l.member_id = $2))
+  select l.created_at as at, 'paid' as kind, w.name as actor, l.amount_poisha::int as amount, l.date::text as date, null::text as meal, null::text as month,
+         jsonb_build_object('type', l.type, 'gave', l.type = 'deposit' and l.member_id = $2) as detail, true as pending
+    from ledger l join members w on w.flat_id = l.flat_id and w.id = l.created_by
+   where l.flat_id = $1 and l.status = 'pending' and ${CONFIRMER} = $2 and l.created_by <> $2
   union all
   select h.created_at, 'handover', f.name, h.amount::int, null, null, null, null, true
     from handovers h join members f on f.flat_id = h.flat_id and f.id = h.from_member

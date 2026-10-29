@@ -9,7 +9,7 @@ export function noticeLine(n: Notice, t: Dict, lang: Locale, today: string): [st
   const date = n.date ? fmtDay(n.date, lang) : '';
   const fill = (s: string) => s.replace('{name}', n.actor ?? '').replace('{amount}', fmtTaka(n.amount ?? 0)).replace('{meal}', meal).replace('{date}', date).replace('{month}', n.month ? fmtMonth(n.month) : '');
   switch (n.kind) {
-    case 'paid': return [fill(d.type === 'deposit' ? x.paidDeposit : x.paidPayout), `/${lang}/home`];
+    case 'paid': return [fill(d.gave ? x.paidFor : d.type === 'deposit' ? x.paidDeposit : x.paidPayout), `/${lang}/home`];
     case 'handover': return [fill(x.handover), `/${lang}/home`];
     case 'handoverDone': return [fill(d.status === 'accepted' ? x.accepted : x.declined), `/${lang}/money`];
     case 'closeMonth': return [fill(x.closeMonth), `/${lang}/money?m=${n.month!.slice(0, 7)}`];
