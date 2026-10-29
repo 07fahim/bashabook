@@ -430,7 +430,10 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
   }, today));
   if (r !== 'ok' && r !== 'again') return { error: x.errors[r] };
   // money between two people waits for whoever didn't write it: tell them after the response, never instead of it. Nothing
-  // waits (the collector's own deposit, someone who moved out): no push. 'again' is the form's retry: no second nudge.
+  // waits (the collector's own deposit, someone who moved out, someone not joined yet): no push. 'again' is the form's retry:
+  // no second nudge.
+  // ponytail: the push looks the entry up by the form's UUID key, so a deposit or payout form without one sends no push; every
+  // current form sends one (hidden() on Money and the Flat tab). Return the new id from addEntry if a form ever drops it.
   if (r === 'ok' && moving && UUID.test(key)) after(async () => {
     try {
       const to = await confirmerOf(db, me.flatId, key);

@@ -372,11 +372,15 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                           <p className="text-[15px] text-muted">
                             {x.addedBy.replace('{name}', name(e.createdBy))}
                             {e.status === 'pending' && <> · <span className="font-semibold text-ink">{x.pending}</span></>}
+                            {/* counted without their answer: memberId is the other person (lib/money-db.ts addEntry) */}
+                            {e.notJoined && <> · {x.atOnce.replace('{name}', name(e.memberId))}</>}
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="font-bold tabular-nums">{fmtExact(e.amount)}</span>
-                          {!closed && (month === thisMonth || e.status === 'pending' || boss) && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending'))) && (
+                          {/* a waiting entry someone else wrote is answered in Waiting for you (That’s not right tells them), not removed here */}
+                          {!closed && (month === thisMonth || e.status === 'pending' || boss) && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending')))
+                            && (e.status !== 'pending' || e.createdBy === me.memberId) && (
                             <details>
                               <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtExact(e.amount)}, ${fmtDay(e.date, lang)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
                             </details>
@@ -406,7 +410,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               <div className="text-[15px] text-muted">
               <LongList label={x.removedTitle.replace('{n}', String(mo.removed.length))} keep={5} more={t.app.showAll.replace('{n}', String(mo.removed.length))} less={t.app.showLess} items={mo.removed.map(rm => (
                   <li key={rm.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
-                    <span className="min-w-0 flex-1">{x.types[rm.type]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {x.removedBy.replace('{name}', rm.by)}</span>
+                    <span className="min-w-0 flex-1">{x.types[rm.type]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {(rm.rejected ? x.rejectedBy : x.removedBy).replace('{name}', rm.by)}</span>
                     <span className="flex items-center gap-2">
                       <s className="tabular-nums">{fmtTaka(rm.amount)}</s>
                       {!closed && (boss || (month === thisMonth && rm.byId === me.memberId)) && (
