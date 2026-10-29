@@ -257,7 +257,7 @@ describe('corrections', { timeout: 30000 }, () => {
       if (!removed && text.includes('insert into ledger')) { removed = true; expect(await removeEntry(db, flatId, nafis, live, '2026-10-02')).toBe(true); }
       return db(text, params);
     };
-    expect(await addCorrection(racing, flatId, nafis, { id: live, kind: 'bazar', forMonth: '2026-09-01', amount: 90000, paidBy: ids.Zarif, note: 'eggs' }, '2026-10-02')).not.toBe('ok');
+    expect(await addCorrection(racing, flatId, nafis, { id: live, kind: 'bazar', forMonth: '2026-09-01', amount: 90000, paidBy: ids.Zarif, note: 'eggs' }, '2026-10-02')).toBe('bad');
     expect(await db(`select 1 from ledger where id = $1`, [live])).toHaveLength(0);
   });
 

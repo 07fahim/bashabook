@@ -183,5 +183,5 @@ export async function addCorrection(db: Db, flatId: string, by: Actor, c: Correc
      move ? null : c.paidBy, move ? c.from : null, move ? c.to : null, c.kind === 'bill' ? c.split : null, note, by.memberId, JSON.stringify(selected), weigh]);
   if (r.length) return 'ok';
   // a retry finds its own row; anything else means the month or the people were wrong
-  return (await db(`select 1 from ledger where flat_id = $1 and id = $2`, [flatId, c.id])).length ? 'ok' : 'month';
+  return (await db(`select 1 from ledger where flat_id = $1 and id = $2`, [flatId, c.id])).length ? 'ok' : await retiredId(db, c.id) ? 'bad' : 'month';
 }
