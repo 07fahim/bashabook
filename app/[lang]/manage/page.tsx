@@ -48,7 +48,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
     loadMeals(db, me.flatId, day, day),
     loadNoCookDays(db, me.flatId, today),
     loadMonth(db, me.flatId, monthOf(today), today),
-    toConfirm(db, me.flatId, me.memberId, true),
+    toConfirm(db, me.flatId, me.memberId),
     listRepeats(db, me.flatId),
     closeInfo(db, me.flatId, today),
     currentOffer(db, me.flatId),

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkAll, db, migrate } from '../db/test-db';
+import { checkAll, confirmAll, db, migrate } from '../db/test-db';
 import { getDictionary } from '../app/[lang]/dictionaries';
 import { breakdownOf, breakdownText, pickWho, type Labels } from '../app/[lang]/money/breakdown';
 import { createFlat } from './auth';
@@ -25,6 +25,7 @@ async function flat() {
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'deposit', amount: 300000, memberId: ids.Tahsin }))).toBe('ok');
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'bazar', amount: 180000 }))).toBe('ok');
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'bill', amount: 90000, note: 'Electricity', split: 'equal' }))).toBe('ok');
+  await confirmAll(f.flatId);   // Tahsin's Yes on the Money received
   await openMonth(db, f.flatId, '2026-10-01');
   return { flatId: f.flatId, ids, nafis };
 }

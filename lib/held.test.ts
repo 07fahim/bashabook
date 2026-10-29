@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkAll, db, migrate } from '../db/test-db';
+import { checkAll, confirmAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, loadMonth, openMonth, type NewEntry } from './money-db';
 import { closeInfo, closeMonth } from './close';
@@ -19,6 +19,7 @@ async function flat(octBazar: number) {
   const nafis = { memberId: ids.Nafis, role: 'manager' as const };
   await openMonth(db, f.flatId, '2026-09-01');
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'deposit', amount: 300000, memberId: ids.Tahsin }))).toBe('ok');
+  await confirmAll(f.flatId);   // Tahsin's Yes
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'bazar', amount: 100000 }))).toBe('ok');
   await openMonth(db, f.flatId, '2026-10-01');
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'bazar', amount: octBazar, date: OCT2 }))).toBe('ok');

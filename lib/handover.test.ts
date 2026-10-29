@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { checkAll, db, migrate, pg } from '../db/test-db';
+import { checkAll, confirmAll, db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal } from './meals-db';
 import { addEntry, confirmEntry, loadMonth, putBack, removeEntry, toConfirm, type NewEntry } from './money-db';
@@ -239,9 +239,11 @@ describe('handover in the app', { timeout: 30000 }, () => {
     const nafis = { memberId: ids.Nafis, role: 'manager' as const };
     expect(await flatMoney(db, flatId, '2026-09-10')).toBe(0);
     expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 300000, date: '2026-09-03', memberId: ids.Tahsin }))).toBe('ok');
+    await confirmAll(flatId);   // Tahsin's Yes
     expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000, date: '2026-09-04' }))).toBe('ok');
     expect(await flatMoney(db, flatId, '2026-09-10')).toBe(250000);
     expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 20000, date: '2026-10-02', memberId: ids.Zarif }))).toBe('ok');
+    await confirmAll(flatId);   // Zarif's Yes
     expect(await flatMoney(db, flatId, '2026-10-05')).toBe(270000);                 // September (not closed) + October
     await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-05', { cash: 270000, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
@@ -256,6 +258,7 @@ describe('handover in the app', { timeout: 30000 }, () => {
     const nafis = { memberId: ids.Nafis, role: 'manager' as const };
     await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 300000, date: '2026-09-03', memberId: ids.Tahsin }));
     await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 20000, date: '2026-10-02', memberId: ids.Zarif }));
+    await confirmAll(flatId);   // Tahsin's and Zarif's Yes
     expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 320000, '2026-10-05')).toBe('ok');
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-05', { cash: 320000, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
     expect(await flatMoney(db, flatId, '2026-10-05')).toBe(320000);
@@ -267,6 +270,7 @@ describe('handover in the app', { timeout: 30000 }, () => {
     const { flatId, ids, collector } = await flat();
     const nafis = { memberId: ids.Nafis, role: 'manager' as const }, tahsin = { memberId: ids.Tahsin, role: 'manager' as const };
     await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 300000, date: '2026-09-03', memberId: ids.Tahsin }));
+    await confirmAll(flatId);   // Tahsin's Yes
     expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 299999, '2026-09-10')).toBe('changed');   // the card showed another amount
     expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 300000, '2026-09-10')).toBe('ok');
     const o = await currentOffer(db, flatId);
@@ -336,7 +340,7 @@ describe('handover in the app', { timeout: 30000 }, () => {
     await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 50000, date: '2026-09-03', memberId: ids.Tahsin }));
     expect(await pendingCount(db, flatId)).toBe(1);
     expect(await offerHandover(db, flatId, nafis, ids.Zarif, 0, '2026-09-10')).toBe('waiting');
-    await confirmEntry(db, flatId, nafis, (await toConfirm(db, flatId, ids.Nafis, true))[0].id);
+    await confirmEntry(db, flatId, nafis, (await toConfirm(db, flatId, ids.Nafis))[0].id);
     expect(await offerHandover(db, flatId, nafis, ids.Zarif, 50000, '2026-09-10')).toBe('ok');
   });
 
@@ -346,10 +350,10 @@ describe('handover in the app', { timeout: 30000 }, () => {
     await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 50000, date: '2026-09-03', memberId: ids.Tahsin }));
     expect(await overrideCollector(db, flatId, ids.Zarif, 'phone lost', 'app team: Fahim')).toBe('ok');
     expect(await collector()).toEqual([ids.Zarif]);
-    const [w] = await toConfirm(db, flatId, ids.Zarif, true);
+    const [w] = await toConfirm(db, flatId, ids.Zarif);
     expect([w.name, w.paidTo]).toEqual(['Tahsin', 'Nafis']);                      // waiting deposit untouched, labelled by held_by
     await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 1000, date: '2026-09-04', memberId: ids.Tahsin }));
-    const after = await toConfirm(db, flatId, ids.Zarif, true);
+    const after = await toConfirm(db, flatId, ids.Zarif);
     expect(after.find(x => x.amount === 1000)?.paidTo).toBeNull();                // held by the current collector: no label
     expect((await handoverHistory(db, flatId))[0]).toMatchObject({ status: 'overridden', from: 'Nafis', to: 'Zarif', amount: null });
   });
@@ -359,7 +363,7 @@ describe('handover in the app', { timeout: 30000 }, () => {
     const nafis = { memberId: ids.Nafis, role: 'manager' as const };
     expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 20000, date: '2026-09-05', memberId: ids.Zarif }))).toBe('ok');
     expect(await overrideCollector(db, flatId, ids.Tahsin, 'phone lost', 'app team: Fahim')).toBe('ok');
-    const [w] = await toConfirm(db, flatId, ids.Zarif, false);
+    const [w] = await toConfirm(db, flatId, ids.Zarif);
     expect(w.paidTo).toBe('Nafis');
   });
 
@@ -404,6 +408,7 @@ describe('handover in the app', { timeout: 30000 }, () => {
     const { flatId, ids } = await flat();
     const nafis = { memberId: ids.Nafis, role: 'manager' as const };
     expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 50000, date: '2026-09-03', memberId: ids.Tahsin }))).toBe('ok');
+    await confirmAll(flatId);   // Tahsin's Yes
     expect(await offerHandover(db, flatId, nafis, ids.Tahsin, 50000, '2026-09-10')).toBe('ok');
     expect(await acceptHandover(db, flatId, ids.Tahsin, (await currentOffer(db, flatId))!.id)).toBe('ok');
     const mo = await loadMonth(db, flatId, '2026-09-01', '2026-09-10');

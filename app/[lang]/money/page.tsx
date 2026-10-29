@@ -42,7 +42,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   // ?m=2026-09 picks a month; never later than this month
   const asked = typeof sp.m === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.m) ? `${sp.m}-01` : thisMonth;
   const month = asked > thisMonth ? thisMonth : asked, mine = sp.mine === '1';
-  const [mo, waiting, closing, history, checks] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss),
+  const [mo, waiting, closing, history, checks] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId),
     boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null, handoverHistory(db, me.flatId), toCheck(db, me.flatId, me.memberId, today)]);   // the card only shows on the month to close
   const closed = mo.info?.status === 'closed';
   // where entries can be added: this month for everyone; an earlier month still open for the collector only

@@ -41,7 +41,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
   const [meals, people, mo, waiting, ho, byOthers, iCleared, checks] = await Promise.all([
     loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId),
-    loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId, me.role === 'manager'),
+    loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId),
     myLatestHandover(db, me.flatId, me.memberId),
     changedByOthers(db, me.flatId, me.memberId, today),
     clearedBefore(db, me.flatId, me.memberId),

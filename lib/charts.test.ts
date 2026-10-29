@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { checkAll, db, migrate } from '../db/test-db';
+import { checkAll, confirmAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
@@ -47,6 +47,7 @@ describe('lastMonths', { timeout: 30000 }, () => {
       expect(await addEntry(db, f.flatId, nafis, e(`${m}-05`, { type: 'deposit', amount: bazar + 10000, memberId: ids.Tahsin }))).toBe('ok');
       expect(await addEntry(db, f.flatId, nafis, e(`${m}-05`, { type: 'bazar', amount: bazar }))).toBe('ok');
       expect(await addEntry(db, f.flatId, nafis, e(`${m}-05`, { type: 'bill', amount: 10000, note: 'Gas', split: 'equal' }))).toBe('ok');
+      await confirmAll(f.flatId);   // Tahsin's Yes
     };
     await month('2026-07', 20000);
     expect(await lastMonths(db, f.flatId, '2026-10-01')).toEqual([]);   // still open

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { checkAll, db, migrate } from '../db/test-db';
+import { checkAll, confirmAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal, setDefaults } from './meals-db';
 import { addEntry, addRoom, loadMonth, openMonth, setRoom, type NewEntry } from './money-db';
@@ -102,6 +102,7 @@ describe('closing a month', { timeout: 30000 }, () => {
     const { flatId, ids, nafis } = await flat();
     expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 300000, memberId: ids.Tahsin }))).toBe('ok');
     expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 120000 }))).toBe('ok');   // fund 1,800
+    await confirmAll(flatId);   // Tahsin's Yes
     const tahsin = { memberId: ids.Tahsin, role: 'member' as const };
     expect((await closeMonth(db, flatId, tahsin, '2026-09-01', '2026-10-01', cash(180000))).result).toBe('notCollector');
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-09-30', cash(180000))).result).toBe('early');

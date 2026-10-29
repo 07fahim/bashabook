@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkAll, db, migrate } from '../db/test-db';
+import { checkAll, confirmAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { setDefaults, updateSettings } from './meals-db';
 import { addEntry, addRoom, loadMonth, openMonth, putBack, removeEntry, setRent, setRoom, type NewEntry } from './money-db';
@@ -24,6 +24,7 @@ async function flat(roomBill = true) {
   const big = (await addRoom(db, f.flatId, nafis, 'Big', 300000)) as string, small = (await addRoom(db, f.flatId, nafis, 'Small', 100000)) as string;
   for (const [n, r] of [['Nafis', big], ['Tahsin', small], ['Zarif', small]]) await setRoom(db, f.flatId, nafis, ids[n], r);
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'deposit', amount: 1300000, memberId: ids.Tahsin }))).toBe('ok');
+  await confirmAll(f.flatId);   // Tahsin's Yes
   if (roomBill) expect(await addEntry(db, f.flatId, nafis, e({ type: 'bill', amount: 400000, note: 'Rent', split: 'room' }))).toBe('ok');
   expect(await addEntry(db, f.flatId, nafis, e({ type: 'bazar', amount: 900000 }))).toBe('ok');
   await openMonth(db, f.flatId, '2026-10-01');
