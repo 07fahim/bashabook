@@ -44,7 +44,9 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
   const day = (at: string | null) => (at ? fmtDay(dhakaDate(at), lang) : '');
   const state = d.check === 'ok' ? (d.checkedBy ? b.checkedBy.replace('{name}', d.checkedBy).replace('{d}', day(d.checkedAt)) : b.checkedOld)
     : d.check === 'fix' ? b.fixBy.replace('{name}', d.checkedBy ?? '?').replace('{d}', day(d.checkedAt)).replace('{reason}', d.reason ?? '')
-    : sp.fixed === '1' ? b.fixed : b.waitingLine;
+    : sp.fixed === '1' ? b.fixed : '';   // waiting: the chip already says so
+  // their own entry sent back, but too late for them to fix (an earlier month): say who will
+  const othersFix = d.open && d.check === 'fix' && !d.mayFix && d.createdBy === me.memberId;
   const src = d.receiptV ? `/api/receipt/${d.id}?v=${d.receiptV}` : null;
   const hidden = (s?: 'ok' | 'fix') => (<><input type="hidden" name="lang" value={lang} /><input type="hidden" name="id" value={d.id} />{s && <><input type="hidden" name="state" value={s} /><input type="hidden" name="rv" value={d.receiptV ?? ''} /></>}</>);
 
@@ -53,12 +55,14 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
       <Header t={t} lang={lang} path={`/money/bazar/${d.id}`} notices={await noticesP}><Nav t={t} lang={lang} current="money" showFlat={boss} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <Link href={d.type === 'bazar' ? `/${lang}/money/bazar${q}` : `/${lang}/money${q}#entries`} className={`inline-flex min-h-11 items-center ${link}`}>{d.type === 'bazar' ? b.back : b.backMoney}</Link>
-        <div className="mt-2 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+        <div className="mt-2 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:items-start">
+          {/* phones: details, receipt, actions; at lg the details and the actions share the left column and a tall photo
+              grows only the second row (1fr), so no gap opens between them */}
           <section className={focal}>
             <h1 className="font-display text-3xl font-bold">{x.types[d.type]} · {fmtExact(d.amount)}</h1>
             <p className="mt-1 text-muted [overflow-wrap:anywhere]">{[fmtDay(d.date, lang), d.paidBy ? x.paidBy.replace('{name}', name(d.paidBy)) : x.fundPaid, d.note].filter(Boolean).join(' · ')}</p>
             <p role="status" className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <StatusChip state={d.check} b={b} /><span className="[overflow-wrap:anywhere]">{state}</span>
+              <StatusChip state={d.check} b={b} />{state && <span className="[overflow-wrap:anywhere]">{state}</span>}
             </p>
             {d.type === 'bazar' && (
               <div className="mt-4">
@@ -75,8 +79,26 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
             )}
             <p className="mt-4 text-[15px] text-muted">{b.addedBy.replace('{name}', d.addedBy).replace('{d}', fmtWhen(d.addedAt, lang))}</p>
             {!d.open && <p className="mt-3 font-semibold">{b.closedNote}</p>}
+          </section>
+          {/* beside a long Fix it form the receipt stays in view, whole: the photo is cut to the screen's height there */}
+          <section className={`${card} lg:sticky lg:top-20 lg:col-start-2 lg:row-span-2 lg:row-start-1`}>
+            <h2 className="text-xl font-bold">{b.receipt}</h2>
+            {src ? (
+              <a href={src} target="_blank" rel="noopener" className={`mt-3 block rounded-xl ${focus}`}>
+                <Image src={src} alt={b.receiptAlt} width={960} height={1280} unoptimized className="mx-auto h-auto w-full rounded-xl lg:max-h-[calc(100vh-11rem)] lg:w-auto" />
+              </a>
+            ) : <p className="mt-2 text-muted">{b.noReceipt}</p>}
+            {d.mayAddReceipt && (
+              <ActionForm action={receiptAction} className="mt-4" clearOnDone>
+                {hidden()}
+                <ReceiptPicker label={src ? b.changeReceipt : b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} hint={b.receiptHint} />
+                <button className={`${primary} sm:w-auto`}>{x.save}</button>
+              </ActionForm>
+            )}
+          </section>
+          {(d.mayCheck || othersFix || d.mayFix) && <section className={card}>
             {d.mayCheck && (
-              <div className="mt-5 space-y-3">
+              <div className="space-y-3">
                 <ActionForm action={checkAction}>{hidden('ok')}<button className={`${primary} sm:w-auto`}>{b.ok}</button></ActionForm>
                 <details>
                   <summary className={`${secondary} cursor-pointer list-none sm:inline-flex sm:w-auto [&::-webkit-details-marker]:hidden`}>{b.fix}</summary>
@@ -94,10 +116,9 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
                 </details>
               </div>
             )}
-            {/* their own entry sent back, but too late for them to fix (an earlier month): say who will */}
-            {d.open && d.check === 'fix' && !d.mayFix && d.createdBy === me.memberId && <p className="mt-5 font-semibold">{b.othersFix.replace('{name}', collector.name)}</p>}
+            {othersFix && <p className="font-semibold">{b.othersFix.replace('{name}', collector.name)}</p>}
             {d.mayFix && (
-              <div className="mt-6 border-t border-line pt-5">
+              <div>
                 <h2 className="text-lg font-bold">{b.fixIt}</h2>
                 <p className="text-muted">{b.fixLead}</p>
                 <ActionForm action={fixAction} className="mt-4">
@@ -115,23 +136,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
                 </ActionForm>
               </div>
             )}
-          </section>
-          {/* beside a long Fix it form the receipt stays in view, whole: the photo is cut to the screen's height there */}
-          <section className={`${card} lg:sticky lg:top-20`}>
-            <h2 className="text-xl font-bold">{b.receipt}</h2>
-            {src ? (
-              <a href={src} target="_blank" rel="noopener" className={`mt-3 block rounded-xl ${focus}`}>
-                <Image src={src} alt={b.receiptAlt} width={960} height={1280} unoptimized className="mx-auto h-auto w-full rounded-xl lg:max-h-[calc(100vh-11rem)] lg:w-auto" />
-              </a>
-            ) : <p className="mt-2 text-muted">{b.noReceipt}</p>}
-            {d.mayAddReceipt && (
-              <ActionForm action={receiptAction} className="mt-4" clearOnDone>
-                {hidden()}
-                <ReceiptPicker label={src ? b.changeReceipt : b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} hint={b.receiptHint} />
-                <button className={`${primary} sm:w-auto`}>{x.save}</button>
-              </ActionForm>
-            )}
-          </section>
+          </section>}
         </div>
       </main>
     </>
