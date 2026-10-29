@@ -92,13 +92,14 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
               <ActionForm action={receiptAction} className="mt-4" clearOnDone>
                 {hidden()}
                 <ReceiptPicker label={src ? b.changeReceipt : b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} hint={b.receiptHint} />
-                <button className={`${primary} sm:w-auto`}>{x.save}</button>
+                <button className={`${secondary} sm:w-auto`}>{x.save}</button>
               </ActionForm>
             )}
           </section>
           {(d.mayCheck || othersFix || d.mayFix) && <section className={card}>
             {d.mayCheck && (
               <div className="space-y-3">
+                <h2 className="sr-only">{b.status}</h2>
                 <ActionForm action={checkAction}>{hidden('ok')}<button className={`${primary} sm:w-auto`}>{b.ok}</button></ActionForm>
                 <details>
                   <summary className={`${secondary} cursor-pointer list-none sm:inline-flex sm:w-auto [&::-webkit-details-marker]:hidden`}>{b.fix}</summary>

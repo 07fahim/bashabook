@@ -19,7 +19,7 @@ describe('reminder texts', () => {
     expect(fixAskMsg('bn', 'Nafis', 'bazar', 'abc').title).toBe('Nafis আপনাকে বাজারের হিসাব ঠিক করতে বলেছে');
     expect(fixedMsg('bn', 'Tahsin', 'bill', 'abc')).toEqual({ title: 'Tahsin বিল ঠিক করেছে', body: 'আবার চেক করুন।', url: '/bn/money/bazar/abc' });
     // the existing rule: no amount in any push (it shows on a locked screen)
-    for (const m of [fixAskMsg('en', 'X', 'bazar', 'a'), fixedMsg('bn', 'X', 'bill', 'a'), checkMsg('en', 3)]) expect(`${m.title} ${m.body}`).not.toMatch(/৳|\d{4,}|ম্যানেজার|manager|মেস|mess/i);
+    for (const m of [fixAskMsg('en', 'X', 'bazar', 'a'), fixAskMsg('bn', 'X', 'bazar', 'a'), fixedMsg('bn', 'X', 'bill', 'a'), fixedMsg('en', 'X', 'bazar', 'a'), checkMsg('en', 3), checkMsg('bn', 3), checkMsg('bn', 1)]) expect(`${m.title} ${m.body}`).not.toMatch(/৳|\d{4,}|ম্যানেজার|manager|মেস|mess/i);
     expect(fixedMsg('en', 'Tahsin', 'bazar', 'abc').title).toBe('Tahsin fixed a bazar');
     expect(checkMsg('bn', 1).title).toBe('1টা বাজারের হিসাব বা বিল চেকের অপেক্ষায়');
     expect(checkMsg('en', 1).title).toBe('1 bazar or bill waits for your check');
