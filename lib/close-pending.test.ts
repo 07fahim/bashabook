@@ -45,13 +45,13 @@ describe('close probe', { timeout: 30000 }, () => {
     const close = async () => closeMonth(db, f.flatId, nafis, '2026-09-01', TODAY, { cash: (await closeInfo(db, f.flatId, TODAY))!.held, bkash: 0, nagad: 0, bank: 0 });
     expect((await closeInfo(db, f.flatId, TODAY))?.pending).toBe(2);
     expect((await close()).result).toBe('pending');
-    expect(await checkEntry(db, f.flatId, nafis, bazar, 'fix', 'receipt?', TODAY)).not.toBeNull();
-    expect(await checkEntry(db, f.flatId, tahsin, bill, 'ok', null, TODAY)).not.toBeNull();
+    expect(await checkEntry(db, f.flatId, nafis, bazar, 'fix', 'receipt?', TODAY, '')).not.toBeNull();
+    expect(await checkEntry(db, f.flatId, tahsin, bill, 'ok', null, TODAY, '')).not.toBeNull();
     expect((await closeInfo(db, f.flatId, TODAY))?.pending).toBe(1);
     expect((await close()).result).toBe('pending');   // Needs correction blocks too
     // September is last month: only the collector may fix it now (a flatmate fixes only this month's, as with removing)
     expect((await fixEntry(db, f.flatId, nafis, { id: bazar, type: 'bazar', amount: 45000, date: '2026-09-06', paidBy: ids.Tahsin, note: null, items: [], receipt: null }, TODAY)).result).toBe('ok');
-    expect(await checkEntry(db, f.flatId, nafis, bazar, 'ok', null, TODAY)).not.toBeNull();
+    expect(await checkEntry(db, f.flatId, nafis, bazar, 'ok', null, TODAY, '')).not.toBeNull();
     expect((await closeInfo(db, f.flatId, TODAY))?.pending).toBe(0);
     expect((await close()).result).toBe('ok');
   });

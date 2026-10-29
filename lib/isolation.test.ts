@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { checkAll, db, migrate } from '../db/test-db';
 import { addMember, bringBack, createFlat, createSession, deleteSession, listMembers, login, memberBySession, renameMember, resetPin, setLeaving } from './auth';
-import { checkEntry, entryDetail, fixEntry, itemsFor, receiptOf, toCheck } from './bazar';
+import { checkEntry, entryDetail, fixEntry, itemsFor, receiptOf, receiptVersion, toCheck } from './bazar';
 import { addCorrection, closeMonth } from './close';
 import { acceptHandover, offerHandover } from './handover';
 import { setOtherMeal } from './meals-db';
@@ -112,9 +112,10 @@ describe('flat isolation', { timeout: 60000 }, () => {
     expect(await entryDetail(db, A.flatId, id, A.boss.memberId, today)).toBeNull();
     expect((await itemsFor(db, A.flatId, OCT)).size).toBe(0);
     expect(await toCheck(db, A.flatId, A.boss.memberId, today)).toEqual([]);
-    expect(await checkEntry(db, A.flatId, A.boss, id, 'fix', 'x', today)).toBeNull();
-    expect(await checkEntry(db, B.flatId, A.boss, id, 'fix', 'x', today)).toBeNull();   // A's collector named in B's flat
-    expect(await checkEntry(db, B.flatId, B.boss, id, 'fix', 'x', today)).not.toBeNull();   // control
+    const rv = await receiptVersion(db, B.flatId, id);   // the photo B's page shows: only the flat can refuse
+    expect(await checkEntry(db, A.flatId, A.boss, id, 'fix', 'x', today, rv)).toBeNull();
+    expect(await checkEntry(db, B.flatId, A.boss, id, 'fix', 'x', today, rv)).toBeNull();   // A's collector named in B's flat
+    expect(await checkEntry(db, B.flatId, B.boss, id, 'fix', 'x', today, rv)).not.toBeNull();   // control
     expect((await fixEntry(db, A.flatId, A.boss, { id, type: 'bazar', amount: 100, date: '2026-10-05', paidBy: null, note: null, items: [], receipt: null }, today)).result).toBe('bad');
     expect(await db(`select 1 from entry_checks where ledger_id = $1 and state = 'fix'`, [id])).toHaveLength(1);
   });

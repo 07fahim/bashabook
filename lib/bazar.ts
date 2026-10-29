@@ -52,13 +52,22 @@ export async function receiptOf(db: Db, flatId: string, ledgerId: string) {
   return r?.photo ?? null;
 }
 
+/** SQL: the receipt photo's version of entry `id` as the entry page shows it (receiptV), '' for none. */
+const photoV = (id: string) => `coalesce((select extract(epoch from r.created_at)::bigint::text from receipts r where r.ledger_id = ${id}), '')`;
+
+/** The receipt version now ('' for none): tells a refused check that the photo changed meanwhile. */
+export const receiptVersion = async (db: Db, flatId: string, id: string) =>
+  (await db<{ v: string }>(`select ${photoV('$2')} as v from ledger where flat_id = $1 and id = $2`, [flatId, id]))[0]?.v ?? '';
+
 /** Verified ('ok') or Needs correction ('fix', with a reason) on a waiting bazar or bill, by someone may_check allows today.
+ *  `rv` is the receipt version the checker's page showed ('' for none): a photo added or changed since then refuses the
+ *  tap, so Verified always means the final photo was seen.
  *  One statement. It locks the entry's month row (no key update, as month_touch does) without bumping its version and needs
  *  the month open: a close running now finishes first and this then finds the month closed and writes nothing; a handover
  *  offer and a close card stay valid. `not exists` reads before the insert, so a check tapped while a Fix it is saving never
  *  waits on that entry's row (no deadlock with the fix's month lock) and writes nothing. A second tap, or two checkers at
  *  once: the row is there, nothing is written. Returns the entry for the push, or null. */
-export async function checkEntry(db: Db, flatId: string, by: Actor, id: string, state: 'ok' | 'fix', note: string | null, today: string) {
+export async function checkEntry(db: Db, flatId: string, by: Actor, id: string, state: 'ok' | 'fix', note: string | null, today: string, rv: string) {
   const reason = state === 'fix' ? cleanText(note) || null : null;
   if (state === 'fix' && (!reason || reason.length > 100)) return null;
   const [r] = await db<{ adder: string; type: 'bazar' | 'bill'; amount: number }>(
@@ -67,13 +76,13 @@ export async function checkEntry(db: Db, flatId: string, by: Actor, id: string, 
          for no key update of mo),
        c as (insert into entry_checks (flat_id, ledger_id, month, state, note, by_member)
          select $1, $2, m.month, $4, $5, $3 from m
-         where not exists (select 1 from entry_checks where ledger_id = $2) and may_check($2, $3, $6::text::date)
+         where not exists (select 1 from entry_checks where ledger_id = $2) and may_check($2, $3, $6::text::date) and ${photoV('$2')} = $7
          on conflict (ledger_id) do nothing returning *),
        a as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
          select $1, 'ledger', c.ledger_id::text, jsonb_build_object('checked', c.state)
            || case when c.note is null then '{}'::jsonb else jsonb_build_object('note', c.note) end, $3 from c)
      select l.created_by as adder, l.type, l.amount_poisha::int as amount from c join ledger l on l.id = c.ledger_id`,
-    [flatId, id, by.memberId, state, reason, today]);
+    [flatId, id, by.memberId, state, reason, today, rv]);
   return r ?? null;
 }
 

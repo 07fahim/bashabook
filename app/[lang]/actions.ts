@@ -5,7 +5,7 @@ import { headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
 import { addMember, changePin, cleanName, cleanText, clearLock, clearedBefore, UUID, createFlat, isPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
-import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems } from '@/lib/bazar';
+import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems, receiptVersion } from '@/lib/bazar';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
@@ -463,9 +463,9 @@ export async function checkAction(_: FormState, d: FormData): Promise<FormState>
   const id = str(d, 'id'), state = pick(['ok', 'fix'] as const, str(d, 'state')), note = cleanText(str(d, 'note')).slice(0, 100) || null, today = todayDhaka();
   if (!UUID.test(id) || !state) return { error: x.errors.bad };
   if (state === 'fix' && !note) return { error: x.errors.fixReason };
-  const r = await checkEntry(db, me.flatId, me, id, state, note, today);
-  refresh();
-  if (!r) return { error: x.errors.notChecked };
+  const rv = str(d, 'rv'), r = await checkEntry(db, me.flatId, me, id, state, note, today, rv);
+  refresh();   // a refusal redraws the page too: the new photo, or the check someone else made
+  if (!r) return { error: (await receiptVersion(db, me.flatId, id)) !== rv ? x.errors.photoChanged : x.errors.notChecked };
   if (state === 'fix') after(async () => {
     try {
       const to = await fixAskTo(db, me.flatId, id, me.memberId, today);
@@ -506,7 +506,7 @@ export async function fixAction(_: FormState, d: FormData): Promise<FormState> {
 export async function receiptAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), x = getDictionary(lang).money;
   const me = await requireMember(lang, true);
-  const id = str(d, 'id'), bytes = fromDataUrl(str(d, 'receipt'));
+  const id = str(d, 'id'), raw = str(d, 'receipt'), bytes = fromDataUrl(raw);
   if (!UUID.test(id)) return { error: x.errors.bad };
   if (!bytes) return { error: x.errors.receipt };
   const r = await addReceipt(db, me.flatId, me, id, bytes, todayDhaka());

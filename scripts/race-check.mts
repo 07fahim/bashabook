@@ -83,14 +83,14 @@ try {
     const f = await flat();
     const c = hold(tx => tx(`update months set status = 'closed', closed_at = now() where flat_id = $1 and month = $2::text::date returning 1`, [f.flatId, SEP]));
     await c.started;
-    const tap = checkEntry(db, f.flatId, f.zarif, f.id, 'ok', null, today);
+    const tap = checkEntry(db, f.flatId, f.zarif, f.id, 'ok', null, today, '');
     check('1 a check waits for a close in progress', await waits(tap));
     c.release(); await c.done;
     check('1 then writes nothing into the closed month', (await tap) === null && (await rows(f.id)) === 0);
   }
   { // 2. a check holds the month row: a close waits, then goes through (no version moved)
     const f = await flat();
-    const tap = hold(tx => checkEntry(tx, f.flatId, f.zarif, f.id, 'ok', null, today));
+    const tap = hold(tx => checkEntry(tx, f.flatId, f.zarif, f.id, 'ok', null, today, ''));
     await tap.started;
     const v = (await db<{ v: number }>(`select version as v from months where flat_id = $1 and month = $2::text::date`, [f.flatId, SEP]))[0].v;
     const c = db(`update months set status = 'closed' where flat_id = $1 and month = $2::text::date and version = $3 returning 1`, [f.flatId, SEP, v]);
@@ -100,10 +100,10 @@ try {
   }
   { // 3. Fix it is saving: a check on the same entry writes nothing
     const f = await flat();
-    await checkEntry(db, f.flatId, f.zarif, f.id, 'fix', 'Rice price', today);
+    await checkEntry(db, f.flatId, f.zarif, f.id, 'fix', 'Rice price', today, '');
     const fx = hold(tx => fixEntry(tx, f.flatId, f.nafis, { id: f.id, type: 'bazar', amount: 90000, date: '2026-09-05', paidBy: f.ids.Tahsin, note: null, items: [], receipt: null }, today));
     await fx.started;
-    const tap = checkEntry(db, f.flatId, f.zarif, f.id, 'ok', null, today);
+    const tap = checkEntry(db, f.flatId, f.zarif, f.id, 'ok', null, today, '');
     const blocked = await waits(tap);
     fx.release(); const r = await fx.done;
     check(`3 a check during a fix writes nothing (waited: ${blocked})`, r.result === 'ok' && (await tap) === null && (await rows(f.id)) === 0, { r, rows: await rows(f.id) });
@@ -112,7 +112,7 @@ try {
     const f = await flat();
     const offered = await offerHandover(db, f.flatId, f.nafis, f.ids.Tahsin, await flatMoney(db, f.flatId, today), today);
     const [h] = await db<{ id: string }>(`select id from handovers where flat_id = $1 and status = 'offered'`, [f.flatId]);
-    const tap = hold(tx => checkEntry(tx, f.flatId, f.zarif, f.id, 'ok', null, today));
+    const tap = hold(tx => checkEntry(tx, f.flatId, f.zarif, f.id, 'ok', null, today, ''));
     await tap.started;
     const acc = acceptHandover(db, f.flatId, f.ids.Tahsin, h.id);
     const blocked = await waits(acc);
@@ -129,7 +129,7 @@ try {
         ? [[f.tahsin, e.id, 'ok'], [f.zarif, e.id, 'ok']] as const
         : [[f.nafis, e.id, 'ok'], [f.nafis, e.id, 'ok']] as const);
       const out = await Promise.all([
-        ...taps.map(async ([by, id, s]) => { await jitter(400); return safe(checkEntry(db, f.flatId, by, id, s, null, today)); }),
+        ...taps.map(async ([by, id, s]) => { await jitter(400); return safe(checkEntry(db, f.flatId, by, id, s, null, today, '')); }),
         ...[0, 400, 900, 1600].map(async ms => { await after(ms); return safe(c()); })]);
       const landed = out.slice(0, taps.length).filter(r => r && r !== 'error').length;
       const per = await Promise.all(f.entries.map(async e => [await rows(e.id), await audits(e.id)]));
@@ -145,11 +145,11 @@ try {
     let landedAfter = 0, bad = 0;
     for (let k = 0; k < ROUNDS; k++) {
       const f = await flat();
-      await checkEntry(db, f.flatId, f.zarif, f.id, 'fix', 'Rice price', today);
+      await checkEntry(db, f.flatId, f.zarif, f.id, 'fix', 'Rice price', today, '');
       const [fx, a, b] = await Promise.all([
         safe(fixEntry(db, f.flatId, f.nafis, { id: f.id, type: 'bazar', amount: 90000, date: '2026-09-05', paidBy: f.ids.Tahsin, note: null, items: [{ name: 'Rice', amount: 50000 }], receipt: null }, today)),
-        (async () => { await jitter(1500); return safe(checkEntry(db, f.flatId, f.zarif, f.id, 'ok', null, today)); })(),
-        (async () => { await jitter(1500); return safe(checkEntry(db, f.flatId, f.tahsin, f.id, 'ok', null, today)); })()]);
+        (async () => { await jitter(1500); return safe(checkEntry(db, f.flatId, f.zarif, f.id, 'ok', null, today, '')); })(),
+        (async () => { await jitter(1500); return safe(checkEntry(db, f.flatId, f.tahsin, f.id, 'ok', null, today, '')); })()]);
       const n = await rows(f.id);
       // a Verified may land only after the fix committed (then it is on the fixed values): its history row comes later
       const order = await db<{ k: string }>(`select case when after ? 'fixed' then 'fix' else 'check' end as k from audit_log
@@ -164,8 +164,8 @@ try {
     let bad = 0;
     for (let k = 0; k < ROUNDS * 2; k++) {
       const f = await flat();
-      const [a, b] = await Promise.all([safe(checkEntry(db, f.flatId, f.tahsin, f.id, 'ok', null, today)),
-        safe(checkEntry(db, f.flatId, f.zarif, f.id, 'fix', 'Too much', today))]);
+      const [a, b] = await Promise.all([safe(checkEntry(db, f.flatId, f.tahsin, f.id, 'ok', null, today, '')),
+        safe(checkEntry(db, f.flatId, f.zarif, f.id, 'fix', 'Too much', today, ''))]);
       const landed = [a, b].filter(r => r && r !== 'error').length;
       if (a && a !== 'error') won.ok++; if (b && b !== 'error') won.fix++;
       if (landed !== 1 || (await rows(f.id)) !== 1 || (await audits(f.id)) !== 1) bad++;
@@ -179,7 +179,7 @@ try {
       const offered = await offerHandover(db, f.flatId, f.nafis, f.ids.Tahsin, await flatMoney(db, f.flatId, today), today);
       const [h] = await db<{ id: string }>(`select id from handovers where flat_id = $1 and status = 'offered'`, [f.flatId]);
       const out = await Promise.all([
-        ...f.entries.map(async e => { await jitter(); return safe(checkEntry(db, f.flatId, e.byNafis ? f.zarif : f.nafis, e.id, 'ok', null, today)); }),
+        ...f.entries.map(async e => { await jitter(); return safe(checkEntry(db, f.flatId, e.byNafis ? f.zarif : f.nafis, e.id, 'ok', null, today, '')); }),
         (async () => { await jitter(); return safe(acceptHandover(db, f.flatId, f.ids.Tahsin, h.id)); })()]);
       // each check still lands once: the rule allows each checker before and after the handover
       const per = await Promise.all(f.entries.map(async e => [await rows(e.id), await audits(e.id)]));

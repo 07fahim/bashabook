@@ -46,7 +46,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
     : d.check === 'fix' ? b.fixBy.replace('{name}', d.checkedBy ?? '?').replace('{d}', day(d.checkedAt)).replace('{reason}', d.reason ?? '')
     : sp.fixed === '1' ? b.fixed : b.waitingLine;
   const src = d.receiptV ? `/api/receipt/${d.id}?v=${d.receiptV}` : null;
-  const hidden = (s?: 'ok' | 'fix') => (<><input type="hidden" name="lang" value={lang} /><input type="hidden" name="id" value={d.id} />{s && <input type="hidden" name="state" value={s} />}</>);
+  const hidden = (s?: 'ok' | 'fix') => (<><input type="hidden" name="lang" value={lang} /><input type="hidden" name="id" value={d.id} />{s && <><input type="hidden" name="state" value={s} /><input type="hidden" name="rv" value={d.receiptV ?? ''} /></>}</>);
 
   return (
     <>

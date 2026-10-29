@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
-import { addReceipt, checkEntry, entryDetail, fixAskTo, fixEntry, itemsFor, itemsOk, monthTotals, otherItems, parseItems, receiptOf, toCheck, type Fix } from './bazar';
+import { addReceipt, checkEntry, entryDetail, fixAskTo, fixEntry, itemsFor, itemsOk, monthTotals, otherItems, parseItems, receiptOf, receiptVersion, toCheck, type Fix } from './bazar';
 import { closeMonth, closeInfo } from './close';
 import { acceptHandover, currentOffer, flatMoney, offerHandover } from './handover';
 import { addEntry, loadMonth, openMonth, putBack, removeEntry, type Actor, type NewEntry } from './money-db';
@@ -141,9 +141,9 @@ describe('the check', { timeout: 30000 }, () => {
     const versions = () => db<{ m: number; o: number }>(`select (select version from months where flat_id = $1 and month = $2::text::date) as m,
       (select offer_version from flats where id = $1) as o`, [flatId, OCT]);
     const before = await versions();
-    expect(await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY)).toEqual({ adder: ids.Tahsin, type: 'bazar', amount: 90000 });
+    expect(await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY, '')).toEqual({ adder: ids.Tahsin, type: 'bazar', amount: 90000 });
     expect(await versions()).toEqual(before);
-    expect(await checkEntry(db, flatId, nafis, id, 'fix', 'again', TODAY)).toBeNull();
+    expect(await checkEntry(db, flatId, nafis, id, 'fix', 'again', TODAY, '')).toBeNull();
     expect(await acceptHandover(db, flatId, ids.Zarif, (await currentOffer(db, flatId))!.id)).toBe('ok');
     const log = await db<{ after: unknown }>(`select after from audit_log where flat_id = $1 and entity_id = $2 and after ? 'checked'`, [flatId, id]);
     expect(log.map(l => l.after)).toEqual([{ checked: 'ok' }]);
@@ -155,13 +155,13 @@ describe('the check', { timeout: 30000 }, () => {
     const own = await add(as('Tahsin'), { type: 'bazar', amount: 30000, paidBy: ids.Tahsin, date: '2026-10-06' });
     expect((await toCheck(db, flatId, ids.Nafis, TODAY)).map(c => c.id)).toEqual([own]);
     expect((await toCheck(db, flatId, ids.Zarif, TODAY)).map(c => c.id)).toEqual([fund]);
-    expect(await checkEntry(db, flatId, nafis, fund, 'ok', null, TODAY)).toBeNull();          // never their own spending
-    expect(await checkEntry(db, flatId, as('Zarif'), own, 'ok', null, TODAY)).toBeNull();     // the collector's to check
-    expect(await checkEntry(db, flatId, nafis, own, 'fix', '  ', TODAY)).toBeNull();         // a reason is required
-    expect(await checkEntry(db, flatId, nafis, own, 'fix', 'Rice was ৳500', TODAY)).toEqual({ adder: ids.Tahsin, type: 'bazar', amount: 30000 });
+    expect(await checkEntry(db, flatId, nafis, fund, 'ok', null, TODAY, '')).toBeNull();          // never their own spending
+    expect(await checkEntry(db, flatId, as('Zarif'), own, 'ok', null, TODAY, '')).toBeNull();     // the collector's to check
+    expect(await checkEntry(db, flatId, nafis, own, 'fix', '  ', TODAY, '')).toBeNull();         // a reason is required
+    expect(await checkEntry(db, flatId, nafis, own, 'fix', 'Rice was ৳500', TODAY, '')).toEqual({ adder: ids.Tahsin, type: 'bazar', amount: 30000 });
     expect(await toCheck(db, flatId, ids.Tahsin, TODAY)).toEqual([
       expect.objectContaining({ id: fund, state: null }), expect.objectContaining({ id: own, state: 'fix', reason: 'Rice was ৳500' })]);
-    expect(await checkEntry(db, flatId, as('Tahsin'), fund, 'ok', null, TODAY)).not.toBeNull();
+    expect(await checkEntry(db, flatId, as('Tahsin'), fund, 'ok', null, TODAY, '')).not.toBeNull();
     expect(await toCheck(db, flatId, ids.Zarif, TODAY)).toEqual([]);
     const [a] = await db<{ after: unknown }>(`select after from audit_log where entity_id = $1 and after ? 'checked'`, [own]);
     expect(a.after).toEqual({ checked: 'fix', note: 'Rice was ৳500' });
@@ -170,11 +170,11 @@ describe('the check', { timeout: 30000 }, () => {
   it('a check needs its month open: nothing lands on a closed month', async () => {
     const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
     const id = await add(nafis, { type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin });   // a late entry, by the collector
-    expect(await checkEntry(db, flatId, as('Zarif'), id, 'ok', null, TODAY)).not.toBeNull();
+    expect(await checkEntry(db, flatId, as('Zarif'), id, 'ok', null, TODAY, '')).not.toBeNull();
     const info = (await closeInfo(db, flatId, TODAY))!;
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', TODAY, { cash: info.held, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
     await db(`delete from entry_checks where ledger_id = $1`, [id]);   // as if never checked
-    expect(await checkEntry(db, flatId, as('Zarif'), id, 'ok', null, TODAY)).toBeNull();
+    expect(await checkEntry(db, flatId, as('Zarif'), id, 'ok', null, TODAY, '')).toBeNull();
     expect(await db(`select 1 from entry_checks where ledger_id = $1`, [id])).toHaveLength(0);
     expect(await toCheck(db, flatId, ids.Zarif, TODAY)).toEqual([]);
   });
@@ -187,7 +187,7 @@ describe('the check', { timeout: 30000 }, () => {
     expect(mine.d.receiptV).toMatch(/^\d+$/);
     expect(mine.people.map(p => p.name)).toEqual(['Nafis', 'Tahsin', 'Zarif']);
     expect((await entryDetail(db, flatId, id, ids.Zarif, TODAY))!.d.mayCheck).toBe(false);
-    await checkEntry(db, flatId, nafis, id, 'fix', 'Rice was ৳450', TODAY);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'Rice was ৳450', TODAY, await receiptVersion(db, flatId, id));
     expect((await entryDetail(db, flatId, id, ids.Tahsin, TODAY))!.d).toMatchObject({ check: 'fix', reason: 'Rice was ৳450', checkedBy: 'Nafis' });
     expect((await entryDetail(db, flatId, id, ids.Nafis, TODAY))!.d.mayCheck).toBe(false);   // checked already: nothing to tap
     expect(await entryDetail(db, flatId, randomUUID(), ids.Nafis, TODAY)).toBeNull();
@@ -204,8 +204,8 @@ describe('the check', { timeout: 30000 }, () => {
   it('a Needs correction reason is cleaned like any typed text', async () => {
     const { flatId, ids, nafis, as, add } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
-    expect(await checkEntry(db, flatId, nafis, id, 'fix', '‮​', TODAY)).toBeNull();   // nothing left once cleaned
-    expect(await checkEntry(db, flatId, nafis, id, 'fix', ' Rice‮ was ৳500\u0007 ', TODAY)).not.toBeNull();
+    expect(await checkEntry(db, flatId, nafis, id, 'fix', '‮​', TODAY, '')).toBeNull();   // nothing left once cleaned
+    expect(await checkEntry(db, flatId, nafis, id, 'fix', ' Rice‮ was ৳500\u0007 ', TODAY, '')).not.toBeNull();
     expect((await entryDetail(db, flatId, id, ids.Tahsin, TODAY))!.d.reason).toBe('Rice was ৳500');
   });
 });
@@ -219,7 +219,7 @@ describe('Fix it', { timeout: 30000 }, () => {
       items: [{ name: 'Rice', amount: 60000 }, { name: 'Dal', amount: 20000 }, { name: 'Oil', amount: null }] });
     const fix = (p: Partial<Fix> = {}): Fix => ({ id, type: 'bazar', amount: 90000, date: '2026-10-06', paidBy: ids.Tahsin, note: 'fixed', items: [{ name: 'Rice', amount: 60000 }], receipt: null, ...p });
     expect((await fixEntry(db, flatId, as('Tahsin'), fix(), TODAY)).result).toBe('bad');   // waiting: nothing to fix
-    await checkEntry(db, flatId, nafis, id, 'fix', 'Rice was ৳500', TODAY);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'Rice was ৳500', TODAY, await receiptVersion(db, flatId, id));
     expect((await fixEntry(db, flatId, as('Zarif'), fix(), TODAY)).result).toBe('bad');    // not theirs
     expect((await fixEntry(db, flatId, as('Tahsin'), fix({ date: '2026-09-30' }), TODAY)).result).toBe('date');   // another month
     expect((await fixEntry(db, flatId, as('Tahsin'), fix({ date: '2026-10-10' }), TODAY)).result).toBe('date');   // after today
@@ -242,7 +242,7 @@ describe('Fix it', { timeout: 30000 }, () => {
   it('a fix by the collector makes it theirs: another flatmate checks it next', async () => {
     const { flatId, ids, nafis, as, add, may } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
-    await checkEntry(db, flatId, nafis, id, 'fix', 'wrong day', TODAY);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'wrong day', TODAY, '');
     expect((await fixEntry(db, flatId, nafis, { id, type: 'bazar', amount: 1000, date: '2026-10-04', paidBy: ids.Tahsin, note: null, items: [], receipt: null }, TODAY)).result).toBe('ok');
     expect([await may(id, 'Nafis'), await may(id, 'Tahsin'), await may(id, 'Zarif')]).toEqual([false, false, true]);
   });
@@ -250,7 +250,7 @@ describe('Fix it', { timeout: 30000 }, () => {
   it('a bill keeps its split; a new receipt replaces the old; a payer who had left by then is refused', async () => {
     const { flatId, ids, nafis, as, add } = await flat();
     const id = await add(as('Tahsin'), { type: 'bill', amount: 2000, note: 'Gas', split: 'selected', selected: [ids.Tahsin, ids.Zarif], paidBy: ids.Tahsin, receipt: jpeg() });
-    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY, await receiptVersion(db, flatId, id));
     const f: Fix = { id, type: 'bill', amount: 2500, date: '2026-10-05', paidBy: ids.Tahsin, note: 'Gas', items: [], receipt: jpeg(200) };
     expect((await fixEntry(db, flatId, as('Tahsin'), { ...f, note: null }, TODAY)).result).toBe('bad');                     // a bill keeps a name
     expect((await fixEntry(db, flatId, as('Tahsin'), { ...f, items: [{ name: 'x', amount: null }] }, TODAY)).result).toBe('bad');
@@ -268,10 +268,10 @@ describe('Fix it', { timeout: 30000 }, () => {
     const v = async () => (await entryDetail(db, flatId, id, ids.Tahsin, TODAY))!.d.receiptV!;
     const f: Fix = { id, type: 'bazar', amount: 1000, date: '2026-10-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null };
     const v0 = await v();
-    await checkEntry(db, flatId, nafis, id, 'fix', 'photo', TODAY);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'photo', TODAY, await receiptVersion(db, flatId, id));
     expect((await fixEntry(db, flatId, as('Tahsin'), f, TODAY)).result).toBe('ok');
     expect(await v()).toBe(v0);
-    await checkEntry(db, flatId, nafis, id, 'fix', 'photo', TODAY);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'photo', TODAY, await receiptVersion(db, flatId, id));
     expect((await fixEntry(db, flatId, as('Tahsin'), { ...f, receipt: jpeg(150) }, TODAY)).result).toBe('ok');
     expect(Number(await v())).toBeGreaterThan(Number(v0));
   });
@@ -279,7 +279,7 @@ describe('Fix it', { timeout: 30000 }, () => {
   it('a receipt that is not a small JPEG is refused', async () => {
     const { flatId, ids, nafis, as, add } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
-    await checkEntry(db, flatId, nafis, id, 'fix', 'photo', TODAY);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'photo', TODAY, '');
     const f: Fix = { id, type: 'bazar', amount: 1000, date: '2026-10-05', paidBy: ids.Tahsin, note: null, items: [], receipt: jpeg(250_001) };
     expect((await fixEntry(db, flatId, as('Tahsin'), f, TODAY)).result).toBe('receipt');
     expect((await fixEntry(db, flatId, as('Tahsin'), { ...f, amount: 0, receipt: null }, TODAY)).result).toBe('bad');
@@ -289,7 +289,7 @@ describe('Fix it', { timeout: 30000 }, () => {
   it('a month closed since it was sent back: the database refuses (month_closed) and nothing changes', async () => {
     const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
     const id = await add(nafis, { type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin });
-    await checkEntry(db, flatId, as('Zarif'), id, 'fix', 'amount', TODAY);
+    await checkEntry(db, flatId, as('Zarif'), id, 'fix', 'amount', TODAY, '');
     await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-09-01'::text::date`, [flatId]);   // a sent-back entry blocks a real close
     await expect(fixEntry(db, flatId, nafis, { id, type: 'bazar', amount: 900, date: '2026-09-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null }, TODAY))
       .rejects.toThrow('month_closed');
@@ -301,7 +301,7 @@ describe('Fix it', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, as } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
     const id = randomUUID();
     expect(await addEntry(db, flatId, as('Tahsin'), e({ id, type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin }))).toBe('ok');   // no today: into September
-    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY, '');
     const f: Fix = { id, type: 'bazar', amount: 900, date: '2026-09-05', paidBy: ids.Tahsin, note: null, items: [], receipt: null };
     expect((await fixEntry(db, flatId, as('Tahsin'), f, TODAY)).result).toBe('bad');
     expect(await db(`select 1 from entry_checks where ledger_id = $1 and state = 'fix'`, [id])).toHaveLength(1);   // still sent back
@@ -315,8 +315,8 @@ describe('Fix it', { timeout: 30000 }, () => {
     const oct = await add(as('Tahsin'), { type: 'bazar', amount: 2000, paidBy: ids.Tahsin });
     const wait = await add(as('Tahsin'), { type: 'bazar', amount: 500, paidBy: ids.Tahsin });
     const own = await add(nafis, { type: 'bazar', amount: 700, date: '2026-10-04' });   // flat money: Zarif checks it
-    for (const id of [sep, oct]) await checkEntry(db, flatId, nafis, id, 'fix', 'amount', day);
-    await checkEntry(db, flatId, as('Zarif'), own, 'fix', 'amount', day);
+    for (const id of [sep, oct]) await checkEntry(db, flatId, nafis, id, 'fix', 'amount', day, '');
+    await checkEntry(db, flatId, as('Zarif'), own, 'fix', 'amount', day, '');
     const listed = async (who: string) => (await toCheck(db, flatId, ids[who], day)).map(c => c.id);
     expect(await listed('Tahsin')).toEqual([oct]);                // last month's: refused by fixEntry, so not listed
     expect(await listed('Nafis')).toEqual([sep, own, wait]);      // last month's (Tahsin can't any more), his own; this month's is Tahsin's
@@ -344,8 +344,8 @@ describe('Fix it', { timeout: 30000 }, () => {
     expect(await addEntry(db, flatId, as('Tahsin'), e({ id: sepFund, type: 'bazar', amount: 1000, date: '2026-09-05' }))).toBe('ok');   // flat money: Zarif checks it
     const oct = await add(as('Tahsin'), { type: 'bazar', amount: 2000, paidBy: ids.Tahsin });
     const own = await add(nafis, { type: 'bazar', amount: 700, date: '2026-10-04' });   // flat money: a flatmate checks it
-    for (const id of [sep, oct]) expect(await checkEntry(db, flatId, nafis, id, 'fix', 'amount', day)).not.toBeNull();
-    for (const id of [sepFund, own]) expect(await checkEntry(db, flatId, as('Zarif'), id, 'fix', 'amount', day)).not.toBeNull();
+    for (const id of [sep, oct]) expect(await checkEntry(db, flatId, nafis, id, 'fix', 'amount', day, '')).not.toBeNull();
+    for (const id of [sepFund, own]) expect(await checkEntry(db, flatId, as('Zarif'), id, 'fix', 'amount', day, '')).not.toBeNull();
     expect(await fixAskTo(db, flatId, oct, ids.Nafis, day)).toBe(ids.Tahsin);      // this month: the adder fixes it
     expect(await fixAskTo(db, flatId, sep, ids.Nafis, day)).toBeNull();            // last month: the collector, who marked it
     expect(await fixAskTo(db, flatId, sepFund, ids.Zarif, day)).toBe(ids.Nafis);  // last month, Zarif marked it: the collector
@@ -358,7 +358,7 @@ describe('Fix it', { timeout: 30000 }, () => {
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 2000, date: '2026-10-03' });   // flat money: Zarif checks it
     await db(`update members set left_on = '2026-10-04' where id = $1`, [ids.Tahsin]);   // moved out before today
     expect((await entryDetail(db, flatId, id, ids.Nafis, day))!.d.adderMayFix).toBe(false);
-    expect(await checkEntry(db, flatId, as('Zarif'), id, 'fix', 'amount', day)).not.toBeNull();
+    expect(await checkEntry(db, flatId, as('Zarif'), id, 'fix', 'amount', day, '')).not.toBeNull();
     expect(await fixAskTo(db, flatId, id, ids.Zarif, day)).toBe(ids.Nafis);
     expect((await toCheck(db, flatId, ids.Nafis, day)).map(r => r.id)).toContain(id);
   });
@@ -366,7 +366,7 @@ describe('Fix it', { timeout: 30000 }, () => {
   it('a fix posted for the other type (a stale form) is refused and keeps the item lines', async () => {
     const { flatId, ids, nafis, as, add } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin, items: [{ name: 'Rice', amount: 600 }] });
-    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY, '');
     const f: Fix = { id, type: 'bill', amount: 900, date: '2026-10-05', paidBy: ids.Tahsin, note: 'Gas', items: [], receipt: null };
     expect((await fixEntry(db, flatId, as('Tahsin'), f, TODAY)).result).toBe('bad');
     expect((await itemsFor(db, flatId, OCT)).get(id)).toEqual([{ name: 'Rice', amount: 600 }]);
@@ -375,7 +375,7 @@ describe('Fix it', { timeout: 30000 }, () => {
   it('another flat’s id with a real entry id: refused', async () => {
     const { flatId, ids, nafis, as, add } = await flat();
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
-    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY);
+    await checkEntry(db, flatId, nafis, id, 'fix', 'amount', TODAY, '');
     const other = await createFlat(db, { flatName: 'Other', name: 'Rafi', pin: '1234', others: [], today: OCT, lang: 'bn' });
     const f: Fix = { id, type: 'bazar', amount: 900, date: '2026-10-05', paidBy: null, note: null, items: [], receipt: null };
     expect((await fixEntry(db, other.flatId, { memberId: other.memberId, role: 'manager' }, f, TODAY)).result).toBe('bad');
@@ -423,8 +423,8 @@ describe('late receipt', { timeout: 30000 }, () => {
     const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-09-01');
     const ok = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
     const fix = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
-    await checkEntry(db, flatId, nafis, ok, 'ok', null, TODAY);
-    await checkEntry(db, flatId, nafis, fix, 'fix', 'amount', TODAY);
+    await checkEntry(db, flatId, nafis, ok, 'ok', null, TODAY, '');
+    await checkEntry(db, flatId, nafis, fix, 'fix', 'amount', TODAY, '');
     for (const id of [ok, fix]) for (const who of [as('Tahsin'), nafis]) expect(await addReceipt(db, flatId, who, id, jpeg(), TODAY)).toBe('bad');
     const sep = await add(nafis, { type: 'bazar', amount: 1000, date: '2026-09-05', paidBy: ids.Tahsin });
     await db(`update months set status = 'closed' where flat_id = $1 and month = '2026-09-01'::text::date`, [flatId]);   // a waiting entry blocks a real close
@@ -440,7 +440,27 @@ describe('late receipt', { timeout: 30000 }, () => {
     const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
     const may = async (who: string) => (await entryDetail(db, flatId, id, ids[who], TODAY))!.d.mayAddReceipt;
     expect([await may('Tahsin'), await may('Nafis'), await may('Zarif')]).toEqual([true, true, false]);
-    await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY);
+    await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY, '');
     expect([await may('Tahsin'), await may('Nafis')]).toEqual([false, false]);
+  });
+});
+
+describe('a check carries the photo it saw', { timeout: 30000 }, () => {
+  it('the photo version on the page lands; a photo added or changed since then refuses the tap and writes nothing', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const rv = async (id: string) => (await entryDetail(db, flatId, id, ids.Nafis, TODAY))!.d.receiptV ?? '';
+    const none = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
+    expect(await rv(none)).toBe('');
+    expect(await addReceipt(db, flatId, as('Tahsin'), none, jpeg(), TODAY)).toBe('ok');   // added after the page was opened
+    expect(await checkEntry(db, flatId, nafis, none, 'ok', null, TODAY, '')).toBeNull();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin, receipt: jpeg() });
+    await db(`update receipts set created_at = created_at - interval '1 hour' where ledger_id = $1`, [id]);
+    const seen = await rv(id);
+    expect(await addReceipt(db, flatId, as('Tahsin'), id, jpeg(150), TODAY)).toBe('ok');   // changed after the page was opened
+    expect(await checkEntry(db, flatId, nafis, id, 'fix', 'Rice was ৳500', TODAY, seen)).toBeNull();
+    expect(await db(`select 1 from entry_checks where ledger_id = any($1::uuid[])`, [[none, id]])).toHaveLength(0);
+    expect(await db(`select 1 from audit_log where entity_id = any($1::text[]) and after ? 'checked'`, [[none, id]])).toHaveLength(0);
+    expect(await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY, await rv(id))).not.toBeNull();   // the new photo, seen
+    expect(await checkEntry(db, flatId, nafis, none, 'ok', null, TODAY, await rv(none))).not.toBeNull();
   });
 });
