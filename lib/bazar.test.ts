@@ -23,6 +23,7 @@ async function flat(others = ['Tahsin', 'Zarif'], start = OCT) {
   const ids: Record<string, string> = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
   const nafis: Actor = { memberId: ids.Nafis, role: 'manager' };
   const as = (name: string): Actor => ({ memberId: ids[name], role: 'member' });
+  await db(`update members set pin_hash = 'x' where flat_id = $1 and pin_hash is null`, [f.flatId]);   // everyone claimed their name (021)
   await openMonth(db, f.flatId, start);
   if (start < OCT) await openMonth(db, f.flatId, OCT);
   const add = async (by: Actor, p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>) => {
@@ -52,6 +53,21 @@ describe('bazar checks: the database', { timeout: 30000 }, () => {
     expect(await may(viaFund, 'Zarif')).toBe(true);
     await db(`update members set left_on = null, joined_on = '2026-10-10' where id = $1`, [ids.Zarif]);   // joins tomorrow: not yet
     expect(await may(viaFund, 'Zarif')).toBe(false);
+  });
+
+  it('a name nobody claimed is not another checker: the collector checks flat money and the month closes', async () => {
+    const { flatId, ids, nafis, add, may } = await flat(['Tahsin']);
+    await db(`update members set pin_hash = null where id = $1`, [ids.Tahsin]);   // Tahsin never claimed his name
+    await add(nafis, { type: 'deposit', amount: 2000, memberId: ids.Nafis });
+    const fund = await add(nafis, { type: 'bazar', amount: 1000 });
+    expect(await may(fund, 'Nafis')).toBe(true);
+    expect((await toCheck(db, flatId, ids.Nafis, TODAY)).map(c => c.id)).toEqual([fund]);
+    await db(`update members set pin_hash = 'x' where id = $1`, [ids.Tahsin]);   // Tahsin claims his name: he checks it
+    expect([await may(fund, 'Nafis'), await may(fund, 'Tahsin')]).toEqual([false, true]);
+    await db(`update members set pin_hash = null where id = $1`, [ids.Tahsin]);
+    expect(await checkEntry(db, flatId, nafis, fund, 'ok', null, TODAY, '')).not.toBeNull();
+    const END = '2026-11-02', held = (await closeInfo(db, flatId, END))!.held;
+    expect((await closeMonth(db, flatId, nafis, OCT, END, { cash: held, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
   });
 
   it('a flat of one: the collector checks their own', async () => {

@@ -100,6 +100,7 @@ describe('timed reminders', { timeout: 30000 }, () => {
     await migrate();
     const f = await createFlat(db, { flatName: 'J5', name: 'Nafis', pin: '1234', others: ['Tahsin', 'Zarif', 'Rafi'], today: '2026-10-01', lang: 'en' });
     const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
+    await db(`update members set pin_hash = 'x' where flat_id = $1 and pin_hash is null`, [f.flatId]);   // everyone claimed their name
     await db(`update members set left_on = '2026-10-03' where id = $1`, [ids.Rafi]);   // moved out: gets nothing
     await openMonth(db, f.flatId, '2026-10-01');
     // this flat's check pushes only: other tests' flats share the database

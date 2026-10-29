@@ -59,7 +59,7 @@ describe('close probe', { timeout: 30000 }, () => {
   it('a monthly bill from openMonth and a correction start waiting for a check', async () => {
     await migrate();
     const f = await createFlat(db, { flatName: 'Flat 4D', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-09-01', lang: 'bn' });
-    const [t] = await db<{ id: string }>(`select id from members where flat_id = $1 and role = 'member'`, [f.flatId]);
+    const [t] = await db<{ id: string }>(`update members set pin_hash = 'x' where flat_id = $1 and role = 'member' returning id`, [f.flatId]);   // Tahsin claimed his name
     const nafis = { memberId: f.memberId, role: 'manager' as const };
     await openMonth(db, f.flatId, '2026-09-01');
     expect(await addEntry(db, f.flatId, nafis, e({ type: 'bill', amount: 30000, note: 'Wi-Fi', split: 'equal', repeat: true, date: '2026-09-02' }), '2026-09-02')).toBe('ok');
