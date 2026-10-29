@@ -153,6 +153,7 @@ describe('bazar items and receipts', { timeout: 30000 }, () => {
     expect(await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY, await receiptVersion(db, flatId, id))).not.toBeNull();
     expect(await removeEntry(db, flatId, as('Tahsin'), id, TODAY)).toBe(true);
     expect(await addEntry(db, flatId, as('Tahsin'), e({ id, type: 'bazar', amount: 1000000, paidBy: ids.Tahsin }), TODAY)).toBe('bad');
+    expect(await addEntry(db, flatId, as('Tahsin'), e({ id: id.toUpperCase(), type: 'bazar', amount: 1000000, paidBy: ids.Tahsin }), TODAY)).toBe('bad');
     const m = await loadMonth(db, flatId, OCT, TODAY);
     expect(m.entries.some(x => x.id === id)).toBe(false);
     expect(m.removed.some(x => x.id === id)).toBe(true);
@@ -165,6 +166,19 @@ describe('bazar items and receipts', { timeout: 30000 }, () => {
     expect(await putBack(db, flatId, ids.Tahsin, plain, TODAY)).toBe(true);
     // a double tap of a saved entry stays 'again'
     expect(await addEntry(db, flatId, as('Tahsin'), e({ id: await add(as('Tahsin'), { type: 'bazar', amount: 700, paidBy: ids.Tahsin }), type: 'bazar', amount: 700, paidBy: ids.Tahsin }), TODAY)).toBe('again');
+  });
+
+  it('a remove that lands just before the save still refuses the old id', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const id = await add(as('Tahsin'), { type: 'bazar', amount: 10000, paidBy: ids.Tahsin });
+    expect(await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY, await receiptVersion(db, flatId, id))).not.toBeNull();
+    let removed = false;   // the remove commits after every earlier read of this save, right before its insert
+    const racing: typeof db = async (text, params) => {
+      if (!removed && text.includes('insert into ledger')) { removed = true; expect(await removeEntry(db, flatId, as('Tahsin'), id, TODAY)).toBe(true); }
+      return db(text, params);
+    };
+    expect(await addEntry(racing, flatId, as('Tahsin'), e({ id, type: 'bazar', amount: 1000000, paidBy: ids.Tahsin }), TODAY)).toBe('bad');
+    expect((await loadMonth(db, flatId, OCT, TODAY)).entries.some(x => x.id === id)).toBe(false);
   });
 });
 

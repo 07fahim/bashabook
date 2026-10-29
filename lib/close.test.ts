@@ -248,6 +248,17 @@ describe('corrections', { timeout: 30000 }, () => {
     await db(`insert into entry_checks (flat_id, ledger_id, month, state, by_member) values ($1, $2, '2026-10-01', 'ok', $3)`, [flatId, id, ids.Tahsin]);
     expect(await removeEntry(db, flatId, nafis, id, '2026-10-02')).toBe(true);
     expect(await addCorrection(db, flatId, nafis, { id, kind: 'bazar', forMonth: '2026-09-01', amount: 90000, paidBy: ids.Zarif, note: 'eggs' }, '2026-10-02')).toBe('bad');
+    expect(await addCorrection(db, flatId, nafis, { id: id.toUpperCase(), kind: 'bazar', forMonth: '2026-09-01', amount: 90000, paidBy: ids.Zarif, note: 'eggs' }, '2026-10-02')).toBe('bad');
+    // a remove that lands after the check, right before the insert
+    const live = randomUUID();
+    expect(await addEntry(db, flatId, nafis, e({ id: live, type: 'bazar', amount: 500, paidBy: ids.Tahsin, date: '2026-10-02' }), '2026-10-02')).toBe('ok');
+    let removed = false;
+    const racing: typeof db = async (text, params) => {
+      if (!removed && text.includes('insert into ledger')) { removed = true; expect(await removeEntry(db, flatId, nafis, live, '2026-10-02')).toBe(true); }
+      return db(text, params);
+    };
+    expect(await addCorrection(racing, flatId, nafis, { id: live, kind: 'bazar', forMonth: '2026-09-01', amount: 90000, paidBy: ids.Zarif, note: 'eggs' }, '2026-10-02')).not.toBe('ok');
+    expect(await db(`select 1 from ledger where id = $1`, [live])).toHaveLength(0);
   });
 
   it('a move between two people, and the rules', async () => {

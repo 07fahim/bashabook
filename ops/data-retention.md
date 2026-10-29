@@ -34,8 +34,8 @@ is at the same migration as production first). (On Neon until 2026-10-28 the win
 
 Trials nobody came back to are deleted on their own (since 2026-10-24, `runJobs` in `lib/jobs.ts`): a flat created more
 than 30 days ago where at most one person claimed a PIN, no money entry and no meal change ever existed, and nothing was
-written to the history for 30 days. Any flat with two claimed people, one money entry or one meal change is never touched by this. The cron run logs the names it
-removed (`purged` in the response, saved in cron-job.org's history).
+written to the history for 30 days. Any flat with two claimed people, one money entry or one meal change is never touched by this. The cron run reports only how many it
+removed (`purged`, a count: the response is saved in cron-job.org's history, so no flat name goes there).
 
 Also since 2026-10-24: anonymous actions are counted per connection and hour (`rate_limits`, `lib/rate-limit.ts`): 5 new
 flats, 120 code lookups, 60 PIN posts; past that the page says to wait an hour. The counts hold the visitor's IP: each cron run deletes

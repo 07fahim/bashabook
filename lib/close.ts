@@ -172,7 +172,8 @@ export async function addCorrection(db: Db, flatId: string, by: Actor, c: Correc
          and (select count(distinct member_id) from month_balances where flat_id = $1 and month = $2::date and days_present > 0
               and member_id in (select json_array_elements_text($3::text::json)::uuid)) = (select count(distinct x) from json_array_elements_text($3::text::json) x)
          and ($15::text is null or (select sum(case when $15::text = 'days' then days_present else weighted_meals end) from month_balances
-              where flat_id = $1 and month = $2::date) > 0)),
+              where flat_id = $1 and month = $2::date) > 0)
+         and not exists (select 1 from audit_log where entity = 'ledger' and entity_id = $4::uuid::text)),   -- retiredId, race-proof
        l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, moves, split, date, note, status, created_by, for_month)
          select $4::uuid, $1, date_trunc('month', $5::date)::date, $6, $7, $8::uuid, $9::uuid, $10::uuid, $11, $5::date, $12, 'ok', $13, $2::date from ok
          on conflict (id) do nothing returning *),
