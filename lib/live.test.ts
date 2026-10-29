@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { busy, live, whenFree, type Sock } from './live';
 
-/** A fake socket: records what the page sent; the test plays the server. */
-function fake() {
+/** A fake socket: records what the page sent; the test plays the server. `dead`: close() never fires onclose, like a
+ *  browser on a silently dead network. */
+function fake(dead = false) {
   const socks: (Sock & { sent: { topic: string; event: string; ref: string; payload: Record<string, unknown> }[]; url: string; closed: boolean })[] = [];
   const open = (url: string) => {
     const s = { url, sent: [] as never[], closed: false, onopen: null, onmessage: null, onclose: null,
       send(d: string) { this.sent.push(JSON.parse(d) as never); },
-      close() { if (this.closed) return; this.closed = true; this.onclose?.(); } } as (typeof socks)[number];
+      close() { if (this.closed) return; this.closed = true; if (!dead) this.onclose?.(); } } as (typeof socks)[number];
     socks.push(s);
     return s;
   };
@@ -38,8 +39,8 @@ describe('busy', () => {
 describe('live', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
-  const start = (isBusy = () => false) => {
-    const f = fake(), refresh = vi.fn();
+  const start = (isBusy = () => false, dead = false) => {
+    const f = fake(dead), refresh = vi.fn();
     const stop = live({ url: 'https://ref.supabase.co', key: 'k', topic: T, open: f.open, refresh, busy: isBusy });
     return { f, refresh, stop };
   };
@@ -52,11 +53,13 @@ describe('live', () => {
     expect(s.sent[0]).toMatchObject({ topic: CH, event: 'phx_join', ref: '1', payload: { config: { broadcast: { self: false }, private: false }, access_token: 'k' } });
   });
 
-  it('refreshes once, 300 ms after a burst of signals', () => {
+  it('refreshes once, 300 ms after the first of a burst of signals', () => {
     const { f, refresh } = start();
     const s = f.socks[0]; joined(f, s);
-    for (let i = 0; i < 5; i++) f.say(s, { topic: CH, event: 'broadcast', payload: {} });
-    vi.advanceTimersByTime(299); expect(refresh).not.toHaveBeenCalled();
+    f.say(s, { topic: CH, event: 'broadcast', payload: {} });
+    vi.advanceTimersByTime(200);
+    for (let i = 0; i < 4; i++) f.say(s, { topic: CH, event: 'broadcast', payload: {} });   // later signals do not push it back
+    vi.advanceTimersByTime(99); expect(refresh).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1); expect(refresh).toHaveBeenCalledTimes(1);
     f.say(s, { topic: CH, event: 'broadcast', payload: {} });
     vi.advanceTimersByTime(300); expect(refresh).toHaveBeenCalledTimes(2);
@@ -87,8 +90,11 @@ describe('live', () => {
     vi.advanceTimersByTime(1); expect(f.socks).toHaveLength(2);
     f.socks[1].close(); vi.advanceTimersByTime(2000); expect(f.socks).toHaveLength(3);
     f.socks[2].close(); vi.advanceTimersByTime(4000); expect(f.socks).toHaveLength(4);
-    for (let i = 4; i < 9; i++) { f.socks[i - 1].close(); vi.advanceTimersByTime(30000); }
-    expect(f.socks).toHaveLength(9);   // 8, 16, then 30 s each: the cap
+    for (const [i, d] of [8000, 16000, 30000, 30000, 30000].entries()) {   // then 8, 16, and 30 s each: the cap
+      f.socks[3 + i].close();
+      vi.advanceTimersByTime(d - 1); expect(f.socks).toHaveLength(4 + i);
+      vi.advanceTimersByTime(1); expect(f.socks).toHaveLength(5 + i);
+    }
     joined(f, f.socks[8]);
     vi.advanceTimersByTime(300); expect(refresh).toHaveBeenCalledTimes(1);
     f.socks[8].close(); vi.advanceTimersByTime(1000); expect(f.socks).toHaveLength(10);   // a good join starts the backoff over
@@ -114,6 +120,38 @@ describe('live', () => {
     f.say(s, { topic: 'phoenix', event: 'phx_reply', ref: hb.ref, payload: { status: 'ok' } });
     vi.advanceTimersByTime(20000); expect(s.closed).toBe(false);
     vi.advanceTimersByTime(20000); expect(s.closed).toBe(true);
+  });
+
+  it('gives up on a dead network at once: an unanswered heartbeat or join brings a new socket after the backoff', () => {
+    const { f } = start(undefined, true);
+    joined(f, f.socks[0]);
+    vi.advanceTimersByTime(40000); expect(f.socks[0].closed).toBe(true);   // heartbeat at 20 s, unanswered at 40 s
+    vi.advanceTimersByTime(1000); expect(f.socks).toHaveLength(2);
+    f.socks[1].onopen!();
+    vi.advanceTimersByTime(10000); expect(f.socks[1].closed).toBe(true);
+    vi.advanceTimersByTime(1999); expect(f.socks).toHaveLength(2);
+    vi.advanceTimersByTime(1); expect(f.socks).toHaveLength(3);
+  });
+
+  it('reconnects when the server errors or closes the channel', () => {
+    const { f } = start();
+    joined(f, f.socks[0]);
+    f.say(f.socks[0], { topic: CH, event: 'phx_error', payload: {} });
+    expect(f.socks[0].closed).toBe(true);
+    vi.advanceTimersByTime(1000); expect(f.socks).toHaveLength(2);
+    joined(f, f.socks[1]);
+    f.say(f.socks[1], { topic: CH, event: 'phx_close', payload: {} });
+    expect(f.socks[1].closed).toBe(true);
+    vi.advanceTimersByTime(1000); expect(f.socks).toHaveLength(3);
+  });
+
+  it('ignores a frame that is not a JSON object', () => {
+    const { f, refresh } = start();
+    const s = f.socks[0]; joined(f, s);
+    for (const data of ['not json', 'null', '5', '"x"']) expect(() => s.onmessage!({ data })).not.toThrow();
+    expect(s.closed).toBe(false);
+    f.say(s, { topic: CH, event: 'broadcast', payload: {} });
+    vi.advanceTimersByTime(300); expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('stops for good: no reconnect, no refresh', () => {

@@ -1,7 +1,8 @@
 /** Instant page updates (spec 2026-10-29). One Supabase Realtime socket (Phoenix protocol) on the flat's secret topic. The
- *  database sends an empty 'changed' signal after any write (migration 022); the page refreshes 300 ms later (a burst gives
- *  one refresh), never while someone is typing. A dropped socket comes back after 1, 2, 4 ... 30 s and refreshes once after
- *  the rejoin, since a signal may have been missed meanwhile (the probe lost 2 of 6 once). */
+ *  database sends an empty 'changed' signal after any write (migration 022); the page refreshes 300 ms after the first signal
+ *  (later signals share that refresh, never push it back, so a steady stream can't starve it), never while someone is typing.
+ *  A dropped socket comes back after 1, 2, 4 ... 30 s and refreshes once after the rejoin, since a signal may have been missed
+ *  meanwhile (the probe lost 2 of 6 once). */
 export type Sock = { send(data: string): void; close(): void; onopen: (() => void) | null; onmessage: ((e: { data: string }) => void) | null; onclose: (() => void) | null };
 export type Field = { tagName: string; type?: string; value?: string; defaultValue?: string; checked?: boolean; defaultChecked?: boolean };
 
@@ -25,10 +26,20 @@ export function whenFree(isBusy: () => boolean, run: () => void, ms = 300) {
 /** Listens until the returned stop is called. */
 export function live(o: { url: string; key: string; topic: string; open: (url: string) => Sock; refresh: () => void; busy: () => boolean }) {
   const ch = `realtime:${o.topic}`;
-  let ws: Sock | null = null, tries = 0, again = false, stopped = false;
+  let ws: Sock | undefined, tries = 0, again = false, stopped = false;
   let beat: ReturnType<typeof setInterval> | undefined, wait: ReturnType<typeof setTimeout> | undefined, joinBy: ReturnType<typeof setTimeout> | undefined;
   let pending: (() => void) | undefined;
   const later = () => { pending ??= whenFree(o.busy, () => { pending = undefined; o.refresh(); }); };
+
+  /** Gives up on a socket at once: a browser fires onclose on a dead network only when the closing handshake times out. */
+  const drop = (s: Sock) => {
+    clearInterval(beat); clearTimeout(joinBy);
+    s.onopen = s.onmessage = s.onclose = null;
+    s.close();
+    if (stopped) return;
+    again = true;
+    wait = setTimeout(connect, Math.min(30, 2 ** tries++) * 1000);
+  };
 
   const connect = () => {
     const s = ws = o.open(`${o.url.replace(/^http/, 'ws')}/realtime/v1/websocket?apikey=${encodeURIComponent(o.key)}&vsn=1.0.0`);
@@ -40,28 +51,24 @@ export function live(o: { url: string; key: string; topic: string; open: (url: s
     };
     s.onopen = () => {
       send(ch, 'phx_join', { config: { broadcast: { self: false }, presence: { key: '' }, postgres_changes: [], private: false }, access_token: o.key });
-      joinBy = setTimeout(() => s.close(), 10000);
-      beat = setInterval(() => { if (unanswered) s.close(); else unanswered = send('phoenix', 'heartbeat', {}); }, 20000);
+      joinBy = setTimeout(() => drop(s), 10000);
+      beat = setInterval(() => { if (unanswered) drop(s); else unanswered = send('phoenix', 'heartbeat', {}); }, 20000);
     };
     s.onmessage = e => {
-      const m = JSON.parse(e.data) as { topic?: string; event?: string; ref?: string; payload?: { status?: string } };
-      if (m.topic === 'phoenix' && m.ref === unanswered) unanswered = null;
-      if (m.topic !== ch) return;
+      let m: { topic?: string; event?: string; ref?: string; payload?: { status?: string } } | null;
+      try { m = JSON.parse(e.data); } catch { return; }
+      if (m?.topic === 'phoenix' && m.ref === unanswered) unanswered = null;
+      if (m?.topic !== ch) return;
       if (m.event === 'phx_reply' && m.ref === '1') {
         clearTimeout(joinBy);
-        if (m.payload?.status !== 'ok') return s.close();
+        if (m.payload?.status !== 'ok') return drop(s);
         tries = 0;
         if (again) later();
       } else if (m.event === 'broadcast') later();
-      else if (m.event === 'phx_error' || m.event === 'phx_close') s.close();
+      else if (m.event === 'phx_error' || m.event === 'phx_close') drop(s);
     };
-    s.onclose = () => {
-      clearInterval(beat); clearTimeout(joinBy);
-      if (stopped || ws !== s) return;
-      again = true;
-      wait = setTimeout(connect, Math.min(30, 2 ** tries++) * 1000);
-    };
+    s.onclose = () => drop(s);
   };
   connect();
-  return () => { stopped = true; clearTimeout(wait); clearTimeout(joinBy); clearInterval(beat); pending?.(); ws?.close(); };
+  return () => { stopped = true; clearTimeout(wait); pending?.(); if (ws) drop(ws); };
 }
