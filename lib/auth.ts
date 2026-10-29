@@ -32,7 +32,8 @@ export async function createFlat(db: Db, f: { flatName: string; name: string; pi
 }
 
 /** The collector makes a new join code (the link got shared outside the flat): the old link stops working at once, and
- *  everyone signed in stays signed in (sessions don't depend on the code). The history says so, without the code. */
+ *  everyone signed in stays signed in (sessions don't depend on the code). The history says so, without the code.
+ *  A new code also gives a new live topic, so whoever had the old link stops hearing when the flat changes. */
 export async function newFlatCode(db: Db, flatId: string, by: { memberId: string; role: 'member' | 'manager' }, gen = newJoinCode) {
   if (by.role !== 'manager') return null;
   // ponytail: a draw equal to this flat's own code (about 1 in 900 million) changes nothing; read the old code first if that matters
@@ -40,7 +41,7 @@ export async function newFlatCode(db: Db, flatId: string, by: { memberId: string
     const code = gen();
     try {
       const rows = await db<{ code: string }>(
-        `with f as (update flats set join_code = $2 where id = $1
+        `with f as (update flats set join_code = $2, live_topic = replace(gen_random_uuid()::text, '-', '') where id = $1
              and exists (select 1 from members where flat_id = $1 and id = $3 and role = 'manager') returning join_code),
          a as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'flats', 'flat|code', '{"codeChanged": true}', $3 from f)
          select join_code as code from f`, [flatId, code, by.memberId]);
@@ -123,11 +124,11 @@ export async function createSession(db: Db, memberId: string) {
   return token;
 }
 
-export type Me = { memberId: string; flatId: string; role: 'member' | 'manager'; name: string; flatName: string; joinCode: string; lang: 'bn' | 'en' };
+export type Me = { memberId: string; flatId: string; role: 'member' | 'manager'; name: string; flatName: string; joinCode: string; lang: 'bn' | 'en'; liveTopic: string };
 
 export async function memberBySession(db: Db, token: string): Promise<Me | null> {
   const [me] = await db<Me>(
-    `select m.id as "memberId", m.flat_id as "flatId", m.role, m.name, f.name as "flatName", f.join_code as "joinCode", f.language as lang
+    `select m.id as "memberId", m.flat_id as "flatId", m.role, m.name, f.name as "flatName", f.join_code as "joinCode", f.language as lang, f.live_topic as "liveTopic"
      from sessions s join members m on m.id = s.member_id join flats f on f.id = m.flat_id
      where s.token_hash = $1 and s.expires_at > now() and ${STAYING}`, [hashToken(token)]);
   return me ?? null;
