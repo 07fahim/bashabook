@@ -2,11 +2,11 @@ import Link from 'next/link';
 import type { toCheck } from '@/lib/bazar';
 import type { Look } from '@/lib/charts';
 import type { toConfirm } from '@/lib/money-db';
-import { confirmAction } from '../actions';
+import { confirmAction, rejectAction } from '../actions';
 import type { Dict, Locale } from '../dictionaries';
 import { fmtDay, fmtExact, fmtTaka } from '../format';
 import { PendingButton } from '../pending-button';
-import { alertCard, link, LongList, secondary } from '../ui';
+import { alertCard, focus, link, LongList, secondary } from '../ui';
 
 /** 'You get back ৳380 so far' in leaf, 'You owe ৳210 so far' in chili; a closed month drops 'so far'. */
 export const balanceText = (x: Dict['money'], balance: number, closed = false) => {
@@ -32,25 +32,40 @@ export function ConfirmList({ lang, x, a, items, collector, fill }: {
 }) {
   if (!items.length) return null;
   return (
-    <section className={`${alertCard} ${fill ? 'md:flex md:h-full md:flex-col' : ''}`}>
+    <section className={`@container ${alertCard} ${fill ? 'md:flex md:h-full md:flex-col' : ''}`}>
       {/* the count: on wider screens the list scrolls inside its card and Show all (n) is a phone-only control */}
+      {/* rows go side by side only when the card itself is 36rem+ (@xl): narrow cards (640-767, the Flat tab column) stack the pills */}
       <h2 className="text-xl font-bold">{x.waitingTitle} ({items.length})</h2>
-      <LongList short fill={fill} label={x.waitingTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(w => (
-          <li key={w.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <LongList short fill={fill} label={x.waitingTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(w => {
+        // paidTo: who actually handed it out, never relabelled to the current collector after a handover
+        const who = w.type === 'payout' ? w.paidTo ?? collector : w.name;
+        const line = w.type === 'payout' ? x.confirmGot.replace('{name}', who)
+          : w.forMe ? x.confirmGave.replace('{name}', w.name)
+          : w.paidTo ? x.confirmDepositTo.replace('{name}', w.name).replace('{to}', w.paidTo) : x.confirmDeposit.replace('{name}', w.name);
+        const yes = w.forMe ? x.confirmGaveYes : w.type === 'payout' || !w.paidTo ? x.confirmYes : x.confirm;
+        const sr = <span className="sr-only">: {who}, {fmtExact(w.amount)}</span>;
+        return (
+          <li key={w.id} className="flex flex-col gap-2 py-3 @xl:flex-row @xl:items-center @xl:justify-between @xl:gap-4">
             <span>
-              {/* paidTo: who actually handed it out, never relabelled to the current collector after a handover */}
-              {(w.type === 'payout' ? x.confirmGot.replace('{name}', w.paidTo ?? collector)
-                : w.paidTo ? x.confirmDepositTo.replace('{name}', w.name).replace('{to}', w.paidTo) : x.confirmDeposit.replace('{name}', w.name)).replace('{t}', fmtExact(w.amount))}
+              {line.replace('{t}', fmtExact(w.amount))}
               <span className="block text-[15px] text-muted">{[fmtDay(w.date, lang), w.method && x.cashMethods[w.method], w.note].filter(Boolean).join(' · ')}</span>
             </span>
-            {/* the form is the flex child: without shrink-0 a long name squeezes it and the button's label wraps */}
-            <form action={confirmAction} className="sm:shrink-0">
-              <input type="hidden" name="lang" value={lang} />
-              <input type="hidden" name="id" value={w.id} />
-              <PendingButton className={`${secondary} sm:w-auto`}>{w.type === 'payout' || !w.paidTo ? x.confirmYes : x.confirm}<span className="sr-only">: {w.type === 'payout' ? w.paidTo ?? collector : w.name}, {fmtExact(w.amount)}</span></PendingButton>
-            </form>
+            {/* the buttons are the flex child: without shrink-0 a long name squeezes them and a label wraps */}
+            <div className="flex flex-col gap-2 @xl:shrink-0 @xl:flex-row">
+              <form action={confirmAction}>
+                <input type="hidden" name="lang" value={lang} />
+                <input type="hidden" name="id" value={w.id} />
+                <PendingButton className={`${secondary} @xl:w-auto`}>{yes}{sr}</PendingButton>
+              </form>
+              <form action={rejectAction}>
+                <input type="hidden" name="lang" value={lang} />
+                <input type="hidden" name="id" value={w.id} />
+                <PendingButton className={`flex min-h-12 w-full items-center justify-center rounded-full border border-chili bg-surface px-6 font-semibold text-chili hover:bg-paper @xl:w-auto ${focus}`}>{x.notRight}{sr}</PendingButton>
+              </form>
+            </div>
           </li>
-        ))} />
+        );
+      })} />
     </section>
   );
 }

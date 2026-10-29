@@ -49,7 +49,7 @@ describe('money held across open months', { timeout: 30000 }, () => {
 
   it('an entry still waiting in October blocks September’s close and says where it is', async () => {
     const { flatId, nafis } = await flat(50000);
-    const [t] = await db<{ id: string }>(`select id from members where flat_id = $1 and name = 'Tahsin'`, [flatId]);
+    const [t] = await db<{ id: string }>(`update members set pin_hash = 'x' where flat_id = $1 and name = 'Tahsin' returning id`, [flatId]);   // Tahsin has joined: he answers
     expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 50000, date: OCT2, memberId: t.id }))).toBe('ok');   // waits for Tahsin’s tap
     await checkAll(flatId);
     expect(await closeInfo(db, flatId, OCT2)).toMatchObject({ month: '2026-09-01', pending: 1, pendingMonth: '2026-10-01' });

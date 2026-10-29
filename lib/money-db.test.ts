@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { db, migrate } from '../db/test-db';
 import { addMember, bringBack, createFlat, setLeaving } from './auth';
 import { editFrom } from './meals';
 import { noCooking, saveMeal } from './meals-db';
 import { foodSplit } from './money';
-import { addEntry, addRoom, confirmEntry, LEDGER_COLUMNS, loadMonth, openMonth, putBack, removeEntry, setRent, setRoom, stopRepeat, toConfirm, type NewEntry } from './money-db';
+import { addEntry, addRoom, confirmEntry, confirmerOf, LEDGER_COLUMNS, loadMonth, openMonth, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat, toConfirm, type NewEntry } from './money-db';
 
 const OCT = '2026-10-01', TODAY = '2026-10-09';
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -14,6 +15,7 @@ async function flat() {
   await migrate();
   const f = await createFlat(db, { flatName: 'Flat 4B', name: 'Nafis', pin: '1234', others: ['Tahsin', 'Zarif'], today: OCT, lang: 'bn' });
   const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
+  await db(`update members set pin_hash = 'x' where flat_id = $1 and pin_hash is null`, [f.flatId]);   // everyone has joined: money between two people waits
   const nafis = { memberId: ids.Nafis, role: 'manager' as const };
   const as = (name: string) => ({ memberId: ids[name], role: 'member' as const });
   const month = () => loadMonth(db, f.flatId, OCT, TODAY);
@@ -49,14 +51,16 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(await addEntry(db, flatId, as('Zarif'), e({ type: 'deposit', amount: 1000000, memberId: ids.Zarif }))).toBe('ok');
     expect(await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 300000, memberId: ids.Tahsin, note: 'for bazar' }))).toBe('ok');
     expect((await month()).result.fund).toBe(0);   // both wait for a tap
-    const [dep] = await toConfirm(db, flatId, ids.Nafis, true);
-    const [pay] = await toConfirm(db, flatId, ids.Tahsin, false);
+    const [dep] = await toConfirm(db, flatId, ids.Nafis);
+    const [pay] = await toConfirm(db, flatId, ids.Tahsin);
     expect(await confirmEntry(db, flatId, as('Tahsin'), dep.id)).toBe(false);   // only the collector confirms deposits
     expect(await confirmEntry(db, flatId, nafis, pay.id)).toBe(false);          // only the receiver confirms a handover
     expect(await confirmEntry(db, flatId, nafis, dep.id)).toBe(true);
     expect(await confirmEntry(db, flatId, as('Tahsin'), pay.id)).toBe(true);
     await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 245000, paidBy: ids.Tahsin }));
     await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 55000, memberId: ids.Tahsin, note: 'change' }));
+    const [change] = await toConfirm(db, flatId, ids.Tahsin);   // the change Tahsin handed back waits for his Yes
+    expect(await confirmEntry(db, flatId, as('Tahsin'), change.id)).toBe(true);
     const { result } = await month();
     expect(result.invariantOk).toBe(true);
     expect(result.fund).toBe(1000000 - 245000);
@@ -71,8 +75,9 @@ describe('money storage', { timeout: 30000 }, () => {
   it('a shopper who spends ৳500 of their own beyond a ৳3,000 advance is owed exactly that', async () => {
     const { flatId, ids, nafis, as, month } = await flat();
     await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 1000000, memberId: ids.Zarif }));
+    expect(await confirmEntry(db, flatId, as('Zarif'), (await toConfirm(db, flatId, ids.Zarif))[0].id)).toBe(true);
     await addEntry(db, flatId, nafis, e({ type: 'payout', amount: 300000, memberId: ids.Tahsin }));
-    const [pay] = await toConfirm(db, flatId, ids.Tahsin, false);
+    const [pay] = await toConfirm(db, flatId, ids.Tahsin);
     await confirmEntry(db, flatId, as('Tahsin'), pay.id);
     await addEntry(db, flatId, as('Tahsin'), e({ type: 'bazar', amount: 350000, paidBy: ids.Tahsin }));
     const { result } = await month();
@@ -140,7 +145,7 @@ describe('money storage', { timeout: 30000 }, () => {
     expect(await putBack(db, flatId, ids.Nafis, dep, TODAY)).toBe(true);
     expect((await month()).entries.find(x => x.id === dep)?.method).toBe('bkash');
     // the collector sees the way it came while it waits for the tap
-    expect((await toConfirm(db, flatId, ids.Nafis, true)).map(w => [w.amount, w.method])).toEqual([[20000, 'bkash']]);
+    expect((await toConfirm(db, flatId, ids.Nafis)).map(w => [w.amount, w.method])).toEqual([[20000, 'bkash']]);
     // a removal record from before 019 has no method key: it still puts back, with none (guards PUT_BACK_COLUMNS too)
     const pay = entries.find(x => x.type === 'payout')!.id;
     expect(await removeEntry(db, flatId, nafis, pay, TODAY)).toBe(true);
@@ -287,7 +292,7 @@ describe('money storage', { timeout: 30000 }, () => {
   it('put back restores the exact entry, its people and status, and the balances', async () => {
     const { flatId, ids, nafis, as, month } = await flat();
     await addEntry(db, flatId, as('Zarif'), e({ type: 'deposit', amount: 300000, memberId: ids.Zarif, note: 'TRX9' }));
-    await confirmEntry(db, flatId, nafis, (await toConfirm(db, flatId, ids.Nafis, true))[0].id);
+    await confirmEntry(db, flatId, nafis, (await toConfirm(db, flatId, ids.Nafis))[0].id);
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 20000, note: 'Laundry', split: 'selected', selected: [ids.Tahsin, ids.Zarif] }));
     const before = await month();
     const rows = await db<{ j: unknown }>(`select to_jsonb(l) as j from ledger l order by id`);
@@ -434,5 +439,114 @@ describe('money storage', { timeout: 30000 }, () => {
     const oct = (await db<{ id: string }>(`select id from ledger where flat_id = $1 and note = 'Tahsin October'`, [flatId]))[0].id;
     expect(await removeEntry(db, flatId, as('Tahsin'), oct, '2026-11-01')).toBe(false);   // the first of next month
     expect(await removeEntry(db, flatId, as('Tahsin'), oct, '2026-10-31')).toBe(true);    // the last day of this month
+  });
+
+  it('the person who did not write it answers: who sees what, nobody their own, a third person never', async () => {
+    const { flatId, ids, nafis, as, month } = await flat();
+    const got = randomUUID(), paid = randomUUID(), gave = randomUUID();
+    expect(await addEntry(db, flatId, nafis, e({ id: got, type: 'deposit', amount: 20000, memberId: ids.Tahsin }))).toBe('ok');   // Money received from Tahsin
+    expect(await addEntry(db, flatId, as('Zarif'), e({ id: paid, type: 'deposit', amount: 30000, memberId: ids.Zarif }))).toBe('ok');   // Zarif's I paid
+    expect(await addEntry(db, flatId, nafis, e({ id: gave, type: 'payout', amount: 5000, memberId: ids.Tahsin }))).toBe('ok');   // Give money to Tahsin
+    const m0 = await month();
+    expect([m0.entries.every(x => x.status === 'pending'), m0.result.fund]).toEqual([true, 0]);
+    const waiting = async (who: string) => (await toConfirm(db, flatId, who)).map(w => w.id).sort();
+    expect(await waiting(ids.Tahsin)).toEqual([got, gave].sort());
+    expect(await waiting(ids.Nafis)).toEqual([paid]);
+    expect(await waiting(ids.Zarif)).toEqual([]);
+    expect((await toConfirm(db, flatId, ids.Tahsin)).find(w => w.id === got)).toMatchObject({ name: 'Nafis', forMe: true });   // named by who wrote it
+    expect((await toConfirm(db, flatId, ids.Tahsin)).find(w => w.id === gave)).toMatchObject({ name: 'Nafis', forMe: false });
+    expect((await toConfirm(db, flatId, ids.Nafis))[0]).toMatchObject({ name: 'Zarif', forMe: false });
+    // the push goes to whoever answers, asked the right thing, in their language (null = the flat's)
+    await db(`update members set language = 'en' where id = $1`, [ids.Tahsin]);
+    expect(await confirmerOf(db, flatId, got)).toEqual({ id: ids.Tahsin, lang: 'en', kind: 'gave' });
+    expect(await confirmerOf(db, flatId, paid)).toEqual({ id: ids.Nafis, lang: null, kind: 'deposit' });
+    expect(await confirmerOf(db, flatId, gave)).toEqual({ id: ids.Tahsin, lang: 'en', kind: 'payout' });
+    expect(await confirmEntry(db, flatId, nafis, got)).toBe(false);          // the writer never answers their own
+    expect(await confirmEntry(db, flatId, as('Zarif'), got)).toBe(false);    // nor a third person
+    expect(await confirmEntry(db, flatId, as('Zarif'), paid)).toBe(false);
+    expect(await confirmEntry(db, flatId, as('Tahsin'), got)).toBe(true);
+    expect(await confirmEntry(db, flatId, as('Tahsin'), got)).toBe(false);   // once
+    expect(await confirmEntry(db, flatId, nafis, paid)).toBe(true);
+    expect((await month()).result.fund).toBe(50000);                         // the payout still waits: not counted
+    expect(await confirmerOf(db, flatId, got)).toBeNull();                   // nothing waits any more
+    expect(await db(`select 1 from audit_log where entity_id = $1 and after->>'status' = 'ok'`, [got])).toHaveLength(1);
+  });
+
+  it('the collector’s own deposit and money from someone who moved out count at once', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await db(`update members set left_on = '2026-10-08' where id = $1`, [ids.Zarif]);   // before today: gone, can't sign in
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 120000, memberId: ids.Zarif, date: '2026-10-08' }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 1000, memberId: ids.Nafis }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 2000, memberId: ids.Tahsin }))).toBe('ok');
+    expect((await month()).entries.map(x => [x.memberId, x.status]).sort()).toEqual([[ids.Nafis, 'ok'], [ids.Tahsin, 'pending'], [ids.Zarif, 'ok']].sort());
+  });
+
+  it('That’s not right: only who answers, only while it waits; in the history marked not right; returns the writer', async () => {
+    const { flatId, ids, nafis, as, month } = await flat();
+    const got = randomUUID(), paid = randomUUID(), done = randomUUID();
+    await addEntry(db, flatId, nafis, e({ id: got, type: 'deposit', amount: 15000, memberId: ids.Tahsin }));
+    await addEntry(db, flatId, as('Zarif'), e({ id: paid, type: 'deposit', amount: 30000, memberId: ids.Zarif }));
+    expect(await rejectEntry(db, flatId, nafis, got)).toBeNull();            // the writer can't
+    expect(await rejectEntry(db, flatId, as('Zarif'), got)).toBeNull();      // nor a third person
+    expect(await rejectEntry(db, flatId, as('Tahsin'), got)).toBe(ids.Nafis);
+    expect(await rejectEntry(db, flatId, as('Tahsin'), got)).toBeNull();     // someone acted first
+    expect(await confirmEntry(db, flatId, as('Tahsin'), got)).toBe(false);
+    expect(await rejectEntry(db, flatId, nafis, paid)).toBe(ids.Zarif);      // the collector on an I paid
+    const handed = randomUUID();
+    await addEntry(db, flatId, nafis, e({ id: handed, type: 'payout', amount: 7000, memberId: ids.Tahsin }));
+    expect(await rejectEntry(db, flatId, nafis, handed)).toBeNull();               // the collector can't reject their own Give money
+    expect(await rejectEntry(db, flatId, as('Tahsin'), handed)).toBe(ids.Nafis);   // the person it was given to can
+    const after = await month();
+    expect(after.entries).toEqual([]);
+    expect(after.removed.map(r => [r.type, r.amount, r.by, r.rejected]).sort()).toEqual([['deposit', 15000, 'Tahsin', true], ['deposit', 30000, 'Nafis', true], ['payout', 7000, 'Tahsin', true]]);
+    // a confirmed entry is never rejected
+    await addEntry(db, flatId, nafis, e({ id: done, type: 'payout', amount: 500, memberId: ids.Tahsin }));
+    expect(await confirmEntry(db, flatId, as('Tahsin'), done)).toBe(true);
+    expect(await rejectEntry(db, flatId, as('Tahsin'), done)).toBeNull();
+    // put back (an undo of a wrong tap) brings it back waiting, never counted
+    expect(await putBack(db, flatId, ids.Tahsin, got, TODAY)).toBe(true);
+    expect((await month()).entries.find(x => x.id === got)?.status).toBe('pending');
+  });
+
+  it('nobody answers their own entry, even after the role moves to them', async () => {
+    const { flatId, ids, as } = await flat();
+    const id = randomUUID();
+    await addEntry(db, flatId, as('Tahsin'), e({ id, type: 'deposit', amount: 10000, memberId: ids.Tahsin }));
+    await db(`update members set role = 'member' where id = $1`, [ids.Nafis]);
+    await db(`update members set role = 'manager' where id = $1`, [ids.Tahsin]);   // the app team made Tahsin the collector
+    const tahsin = { memberId: ids.Tahsin, role: 'manager' as const };
+    expect(await toConfirm(db, flatId, ids.Tahsin)).toEqual([]);
+    expect(await confirmEntry(db, flatId, tahsin, id)).toBe(false);
+    expect(await rejectEntry(db, flatId, tahsin, id)).toBeNull();
+    expect(await removeEntry(db, flatId, tahsin, id, TODAY)).toBe(true);   // the way out: remove it and write it again
+  });
+
+  it('Money received keeps the collector who wrote it as its holder, even if the role moved before the save', async () => {
+    const { flatId, ids, nafis } = await flat();
+    await db(`update members set role = 'member' where id = $1`, [ids.Nafis]);
+    await db(`update members set role = 'manager' where id = $1`, [ids.Zarif]);   // a handover landed between Nafis's role check and his save
+    const id = randomUUID();
+    expect(await addEntry(db, flatId, nafis, e({ id, type: 'deposit', amount: 5000, memberId: ids.Tahsin }))).toBe('ok');
+    expect((await db<{ h: string; s: string }>(`select held_by as h, status as s from ledger where id = $1`, [id]))[0]).toEqual({ h: ids.Nafis, s: 'pending' });
+  });
+  it('money from or to someone who has not joined counts at once, marked so; the mark stays after they join', async () => {
+    const { flatId, ids, nafis, month } = await flat();
+    await db(`update members set pin_hash = null where id = $1`, [ids.Zarif]);   // Zarif hasn't joined: he can't sign in to answer
+    const dep = randomUUID(), pay = randomUUID(), waits = randomUUID(), later = randomUUID(), own = randomUUID();
+    expect(await addEntry(db, flatId, nafis, e({ id: dep, type: 'deposit', amount: 20000, memberId: ids.Zarif }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ id: pay, type: 'payout', amount: 5000, memberId: ids.Zarif }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ id: waits, type: 'deposit', amount: 1000, memberId: ids.Tahsin }))).toBe('ok');   // Tahsin has joined
+    expect(await addEntry(db, flatId, nafis, e({ id: own, type: 'deposit', amount: 2000, memberId: ids.Nafis }))).toBe('ok');      // the collector's own
+    const rows = async (...xs: string[]) => { const m = await month(); return xs.map(id => { const r = m.entries.find(x => x.id === id); return [r?.status, r?.notJoined]; }); };
+    expect(await rows(dep, pay, waits, own)).toEqual([['ok', true], ['ok', true], ['pending', false], ['ok', false]]);
+    expect((await month()).result.fund).toBe(20000 - 5000 + 2000);
+    expect(await confirmerOf(db, flatId, dep)).toBeNull();
+    await db(`update members set pin_hash = 'x' where id = $1`, [ids.Zarif]);   // Zarif joins
+    expect(await addEntry(db, flatId, nafis, e({ id: later, type: 'deposit', amount: 3000, memberId: ids.Zarif }))).toBe('ok');
+    expect(await rows(dep, pay, later)).toEqual([['ok', true], ['ok', true], ['pending', false]]);
+    // removed and put back, it keeps its mark
+    expect(await removeEntry(db, flatId, nafis, dep, TODAY)).toBe(true);
+    expect(await putBack(db, flatId, ids.Nafis, dep, TODAY)).toBe(true);
+    expect(await rows(dep)).toEqual([['ok', true]]);
   });
 });

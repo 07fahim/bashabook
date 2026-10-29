@@ -14,8 +14,8 @@ import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOtherMeal, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
-import { addEntry, addRoom, confirmEntry, endedOpenMonth, monthOf, putBack, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
-import { depositMsg, fixAskMsg, fixedMsg, handoverMsg, payoutMsg } from '@/lib/notify-text';
+import { addEntry, addRoom, confirmEntry, confirmerOf, endedOpenMonth, monthOf, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
+import { depositMsg, fixAskMsg, fixedMsg, gaveAskMsg, handoverMsg, payoutMsg, rejectedMsg } from '@/lib/notify-text';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
 import { removePush, savePush, type PushSub } from '@/lib/push-db';
@@ -429,15 +429,15 @@ export async function entryAction(_: FormState, d: FormData): Promise<FormState>
     method, items, receipt,
   }, today));
   if (r !== 'ok' && r !== 'again') return { error: x.errors[r] };
-  // money between two people waits for the receiver's tap: tell them after the response, never instead of it ('again' is the
-  // form's retry of an entry already saved: nothing new, so no second nudge)
-  const receiver = type === 'deposit' && me.role !== 'manager' ? 'collector' : type === 'payout' && who && who !== me.memberId ? who : null;
-  if (receiver && r === 'ok') after(async () => {
+  // money between two people waits for whoever didn't write it: tell them after the response, never instead of it. Nothing
+  // waits (the collector's own deposit, someone who moved out, someone not joined yet): no push. 'again' is the form's retry:
+  // no second nudge.
+  // ponytail: the push looks the entry up by the form's UUID key, so a deposit or payout form without one sends no push; every
+  // current form sends one (hidden() on Money and the Flat tab). Return the new id from addEntry if a form ever drops it.
+  if (r === 'ok' && moving && UUID.test(key)) after(async () => {
     try {
-      const [to] = await db<{ id: string; lang: Locale | null }>(
-        receiver === 'collector' ? `select id, language as lang from members where flat_id = $1 and role = 'manager'` : `select id, language as lang from members where flat_id = $1 and id = $2`,
-        receiver === 'collector' ? [me.flatId] : [me.flatId, receiver]);
-      if (to) await sendPush(db, [to.id], (type === 'deposit' ? depositMsg : payoutMsg)(to.lang ?? me.lang, me.name));
+      const to = await confirmerOf(db, me.flatId, key);
+      if (to) await sendPush(db, [to.id], { deposit: depositMsg, gave: gaveAskMsg, payout: payoutMsg }[to.kind](to.lang ?? me.lang, me.name));
     } catch (e) { console.warn('push failed', String(e)); }
   });
   refresh();
@@ -448,6 +448,20 @@ export async function confirmAction(d: FormData) {
   const lang = langOf(d), me = await requireMember(lang, true), id = str(d, 'id');
   const ok = UUID.test(id) && await unlessClosed(() => confirmEntry(db, me.flatId, me, id)) === true;
   return back(lang, ok ? undefined : 'notSaved');
+}
+
+/** That's not right (the rules live in rejectEntry): the entry goes to the history and whoever wrote it is told. */
+export async function rejectAction(d: FormData) {
+  const lang = langOf(d), me = await requireMember(lang, true), id = str(d, 'id');
+  const r = UUID.test(id) ? await unlessClosed(() => rejectEntry(db, me.flatId, me, id)) : null;
+  const writer = r === 'closed' ? null : r;
+  if (writer) after(async () => {
+    try {
+      const [w] = await db<{ lang: Locale | null }>(`select language as lang from members where flat_id = $1 and id = $2`, [me.flatId, writer]);
+      await sendPush(db, [writer], rejectedMsg(w?.lang ?? me.lang, me.name));
+    } catch (e) { console.warn('push failed', String(e)); }
+  });
+  return back(lang, writer ? undefined : 'notSaved');   // someone acted first: the existing refusal note
 }
 
 export async function removeAction(d: FormData) {

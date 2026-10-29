@@ -12,6 +12,12 @@ export const depositMsg = (lang: Locale, name: string): Msg =>
   ({ title: fill(t(lang).depositTitle, { name }), body: t(lang).depositBody, url: `/${lang}/money` });
 export const payoutMsg = (lang: Locale, name: string): Msg =>
   ({ title: fill(t(lang).payoutTitle, { name }), body: t(lang).payoutBody, url: `/${lang}/money` });
+/** Money received written by the collector, to the giver: who wrote it; the amount stays in the app. */
+export const gaveAskMsg = (lang: Locale, name: string): Msg =>
+  ({ title: fill(t(lang).gaveAskTitle, { name }), body: t(lang).gaveAskBody, url: `/${lang}/money` });
+/** That's not right, to whoever wrote the entry: who said it; no amount, no reason. */
+export const rejectedMsg = (lang: Locale, name: string): Msg =>
+  ({ title: fill(t(lang).rejectedTitle, { name }), body: t(lang).rejectedBody, url: `/${lang}/money` });
 export const handoverMsg = (lang: Locale, name: string): Msg =>
   ({ title: fill(t(lang).handoverTitle, { name }), body: t(lang).handoverBody, url: `/${lang}/home` });
 export const closeMsg = (lang: Locale, month: string, pending: number): Msg => pending > 0

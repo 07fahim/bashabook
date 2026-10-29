@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { checkEntry, fixEntry, toCheck } from './bazar';
-import { addEntry, openMonth, type NewEntry } from './money-db';
+import { addEntry, openMonth, rejectEntry, type NewEntry } from './money-db';
 import { addCorrection, closeInfo, closeMonth } from './close';
 
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -73,5 +73,32 @@ describe('close probe', { timeout: 30000 }, () => {
     // paid by Tahsin: both did something, nobody else lives here, so the collector checks it after all
     expect((await toCheck(db, f.flatId, t.id, '2026-10-05')).map(w => [w.type, w.note])).toEqual([['bill', 'Wi-Fi']]);
     expect((await toCheck(db, f.flatId, f.memberId, '2026-10-05')).map(w => [w.type, w.note])).toEqual([['bazar', 'forgot']]);
+  });
+
+  it('Money received waiting for its giver blocks the close; after That’s not right the close goes through', async () => {
+    await migrate();
+    const f = await createFlat(db, { flatName: 'Flat 4E', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-09-01', lang: 'bn' });
+    const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const }, tahsin = { memberId: ids.Tahsin, role: 'member' as const }, TODAY = '2026-10-05';
+    await db(`update members set pin_hash = 'x' where id = $1`, [ids.Tahsin]);   // Tahsin has joined: he answers
+    await openMonth(db, f.flatId, '2026-09-01'); await openMonth(db, f.flatId, '2026-10-01');
+    const id = randomUUID();
+    expect(await addEntry(db, f.flatId, nafis, e({ id, type: 'deposit', amount: 20000, memberId: ids.Tahsin }))).toBe('ok');
+    const close = async () => closeMonth(db, f.flatId, nafis, '2026-09-01', TODAY, { cash: (await closeInfo(db, f.flatId, TODAY))!.held, bkash: 0, nagad: 0, bank: 0 });
+    expect((await closeInfo(db, f.flatId, TODAY))?.pending).toBe(1);
+    expect((await close()).result).toBe('pending');
+    expect(await rejectEntry(db, f.flatId, tahsin, id)).toBe(ids.Nafis);
+    expect((await close()).result).toBe('ok');
+  });
+  it('money from or to a flatmate who has not joined counts at once: it never blocks the close', async () => {
+    await migrate();
+    const f = await createFlat(db, { flatName: 'Flat 4F', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-09-01', lang: 'bn' });   // Tahsin hasn't joined
+    const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const }, TODAY = '2026-10-05';
+    await openMonth(db, f.flatId, '2026-09-01'); await openMonth(db, f.flatId, '2026-10-01');
+    expect(await addEntry(db, f.flatId, nafis, e({ type: 'deposit', amount: 20000, memberId: ids.Tahsin }))).toBe('ok');
+    expect(await addEntry(db, f.flatId, nafis, e({ type: 'payout', amount: 5000, memberId: ids.Tahsin }))).toBe('ok');
+    expect((await closeInfo(db, f.flatId, TODAY))?.pending).toBe(0);
+    expect((await closeMonth(db, f.flatId, nafis, '2026-09-01', TODAY, { cash: (await closeInfo(db, f.flatId, TODAY))!.held, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
   });
 });

@@ -15,3 +15,5 @@ export const db: Db = async (text, params) => (await pg.query(text, params)).row
 /** Every bazar and bill of a flat Verified, as the checkers would tap them before a close (migration 020). */
 export const checkAll = (flatId: string) => db(`insert into entry_checks (flat_id, ledger_id, month, state)
   select flat_id, id, month, 'ok' from ledger where flat_id = $1 and type in ('bazar', 'bill') on conflict do nothing`, [flatId]);
+/** Every waiting deposit and payout of a flat answered Yes, as the other person would tap it before a close. */
+export const confirmAll = (flatId: string) => db(`update ledger set status = 'ok' where flat_id = $1 and status = 'pending'`, [flatId]);

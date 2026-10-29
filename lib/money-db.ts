@@ -6,7 +6,8 @@ import { CASH_KEYS, monthBalances, type LedgerRow, type MonthResult, type Split 
 import { isJpeg, MAX_RECEIPT } from './photo';
 
 export type Entry = LedgerRow & { date: string; note: string | null; createdBy: string; forMonth: string | null; moves: string | null; heldBy: string | null; method: Method | null;
-  check: 'ok' | 'fix' | null; receiptV: string | null };   // 020: null check = waiting; receiptV: the receipt's ?v= (null = none)
+  check: 'ok' | 'fix' | null; receiptV: string | null;   // 020: null check = waiting; receiptV: the receipt's ?v= (null = none)
+  notJoined: boolean };   // counted at once because the other person hadn't joined yet (marked in its first history row)
 /** How money in or out was paid (019): the same four places the close card counts. */
 export type Method = (typeof CASH_KEYS)[number];
 export type CashRecord = { cash: number; bkash: number; nagad: number; bank: number; expected: number; actual: number; difference: number; by: string };
@@ -16,7 +17,7 @@ const snapshot = (db: Db, flatId: string, month: string) => db<Snap>(
      bill_share::float8 as "billShare", payouts::float8, adjustments::float8, balance::float8
    from month_balances where flat_id = $1 and month = $2`, [flatId, month]);
 export type Room = { id: string; name: string; rentShare: number };
-export type Removed = { id: string; at: string; by: string; byId: string; type: LedgerRow['type']; amount: number; date: string; note: string | null };
+export type Removed = { id: string; at: string; by: string; byId: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; rejected: boolean };
 
 export const monthOf = (date: string) => `${date.slice(0, 8)}01`;
 
@@ -47,11 +48,11 @@ export async function openMonth(db: Db, flatId: string, month: string) {
 /** One ledger row, its split people, its item lines, its receipt, its history row and (if `repeat`) its monthly template, all
  *  in one statement, so a bill can never be saved without the repeat the person ticked, nor a bazar without its lines. Callers check the rules. */
 async function insertEntry(db: Db, flatId: string, by: string,
-  e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[]; method?: Method | null; items?: Item[]; receipt?: Uint8Array | null },
+  e: { id?: string; type: LedgerRow['type']; amount: number; date: string; note: string | null; paidBy: string | null; memberId: string | null; split: Split | null; selected: string[]; method?: Method | null; items?: Item[]; receipt?: Uint8Array | null; notJoined?: boolean },
   status: 'ok' | 'pending', repeat: { split: Split; selected: string[] } | null = null) {
   return (await db(
-    `with l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by, method)
-       values (coalesce($15::uuid, gen_random_uuid()), $1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10, $16)
+    `with l as (insert into ledger (id, flat_id, month, type, amount_poisha, paid_by_member_id, member_id, split, date, note, status, created_by, method, held_by)
+       values (coalesce($15::uuid, gen_random_uuid()), $1, date_trunc('month', $2::date)::date, $3, $4, $5, $6, $7, $2, $8, $9, $10, $16, $19::uuid)
        on conflict (id) do nothing returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, l.id, x::uuid from l, json_array_elements_text($11::text::json) x),
      i as (insert into bazar_items (flat_id, ledger_id, pos, name, amount_poisha)
@@ -61,11 +62,15 @@ async function insertEntry(db: Db, flatId: string, by: string,
        select $1, $8, $4, $12, array(select json_array_elements_text($13::text::json)::uuid) from l where $14::boolean returning *),
      th as (insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'bill_templates', t.id::text, to_jsonb(t), $10 from t)
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text,
-       to_jsonb(l) || case when json_array_length($17::text::json) > 0 then jsonb_build_object('items', $17::text::jsonb) else '{}'::jsonb end, $10
+       to_jsonb(l) || case when json_array_length($17::text::json) > 0 then jsonb_build_object('items', $17::text::jsonb) else '{}'::jsonb end
+         || case when $20::boolean then '{"atOnce":"notJoined"}'::jsonb else '{}'::jsonb end, $10
      from l returning 1`,
     [flatId, e.date, e.type, e.amount, e.paidBy, e.memberId, e.split, e.note, status, by, JSON.stringify(e.split === 'selected' ? e.selected : []),
      repeat?.split ?? 'equal', JSON.stringify(repeat?.selected ?? []), repeat !== null, e.id ?? null, e.method ?? null,
-     JSON.stringify(e.items ?? []), e.receipt ? Buffer.from(e.receipt) : null])).length > 0;   // false: this id was saved already
+     JSON.stringify(e.items ?? []), e.receipt ? Buffer.from(e.receipt) : null,
+     // Money received is held by the collector who wrote it: the 011 trigger would give a waiting deposit whoever collects at
+     // insert time, wrong if a handover lands between this person's role check and the save. null: the trigger decides.
+     e.type === 'deposit' && e.memberId !== by ? by : null, e.notJoined ?? false])).length > 0;   // false: this id was saved already
 }
 
 /** Everything the money screens need for one month. The version is read first: closeMonth freezes only results computed
@@ -94,14 +99,18 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
        l.date::text as date, l.note, l.created_by as "createdBy", l.for_month::text as "forMonth", l.moves, l.held_by as "heldBy", l.method,
        (select c.state from entry_checks c where c.ledger_id = l.id) as "check",
        (select extract(epoch from r.created_at)::bigint::text from receipts r where r.flat_id = l.flat_id and r.ledger_id = l.id) as "receiptV",
+       exists (select 1 from audit_log a where a.flat_id = l.flat_id and a.entity_id = l.id::text and a.entity = 'ledger'
+         and a.after->>'atOnce' = 'notJoined') as "notJoined",
        (select coalesce(json_agg(s.member_id), '[]'::json) from bill_split_members s where s.ledger_id = l.id) as selected
      from ledger l`;
   const entries = await db<Entry>(`${select} where l.flat_id = $1 and l.month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
   const corrections = await db<Entry>(`${select} where l.flat_id = $1 and l.for_month = $2 order by l.date desc, l.created_at desc`, [flatId, month]);
-  // per entry only its latest removal (audit ids follow commit order per entry: see putBack), and only while it is still gone
+  // per entry only its latest removal (audit ids follow commit order per entry: see putBack), and only while it is still gone;
+  // `rejected`: removed by That's not right (rejectEntry), not by Remove
   const removed = await db<Removed>(
-    `select id, at, by, "byId", type, amount, date, note from (select distinct on (a.entity_id) a.entity_id as id, a.at, m.name as by, a.by_member as "byId",
-         a.before->>'type' as type, (a.before->>'amount_poisha')::int as amount, a.before->>'date' as date, a.before->>'note' as note, a.id as seq
+    `select id, at, by, "byId", type, amount, date, note, rejected from (select distinct on (a.entity_id) a.entity_id as id, a.at, m.name as by, a.by_member as "byId",
+         a.before->>'type' as type, (a.before->>'amount_poisha')::int as amount, a.before->>'date' as date, a.before->>'note' as note, a.id as seq,
+         coalesce(a.after->>'rejected' = 'true', false) as rejected
        from audit_log a join members m on m.flat_id = a.flat_id and m.id = a.by_member
        where a.flat_id = $1 and a.entity = 'ledger' and a.after->>'removed' = 'true' and a.before->>'month' = $2
          and not exists (select 1 from ledger l where l.flat_id = a.flat_id and l.id = a.entity_id::uuid)
@@ -146,18 +155,37 @@ export async function loadMonth(db: Db, flatId: string, month: string, today: st
     carriedFrom: lastClosed?.month ?? null, closedMonths, days, corrections };
 }
 
-/** Rows waiting for this person's tap: deposits for the collector, money handed to me for me. `name` = who the row is for. */
-export const toConfirm = (db: Db, flatId: string, memberId: string, boss: boolean) => db<{
-  id: string; type: 'deposit' | 'payout'; amount: number; date: string; note: string | null; method: Method | null; name: string; paidTo: string | null;
+/** SQL over a ledger row `l`: who answers it while it waits (Yes or That's not right). A deposit someone wrote for themselves
+ *  (I paid): the collector. Anything else (Money received or Give money, written by the collector): the person it is for.
+ *  confirmEntry, rejectEntry, toConfirm and confirmerOf all use this, so they never disagree. Callers also require
+ *  `l.created_by <> <me>`: nobody answers their own entry. */
+export const CONFIRMER = `case when l.type = 'deposit' and l.created_by = l.member_id
+  then (select c.id from members c where c.flat_id = l.flat_id and c.role = 'manager') else l.member_id end`;
+
+/** Rows waiting for this person's answer. `name` = who wrote it; `forMe` = a deposit written for me (Yes, I gave it). */
+export const toConfirm = (db: Db, flatId: string, memberId: string) => db<{
+  id: string; type: 'deposit' | 'payout'; amount: number; date: string; note: string | null; method: Method | null; name: string; paidTo: string | null; forMe: boolean;
 }>(
   // paidTo: who held this money (received a deposit, or paid out a payout), named only when that is no longer the
   // collector (after a handover) — so a waiting entry is never relabelled to whoever collects today
-  `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.note, l.method, m.name
+  `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.note, l.method, m.name,
+       (l.type = 'deposit' and l.member_id = $2) as "forMe"
      , (select hb.name from members hb where hb.id = l.held_by
          and hb.id is distinct from (select id from members where flat_id = l.flat_id and role = 'manager')) as "paidTo"
-   from ledger l join members m on m.flat_id = l.flat_id and m.id = l.member_id
-   where l.flat_id = $1 and l.status = 'pending' and ((l.type = 'deposit' and $3::boolean) or (l.type = 'payout' and l.member_id = $2))
-   order by l.date, l.created_at`, [flatId, memberId, boss]);
+   from ledger l join members m on m.flat_id = l.flat_id and m.id = l.created_by
+   where l.flat_id = $1 and l.status = 'pending' and ${CONFIRMER} = $2 and l.created_by <> $2
+   order by l.date, l.created_at`, [flatId, memberId]);
+
+/** Who answers a waiting entry, for the push after it is saved: their id, language and what they are asked. Null when
+ *  nothing waits (it counted at once: the collector's own deposit, someone who moved out). */
+export async function confirmerOf(db: Db, flatId: string, id: string) {
+  const [r] = await db<{ id: string; lang: 'en' | 'bn' | null; kind: 'deposit' | 'gave' | 'payout' }>(
+    `select c.id, c.language as lang,
+       case when l.type = 'payout' then 'payout' when l.created_by = l.member_id then 'deposit' else 'gave' end as kind
+     from ledger l join members c on c.flat_id = l.flat_id and c.id = ${CONFIRMER}
+     where l.flat_id = $1 and l.id = $2 and l.status = 'pending' and l.created_by <> c.id`, [flatId, id]);
+  return r ?? null;
+}
 
 export type Actor = { memberId: string; role: 'member' | 'manager' };
 export type NewEntry = {
@@ -202,9 +230,9 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, t
   if (e.type === 'deposit' && !boss && e.memberId !== by.memberId) return 'bad';   // members deposit only for themselves
   if (e.repeat && (!boss || e.type !== 'bill')) return 'bad';                      // monthly bills are the collector's
   const month = monthOf(e.date), end = daysOfMonth(month).at(-1)!;
-  const here = await db<{ id: string; joinedOn: string; leftOn: string | null; roomId: string | null; gone: boolean }>(
+  const here = await db<{ id: string; joinedOn: string; leftOn: string | null; roomId: string | null; gone: boolean; notJoined: boolean }>(
     `select id, joined_on::text as "joinedOn", left_on::text as "leftOn", room_id as "roomId",
-       left_on < (now() at time zone 'Asia/Dhaka')::date as gone from members
+       left_on < (now() at time zone 'Asia/Dhaka')::date as gone, pin_hash is null as "notJoined" from members
      where flat_id = $1 and joined_on <= $3 and (left_on is null or left_on >= $2)`, [flatId, month, end]);
   let split = e.split, selected = e.split === 'selected' ? e.selected : [];
   if (split === 'here') {
@@ -229,24 +257,42 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, t
     const rooms = await db<{ id: string }>(`select id from rooms where flat_id = $1 and rent_share_poisha > 0`, [flatId]);
     if (!rooms.length || here.some(m => !m.roomId) || rooms.some(r => !here.some(m => m.roomId === r.id))) return 'rooms';
   }
-  // money between two people waits for the receiver: the collector for deposits, the person for payouts. Someone who has
-  // moved out can't sign in to confirm, so paying them back counts at once: the collector's entry is the record.
+  // money between two people waits for whoever didn't write it (CONFIRMER): the collector for a flatmate's own deposit, the
+  // person for money the collector wrote as received from or given to them. Someone who has moved out can't sign in to
+  // answer, so then it counts at once: the collector's entry is the record. The collector's own deposit always counts at once.
+  // So does money with someone who hasn't joined yet (can't sign in either): marked notJoined, so it stays visible after they join.
   const gone = here.some(m => m.id === e.memberId && m.gone) || (owed.some(o => o.id === e.memberId) && !here.some(m => m.id === e.memberId));
-  const pending = (e.type === 'deposit' && !boss) || (e.type === 'payout' && e.memberId !== by.memberId && !gone);
+  const waits = (e.type === 'deposit' && !boss) || (moving && e.memberId !== by.memberId && !gone);
+  const notJoined = waits && e.memberId !== by.memberId && here.some(m => m.id === e.memberId && m.notJoined);   // they would answer
+  const pending = waits && !notJoined;
   await openMonth(db, flatId, month);
   // a repeated "everyone living here" bill becomes "everyone, by days": the people living here change month to month
   const repeat = e.repeat ? (split === 'selected' && e.split !== 'here' ? { split: 'selected' as const, selected } : { split: e.split === 'here' ? 'equal' as const : split!, selected: [] }) : null;
-  return await insertEntry(db, flatId, by.memberId, { ...e, split, selected }, pending ? 'pending' : 'ok', repeat) ? 'ok' : 'again';
+  return await insertEntry(db, flatId, by.memberId, { ...e, split, selected, notJoined }, pending ? 'pending' : 'ok', repeat) ? 'ok' : 'again';
 }
 
-/** The receiver's tap: the collector confirms deposits, the person who got the money confirms a payout. */
+/** Yes: by whoever answers it (CONFIRMER), only while it waits; never the writer. */
 export async function confirmEntry(db: Db, flatId: string, by: Actor, id: string) {
   const r = await db(
-    `with l as (update ledger set status = 'ok' where flat_id = $1 and id = $2 and status = 'pending'
-       and ((type = 'deposit' and $4::boolean) or (type = 'payout' and member_id = $3)) returning id)
-     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, '{"status":"ok"}', $3 from l returning 1`,
-    [flatId, id, by.memberId, by.role === 'manager']);
+    `with x as (update ledger l set status = 'ok' where l.flat_id = $1 and l.id = $2 and l.status = 'pending'
+       and ${CONFIRMER} = $3 and l.created_by <> $3 returning l.id)
+     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', x.id::text, '{"status":"ok"}', $3 from x returning 1`,
+    [flatId, id, by.memberId]);
   return r.length > 0;
+}
+
+/** That's not right: whoever answers it (CONFIRMER) removes a waiting entry, one statement. It stays in the history the way
+ *  removeEntry keeps a removal, marked rejected (put back brings it back, still waiting). Returns who wrote it, for the push;
+ *  null when nothing waited for this person (someone acted first, or it isn't theirs to answer). */
+export async function rejectEntry(db: Db, flatId: string, by: Actor, id: string) {
+  const [r] = await db<{ writer: string }>(
+    `with d as (delete from ledger l where l.flat_id = $1 and l.id = $2 and l.status = 'pending'
+       and ${CONFIRMER} = $3 and l.created_by <> $3 returning l.*),
+     a as (insert into audit_log (flat_id, entity, entity_id, before, after, by_member)
+       select $1, 'ledger', d.id::text, to_jsonb(d), '{"removed":true,"rejected":true}', $3 from d)
+     select created_by as writer from d`,
+    [flatId, id, by.memberId]);
+  return r?.writer ?? null;
 }
 
 /** Whoever added it, or the collector, removes an entry. A confirmed deposit only the collector: the cash is with them.

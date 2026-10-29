@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkMsg, closeMsg, depositMsg, fixAskMsg, fixedMsg, handoverMsg, mealMsg, payoutMsg } from './notify-text';
+import { checkMsg, closeMsg, depositMsg, fixAskMsg, fixedMsg, gaveAskMsg, handoverMsg, mealMsg, payoutMsg, rejectedMsg } from './notify-text';
 
 describe('reminder texts', () => {
   it('fill names, times and months, English digits, right pages, nothing sensitive', () => {
@@ -25,5 +25,12 @@ describe('reminder texts', () => {
     expect(checkMsg('en', 1).title).toBe('1 bazar or bill waits for your check');
     expect(checkMsg('en', 3)).toEqual({ title: '3 bazars and bills wait for your check', body: 'See Money.', url: '/en/money' });
     expect(checkMsg('bn', 2).title).toBe('2টা বাজারের হিসাব ও বিল চেকের অপেক্ষায়');
+  });
+  it('money between two people: who wrote it or who said not right; never the amount or a reason', () => {
+    expect(gaveAskMsg('en', 'Nafis')).toEqual({ title: 'Nafis wrote that you gave money', body: 'Check it and confirm.', url: '/en/money' });
+    expect(gaveAskMsg('bn', 'Nafis')).toEqual({ title: 'Nafis লিখেছে আপনি টাকা দিয়েছেন', body: 'দেখে কনফার্ম করুন।', url: '/bn/money' });
+    expect(rejectedMsg('en', 'Tahsin')).toEqual({ title: 'Tahsin says an entry isn’t right', body: 'Talk it over and write it again if needed.', url: '/en/money' });
+    expect(rejectedMsg('bn', 'Tahsin')).toEqual({ title: 'Tahsin বলছে একটা লেনদেন ঠিক না', body: 'কথা বলে দরকার হলে আবার লিখুন।', url: '/bn/money' });
+    for (const m of [gaveAskMsg('en', 'X'), gaveAskMsg('bn', 'X'), rejectedMsg('en', 'X'), rejectedMsg('bn', 'X')]) expect(`${m.title} ${m.body}`).not.toMatch(/৳|\d{4,}|ম্যানেজার|manager|মেস|mess/i);
   });
 });

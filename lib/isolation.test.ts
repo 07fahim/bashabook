@@ -6,7 +6,7 @@ import { checkEntry, entryDetail, fixEntry, itemsFor, receiptOf, receiptVersion,
 import { addCorrection, closeMonth } from './close';
 import { acceptHandover, offerHandover } from './handover';
 import { setOtherMeal } from './meals-db';
-import { addEntry, confirmEntry, openMonth, putBack, removeEntry, setRent, setRoom, stopRepeat, type NewEntry } from './money-db';
+import { addEntry, confirmEntry, openMonth, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat, type NewEntry } from './money-db';
 import { removePhoto, setPhoto } from './photo';
 
 const today = '2026-10-09', OCT = '2026-10-01', SEP = '2026-09-01', noCash = { cash: 0, bkash: 0, nagad: 0, bank: 0 };
@@ -59,6 +59,8 @@ describe('flat isolation', { timeout: 60000 }, () => {
     expect(await addEntry(db, A.flatId, A.boss, e({ type: 'bill', amount: 100, note: 'x', split: 'selected', selected: [A.other] }), today)).toBe('ok');   // control
     expect(await addEntry(db, A.flatId, A.boss, e({ type: 'bill', amount: 100, note: 'x', split: 'selected', selected: [B.other] }), today)).toBe('bad');
     expect(await confirmEntry(db, A.flatId, A.boss, pending)).toBe(false);
+    expect(await rejectEntry(db, A.flatId, A.boss, pending)).toBeNull();
+    expect(await db(`select 1 from ledger where id = $1`, [pending])).toHaveLength(1);
     expect(await removeEntry(db, A.flatId, A.boss, bazar, today)).toBe(false);
     expect(await putBack(db, A.flatId, A.boss.memberId, bill, today)).toBe(false);
     expect(await stopRepeat(db, A.flatId, A.boss, tpl.id)).toBe(false);
