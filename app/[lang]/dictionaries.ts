@@ -118,7 +118,7 @@ const bn = {
     items: [
       { icon: 'meal', title: 'মিল', body: 'সবাই নিজের মিল নিজেই চালু-বন্ধ করে। মাস শেষে কে কত মিল খেল, গুনতে হয় না।', points: ['কালকের মিল ফ্ল্যাটের ঠিক করা সময় পর্যন্ত', 'অতিথি আর ছুটির দিন', 'দেরিতে বদল সবাই দেখে'] },
       { icon: 'cook', title: 'রাঁধুনির জন্য', body: 'রাঁধুনি ফোন করুক বা বাসায় এসে জিজ্ঞেস করুক, যে-ই থাকুক হোম খুলেই সংখ্যাটা বলে দিতে পারে।', points: ['আজ আর কালকের প্লেট', 'রান্না বন্ধের দিন', 'এক ট্যাপে শেয়ার'] },
-      { icon: 'bazar', title: 'বাজার', body: 'যে বাজার করে সে খরচ লিখে দেয়। মিল রেট নিজে থেকেই হিসাব হয়।', points: ['কে কবে কত টাকার বাজার করল', 'মিল রেট সবসময় হালনাগাদ', 'সবাই একই খাতা দেখে'] },
+      { icon: 'bazar', title: 'বাজার', body: 'যে বাজার করে সে খরচ লিখে দেয়। মিল রেট নিজে থেকেই হিসাব হয়।', points: ['কে কবে কত টাকার বাজার করল', 'কী কী কেনা হয়েছে আর রসিদের ছবি থাকলে সেটাও', 'মাস ক্লোজের আগে প্রতিটা বাজার চেক হয়'] },
       { icon: 'bill', title: 'ভাড়া আর বিল', body: 'ভাড়া, বিদ্যুৎ, গ্যাস, ইন্টারনেট, রাঁধুনির বেতন। যার যতটুকু ভাগ, ততটুকুই।', points: ['রুম অনুযায়ী ভাড়া', 'বিল সবার মধ্যে ভাগ', 'নিজে রান্না করলেও বিলের ভাগে'] },
       { icon: 'wallet', title: 'জমা আর ব্যালেন্স', body: 'কে কত টাকা জমা দিল আর এখন কার কত পাওনা, সবসময় দেখা যায়।', points: ['বিকাশ, নগদ বা ক্যাশ', 'সবার ব্যালেন্স এক নজরে', 'প্রতিটা এন্ট্রিতে কে লিখেছে আর তারিখ'] },
       { icon: 'settle', title: 'মাস শেষের হিসাব', body: 'এক ট্যাপে কে কত দেবে আর কে কত পাবে। মেসেঞ্জার বা হোয়াটসঅ্যাপ গ্রুপে পাঠিয়ে দিন।', points: ['প্রত্যেকের ভাগ আলাদা করে', 'ক্যাশ না মিললে মাস ক্লোজ হয় না', 'বাকি টাকা পরের মাসে যায়'] },
@@ -130,7 +130,7 @@ const bn = {
     points: [
       ['সময় পার হওয়ার পরে কালকের মিল বদল', 'করা যায়, পাশে সময় লেখা থাকে, সবাই দেখে'],
       ['আজকের মিল', 'লক থাকে। ভুল হলে ঠিক করা যায়, সেটাও সবাই দেখে'],
-      ['বাজার আর টাকা', 'প্রতিটা এন্ট্রিতে কে দিয়েছে লেখা থাকে। মাস শেষে ক্যাশ না মিললে মাস বন্ধ হয় না'],
+      ['বাজার আর টাকা', 'প্রতিটা এন্ট্রিতে কে দিয়েছে লেখা থাকে। যার কাছে ফ্ল্যাটের টাকা থাকে সে প্রতিটা বাজার আর বিল চেক করে। তার নিজেরগুলো চেক করে অন্য একজন। সব চেক না হলে আর ক্যাশ না মিললে মাস ক্লোজ হয় না'],
     ] as [string, string][],
   },
   faqTitle: 'সাধারণ প্রশ্ন',
@@ -138,9 +138,9 @@ const bn = {
     ['সবাইকে কি অ্যাপ ডাউনলোড করতে হবে?', 'না। যোগ দেওয়ার লিংকে ট্যাপ করলেই ব্রাউজারে খুলে যায়। চাইলে হোম স্ক্রিনে যোগ করে অ্যাপের মতো ব্যবহার করা যায়।'],
     ['খরচ কত?', 'কিছুই না। বাসাবুক ব্যবহার করতে টাকা লাগে না, আর আপনাদের হিসাব আপনাদেরই থাকে।'],
     ['বাসাবুক কি আমাদের টাকা রাখে?', 'না। এখন যেভাবে দেন, বিকাশ, নগদ বা ক্যাশে, সেভাবেই দেবেন। বাসাবুক শুধু লিখে রাখে কে কত দিল।'],
-    ['টাকা কার কাছে থাকে?', 'ফ্ল্যাটের একজনের কাছে, যার কাছে ফ্ল্যাটের টাকা থাকে। সবাই তাকে জমা দেয়, বাজার সেই টাকা থেকে হয়, আর প্রতিটা জমা সে কনফার্ম করলে তবেই হিসাবে ওঠে। চাইলে সে অ্যাপেই দায়িত্বটা অন্য কাউকে বুঝিয়ে দিতে পারে।'],
+    ['টাকা কার কাছে থাকে?', 'ফ্ল্যাটের একজনের কাছে, যার কাছে ফ্ল্যাটের টাকা থাকে। সবাই তাকে জমা দেয় আর বাজার সেই টাকা থেকে হয়। প্রতিটা জমা সে কনফার্ম করলে তবেই হিসাবে ওঠে। প্রতিটা বাজার আর বিলও সে চেক করে। চাইলে সে অ্যাপেই দায়িত্বটা অন্য কাউকে বুঝিয়ে দিতে পারে।'],
     ['মাসের মাঝখানে কেউ উঠলে বা চলে গেলে?', 'যে কয়দিন ছিল শুধু সেই কয়দিনের মিল ধরা হয়, আর “থাকার দিন অনুযায়ী” ভাগ করা বিল যে যত দিন ছিল সেই হিসাবে ভাগ হয়। কেউ চলে গেলে যাওয়ার দিন এখন পর্যন্ত যা হয়েছে মিটিয়ে নেয়, বাকিটা মাস ক্লোজ হলে।'],
-    ['সবাই কি সবার এন্ট্রি দেখতে পারে?', 'হ্যাঁ। প্রতিটা বাজার, বিল আর জমা ফ্ল্যাটের সবাই দেখতে পারে, তাই হিসাব নিয়ে সন্দেহ থাকে না।'],
+    ['সবাই কি সবার এন্ট্রি দেখতে পারে?', 'হ্যাঁ। প্রতিটা বাজার, বিল আর জমা ফ্ল্যাটের সবাই দেখতে পারে। রসিদের ছবি দিলে সেটাও। তাই হিসাব নিয়ে সন্দেহ থাকে না।'],
   ],
   footer: {
     tagline: 'বাসাবুক · শেয়ার্ড ফ্ল্যাটের হিসাব',
@@ -871,7 +871,7 @@ const en: Dict = {
     items: [
       { icon: 'meal', title: 'Meals', body: 'Everyone switches their own meals on or off. Nobody counts meals at the end of the month.', points: ['Tomorrow’s meals until your flat’s deadline', 'Guests and days away', 'Late changes are visible to all'] },
       { icon: 'cook', title: 'For the cook', body: 'When the cook calls or arrives and asks how many, whoever is there reads it straight from Home.', points: ['Today’s and tomorrow’s plates', 'No-cooking days', 'Share in one tap'] },
-      { icon: 'bazar', title: 'Bazar', body: 'Whoever shops adds the cost. The meal rate works itself out.', points: ['Who shopped, when and for how much', 'Meal rate always up to date', 'Everyone sees the same book'] },
+      { icon: 'bazar', title: 'Bazar', body: 'Whoever shops adds the cost. The meal rate works itself out.', points: ['Who shopped, when and for how much', 'What was bought and any receipt photo', 'Every bazar checked before the month closes'] },
       { icon: 'bill', title: 'Rent and bills', body: 'Rent, electricity, gas, internet, the cook’s pay. Everyone pays their own share.', points: ['Rent by room', 'Bills shared by everyone', 'Bill share even if you cook for yourself'] },
       { icon: 'wallet', title: 'Deposits and balance', body: 'Who paid in and who is owed what, visible at any time.', points: ['bKash, Nagad or cash', 'Everyone’s balance at a glance', 'Every entry shows who added it and its date'] },
       { icon: 'settle', title: 'Month-end settlement', body: 'One tap shows who pays and who gets money back. Send it to your Messenger or WhatsApp group.', points: ['Each person’s share, itemised', 'The month closes only when cash matches', 'Leftovers carry to next month'] },
@@ -883,7 +883,7 @@ const en: Dict = {
     points: [
       ["Changing tomorrow's meals after the deadline", 'Allowed, marked with the time for everyone to see'],
       ["Today's meals", 'Locked. Mistakes can be fixed, and everyone sees the fix'],
-      ['Bazar and money', 'Every entry shows who added it. The month only closes when the cash matches'],
+      ['Bazar and money', 'Every entry shows who added it. The person who keeps the flat money checks every bazar and bill; a flatmate checks theirs. The month closes only when all are checked and the cash matches'],
     ] as [string, string][],
   },
   faqTitle: 'Common questions',
@@ -891,9 +891,9 @@ const en: Dict = {
     ['Does everyone need to download an app?', 'No. The join link opens in the browser. Anyone can add it to their home screen to use it like an app.'],
     ['What does it cost?', 'Nothing. BashaBook is free to use, and your records stay yours.'],
     ['Does BashaBook hold our money?', 'No. You pay by bKash, Nagad or cash as you do now. BashaBook only records who paid what.'],
-    ['Who keeps the money?', 'One flatmate, the person who keeps the flat money. Everyone deposits with them, bazar comes out of what they hold, and a deposit counts only once they confirm it. They can hand the role to someone else in the app at any time.'],
+    ['Who keeps the money?', 'One flatmate, the person who keeps the flat money. Everyone deposits with them and bazar comes out of what they hold. A deposit counts only once they confirm it. They also check every bazar and bill. They can hand the role to someone else in the app at any time.'],
     ['What if someone moves in or out mid-month?', 'Meals count only the days they were here, and a bill split “by days here this month” follows the days each person stayed. Someone moving out settles what they owe so far when they leave, and the rest once the month closes.'],
-    ['Can everyone see every entry?', 'Yes. Every bazar, bill and deposit is visible to the whole flat, so nobody has to take the numbers on trust.'],
+    ['Can everyone see every entry?', 'Yes. The whole flat sees every bazar, bill and deposit and any receipt photo. Nobody has to take the numbers on trust.'],
   ],
   footer: {
     tagline: 'BashaBook · accounts for shared flats',
