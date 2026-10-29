@@ -511,9 +511,9 @@ export async function receiptAction(_: FormState, d: FormData): Promise<FormStat
   if (!raw) return { error: x.errors.noPhoto };
   if (!bytes) return { error: x.errors.receipt };
   const r = await addReceipt(db, me.flatId, me, id, bytes, todayDhaka());
-  if (r !== 'ok') return { error: x.errors[r] };
-  refresh();
-  return { done: x.saved };
+  if (r === 'receipt') return { error: x.errors.receipt };
+  refresh();   // a refusal redraws the page too: the check or the close someone made meanwhile
+  return r === 'ok' ? { done: x.saved } : { error: x.errors.receiptLate };
 }
 
 /** Rent typed in taka; 0 is allowed (a room that pays no rent). */

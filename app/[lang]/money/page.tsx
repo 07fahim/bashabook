@@ -166,7 +166,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               className={`mt-3 flex min-h-11 items-center justify-between gap-4 ${card} hover:bg-paper ${focus}`}>
               <span className="min-w-0">
                 <span className="block text-lg font-bold">{x.bazar.list}</span>
-                <span className={`block text-[15px] ${waitingBazar ? 'font-semibold text-turmeric-ink' : 'text-muted'}`}>{waitingBazar ? x.bazar.waitingN.replace('{n}', String(waitingBazar)) : x.bazar.listLead}</span>
+                <span className="block text-[15px] text-muted">{x.bazar.listLead}</span>
+                {waitingBazar > 0 && <span className="block text-[15px] font-semibold text-turmeric-ink">{x.bazar.waitingN.replace('{n}', String(waitingBazar))}</span>}
               </span>
               <span aria-hidden="true" className="text-2xl leading-none text-muted">→</span>
             </Link>

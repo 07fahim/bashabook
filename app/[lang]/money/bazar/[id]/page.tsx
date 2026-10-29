@@ -42,9 +42,9 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
   const other = otherItems(d.items, d.amount), end = daysOfMonth(d.month).at(-1)!;
   const q = d.month !== monthOf(today) ? `?m=${d.month.slice(0, 7)}` : '';
   const day = (at: string | null) => (at ? fmtDay(dhakaDate(at), lang) : '');
-  const state = d.check === 'ok' ? (d.checkedBy ? b.checkedBy.replace('{name}', d.checkedBy).replace('{d}', day(d.checkedAt)) : b.checkedOld)
+  const state = d.check === 'ok' ? (d.checkedBy ? b.checkedBy.replace('{name}', d.checkedBy).replace('{d}', day(d.checkedAt)) : '')
     : d.check === 'fix' ? b.fixBy.replace('{name}', d.checkedBy ?? '?').replace('{d}', day(d.checkedAt)).replace('{reason}', d.reason ?? '')
-    : sp.fixed === '1' ? b.fixed : '';   // waiting: the chip already says so
+    : sp.fixed === '1' ? b.fixed : '';   // waiting, or verified with no name kept: the chip already says so
   // their own entry sent back, but too late for them to fix (an earlier month): say who will
   const othersFix = d.open && d.check === 'fix' && !d.mayFix && d.createdBy === me.memberId;
   const src = d.receiptV ? `/api/receipt/${d.id}?v=${d.receiptV}` : null;
