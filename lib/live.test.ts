@@ -66,8 +66,23 @@ describe('live', () => {
     for (let i = 0; i < 4; i++) f.say(s, { topic: CH, event: 'broadcast', payload: {} });   // later signals do not push it back
     vi.advanceTimersByTime(99); expect(refresh).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1); expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('a signal 1 s after a refresh waits until 3 s after that refresh', () => {
+    const { f, refresh } = start();
+    const s = f.socks[0]; joined(f, s);
     f.say(s, { topic: CH, event: 'broadcast', payload: {} });
-    vi.advanceTimersByTime(300); expect(refresh).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(300); expect(refresh).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1000); f.say(s, { topic: CH, event: 'broadcast', payload: {} });
+    vi.advanceTimersByTime(1999); expect(refresh).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1); expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshes at most once per 3 s under a flood of signals', () => {
+    const { f, refresh } = start();
+    const s = f.socks[0]; joined(f, s);
+    for (let t = 0; t < 10000; t += 100) { f.say(s, { topic: CH, event: 'broadcast', payload: {} }); vi.advanceTimersByTime(100); }
+    expect(refresh).toHaveBeenCalledTimes(4);   // at 0.3, 3.3, 6.3 and 9.3 s
   });
 
   it('ignores another topic and does not refresh on the first join', () => {
