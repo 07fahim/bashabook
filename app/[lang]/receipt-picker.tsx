@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { focus } from './ui';
 
 const SIDE = 1280, MAX = 250_000;   // the long side in px; the server's limit in bytes (lib/photo.ts MAX_RECEIPT)
@@ -8,7 +8,8 @@ const SIDE = 1280, MAX = 250_000;   // the long side in px; the server's limit i
 /** Picks a receipt photo and shrinks it on the phone: long side 1280 px, JPEG quality 0.7 (lower only if it would pass
  *  250 KB), nothing cropped, so a slow connection sends a small file. It waits in a hidden field until the form is saved;
  *  a cleared form (after a save) drops it. */
-export function ReceiptPicker({ label, change, added, failed }: { label: string; change: string; added: string; failed: string }) {
+export function ReceiptPicker({ label, change, added, failed, hint }: { label: string; change: string; added: string; failed: string; hint: string }) {
+  const hintId = useId();
   const file = useRef<HTMLInputElement>(null), out = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<'none' | 'added' | 'failed'>('none');
   useEffect(() => {
@@ -43,8 +44,9 @@ export function ReceiptPicker({ label, change, added, failed }: { label: string;
     <div>
       <input ref={out} type="hidden" name="receipt" />
       <input ref={file} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={e => { pick(e.target.files?.[0]); e.target.value = ''; }} />
-      <button type="button" onClick={() => file.current?.click()}
+      <button type="button" onClick={() => file.current?.click()} aria-describedby={hintId}
         className={`inline-flex min-h-11 items-center rounded-full border border-muted bg-surface px-4 font-semibold hover:bg-paper ${focus}`}>{state === 'added' ? change : label}</button>
+      <p id={hintId} className="mt-1 text-[15px] text-muted">{hint}</p>
       <p role="status" className={`text-[15px] font-semibold ${state === 'failed' ? 'mt-2 text-chili' : state === 'added' ? 'mt-2 text-leaf' : ''}`}>
         {state === 'added' ? added : state === 'failed' ? failed : ''}
       </p>

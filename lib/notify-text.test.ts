@@ -16,13 +16,14 @@ describe('reminder texts', () => {
 
   it('check texts: who asks, never the amount or the reason; the count; the entry’s page', () => {
     expect(fixAskMsg('en', 'Nafis', 'bazar', 'abc')).toEqual({ title: 'Nafis asks you to fix a bazar', body: 'Open the app to see why.', url: '/en/money/bazar/abc' });
-    expect(fixAskMsg('bn', 'Nafis', 'bazar', 'abc').title).toBe('Nafis আপনাকে একটা বাজার ঠিক করতে বলছে');
-    expect(fixedMsg('bn', 'Tahsin', 'bill', 'abc')).toEqual({ title: 'Tahsin একটা বিল ঠিক করেছে', body: 'আবার দেখে নিন।', url: '/bn/money/bazar/abc' });
+    expect(fixAskMsg('bn', 'Nafis', 'bazar', 'abc').title).toBe('Nafis আপনাকে বাজারের হিসাব ঠিক করতে বলেছে');
+    expect(fixedMsg('bn', 'Tahsin', 'bill', 'abc')).toEqual({ title: 'Tahsin বিল ঠিক করেছে', body: 'আবার চেক করুন।', url: '/bn/money/bazar/abc' });
     // the existing rule: no amount in any push (it shows on a locked screen)
     for (const m of [fixAskMsg('en', 'X', 'bazar', 'a'), fixedMsg('bn', 'X', 'bill', 'a'), checkMsg('en', 3)]) expect(`${m.title} ${m.body}`).not.toMatch(/৳|\d{4,}|ম্যানেজার|manager|মেস|mess/i);
     expect(fixedMsg('en', 'Tahsin', 'bazar', 'abc').title).toBe('Tahsin fixed a bazar');
+    expect(checkMsg('bn', 1).title).toBe('1টা বাজারের হিসাব বা বিল চেকের অপেক্ষায়');
     expect(checkMsg('en', 1).title).toBe('1 bazar or bill waits for your check');
     expect(checkMsg('en', 3)).toEqual({ title: '3 bazars and bills wait for your check', body: 'See Money.', url: '/en/money' });
-    expect(checkMsg('bn', 2).title).toBe('2টা বাজার আর বিল আপনার চেকের অপেক্ষায়');
+    expect(checkMsg('bn', 2).title).toBe('2টা বাজারের হিসাব ও বিল চেকের অপেক্ষায়');
   });
 });

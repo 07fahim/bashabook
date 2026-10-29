@@ -202,7 +202,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       <span><span className="font-semibold">{x.repeat}</span><span className="block text-[15px] text-muted">{x.repeatHint}</span></span>
                     </label>
                   )}
-                  <ReceiptPicker label={x.bazar.addReceipt} change={x.bazar.changeReceipt} added={x.bazar.receiptAdded} failed={x.bazar.receiptFailed} />
+                  <ReceiptPicker label={x.bazar.addReceipt} change={x.bazar.changeReceipt} added={x.bazar.receiptAdded} failed={x.bazar.receiptFailed} hint={x.bazar.receiptHint} />
                   <button className={primary}>{x.save}</button>
                 </ActionForm>
               </Fold>

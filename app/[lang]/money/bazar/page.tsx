@@ -112,7 +112,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
                 <PayerSelect label={x.whoPaidShop} fundLabel={x.flatMoney.replace('{name}', collector.name)} today={dTo} initial={boss ? 'fund' : me.memberId}
                   people={mo.members.filter(p => p.id !== collector.id).map(p => ({ id: p.id, name: p.name, joinedOn: p.joinedOn, leftOn: p.leftOn }))} />
                 <ItemLines title={b.itemsTitle} hint={b.itemsHint} name={b.itemName} amount={b.itemAmount} add={b.addItem} />
-                <ReceiptPicker label={b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} />
+                <ReceiptPicker label={b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} hint={b.receiptHint} />
                 <Field label={x.note} name="note" maxLength={100} />
                 <button className={primary}>{x.save}</button>
               </ActionForm>

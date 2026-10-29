@@ -109,7 +109,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
                     initial={d.paidBy ?? 'fund'} people={people.filter(p => !p.collector || p.id === d.paidBy)} />
                   {d.type === 'bazar' && <ItemLines title={b.itemsTitle} hint={b.itemsHint} name={b.itemName} amount={b.itemAmount} add={b.addItem}
                     initial={d.items.map(i => ({ name: i.name, amount: i.amount === null ? '' : String(i.amount / 100) }))} />}
-                  <ReceiptPicker label={src ? b.changeReceipt : b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} />
+                  <ReceiptPicker label={src ? b.changeReceipt : b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} hint={b.receiptHint} />
                   {d.type === 'bazar' && <Field label={x.note} name="note" maxLength={100} defaultValue={d.note ?? ''} />}
                   <button className={primary}>{x.save}</button>
                 </ActionForm>
@@ -127,7 +127,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
             {d.mayAddReceipt && (
               <ActionForm action={receiptAction} className="mt-4" clearOnDone>
                 {hidden()}
-                <ReceiptPicker label={src ? b.changeReceipt : b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} />
+                <ReceiptPicker label={src ? b.changeReceipt : b.addReceipt} change={b.changeReceipt} added={b.receiptAdded} failed={b.receiptFailed} hint={b.receiptHint} />
                 <button className={`${primary} sm:w-auto`}>{x.save}</button>
               </ActionForm>
             )}
