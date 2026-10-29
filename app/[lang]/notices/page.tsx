@@ -27,7 +27,7 @@ async function Body({ params }: Pick<PageProps<'/[lang]/notices'>, 'params'>) {
   const rows = (await listNotices(db, me.flatId, me.memberId, me.role === 'manager')).map(n => [n, noticeLine(n, t, lang, today)] as const).filter(([, l]) => l);
   return (
     <>
-      <Header t={t} lang={lang} path="/notices" notices={0}><Nav t={t} lang={lang} showFlat={me.role === 'manager'} /></Header>
+      <Header t={t} lang={lang} path="/notices" notices={0}><Nav t={t} lang={lang} topic={me.liveTopic} showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-7xl px-5 pt-6 pb-28 md:px-8 md:pb-10">
         <section className={`${card} md:max-w-2xl`}>
           <h1 className="font-display text-2xl font-bold">{t.notices.title}</h1>

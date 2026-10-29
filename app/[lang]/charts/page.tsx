@@ -109,7 +109,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
 
   return (
     <>
-      <Header t={t} lang={lang} path={withQuery('/charts', sp)} notices={await noticesP}><Nav t={t} lang={lang} current="charts" showFlat={boss} /></Header>
+      <Header t={t} lang={lang} path={withQuery('/charts', sp)} notices={await noticesP}><Nav t={t} lang={lang} topic={me.liveTopic} current="charts" showFlat={boss} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <nav aria-label={t.money.monthNav} className="flex items-center justify-between gap-3">
           <h1 className="font-display text-3xl font-bold">{fmtMonth(month)}</h1>

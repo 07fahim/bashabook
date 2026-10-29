@@ -1,14 +1,17 @@
 import Link from 'next/link';
 import type { Dict, Locale } from './dictionaries';
+import { Live } from './live';
 import { focus } from './ui';
 
 type Tab = 'home' | 'meals' | 'money' | 'charts' | 'manage';
 
-/** Bottom tabs on phones, links in the top bar on wider screens. The Flat tab is only for the person who runs the flat. */
-export function Nav({ t, lang, current, showFlat }: { t: Dict; lang: Locale; current?: Tab; showFlat: boolean }) {
+/** Bottom tabs on phones, links in the top bar on wider screens. The Flat tab is only for the person who runs the flat.
+ *  On every signed-in page, so it also carries the live updates (live.tsx). */
+export function Nav({ t, lang, current, showFlat, topic }: { t: Dict; lang: Locale; current?: Tab; showFlat: boolean; topic?: string }) {
   const tabs: Tab[] = showFlat ? ['home', 'meals', 'money', 'charts', 'manage'] : ['home', 'meals', 'money', 'charts'];
   return (
     <nav aria-label={t.meals.nav} className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:static md:border-0 md:bg-transparent md:pb-0">
+      {topic && <Live topic={topic} />}
       <ul className="mx-auto flex max-w-md gap-2 px-3 py-2 md:gap-1 md:p-0">
         {tabs.map(tab => (
           <li key={tab} className="flex-1 md:flex-none">

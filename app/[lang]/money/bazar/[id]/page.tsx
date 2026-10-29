@@ -52,7 +52,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
 
   return (
     <>
-      <Header t={t} lang={lang} path={`/money/bazar/${d.id}`} notices={await noticesP}><Nav t={t} lang={lang} current="money" showFlat={boss} /></Header>
+      <Header t={t} lang={lang} path={`/money/bazar/${d.id}`} notices={await noticesP}><Nav t={t} lang={lang} topic={me.liveTopic} current="money" showFlat={boss} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <Link href={d.type === 'bazar' ? `/${lang}/money/bazar${q}` : `/${lang}/money${q}#entries`} className={`inline-flex min-h-11 items-center ${link}`}>{d.type === 'bazar' ? b.back : b.backMoney}</Link>
         <div className="mt-2 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:items-start">
