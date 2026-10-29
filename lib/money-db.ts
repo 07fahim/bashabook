@@ -45,6 +45,14 @@ export async function openMonth(db: Db, flatId: string, month: string) {
     [flatId, month]);
 }
 
+/** A form's key becomes the entry's id, so two taps save once. An id any flat's ledger had and has no more (removed) is
+ *  refused: its check and receipt stay with the id for Put back, and a new entry under it, here or in another flat, would take them. */
+export async function retiredId(db: Db, id: string) {
+  const [r] = await db<{ gone: boolean }>(`select exists (select 1 from audit_log where entity = 'ledger' and entity_id = $1)
+    and not exists (select 1 from ledger where id = $1::uuid) as gone`, [id]);
+  return r.gone;
+}
+
 /** One ledger row, its split people, its item lines, its receipt, its history row and (if `repeat`) its monthly template, all
  *  in one statement, so a bill can never be saved without the repeat the person ticked, nor a bazar without its lines. Callers check the rules. */
 async function insertEntry(db: Db, flatId: string, by: string,
@@ -265,6 +273,7 @@ export async function addEntry(db: Db, flatId: string, by: Actor, e: NewEntry, t
   const waits = (e.type === 'deposit' && !boss) || (moving && e.memberId !== by.memberId && !gone);
   const notJoined = waits && e.memberId !== by.memberId && here.some(m => m.id === e.memberId && m.notJoined);   // they would answer
   const pending = waits && !notJoined;
+  if (e.id && await retiredId(db, e.id)) return 'bad';
   await openMonth(db, flatId, month);
   // a repeated "everyone living here" bill becomes "everyone, by days": the people living here change month to month
   const repeat = e.repeat ? (split === 'selected' && e.split !== 'here' ? { split: 'selected' as const, selected } : { split: e.split === 'here' ? 'equal' as const : split!, selected: [] }) : null;

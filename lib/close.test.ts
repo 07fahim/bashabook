@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal, setDefaults } from './meals-db';
-import { addEntry, addRoom, loadMonth, openMonth, setRoom, type NewEntry } from './money-db';
+import { addEntry, addRoom, loadMonth, openMonth, removeEntry, setRoom, type NewEntry } from './money-db';
 import { addCorrection, closeMonth, closeInfo, coverGap, openFrom, openStart, parseCash } from './close';
 import { allocate } from './money';
 
@@ -239,6 +239,15 @@ describe('corrections', { timeout: 30000 }, () => {
     expect(oct.result.fund).toBe(0);
     expect(oct.result.invariantOk).toBe(true);
     expect(sumBalances(oct.result)).toBe(oct.result.fund);
+  });
+
+  it('a removed entry’s id is refused for a correction: it would take the old check', async () => {
+    const { flatId, ids, nafis } = await closedSeptember();
+    const id = randomUUID();
+    expect(await addEntry(db, flatId, nafis, e({ id, type: 'bazar', amount: 500, paidBy: ids.Tahsin, date: '2026-10-02' }), '2026-10-02')).toBe('ok');
+    await db(`insert into entry_checks (flat_id, ledger_id, month, state, by_member) values ($1, $2, '2026-10-01', 'ok', $3)`, [flatId, id, ids.Tahsin]);
+    expect(await removeEntry(db, flatId, nafis, id, '2026-10-02')).toBe(true);
+    expect(await addCorrection(db, flatId, nafis, { id, kind: 'bazar', forMonth: '2026-09-01', amount: 90000, paidBy: ids.Zarif, note: 'eggs' }, '2026-10-02')).toBe('bad');
   });
 
   it('a move between two people, and the rules', async () => {

@@ -4,7 +4,7 @@ import type { Db } from './db';
 import { addDays, daysOfMonth, editFrom } from './meals';
 import { CASH_KEYS, parseCash, type Cash } from './money';
 import { flatMoney } from './handover';
-import { addEntry, loadMonth, monthOf, openMonth, type Actor } from './money-db';
+import { addEntry, loadMonth, monthOf, openMonth, retiredId, type Actor } from './money-db';
 import { history, worthALook } from './charts';
 
 export { CASH_KEYS, parseCash, type Cash };   // pure, in money.ts so the close card can use them in the browser
@@ -165,6 +165,7 @@ export async function addCorrection(db: Db, flatId: string, by: Actor, c: Correc
   if (people.some(p => !p)) return 'bad';   // a cost with no payer would come out of flat money
   // the frozen weights the cost is split by must not all be 0, else nobody would pay it ('selected': the people are checked below)
   const weigh = move || selected.length ? null : c.kind === 'bill' && c.split === 'equal' ? 'days' : 'meals';
+  if (await retiredId(db, c.id)) return 'bad';
   await openMonth(db, flatId, monthOf(today));   // the correction is booked in this month
   const r = await db(
     `with ok as (select 1 from months where flat_id = $1 and month = $2::date and status = 'closed'
