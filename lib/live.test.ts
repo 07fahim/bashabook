@@ -34,6 +34,11 @@ describe('busy', () => {
     expect(busy(null, [{ tagName: 'INPUT', type: 'file', value: 'C:\\fakepath\\slip.jpg', defaultValue: '' }])).toBe(true);
     expect(busy(null, [{ tagName: 'INPUT', type: 'text', value: 'x', defaultValue: 'x' }, { tagName: 'INPUT', type: 'checkbox', checked: false, defaultChecked: false }])).toBe(false);
   });
+  it('ignores a changed field that is not rendered (a page left behind, a closed details)', () => {
+    const draft = (rects: unknown[]) => ({ tagName: 'INPUT', type: 'text', value: '450', defaultValue: '', getClientRects: () => rects });
+    expect(busy(null, [draft([])])).toBe(false);
+    expect(busy(null, [draft([{}])])).toBe(true);
+  });
 });
 
 describe('live', () => {

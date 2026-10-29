@@ -4,16 +4,18 @@
  *  A dropped socket comes back after 1, 2, 4 ... 30 s and refreshes once after the rejoin, since a signal may have been missed
  *  meanwhile (the probe lost 2 of 6 once). */
 export type Sock = { send(data: string): void; close(): void; onopen: (() => void) | null; onmessage: ((e: { data: string }) => void) | null; onclose: (() => void) | null };
-export type Field = { tagName: string; type?: string; value?: string; defaultValue?: string; checked?: boolean; defaultChecked?: boolean };
+export type Field = { tagName: string; type?: string; value?: string; defaultValue?: string; checked?: boolean; defaultChecked?: boolean; getClientRects?(): { length: number } };
 
-/** Someone is filling in a form: a text field, text area or select has focus, or a field differs from what the page rendered.
+/** Someone is filling in a form: a text field, text area or select has focus, or a rendered field differs from what the page
+ *  rendered. A draft on a page you left (Next keeps it hidden) or inside a closed details doesn't hold the refresh: a refresh
+ *  doesn't wipe DOM values anyway; it only waits so the page doesn't jump under someone typing.
  *  ponytail: a changed select with no focus counts as not busy (a select's first option has no defaultSelected); add if a
  *  half-filled form loses a picked option. */
 export function busy(active: Field | null, fields: Iterable<Field>) {
   if (active && (active.tagName === 'TEXTAREA' || active.tagName === 'SELECT'
     || (active.tagName === 'INPUT' && !['button', 'submit', 'reset', 'checkbox', 'radio', 'hidden'].includes(active.type ?? '')))) return true;
   for (const f of fields)
-    if (f.type === 'checkbox' || f.type === 'radio' ? f.checked !== f.defaultChecked : f.value !== f.defaultValue) return true;
+    if (f.getClientRects?.().length !== 0 && (f.type === 'checkbox' || f.type === 'radio' ? f.checked !== f.defaultChecked : f.value !== f.defaultValue)) return true;
   return false;
 }
 
