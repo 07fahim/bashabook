@@ -1,7 +1,9 @@
 import type { Db } from './db';
 
 export const MAX_PHOTO = 60_000;
-/** A receipt (020): long side 1280 px at JPEG quality 0.7 on the phone, measured on real receipts (bazar-check plan, Task 10). */
+/** A receipt (020): long side 1280 px at JPEG quality 0.7 on the phone. Measured 2026-10-29 with the picker's code in Chromium on
+ *  40 sample slips and one phone photo of three slips: median 80 KB, largest 227 KB, all readable; a full 12 MP camera original
+ *  is not measured yet (the picker steps the quality down if one passes this). */
 export const MAX_RECEIPT = 250_000;
 
 /** A JPEG as the app's pickers make it (starts FF D8 FF), at most `max` bytes (a profile photo: 60 KB). Anything else is refused. */
