@@ -45,6 +45,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const [mo, waiting, closing, history, checks] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId, boss),
     boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null, handoverHistory(db, me.flatId), toCheck(db, me.flatId, me.memberId, today)]);   // the card only shows on the month to close
   const closed = mo.info?.status === 'closed';
+  // where entries can be added: this month for everyone; an earlier month still open for the collector only
+  const canAdd = month === thisMonth ? !closed : boss && mo.info?.status === 'open';
   // money with the collector: a month's own fund, but for this month what they hold now. While last month is still open,
   // this month's own fund starts from 0, so it would show a false gap: add up every open month instead (flatMoney)
   const held = month === thisMonth && mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
@@ -166,12 +168,12 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               className={`mt-3 flex min-h-11 items-center justify-between gap-4 ${card} hover:bg-paper ${focus}`}>
               <span className="min-w-0">
                 <span className="block text-lg font-bold">{x.bazar.list}</span>
-                <span className="block text-[15px] text-muted">{x.bazar.listLead}</span>
+                <span className="block text-[15px] text-muted">{canAdd && `${x.bazar.addHere} `}{x.bazar.listLead}</span>
                 {waitingBazar > 0 && <span className="block text-[15px] font-semibold text-turmeric-ink">{x.bazar.waitingN.replace('{n}', String(waitingBazar))}</span>}
               </span>
               <span aria-hidden="true" className="text-2xl leading-none text-muted">→</span>
             </Link>
-            {(month === thisMonth ? !closed : boss && mo.info?.status === 'open') && (<>
+            {canAdd && (<>
               {month !== thisMonth && <p className="max-w-prose text-[15px] text-muted">{x.lateLead.replaceAll('{month}', fmtMonth(month))}</p>}
               <Fold title={x.addBill} lead={x.billLead}>
                 <ActionForm action={entryAction} className="mt-4" clearOnDone>
