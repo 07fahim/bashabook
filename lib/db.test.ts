@@ -20,7 +20,8 @@ describe('db retries', () => {
   });
 
   it('never runs again when the outcome is unknown: a reset on commit, a connection closed mid-transaction', async () => {
-    for (const e of [{ code: 'ECONNRESET', query: 'commit' }, { code: 'CONNECTION_CLOSED' }, { code: '23505' }]) {
+    for (const e of [{ code: 'ECONNRESET', query: 'commit' }, { code: 'ECONNRESET', query: 'set local statement_timeout = 8000' },
+      { code: 'ECONNRESET' }, { code: 'CONNECTION_CLOSED' }, { code: '23505' }]) {
       const f = fails(e);
       await expect(withRetry(f.run)('insert')).rejects.toMatchObject(e);
       expect(f.tries()).toBe(1);
@@ -34,5 +35,8 @@ describe('db retries', () => {
     const g = fails(dead(), dead());
     await expect(withRetry(g.run)('update')).rejects.toMatchObject({ code: '40P01' });
     expect(g.tries()).toBe(2);
+    const h = fails({ code: 'ECONNRESET', query: 'begin ' }, dead());   // a reset first still leaves the deadlock its one more try
+    expect(await withRetry(h.run)('update')).toEqual(['ok']);
+    expect(h.tries()).toBe(3);
   });
 });

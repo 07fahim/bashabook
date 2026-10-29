@@ -20,13 +20,15 @@ const run = async (text: string, params: unknown[]) =>
 //   month rows in varying orders, so a rare one can't be ruled out by lock order alone. Once more.
 // - a reset on BEGIN (ECONNRESET): a pooled connection that died unnoticed (a Wi-Fi drop, a frozen serverless instance) fails
 //   before anything ran; each try retires one dead connection (the pool holds 10). Up to 10 more.
-// Never again on a reset at COMMIT or CONNECTION_CLOSED mid-transaction: the write may have landed (.git/sdd/econnreset-report.md).
+// Never again on a reset at any later step (set local, the statement, COMMIT) or CONNECTION_CLOSED: the write may have landed.
 export const withRetry = (go: typeof run): Db => async (text, params = []) => {
-  for (let i = 0; ; i++) {
+  for (let resets = 0, deadlocked = false; ;) {
     try { return await go(text, params); }
     catch (e) {
       const { code, query } = e as { code?: string; query?: string };
-      if (!(code === 'ECONNRESET' && query?.startsWith('begin') && i < 10) && !(code === '40P01' && i === 0)) throw e;
+      if (code === 'ECONNRESET' && query?.startsWith('begin') && resets < 10) resets++;
+      else if (code === '40P01' && !deadlocked) deadlocked = true;
+      else throw e;
     }
   }
 };
