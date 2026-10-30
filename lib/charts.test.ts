@@ -216,4 +216,17 @@ describe('billNames', () => {
   it('a closed month keeps no lines: no list for one person', () => {
     expect(billNames(bills, [], 'a', 'Others')).toBeNull();
   });
+  it('a correction bill for a closed month is named too: the bill share it sits next to counts it', () => {
+    const fix = row({ id: 'f', type: 'bill', amount: 300, note: 'Water', forMonth: '2026-09-01' });
+    expect(billNames([...bills, fix], null, null, 'Others')).toContain('Water');
+    expect(billNames([...bills, fix], [{ rowId: 'f', memberId: 'a', amount: 40 }], 'a', 'Others')).toEqual(['Water']);
+  });
+  it('mine: biggest share first, not biggest bill', () => {
+    const lines = [{ rowId: 'r', memberId: 'a', amount: 100 }, { rowId: 'w', memberId: 'a', amount: 400 }];
+    expect(billNames(bills, lines, 'a', 'Others')).toEqual(['Wi-Fi', 'Rent']);
+  });
+  it('more than five names: the biggest four, then Others once', () => {
+    const many = ['A', 'B', 'C', 'D', 'E', 'F'].map((n, i) => row({ id: n, type: 'bill', amount: 1000 - i, note: n }));
+    expect(billNames([...many, row({ id: 'u', type: 'bill', amount: 5000, note: null })], null, null, 'Others')).toEqual(['A', 'B', 'C', 'D', 'Others']);
+  });
 });

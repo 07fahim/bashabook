@@ -89,7 +89,7 @@ const Move = ({ tone }: { tone: string }) => tone === 'text-chili' || tone === '
  *  colour, for the shape at a glance (a bar opens its month; the cards below carry the same links for the keyboard). Then one
  *  card a month, newest first, every number saying how it moved from the month before (chili when it costs more); the cards
  *  scroll sideways when they don't fit. */
-export function MonthCards({ rows, words }: { rows: MonthRow[]; words: { rate: string; spend: string; latest: string } }) {
+export function MonthCards({ rows, words }: { rows: MonthRow[]; words: { rate: string; spend: string; latest: string | null } }) {
   const chart = (title: string, get: (r: MonthRow) => number, text: (r: MonthRow) => string, on: string, off: string) => {
     const max = Math.max(...rows.map(get), 0);
     return (
@@ -100,9 +100,13 @@ export function MonthCards({ rows, words }: { rows: MonthRow[]; words: { rate: s
             const last = i === rows.length - 1;
             return (
               <li key={r.key} className="min-w-0 flex-1">
-                <Link href={r.href} tabIndex={-1} title={`${r.long}: ${text(r)}`} className="group flex flex-col items-center gap-1">
+                <Link href={r.href} tabIndex={-1} className="group flex flex-col items-center gap-1">
                   <span className="flex h-16 w-full items-end justify-center">
-                    <span className={`w-full max-w-9 rounded-t-[3px] group-hover:opacity-75 ${last ? on : off}`} style={{ height: `${Math.max(pct(get(r), max), 4)}%` }} />
+                    <span className={`relative w-full max-w-9 rounded-t-[3px] ${last ? on : off}`} style={{ height: `${Math.max(pct(get(r), max), 4)}%` }}>
+                      {/* a mouse over a bar reads its value; the end bars' chips open inwards, so they never leave the card */}
+                      <span className={`pointer-events-none absolute bottom-full z-10 mb-1.5 hidden rounded-lg bg-ink px-2 py-1 text-[13px] font-semibold whitespace-nowrap text-paper tabular-nums group-hover:block ${
+                        i === 0 ? 'left-0' : last ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>{r.label} {text(r)}</span>
+                    </span>
                   </span>
                   <span className={`text-[13px] ${last ? 'font-semibold' : 'text-muted'}`}>{r.label}</span>
                 </Link>
@@ -130,7 +134,7 @@ export function MonthCards({ rows, words }: { rows: MonthRow[]; words: { rate: s
           <li key={r.key} className="w-44 flex-none snap-start">
             <Link aria-label={r.aria} href={r.href} className={`block h-full rounded-2xl border border-line p-4 hover:bg-paper ${focus}`}>
               <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 font-semibold">{r.long}
-                {i === 0 && <span className="rounded-full bg-turmeric px-2 text-[13px] text-on-turmeric">{words.latest}</span>}</span>
+                {i === 0 && words.latest && <span className="rounded-full bg-turmeric px-2 text-[13px] text-on-turmeric">{words.latest}</span>}</span>
               {line(words.rate, r.rateText, r.rateNote)}
               {line(words.spend, r.spendText, r.spendNote)}
             </Link>
@@ -148,7 +152,7 @@ export type Part = { key: string; label: string; value: number; color: string };
  *  are the meter's legend. */
 export function Meter({ came, used, fmt, words, total }: {
   came: Part[]; used: Part[]; fmt: (v: number) => string; total: { label: string; text: string; tone: string };
-  words: { usedOf: string; usedOnly: string; left: string; short: string; cameIn: string };
+  words: { usedOf: string; usedOnly: string; usedOver: string; left: string; short: string; cameIn: string };
 }) {
   const sum = (ps: Part[]) => ps.reduce((a, p) => a + p.value, 0);
   const a = sum(came), b = sum(used), whole = Math.max(a, b), over = b > a && a > 0, at = pct(a, whole);
@@ -169,7 +173,7 @@ export function Meter({ came, used, fmt, words, total }: {
         {over && <span className="absolute -bottom-1 top-5 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at}%` }} />}
       </div>
       <p className="mt-2 flex flex-wrap justify-between gap-x-4 text-[13px]">
-        <span className="text-muted">{a > 0 ? words.usedOf.replace('{u}', fmt(b)).replace('{c}', fmt(a)) : words.usedOnly.replace('{u}', fmt(b))}</span>
+        <span className="text-muted">{(a === 0 ? words.usedOnly : b > a ? words.usedOver : words.usedOf).replace('{u}', fmt(b)).replace('{c}', fmt(a))}</span>
         {a !== b && <span className={`font-semibold ${a > b ? 'text-leaf' : 'text-chili'}`}>{(a > b ? words.left : words.short).replace('{t}', fmt(Math.abs(a - b)))}</span>}
       </p>
       <dl className="mt-4 rounded-2xl bg-paper p-4 text-[15px]">
