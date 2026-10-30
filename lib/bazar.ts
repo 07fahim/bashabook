@@ -247,7 +247,7 @@ export async function monthChecks(db: Db, flatId: string, month: string) {
        left join entry_checks c on c.ledger_id = l.id
        left join members m on m.flat_id = c.flat_id and m.id = c.by_member
      where l.flat_id = $1 and l.month = $2::text::date and l.type in ('bazar', 'bill') and l.status = 'ok'
-     group by m.name, c.state order by n desc, m.name`, [flatId, month]);
+     group by m.id, m.name, c.state order by n desc, m.name`, [flatId, month]);
   const sum = (s: 'fix' | null) => rows.filter(r => r.state === s).reduce((a, r) => a + r.n, 0);
   return { by: rows.filter(r => r.state === 'ok' && r.name).map(r => ({ name: r.name!, n: r.n })), none: sum(null), fix: sum('fix') };
 }

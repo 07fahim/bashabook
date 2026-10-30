@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { monthChecks, monthTotals, toCheck } from '@/lib/bazar';
-import { cashSeen, closeInfo, maySeeCash } from '@/lib/close';
+import { cashSeen, closeInfo, latestClosed, maySeeCash } from '@/lib/close';
 import { db } from '@/lib/db';
 import { flatMoney, handoverHistory } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
@@ -46,9 +46,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
     boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null, handoverHistory(db, me.flatId), toCheck(db, me.flatId, me.memberId, today)]);   // the card only shows on the month to close
   const closed = mo.info?.status === 'closed';
   // a closed month's cash seen and checks (trust features 1 and 4): one more round trip, only for a closed month
-  const [seen, maySee, mc] = closed
-    ? await Promise.all([cashSeen(db, me.flatId, month), maySeeCash(db, me.flatId, month, me.memberId), monthChecks(db, me.flatId, month)])
-    : [[], false, null] as const;
+  const [seen, maySee, mc, latest] = closed
+    ? await Promise.all([cashSeen(db, me.flatId, month), maySeeCash(db, me.flatId, month, me.memberId), monthChecks(db, me.flatId, month), latestClosed(db, me.flatId, month)])
+    : [[], false, null, false] as const;
   // where entries can be added: this month for everyone; an earlier month still open for the collector only
   const canAdd = month === thisMonth ? !closed : boss && mo.info?.status === 'open';
   // money with the collector: a month's own fund, but for this month what they hold now. While last month is still open,
@@ -338,7 +338,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               // who counted the cash and who saw it, who checked the bazars and bills: on the page and in the shared text
               const cr = mo.info?.cash ?? null, counter = cr ? name(cr.by) : '';
               const seenNames = names(seen.map(p => p.name), x.and);
-              const cashLine = cr ? (seen.length ? x.shareCash.replace('{names}', seenNames) : x.shareCashNobody)
+              // nobody saw it yet only where a tap is still possible: the latest closed month
+              const cashLine = cr ? (seen.length ? x.shareCash.replace('{names}', seenNames) : latest ? x.shareCashNobody : x.shareCashOnly)
                 .replace('{t}', fmtExact(cr.actual)).replace('{name}', counter) : null;
               const checkLines = mc ? [
                 mc.by.length ? x.shareChecked.replace('{list}', mc.by.map(c => `${c.name} ${c.n}`).join(' · ')) : null,
@@ -354,7 +355,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 {cr && (
                   <div className="mt-4 text-[15px]">
                     <p>{x.cashCounted.replace('{name}', counter).replace('{t}', fmtExact(cr.actual)).replace('{d}', fmtDay(dhakaDate(mo.info!.closedAt!), lang))}{' '}
-                      {seen.length ? x.seenBy.replace('{names}', seenNames) : x.seenNobody}</p>
+                      {seen.length ? x.seenBy.replace('{names}', seenNames) : latest ? x.seenNobody : null}</p>
                     {/* a second, deliberate tap that names the amount: I saw this much with this person */}
                     {maySee && (
                       <div className="group mt-2">

@@ -4,7 +4,7 @@ import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal, setDefaults } from './meals-db';
 import { addEntry, addRoom, loadMonth, openMonth, removeEntry, setRoom, type NewEntry } from './money-db';
-import { addCorrection, anywayFrom, cashSeen, closeMonth, closeInfo, coverGap, maySeeCash, openFrom, openStart, parseCash, seeCash } from './close';
+import { addCorrection, anywayFrom, cashSeen, closeMonth, closeInfo, coverGap, latestClosed, maySeeCash, openFrom, openStart, parseCash, seeCash } from './close';
 import { allocate } from './money';
 
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -394,5 +394,7 @@ describe('cash seen', { timeout: 30000 }, () => {
     expect(await maySeeCash(db, flatId, '2026-09-01', ids.Tahsin)).toBe(false);   // September is no longer the latest closed
     expect(await maySeeCash(db, flatId, '2026-10-01', ids.Tahsin)).toBe(true);
     expect(await maySeeCash(db, flatId, '2026-10-01', ids.Zarif)).toBe(true);   // lived in October
+    expect(await latestClosed(db, flatId, '2026-09-01')).toBe(false);   // the page's nobody-saw-it-yet line: October only
+    expect(await latestClosed(db, flatId, '2026-10-01')).toBe(true);
   });
 });

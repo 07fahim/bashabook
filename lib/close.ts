@@ -199,6 +199,10 @@ const MAY_SEE = `exists (select 1 from months mo where mo.flat_id = $1 and mo.mo
     and exists (select 1 from month_balances b where b.flat_id = $1 and b.month = $2::text::date and b.member_id = $3::uuid and b.days_present > 0)
     and not exists (select 1 from cash_seen s where s.flat_id = $1 and s.month = $2::text::date and s.member_id = $3::uuid)`;
 
+/** No later month is closed: the only closed month where saying "I saw the cash" is still possible. */
+export const latestClosed = async (db: Db, flatId: string, month: string) => (await db<{ ok: boolean }>(
+  `select not exists (select 1 from months where flat_id = $1 and status = 'closed' and month > $2::text::date) as ok`, [flatId, month]))[0].ok;
+
 /** Who said they saw a closed month's counted cash, oldest first (trust feature 1). */
 export const cashSeen = (db: Db, flatId: string, month: string) => db<{ id: string; name: string }>(
   `select m.id, m.name from cash_seen s join members m on m.flat_id = s.flat_id and m.id = s.member_id

@@ -553,5 +553,10 @@ describe('month checks', { timeout: 30000 }, () => {
     expect(await checkEntry(db, flatId, as('Tahsin'), c, 'ok', null, TODAY, '')).not.toBeNull();
     expect(await checkEntry(db, flatId, nafis, f, 'fix', 'wrong total', TODAY, '')).not.toBeNull();
     expect(await monthChecks(db, flatId, OCT)).toEqual({ by: [{ name: 'Nafis', n: 2 }, { name: 'Tahsin', n: 1 }], none: 1, fix: 1 });
+    // two people with one name over different stays stay apart
+    await db(`update members set left_on = '2026-10-04' where id = $1`, [ids.Tahsin]);
+    await db(`update members set joined_on = '2026-10-05' where id = $1`, [ids.Nafis]);
+    await db(`update members set name = 'Nafis' where id = $1`, [ids.Tahsin]);
+    expect((await monthChecks(db, flatId, OCT)).by).toEqual([{ name: 'Nafis', n: 2 }, { name: 'Nafis', n: 1 }]);
   });
 });

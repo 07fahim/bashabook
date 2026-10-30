@@ -18,7 +18,8 @@ const claim = async (db: Db, flatId: string, date: string, job: string) =>
  *  01:00 (settingsAction), so the window never wraps midnight. Close: once per month to the collector, from the
  *  1st at 10:00, for the oldest month still open.
  *  Check: from 21:00, once a day per flat, to each person with bazars or bills to check.
- *  CheckLate: from 21:00, once a day per flat, to everyone else when a bazar or bill has had no check for 2 days.
+ *  CheckLate: from 21:00, once a day per flat, to everyone living here who claimed their name when a bazar or bill has had
+ *  no check for 2 days.
  *  ponytail: each due reminder is three round trips (claim, members, subscriptions), about 0.25 s from Singapore; the route
  *  has 25 s, so ~80 due reminders per run. A pilot has a handful of flats; batch the claims if flats ever reach dozens. */
 export async function runJobs(db: Db, now: string, send: typeof sendPush = sendPush) {
@@ -73,8 +74,8 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
   }
 
   // Late checks (trust feature 2): a bazar or bill of an open month with no check at all 2 days after it was added (database
-  // clock): once a day from 21:00 to everyone else living here who claimed their name and may check none of them, so the
-  // whole flat sees the checks are late. The ones who may check get the reminder above.
+  // clock): once a day from 21:00 to everyone living here who claimed their name, checkers included, so the whole flat
+  // sees the checks are late.
   if (time >= '21:00') {
     const LATE = `l.type in ('bazar', 'bill') and l.status = 'ok' and l.created_at < now() - interval '2 days'
       and not exists (select 1 from entry_checks c where c.ledger_id = l.id)`;
@@ -85,10 +86,8 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
        group by f.id, f.language`, [today]);
     for (const f of flats) {
       const people = await db<{ id: string; lang: Locale | null }>(
-        `select m.id, m.language as lang from members m where m.flat_id = $1 and m.pin_hash is not null
-           and m.joined_on <= $2::text::date and (m.left_on is null or m.left_on >= $2::text::date)
-           and not exists (select 1 from ledger l join months mo on mo.flat_id = l.flat_id and mo.month = l.month and mo.status = 'open'
-                           where l.flat_id = $1 and ${LATE} and may_check(l.id, m.id, $2::text::date))`, [f.id, today]);
+        `select id, language as lang from members where flat_id = $1 and pin_hash is not null
+           and joined_on <= $2::text::date and (left_on is null or left_on >= $2::text::date)`, [f.id, today]);
       if (!people.length || !await claim(db, f.id, today, 'checkLate')) continue;
       out.checkLate++;
       for (const p of people) add(await send(db, [p.id], lateMsg(p.lang ?? f.lang, f.n)));

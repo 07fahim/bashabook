@@ -142,7 +142,7 @@ describe('timed reminders', { timeout: 30000 }, () => {
     expect(s.calls.filter(c => /check/.test(c.msg.title) && [f.memberId, t.id].includes(c.ids[0]))).toEqual([]);
   });
 
-  it('checkLate: a bazar with no check for 2 days: once a day from 21:00 to everyone who may not check it', async () => {
+  it('checkLate: a bazar with no check for 2 days: once a day from 21:00 to everyone living here who claimed their name', async () => {
     await migrate();
     const f = await createFlat(db, { flatName: 'L1', name: 'Nafis', pin: '1234', others: ['Tahsin', 'Zarif', 'Rafi'], today: '2026-10-01', lang: 'en' });
     const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
@@ -158,10 +158,27 @@ describe('timed reminders', { timeout: 30000 }, () => {
     const r = await runJobs(db, '2026-10-07T21:00', s.send);
     expect(r.checkLate).toBe(1);
     const late = s.calls.filter(c => c.msg.url === '/en/money' && c.msg.title.includes('2 days'));
-    expect(late.map(c => c.ids[0]).sort()).toEqual([ids.Tahsin, ids.Zarif].sort());   // not Nafis (may check it), not Rafi (unclaimed)
+    expect(late.map(c => c.ids[0]).sort()).toEqual([ids.Nafis, ids.Tahsin, ids.Zarif].sort());   // checkers too; not Rafi (unclaimed)
     expect((await runJobs(db, '2026-10-07T22:00', s.send)).checkLate).toBe(0);   // once a day
     await db(`insert into entry_checks (flat_id, ledger_id, month, state, note) values ($1, $2, '2026-10-01', 'fix', 'Wrong total')`, [f.flatId, id]);
     expect((await runJobs(db, '2026-10-08T21:00', s.send)).checkLate).toBe(0);   // it has a check now (sent back)
+  });
+
+  it('checkLate: late entries by the collector and a flatmate: everyone may check one, all claimed still told', async () => {
+    await migrate();
+    const f = await createFlat(db, { flatName: 'L2', name: 'Nafis', pin: '1234', others: ['Tahsin', 'Zarif', 'Rafi'], today: '2026-10-01', lang: 'en' });
+    const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
+    await db(`update members set pin_hash = 'x' where flat_id = $1 and name <> 'Rafi'`, [f.flatId]);   // Rafi never claimed
+    await openMonth(db, f.flatId, '2026-10-01');
+    const bazar = (by: string, role: 'member' | 'manager', paidBy: string | null) => addEntry(db, f.flatId, { memberId: by, role },
+      { type: 'bazar', amount: 1000, date: '2026-10-05', note: null, paidBy, memberId: null, split: null, selected: [] }, '2026-10-05');
+    expect(await bazar(ids.Tahsin, 'member', ids.Tahsin)).toBe('ok');   // the collector may check it
+    expect(await bazar(ids.Nafis, 'manager', null)).toBe('ok');         // Tahsin and Zarif may check it
+    await db(`update ledger set created_at = now() - interval '49 hours' where flat_id = $1`, [f.flatId]);
+    const s = spy();
+    expect((await runJobs(db, '2026-10-07T21:00', s.send)).checkLate).toBe(1);
+    const late = s.calls.filter(c => c.msg.title.includes('2 days') && Object.values(ids).includes(c.ids[0]));
+    expect(late.map(c => c.ids[0]).sort()).toEqual([ids.Nafis, ids.Tahsin, ids.Zarif].sort());   // not Rafi (unclaimed)
   });
 
   it('purge: a receipt 90 days after its month closed; a removed entry’s receipt and check once its month closed', async () => {
