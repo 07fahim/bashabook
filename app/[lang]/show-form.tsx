@@ -8,9 +8,11 @@ import { useState, type ReactNode } from 'react';
 export function ShowForm({ className, hint, children, panel }: { className: string; hint: string; children: ReactNode; panel: ReactNode }) {
   const [stale, setStale] = useState(false);
   return (<>
-    <form className={className} onChange={() => setStale(true)}>
+    {/* autoComplete off: a reload must not bring back a changed pick without its fade; the status stays mounted so a screen
+        reader hears the hint when it appears */}
+    <form className={className} autoComplete="off" onChange={() => setStale(true)}>
       {children}
-      {stale && <p role="status" className="text-[15px] font-semibold">{hint}</p>}
+      <p role="status" className={stale ? 'text-[15px] font-semibold' : 'sr-only'}>{stale ? hint : ''}</p>
     </form>
     <div inert={stale} className={stale ? 'opacity-40' : undefined}>{panel}</div>
   </>);

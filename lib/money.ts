@@ -162,7 +162,7 @@ export const CASH_KEYS = ['cash', 'bkash', 'nagad', 'bank'] as const;
 export function parseCash(raw: Record<keyof Cash, string>): Cash | null {
   const out = {} as Cash;
   for (const k of CASH_KEYS) {
-    const v = (raw[k] ?? '').replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/[,\s৳]/g, '');
+    const v = enDigits(raw[k] ?? '').replace(/[,\s৳]/g, '');
     const p = v === '' || /^0+(\.0+)?$/.test(v) ? 0 : toPoisha(v);
     if (p === null) return null;
     out[k] = p;
