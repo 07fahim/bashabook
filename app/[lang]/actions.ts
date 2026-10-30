@@ -14,7 +14,7 @@ import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOtherMeal, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
-import { addEntry, addRoom, confirmEntry, confirmerOf, endedOpenMonth, monthOf, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
+import { addEntry, addRoom, confirmEntry, confirmerOf, endedOpenMonth, monthOf, payDue, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
 import { cashAskMsg, depositMsg, fixAskMsg, fixedMsg, gaveAskMsg, handoverMsg, payoutMsg, rejectedMsg } from '@/lib/notify-text';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
@@ -448,6 +448,16 @@ export async function confirmAction(d: FormData) {
   const lang = langOf(d), me = await requireMember(lang, true), id = str(d, 'id');
   const ok = UUID.test(id) && await unlessClosed(() => confirmEntry(db, me.flatId, me, id)) === true;
   return back(lang, ok ? undefined : 'notSaved');
+}
+
+/** Paid on a due monthly bill (the rules live in payDue): the amount as paid this month, which may differ from last month's. */
+export async function payDueAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), t = getDictionary(lang);
+  const me = await requireMember(lang, true), id = str(d, 'id'), amount = toPoisha(str(d, 'amount'));
+  if (amount === null) return { error: t.money.errors.amount };
+  const ok = UUID.test(id) && await unlessClosed(() => payDue(db, me.flatId, me, id, amount, todayDhaka())) === true;
+  refresh();
+  return ok ? { done: t.money.saved } : { error: t.app.notSavedNote };
 }
 
 /** That's not right (the rules live in rejectEntry): the entry goes to the history and whoever wrote it is told. */

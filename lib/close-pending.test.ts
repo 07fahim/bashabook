@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { checkEntry, fixEntry, toCheck } from './bazar';
-import { addEntry, openMonth, rejectEntry, type NewEntry } from './money-db';
+import { addEntry, payDue, openMonth, rejectEntry, type NewEntry } from './money-db';
 import { addCorrection, closeInfo, closeMonth } from './close';
 
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -70,6 +70,10 @@ describe('close probe', { timeout: 30000 }, () => {
     await db(`delete from entry_checks where flat_id = $1 and month = '2026-10-01'::text::date`, [f.flatId]);   // checkAll ran on October's too
     expect((await closeMonth(db, f.flatId, nafis, '2026-09-01', '2026-10-05', { cash: (await closeInfo(db, f.flatId, '2026-10-05'))!.held, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
     expect((await addCorrection(db, f.flatId, nafis, { id: randomUUID(), kind: 'bazar', forMonth: '2026-09-01', amount: 5000, note: 'forgot', paidBy: t.id }, '2026-10-05'))).toBe('ok');
+    // the monthly bill waits as due, nothing to check until the collector pays it
+    expect(await toCheck(db, f.flatId, t.id, '2026-10-05')).toEqual([]);
+    const [wifi] = await db<{ id: string }>(`select id from ledger where flat_id = $1 and status = 'due'`, [f.flatId]);
+    expect(await payDue(db, f.flatId, nafis, wifi.id, 30000, '2026-10-05')).toBe(true);
     // the monthly bill is the collector's own (flat money): Tahsin checks it. The correction was added by the collector and
     // paid by Tahsin: both did something, nobody else lives here, so the collector checks it after all
     expect((await toCheck(db, f.flatId, t.id, '2026-10-05')).map(w => [w.type, w.note])).toEqual([['bill', 'Wi-Fi']]);

@@ -23,7 +23,7 @@ export const monthOf = (date: string) => `${date.slice(0, 8)}01`;
 
 /** Makes sure the month exists, and every month between the flat's latest month and it: a month nobody opened the app in
  *  still gets its monthly bills and still has to be closed in order. A new month copies the monthly bills for the people
- *  living in it, paid from flat money and added by the collector (whoever happens to open the page first must not own, or be
+ *  living in it, due (counted nowhere until the collector taps Paid, payDue) and added by the collector (whoever happens to open the page first must not own, or be
  *  able to remove, the flat's rent). Safe to call again. One statement: the months, their bills, their people and their history
  *  rows are created together or not at all, so a failure leaves nothing and the next call tries again; two people opening a
  *  month at once can't both copy (one wins the month row). */
@@ -39,7 +39,7 @@ export async function openMonth(db: Db, flatId: string, month: string) {
            from bill_templates b, m where b.flat_id = $1),
      ok as (select * from t where split <> 'selected' or cardinality(sel) > 0),
      l as (insert into ledger (id, flat_id, month, type, amount_poisha, split, date, note, status, created_by)
-           select lid, $1, month, 'bill', amount_poisha, split, month, name, 'ok', (select id from c) from ok returning *),
+           select lid, $1, month, 'bill', amount_poisha, split, month, name, 'due', (select id from c) from ok returning *),
      s as (insert into bill_split_members (flat_id, ledger_id, member_id) select $1, ok.lid, unnest(ok.sel) from ok where ok.split = 'selected')
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', l.id::text, to_jsonb(l), l.created_by from l`,
     [flatId, month]);
@@ -289,6 +289,20 @@ export async function confirmEntry(db: Db, flatId: string, by: Actor, id: string
        and ${CONFIRMER} = $3 and l.created_by <> $3 returning l.id)
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', x.id::text, '{"status":"ok"}', $3 from x returning 1`,
     [flatId, id, by.memberId]);
+  return r.length > 0;
+}
+
+/** Paid: the collector paid a due monthly bill, maybe a different amount this month (Wi-Fi, electricity). From now on it is
+ *  an ordinary bill from flat money, dated today, or its month's last day when paid after the month ended (still open). */
+export async function payDue(db: Db, flatId: string, by: Actor, id: string, amount: number, today: string) {
+  if (by.role !== 'manager' || !Number.isInteger(amount) || amount <= 0) return false;
+  const r = await db(
+    `with x as (update ledger l set status = 'ok', amount_poisha = $3,
+         date = least($4::date, (l.month + interval '1 month' - interval '1 day')::date)
+       where l.flat_id = $1 and l.id = $2 and l.status = 'due'
+         and exists (select 1 from months mo where mo.flat_id = $1 and mo.month = l.month and mo.status = 'open') returning l.*)
+     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', x.id::text, to_jsonb(x) || '{"paid":true}', $5 from x returning 1`,
+    [flatId, id, amount, today, by.memberId]);
   return r.length > 0;
 }
 

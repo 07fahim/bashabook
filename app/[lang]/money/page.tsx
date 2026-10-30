@@ -12,7 +12,7 @@ import { loadMonth, monthOf, toConfirm, type Entry } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
-import { correctionAction, entryAction, putBackAction, removeAction, seeCashAction } from '../actions';
+import { correctionAction, entryAction, payDueAction, putBackAction, removeAction, seeCashAction } from '../actions';
 import { CloseCard } from '../close-card';
 import { DateField } from '../date-field';
 import { getDictionary, hasLocale } from '../dictionaries';
@@ -51,6 +51,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
     : [[], false, null, false] as const;
   // where entries can be added: this month for everyone; an earlier month still open for the collector only
   const canAdd = month === thisMonth ? !closed : boss && mo.info?.status === 'open';
+  const due = boss && !closed ? mo.entries.filter(e => e.status === 'due') : [];
   // money with the collector: a month's own fund, but for this month what they hold now. While last month is still open,
   // this month's own fund starts from 0, so it would show a false gap: add up every open month instead (flatMoney)
   const held = month === thisMonth && mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
@@ -137,6 +138,25 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
 
         {waiting.length > 0 && <div className="mt-6"><ConfirmList lang={lang} a={t.app} x={x} items={waiting} collector={collector.name} /></div>}
         {checks.length > 0 && <div className="mt-6"><CheckList lang={lang} a={t.app} x={x} items={checks} /></div>}
+        {/* monthly bills copied into this month count nowhere until the collector pays them: the amount may differ this month */}
+        {due.length > 0 && (
+          <section className={`mt-6 ${card}`}>
+            <h2 className="text-xl font-bold">{x.dueTitle}</h2>
+            <p className="mt-1 max-w-prose text-[15px] text-muted">{x.dueLead}</p>
+            <ul className="mt-2 divide-y divide-line">
+              {due.map(e => (
+                <li key={e.id} className="py-3">
+                  <ActionForm action={payDueAction} className="flex flex-wrap items-end gap-3">
+                    <input type="hidden" name="lang" value={lang} />
+                    <input type="hidden" name="id" value={e.id} />
+                    <div className="min-w-0 grow"><Field label={e.note ?? x.types.bill} name="amount" inputMode="decimal" required defaultValue={String(e.amount / 100)} /></div>
+                    <button className={`${primary} sm:w-auto`}>{x.paidBtn}</button>
+                  </ActionForm>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* desktop: my balance and the three forms on the left; the flat summary over the entries on the right, two thirds wide,
             so both sides grow downward together and no column leaves a hole */}
@@ -397,7 +417,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                         <div className="min-w-36 flex-1">
                           <p className="font-semibold">{x.types[e.type]} · {who(e)}</p>
                           {(e.forMonth || e.method || e.note) && <p className="text-[15px]">{[e.forMonth && x.correctionFor.replace('{month}', fmtMonth(e.forMonth)), e.method && x.cashMethods[e.method], e.note].filter(Boolean).join(' · ')}</p>}
-                          {(e.type === 'bazar' || e.type === 'bill') && (
+                          {(e.type === 'bazar' || e.type === 'bill') && e.status !== 'due' && (
                             <p className="flex flex-wrap items-center gap-x-3">
                               <Link href={`/${lang}/money/bazar/${e.id}`} aria-label={`${x.types[e.type]} ${fmtExact(e.amount)}: ${e.check === 'ok' ? x.bazar.ok : e.check === 'fix' ? x.bazar.fix : closed ? x.bazar.closedUnchecked : x.bazar.waiting}`}
                                 className={`inline-flex min-h-11 items-center rounded-full ${focus}`}><StatusChip state={e.check} b={x.bazar} closed={closed} /></Link>
@@ -408,6 +428,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                           <p className="text-[15px] text-muted">
                             {x.addedBy.replace('{name}', name(e.createdBy))}
                             {e.status === 'pending' && <> · <span className="font-semibold text-ink">{x.pending}</span></>}
+                            {e.status === 'due' && <> · <span className="font-semibold text-ink">{x.dueTag}</span></>}
                             {/* counted without their answer: memberId is the other person (lib/money-db.ts addEntry) */}
                             {e.notJoined && <> · {x.atOnce.replace('{name}', name(e.memberId))}</>}
                           </p>

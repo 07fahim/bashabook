@@ -8,7 +8,7 @@ import { fmtDate, fmtExact, fmtMonth, fmtSigned } from './format';
 import { alertCard, link, primary, secondary } from './ui';
 
 /** `fund`: the month's own fund (below 0 = its gap is paid first); `held`: the cash to count, every open month's money now. */
-export type CloseInfo = { month: string; fund: number; held: number; later: number; pending: number; pendingMonth: string; problems: number; looks: Look[]; unchecked: number; anywayFrom: string; anyway: boolean };
+export type CloseInfo = { month: string; fund: number; held: number; later: number; pending: number; due: number; pendingMonth: string; problems: number; looks: Look[]; unchecked: number; anywayFrom: string; anyway: boolean };
 
 /** The collector's card for the oldest finished month: what blocks it, or the cash count and Close. */
 /** `collector`: the collector's name (the signed-in person: only they see this card). */
@@ -34,9 +34,15 @@ export function CloseCard({ lang, x, c, collector, warn }: { lang: Locale; x: Di
       )}
       {blocked ? (<>
         <ul className="mt-3 list-disc space-y-2 pl-5">
-          {c.pending > 0 && (
+          {c.due > 0 && (
             <li>
-              {c.pending === 1 ? x.blockPendingOne : x.blockPending.replace('{n}', String(c.pending))}{' '}
+              {(c.due === 1 ? x.blockDueOne : x.blockDue.replace('{n}', String(c.due))).replace('{month}', name)}{' '}
+              <Link href={`/${lang}/money?m=${c.month.slice(0, 7)}`} className={`inline-flex min-h-11 items-center ${link}`}>{x.fixIt}</Link>
+            </li>
+          )}
+          {c.pending > c.due && (
+            <li>
+              {c.pending - c.due === 1 ? x.blockPendingOne : x.blockPending.replace('{n}', String(c.pending - c.due))}{' '}
               <Link href={`/${lang}/money?m=${c.pendingMonth.slice(0, 7)}`} className={`inline-flex min-h-11 items-center ${link}`}>{x.fixIt}</Link>
               <span className="block text-[15px] text-muted">{x.blockPayout}</span>
             </li>

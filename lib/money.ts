@@ -21,7 +21,7 @@ export interface LedgerRow {
   memberId: string | null;   // deposit: payer; payout: receiver; adjustment: who it moves from
   split: Split | null;       // bills only
   selected: string[];        // split = 'selected'
-  status: 'ok' | 'pending';
+  status: 'ok' | 'pending' | 'due';   // due: a copied monthly bill not paid yet, counted nowhere
   moves?: string | null;     // adjustment: who it moves to
   weights?: [string, number][] | null;   // a correction for a closed month: that month's frozen split (person, weight)
 }

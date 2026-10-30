@@ -5,7 +5,7 @@ import { addMember, bringBack, createFlat, setLeaving } from './auth';
 import { editFrom } from './meals';
 import { noCooking, saveMeal } from './meals-db';
 import { foodSplit } from './money';
-import { addEntry, addRoom, confirmEntry, confirmerOf, LEDGER_COLUMNS, loadMonth, openMonth, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat, toConfirm, type NewEntry } from './money-db';
+import { addEntry, addRoom, confirmEntry, confirmerOf, LEDGER_COLUMNS, loadMonth, openMonth, payDue, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat, toConfirm, type NewEntry } from './money-db';
 
 const OCT = '2026-10-01', TODAY = '2026-10-09';
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -204,6 +204,25 @@ describe('money storage', { timeout: 30000 }, () => {
     // added by the collector, whoever opens the page first, so no flatmate can remove the flat's bill
     expect(nov.entries[0].createdBy).toBe(ids.Nafis);
     expect(await removeEntry(db, flatId, as('Tahsin'), nov.entries[0].id, TODAY)).toBe(false);
+  });
+
+  it('a copied monthly bill is due: it counts nowhere until the collector taps Paid, with the real amount, dated that day', async () => {
+    const { flatId, nafis, as } = await flat();
+    await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 120000, note: 'Wi-Fi', split: 'equal', repeat: true }));
+    const nov = await loadMonth(db, flatId, '2026-11-01', '2026-11-03');
+    const [wifi] = nov.entries;
+    expect([wifi.status, nov.result.fund, nov.result.perMember.reduce((a, p) => a + p.billShare, 0)]).toEqual(['due', 0, 0]);
+    expect(await payDue(db, flatId, as('Tahsin'), wifi.id, 125000, '2026-11-05')).toBe(false);   // the collector's
+    expect(await payDue(db, flatId, nafis, wifi.id, 0, '2026-11-05')).toBe(false);
+    expect(await payDue(db, flatId, nafis, wifi.id, 125000, '2026-11-05')).toBe(true);
+    expect(await payDue(db, flatId, nafis, wifi.id, 125000, '2026-11-06')).toBe(false);          // already paid
+    const paid = await loadMonth(db, flatId, '2026-11-01', '2026-11-06');
+    expect([paid.entries[0].status, paid.entries[0].amount, paid.entries[0].date, paid.result.fund]).toEqual(['ok', 125000, '2026-11-05', -125000]);
+    expect(paid.result.perMember.reduce((a, p) => a + p.billShare, 0)).toBe(125000);
+    // paid after its month ended (the month still open): dated its last day, so it stays in its month
+    const [dec] = (await loadMonth(db, flatId, '2026-12-01', '2026-12-01')).entries;
+    expect(await payDue(db, flatId, nafis, dec.id, 120000, '2027-01-02')).toBe(true);
+    expect((await loadMonth(db, flatId, '2026-12-01', '2027-01-02')).entries.find(x => x.id === dec.id)!.date).toBe('2026-12-31');
   });
 
   it('a monthly bill for some people drops whoever left, and skips the bill if nobody is left', async () => {

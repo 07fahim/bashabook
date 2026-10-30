@@ -79,7 +79,7 @@ describe('timed reminders', { timeout: 30000 }, () => {
     expect((await runJobs(db, '2026-10-01T10:10', s.send)).close).toBe(1);
     const w = s.calls.find(c => c.msg.url === '/en/money')!;
     expect(w.ids).toEqual([g.memberId]);
-    expect(w.msg.title).toBe('September: 1 still to confirm or check');
+    expect(w.msg.title).toBe('September: 1 still to confirm, check or pay');
   });
 
   it('close: a bazar not Verified counts as still waiting', async () => {
@@ -90,7 +90,7 @@ describe('timed reminders', { timeout: 30000 }, () => {
     expect(await addEntry(db, f.flatId, { memberId: t.id, role: 'member' }, { type: 'bazar', amount: 50000, date: '2026-09-10', note: null, paidBy: t.id, memberId: null, split: null, selected: [] }, '2026-09-10')).toBe('ok');
     const s = spy();
     await runJobs(db, '2026-10-01T10:00', s.send);
-    expect(s.calls.filter(c => c.ids.includes(f.memberId)).map(c => c.msg.title)).toEqual(['September: 1 still to confirm or check']);
+    expect(s.calls.filter(c => c.ids.includes(f.memberId)).map(c => c.msg.title)).toEqual(['September: 1 still to confirm, check or pay']);
   });
 
   it('authorized: bearer secret only, timing-safe, no secret configured means nobody', () => {
