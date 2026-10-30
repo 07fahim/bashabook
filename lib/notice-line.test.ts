@@ -29,7 +29,7 @@ describe('noticeLine', () => {
   });
 
   it('money and month rows', () => {
-    expect(noticeLine(n({ kind: 'paid', actor: 'Tahsin', amount: 30000, detail: { type: 'deposit' }, pending: true }), t, 'en', today)).toEqual(['Tahsin says they paid the flat money ৳300', '/en/home']);
+    expect(noticeLine(n({ kind: 'paid', actor: 'Tahsin', amount: 30000, detail: { type: 'deposit' }, pending: true }), t, 'en', today)).toEqual(['Tahsin says they paid ৳300 into the flat money', '/en/home']);
     expect(noticeLine(n({ kind: 'paid', actor: 'Nafis', amount: 20000, detail: { type: 'payout' } }), t, 'en', today)![0]).toBe('Nafis says they gave you ৳200');
     expect(noticeLine(n({ kind: 'paid', actor: 'Nafis', amount: 20000, detail: { type: 'deposit', gave: true } }), t, 'en', today)).toEqual(['Nafis wrote that you gave ৳200', '/en/home']);
     expect(noticeLine(n({ kind: 'paid', actor: 'Nafis', amount: 20000, detail: { type: 'deposit', gave: true } }), getDictionary('bn'), 'bn', today)).toEqual(['Nafis লিখেছে আপনি ৳200 দিয়েছেন', '/bn/home']);

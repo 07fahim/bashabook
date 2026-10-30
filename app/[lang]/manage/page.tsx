@@ -285,7 +285,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                   ))}
                 </ul>
               )}
-              <ActionForm action={addRoomAction} className="mt-4">
+              <ActionForm action={addRoomAction} className="mt-4" clearOnDone>
                 <input type="hidden" name="lang" value={lang} />
                 <Field label={mn.roomName} name="name" required maxLength={40} />
                 <Field label={mn.rent} name="rent" inputMode="decimal" required placeholder="12000" />
@@ -355,7 +355,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                   {/* the member's actions sit on one line; an opened one takes the full width below */}
                   <div className="flex flex-wrap items-start gap-x-6">
                     <details className="open:basis-full">
-                      <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.rename}</summary>
+                      <summary className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden text-[15px] ${link}`}>{a.rename}</summary>
                       <ActionForm action={renameAction} className="mt-2">
                         <input type="hidden" name="lang" value={lang} />
                         <input type="hidden" name="memberId" value={x.id} />
@@ -375,7 +375,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     )}
                     {x.claimed && x.id !== me.memberId && (
                       <details className="open:basis-full">
-                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
+                        <summary className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden text-[15px] ${link}`}>{a.resetPin}</summary>
                         <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
                         <ActionForm action={resetPinAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />
@@ -387,7 +387,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     )}
                     {x.id !== me.memberId && (
                       <details className="open:basis-full">
-                        <summary aria-label={`${a.movingOut}: ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.movingOut}</summary>
+                        <summary aria-label={`${a.movingOut}: ${x.name}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden text-[15px] ${link}`}>{a.movingOut}</summary>
                         <p className="mt-2 text-[15px] text-muted">{a.movingOutLead}</p>
                         <ActionForm action={leavingAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />
@@ -422,7 +422,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                       <span className="text-[15px] text-muted">{a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}</span>
                     </div>
                     <details>
-                      <summary aria-label={`${a.byMistake} ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.byMistake}</summary>
+                      <summary aria-label={`${a.byMistake} ${x.name}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden text-[15px] ${link}`}>{a.byMistake}</summary>
                       <p className="mt-2 text-[15px] text-muted">{a.bringBackLead.replace('{d}', fmtDay(addDays(x.leftOn, 1), lang))}</p>
                       <ActionForm action={bringBackAction} className="mt-3">
                         <input type="hidden" name="lang" value={lang} />
@@ -449,7 +449,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
             <div className="mt-3 sm:max-w-xs"><ShareButton path={`/${me.lang}/j/${me.joinCode}`} text={a.shareText.replace('{flat}', me.flatName)} label={a.share} copied={a.copied} /></div>
             {/* a second tap, as for every flat-wide or per-person change here: it sits right under Share and kills the old link */}
             <details className="mt-4">
-              <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{a.newCodeBtn}</summary>
+              <summary className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden ${link}`}>{a.newCodeBtn}</summary>
               <p className="mt-2 max-w-prose text-[15px] text-muted">{a.newCodeLead}</p>
               <ActionForm action={newCodeAction} className="mt-3">
                 <input type="hidden" name="lang" value={lang} />

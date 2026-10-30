@@ -23,7 +23,7 @@ const copy = {
 
 export default function PageError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   const { lang } = useParams<{ lang: string }>();
-  const c = lang === 'en' ? copy.en : copy.bn;
+  const c = lang === 'bn' ? copy.bn : copy.en;
   useEffect(() => { console.error(error); }, [error]);   // the server logs it too, under the same digest
   return (
     <main className="mx-auto max-w-md px-5 pt-16 pb-28">

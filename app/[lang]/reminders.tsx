@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { removePushAction, savePushAction } from './actions';
 import { link, secondary } from './ui';
 
-type Copy = { on: string; turnOn: string; turnOff: string; hint: string; denied: string; unsupported: string; ios: string };
-type State = 'loading' | 'unsupported' | 'ios' | 'denied' | 'off' | 'on' | 'busy';
+type Copy = { on: string; turnOn: string; turnOff: string; hint: string; denied: string; unsupported: string; ios: string; failed: string };
+type State = 'loading' | 'unsupported' | 'ios' | 'denied' | 'off' | 'on' | 'busy' | 'failed';
 
 const KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 const toKey = (b64: string) => Uint8Array.from(atob(b64.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(b64.length / 4) * 4, '=')), c => c.charCodeAt(0));
@@ -37,7 +37,7 @@ export function Reminders({ lang, t }: { lang: string; t: Copy }) {
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toKey(KEY) });
       await savePushAction(lang, sub.toJSON() as never);
       setState('on');
-    } catch { setState('off'); }
+    } catch { setState('failed'); }   // the button stays, with words saying it didn't work
   };
   const off = async () => {
     setState('busy');
@@ -53,7 +53,7 @@ export function Reminders({ lang, t }: { lang: string; t: Copy }) {
   return (
     <>
       <button type="button" onClick={on} disabled={state === 'busy'} className={`${secondary} sm:w-auto`}>{t.turnOn}</button>
-      <p className="mt-2 text-[15px] text-muted">{t.hint}</p>
+      <p role={state === 'failed' ? 'alert' : undefined} className={`mt-2 text-[15px] ${state === 'failed' ? 'font-semibold text-chili' : 'text-muted'}`}>{state === 'failed' ? t.failed : t.hint}</p>
     </>
   );
 }

@@ -32,7 +32,7 @@ function Tile({ label, value, note, tone = '' }: { label: string; value: string;
   return (
     <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
       <p className="text-[13px] font-semibold text-muted">{label}</p>
-      <p className={`mt-1 text-[28px] leading-tight font-bold tabular-nums ${tone}`}>{value}</p>
+      <p className={`mt-1 text-[28px] leading-tight font-bold tabular-nums [overflow-wrap:anywhere] ${tone}`}>{value}</p>
       {note && <p className="mt-1 text-[13px] text-muted">{note}</p>}
     </div>
   );

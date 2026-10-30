@@ -168,7 +168,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               {!r || !balance || !bd ? <p className="mt-2 text-muted">{x.notHere}</p> : (<>
                 <p className={`mt-2 text-2xl font-bold ${balance.tone}`}>{balance.text}</p>
                 <details className="mt-3" open={!!whoId}>
-                  <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.breakdown}</summary>
+                  <summary className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden ${link}`}>{x.breakdown}</summary>
                   <dl className="mt-2 space-y-1 [&>div]:flex [&>div]:justify-between [&>div]:gap-4 [&_dd]:tabular-nums">
                     {bd.rows.map((row, i) => (
                       <div key={i} className={row.kind === 'head' ? 'font-semibold' : row.kind === 'sub' ? 'pl-4' : row.kind === 'total' ? 'border-t border-line pt-1 font-bold' : ''}>
@@ -340,7 +340,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
               return (
                 <div className="mt-3 text-[15px]">
                   <p>{line(h)}</p>
-                  {older.length > 0 && <details className="mt-1"><summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{x.earlierHandovers}</summary>
+                  {older.length > 0 && <details className="mt-1"><summary className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden ${link}`}>{x.earlierHandovers}</summary>
                     <ul className="mt-1 space-y-1 text-muted">{older.map(r => <li key={r.at}>{past(r)}</li>)}</ul></details>}
                 </div>
               );
@@ -440,7 +440,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                           {!closed && (month === thisMonth || e.status === 'pending' || boss) && (boss || (e.createdBy === me.memberId && (e.type !== 'deposit' || e.status === 'pending')))
                             && (e.status !== 'pending' || e.createdBy === me.memberId || (boss && !waiting.some(w => w.id === e.id))) && (
                             <details>
-                              <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtExact(e.amount)}, ${fmtDay(e.date, lang)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center px-2 ${link}`}>{x.remove}</summary>
+                              <summary aria-label={`${x.remove}: ${x.types[e.type]} ${fmtExact(e.amount)}, ${fmtDay(e.date, lang)}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden px-2 ${link}`}>{x.remove}</summary>
                             </details>
                           )}
                         </div>
@@ -470,12 +470,12 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   <li key={rm.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
                     <span className="min-w-0 flex-1">{x.types[rm.type]} · {fmtDay(rm.date, lang)}{rm.note ? ` · ${rm.note}` : ''} · {(rm.rejected ? x.rejectedBy : x.removedBy).replace('{name}', rm.by)}</span>
                     <span className="flex items-center gap-2">
-                      <s className="tabular-nums">{fmtTaka(rm.amount)}</s>
+                      <s className="tabular-nums">{fmtExact(rm.amount)}</s>
                       {!closed && (boss || (month === thisMonth && rm.byId === me.memberId)) && (
                         <form action={putBackAction}>
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="id" value={rm.id} />
-                          <PendingButton aria-label={`${x.putBack}: ${x.types[rm.type]} ${fmtTaka(rm.amount)}`} className={`min-h-11 px-2 ${link}`}>{x.putBack}</PendingButton>
+                          <PendingButton aria-label={`${x.putBack}: ${x.types[rm.type]} ${fmtExact(rm.amount)}`} className={`min-h-11 px-2 ${link}`}>{x.putBack}</PendingButton>
                         </form>
                       )}
                     </span>

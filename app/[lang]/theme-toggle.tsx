@@ -2,16 +2,22 @@
 
 import { useLayoutEffect } from 'react';
 
+/** The phone's status bar follows the app's theme, not only the phone's setting (the layout's theme-color metas, one per scheme). */
+const statusBar = (theme: string) =>
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach(m => { m.content = theme === 'dark' ? '#0A0A0A' : '#FBF7F0'; });
+
 /** Flips light/dark and remembers it. Icons swap with CSS, so no React state is needed. */
 export function ThemeToggle({ label }: { label: string }) {
   // Dev Strict Mode remounts can clear data-theme on <html>; put it back.
   useLayoutEffect(() => {
     document.documentElement.dataset.theme ??= localStorage.getItem('theme') ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    statusBar(document.documentElement.dataset.theme);
   }, []);
   const toggle = () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
     localStorage.setItem('theme', next);
+    statusBar(next);
   };
   return (
     <button
