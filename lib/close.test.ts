@@ -4,7 +4,7 @@ import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal, setDefaults } from './meals-db';
 import { addEntry, addRoom, loadMonth, openMonth, removeEntry, setRoom, type NewEntry } from './money-db';
-import { addCorrection, closeMonth, closeInfo, coverGap, openFrom, openStart, parseCash } from './close';
+import { addCorrection, anywayFrom, closeMonth, closeInfo, coverGap, openFrom, openStart, parseCash } from './close';
 import { allocate } from './money';
 
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -348,5 +348,24 @@ describe('corrections', { timeout: 30000 }, () => {
     const id = randomUUID();
     for (const want of ['ok', 'again']) expect(await addEntry(db, flatId, nafis, e({ id, type: 'deposit', amount: 7000, memberId: ids.Zarif }))).toBe(want);   // the retry says so, and sends no second nudge
     expect(await db(`select 1 from ledger where id = $1`, [id])).toHaveLength(1);
+  });
+});
+
+describe('close anyway', { timeout: 30000 }, () => {
+  it('a bazar not Verified blocks until the 3rd; from the 4th the month closes; waiting money still blocks', async () => {
+    const { flatId, ids, nafis } = await flat();
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000, paidBy: ids.Tahsin }))).toBe('ok');   // out of pocket: fund 0
+    expect(anywayFrom('2026-09-01')).toBe('2026-10-04');
+    const on3 = (await closeInfo(db, flatId, '2026-10-03'))!;
+    expect([on3.pending, on3.unchecked, on3.anywayFrom, on3.anyway]).toEqual([1, 1, '2026-10-04', false]);
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-03', cash(0))).result).toBe('pending');
+    const tahsin = { memberId: ids.Tahsin, role: 'member' as const };
+    expect(await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 1000, memberId: ids.Tahsin }))).toBe('ok');   // waits for the collector
+    const on4 = (await closeInfo(db, flatId, '2026-10-04'))!;
+    expect([on4.pending, on4.unchecked, on4.anyway]).toEqual([1, 1, true]);   // only the waiting deposit blocks now
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-04', cash(0))).result).toBe('pending');
+    await db(`delete from ledger where flat_id = $1 and type = 'deposit'`, [flatId]);
+    expect((await closeInfo(db, flatId, '2026-10-04'))!.pending).toBe(0);
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-04', cash(0))).result).toBe('ok');
   });
 });

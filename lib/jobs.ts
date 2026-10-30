@@ -39,10 +39,10 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
   if (time >= '10:00') {
     const closes = await db<{ id: string; lang: Locale; month: string; pending: number; collector: string }>(
       `select f.id, f.language as lang, o.month::text as month,
-         (select count(*)::int from ledger where flat_id = f.id and month >= o.month and ${blocksClose('o.month')}) as pending,
+         (select count(*)::int from ledger where flat_id = f.id and month >= o.month and ${blocksClose('o.month', '$2::text::date')}) as pending,
          (select id from members where flat_id = f.id and role = 'manager') as collector
        from flats f join lateral (select min(month) as month from months where flat_id = f.id and status = 'open' and month < $1::date) o on o.month is not null
-       where not exists (select 1 from sent_jobs where flat_id = f.id and date = o.month and job_type = 'close')`, [monthOf(today)]);
+       where not exists (select 1 from sent_jobs where flat_id = f.id and date = o.month and job_type = 'close')`, [monthOf(today), today]);
     for (const f of closes) {
       if (!await claim(db, f.id, f.month, 'close')) continue;
       out.close++; add(await send(db, [f.collector], closeMsg(f.lang, f.month, f.pending)));

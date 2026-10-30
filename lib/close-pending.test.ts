@@ -34,7 +34,8 @@ describe('close probe', { timeout: 30000 }, () => {
     await migrate();
     const f = await createFlat(db, { flatName: 'Flat 4C', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-09-01', lang: 'bn' });
     const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id]));
-    const nafis = { memberId: ids.Nafis, role: 'manager' as const }, tahsin = { memberId: ids.Tahsin, role: 'member' as const }, TODAY = '2026-10-05';
+    // the 3rd: from the 4th a bazar or bill not Verified no longer blocks (close anyway)
+    const nafis = { memberId: ids.Nafis, role: 'manager' as const }, tahsin = { memberId: ids.Tahsin, role: 'member' as const }, TODAY = '2026-10-03';
     await openMonth(db, f.flatId, '2026-09-01'); await openMonth(db, f.flatId, '2026-10-01');
     const bazar = randomUUID(), bill = randomUUID();
     // no `today`: the date rules are skipped, so Tahsin can add into September here

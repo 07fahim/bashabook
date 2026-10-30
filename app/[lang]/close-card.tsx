@@ -8,7 +8,7 @@ import { fmtExact, fmtMonth, fmtSigned } from './format';
 import { alertCard, link, primary, secondary } from './ui';
 
 /** `fund`: the month's own fund (below 0 = its gap is paid first); `held`: the cash to count, every open month's money now. */
-export type CloseInfo = { month: string; fund: number; held: number; later: number; pending: number; pendingMonth: string; problems: number; looks: Look[] };
+export type CloseInfo = { month: string; fund: number; held: number; later: number; pending: number; pendingMonth: string; problems: number; looks: Look[]; unchecked: number; anywayFrom: string; anyway: boolean };
 
 /** The collector's card for the oldest finished month: what blocks it, or the cash count and Close. */
 /** `collector`: the collector's name (the signed-in person: only they see this card). */
