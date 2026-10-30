@@ -10,13 +10,18 @@ export type Tip = { date: string; total: string; add: string | null };
  *  total by then and what that day added. A vertical drag still scrolls the page. */
 export function SpendLine({ values, upTo, running, label, tips }: { values: number[]; upTo: number; running: boolean; label: string; tips: Tip[] }) {
   const [at, setAt] = useState<number | null>(null);
+  const [touch, setTouch] = useState(false);
   const fill = `spend${useId().replace(/\W/g, '')}`;
   const n = values.length, max = Math.max(...values.slice(0, upTo + 1), 1);
   const x = (i: number) => (i / (n - 1)) * 100, y = (v: number) => 38 - (v / max) * 34;
   const line = values.slice(0, upTo + 1).map((v, i) => `${x(i)},${y(v)}`).join(' ');
   const i = at === null ? null : Math.min(at, upTo);   // a live refresh can shorten the drawn days
   const shown = i ?? upTo, top = (y(values[shown]) / 40) * 100, tip = tips[shown];
-  const move = (e: PointerEvent<HTMLDivElement>) => { const r = e.currentTarget.getBoundingClientRect(); setAt(pickDay((e.clientX - r.left) / r.width, n, upTo)); };
+  const move = (e: PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setTouch(e.pointerType === 'touch');
+    setAt(pickDay((e.clientX - r.left) / r.width, n, upTo));
+  };
   const key = (e: KeyboardEvent<HTMLDivElement>) => {
     const step = ({ ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 } as Record<string, number>)[e.key];
     const to = e.key === 'Home' ? 0 : e.key === 'End' ? upTo : step === undefined ? null : Math.max(0, Math.min(upTo, shown + step));
@@ -27,9 +32,10 @@ export function SpendLine({ values, upTo, running, label, tips }: { values: numb
   return (
     <div role="slider" tabIndex={0} aria-label={label} aria-valuemin={1} aria-valuemax={upTo + 1} aria-valuenow={shown + 1}
       aria-valuetext={[tip.date, tip.total, tip.add].filter(Boolean).join(', ')}
-      className={`relative h-40 cursor-crosshair touch-pan-y select-none rounded-lg sm:h-48 ${focus}`}
+      className={`relative h-40 cursor-crosshair touch-pan-y touch-pinch-zoom select-none rounded-lg sm:h-48 ${focus}`}
       onBlur={() => setAt(null)} onFocus={() => setAt(a => a ?? upTo)} onKeyDown={key}
-      onPointerDown={move} onPointerMove={move} onPointerLeave={e => { if (e.pointerType === 'mouse') setAt(null); }}>
+      // a scroll that starts on the chart cancels the pointer without focusing it, so nothing else would clear the tooltip
+      onPointerDown={move} onPointerMove={move} onPointerCancel={() => setAt(null)} onPointerLeave={e => { if (e.pointerType !== 'touch') setAt(null); }}>
       <svg aria-hidden="true" className="size-full text-turmeric" preserveAspectRatio="none" viewBox="0 0 100 40">
         <defs>
           <linearGradient id={fill} x1="0" x2="0" y1="0" y2="1">
@@ -45,11 +51,11 @@ export function SpendLine({ values, upTo, running, label, tips }: { values: numb
       {/* the point at rest marks where the line ends, so the chart looks like something to touch */}
       <span aria-hidden="true" className="pointer-events-none absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-turmeric shadow-card"
         style={{ left: `${x(shown)}%`, top: `${top}%` }} />
-      {/* above the point when there is room (a finger sits below it), else below; sliding by its own width as the point moves
-          right keeps it inside the card at both ends */}
+      {/* under a finger: above the chart, where the hand never is. Otherwise above the point when there is room, else below.
+          Sliding by its own width as the point moves right keeps it inside the card at both ends */}
       {i !== null && (
         <span aria-hidden="true" className="pointer-events-none absolute z-10 rounded-xl border border-line bg-surface px-3 py-1.5 text-[13px] whitespace-nowrap shadow-card"
-          style={{ left: `${x(i)}%`, transform: `translateX(-${x(i)}%)`, ...(top > 50 ? { bottom: `calc(${100 - top}% + 14px)` } : { top: `calc(${top}% + 14px)` }) }}>
+          style={{ left: `${x(i)}%`, transform: `translateX(-${x(i)}%)`, ...(touch ? { bottom: 'calc(100% + 8px)' } : top > 50 ? { bottom: `calc(${100 - top}% + 14px)` } : { top: `calc(${top}% + 14px)` }) }}>
           <span className="block text-muted">{tip.date}</span>
           <span className="block text-[15px] font-bold tabular-nums">{tip.total}</span>
           {tip.add && <span className="block text-muted tabular-nums">{tip.add}</span>}
