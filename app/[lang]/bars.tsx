@@ -35,8 +35,8 @@ export type Cell = { own: number; guests: number } | null;
 
 /** A month of one person's meals: a row of day squares per meal. Filled: I ate; an outline: I didn't; a dot: guests ate that
  *  meal; nothing: not living here yet, or a day still to come. `n` is the month's length, so a running month leaves room.
- *  Legend in the order shown: ate, guests, didn't eat. */
-export function MealGrid({ rows, n, legend }: { rows: { key: string; label: string; total: string; note: string; cells: Cell[] }[]; n: number; legend: [string, string, string] }) {
+ *  Legend in the order shown: ate, guests, didn't eat, guests only (shown when the month has one). */
+export function MealGrid({ rows, n, legend }: { rows: { key: string; label: string; total: string; note: string; cells: Cell[] }[]; n: number; legend: [string, string, string, string] }) {
   const cols: CSSProperties = { gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` };
   const square = 'relative block aspect-square rounded-[3px] border';
   const ate = `${square} border-turmeric-ink bg-turmeric`, skipped = `${square} border-muted`;
@@ -64,6 +64,7 @@ export function MealGrid({ rows, n, legend }: { rows: { key: string; label: stri
         <li className="flex items-center gap-2"><span aria-hidden="true" className={`${ate} size-3`} />{legend[0]}</li>
         <li className="flex items-center gap-2"><span aria-hidden="true" className={`${ate} size-3`}>{dot(true)}</span>{legend[1]}</li>
         <li className="flex items-center gap-2"><span aria-hidden="true" className={`${skipped} size-3`} />{legend[2]}</li>
+        {rows.some(r => r.cells.some(c => c && !c.own && c.guests > 0)) && <li className="flex items-center gap-2"><span aria-hidden="true" className={`${skipped} size-3`}>{dot(false)}</span>{legend[3]}</li>}
       </ul>
     </div>
   );
@@ -79,7 +80,7 @@ export function MonthTable({ rows, head }: { rows: MonthRow[]; head: [string, st
   const cols = 'grid grid-cols-[minmax(0,3.5rem)_minmax(0,1fr)_minmax(0,1fr)_1rem] items-start gap-x-3';
   const cell = (text: string, v: number, max: number, bar: string, note?: { text: string; tone: string }) => (
     <span className="min-w-0">
-      <span className="block font-semibold tabular-nums">{text}</span>
+      <span className="block text-[15px] font-semibold tabular-nums sm:text-base">{text}</span>
       <span aria-hidden="true" className="mt-1 block h-1 rounded-full bg-line"><span className={`block h-full rounded-full ${bar}`} style={{ width: `${pct(v, max)}%` }} /></span>
       {note && <span className={`mt-1 block text-[13px] tabular-nums ${note.tone || 'text-muted'}`}>{note.text}</span>}
     </span>);

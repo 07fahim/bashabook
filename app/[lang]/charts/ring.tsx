@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { focus } from '../ui';
 
 const RING = ['stroke-turmeric', 'stroke-leaf', 'stroke-muted', 'stroke-chili', 'stroke-ink'] as const;   // the legend beside it names every part
@@ -9,6 +9,7 @@ const SWATCH = ['bg-turmeric', 'bg-leaf', 'bg-muted', 'bg-chili', 'bg-ink'] as c
  *  row: that part stands out, the rest steps back and the middle says its name, amount and share. Tap again to see all. */
 export function Ring({ slices, total }: { slices: { label: string; value: number; text: string }[]; total: string }) {
   const [on, setOn] = useState<number | null>(null);
+  const mouse = useRef(false);
   const sum = slices.reduce((a, s) => a + s.value, 0);
   const share = (v: number) => (sum ? Math.round((v / sum) * 100) : 0);
   const starts = slices.map((_, i) => slices.slice(0, i).reduce((a, s) => a + (s.value / sum) * 100, 0));
@@ -23,8 +24,9 @@ export function Ring({ slices, total }: { slices: { label: string; value: number
           {sum > 0 && slices.map((s, i) => (
             <circle key={i} className={`${RING[i]} ${dim(i)} ${fade} cursor-pointer`} cx="21" cy="21" fill="none" r="15.9155"
               strokeDasharray={`${(s.value / sum) * 100} ${100 - (s.value / sum) * 100}`} strokeDashoffset={-starts[i]} strokeWidth={on === i ? 6.5 : 5}
-              // a mouse already picked it on the way in, so its click keeps it; a tap toggles
-              onPointerDown={e => (e.pointerType === 'mouse' ? setOn(i) : pick(i))} onPointerEnter={e => { if (e.pointerType === 'mouse') setOn(i); }} />
+              // a mouse already picked it on the way in, so its click keeps it; a tap toggles, a scroll does nothing
+              onPointerDown={e => { mouse.current = e.pointerType === 'mouse'; }} onClick={() => (mouse.current ? setOn(i) : pick(i))}
+              onPointerEnter={e => { if (e.pointerType === 'mouse') setOn(i); }} />
           ))}
         </svg>
         {/* the middle answers for the part picked, else for the whole; screen readers get the same from the pressed legend row */}

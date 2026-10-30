@@ -211,7 +211,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
               {self && <p className="text-[15px] font-semibold tabular-nums">{x.mealsTotal.replace('{n}', fmtMeals(myMeals))}</p>}
             </div>
             {self ? (<>
-              <div className="mt-4"><MealGrid n={days.length} legend={[x.gridAte, x.gridGuest, x.gridSkipped]} rows={plates.map(p => ({
+              <div className="mt-4"><MealGrid n={days.length} legend={[x.gridAte, x.gridGuest, x.gridSkipped, x.gridGuestOnly]} rows={plates.map(p => ({
                 key: p.meal, label: t.meals.names[p.meal], cells: grid![p.meal], total: x.platesN.replace('{n}', String(p.plates)),
                 note: [p.guests > 0 ? x.forGuests.replace('{g}', String(p.guests)) : '',
                   weightsHold && weights[p.meal] !== 100 ? x.countsAs.replace('{m}', fmtMeals(p.plates * weights[p.meal])) : ''].filter(Boolean).join(' · ') }))} /></div>
@@ -230,7 +230,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
                 const before = past[i - 1] ?? null, rd = delta(x, p.rate, before?.rate ?? null, before?.month ?? null, true), sd = delta(x, p.spend, before?.spend ?? null, before?.month ?? null, true);
                 return { key: p.month, label: short(p.month), href: href(p.month), rate: p.rate, rateText: fmtRate(p.rate, 1), spend: p.spend, spendText: fmtTaka(p.spend),
                   rateNote: rd.note ? { text: rd.note, tone: rd.tone } : undefined, spendNote: sd.note ? { text: sd.note, tone: sd.tone } : undefined,
-                  aria: x.openMonth.replace('{month}', fmtMonth(p.month)).replace('{s}', fmtTaka(p.spend)).replace('{r}', fmtRate(p.rate, 1)) };
+                  aria: [x.openMonth.replace('{month}', fmtMonth(p.month)).replace('{s}', fmtTaka(p.spend)).replace('{r}', fmtRate(p.rate, 1)), rd.note && `${x.rate} ${rd.note}`, sd.note && `${x.spend} ${sd.note}`].filter(Boolean).join('. ') };
               }).reverse()} /></div>)}
           </section>
 
