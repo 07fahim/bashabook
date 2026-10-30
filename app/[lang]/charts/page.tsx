@@ -8,11 +8,11 @@ import { addDays, daysOfMonth, todayDhaka, weightedMeals } from '@/lib/meals';
 import { loadMonth, monthOf } from '@/lib/money-db';
 import { noticeCount } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
-import { HBars, InOut, Lollipops, MealGrid, MonthTable } from '../bars';
+import { Lollipops, MealGrid, Meter, MonthCards, SplitBars } from '../bars';
 import { getDictionary, hasLocale, type Dict } from '../dictionaries';
 import { fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka, names } from '../format';
 import { Header, withQuery } from '../header';
-import { balanceText, lookText } from '../money/bits';
+import { balanceText } from '../money/bits';
 import { Nav } from '../nav';
 import { card, focus, link, PageSkeleton } from '../ui';
 import { Ring } from './ring';
@@ -98,6 +98,9 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
     return { date: fmtDay(p.day, lang), total: fmtTaka(p.value), add: add ? x.thatDay.replace('{t}', fmtTaka(add)) : null }; });
   const empty = !mo.entries.some(e => e.status === 'ok') && totalMeals === 0;
   const b = mine ? balanceText(t.money, mine.balance, closed) : null;
+  // My month speaks in exact amounts, so its words and colour follow the exact sign (the tile above rounds to whole taka)
+  const verdict = !mine ? '' : mine.balance < 0 ? x.tileOwe : mine.balance > 0 ? x.tileGet : x.tileEven;
+  const vtone = !mine ? '' : mine.balance < 0 ? 'text-chili' : mine.balance > 0 ? 'text-leaf' : '';
   // money with the collector, as Money shows it (this month adds every open month up while an earlier one is still open)
   const held = running && mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
   const holder = closed && mo.info?.cash ? name(mo.info.cash.by) : mo.all.find(p => p.role === 'manager')?.name ?? '';
@@ -182,12 +185,40 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
             <section className={`${card} md:col-span-12`}>
               <h2 className={h2}>{x.look}</h2>
               <p className="mt-1 text-[15px] text-muted">{x.lookHint}</p>
-              <ul className="mt-3 divide-y divide-line text-[15px]">
+              {/* each question drawn the way it is asked: how big against the biggest before, the twin rows, when it usually comes */}
+              <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {looks.map((l, i) => (
-                  <li key={i} className="flex items-start gap-3 py-3">
-                    {/* the tag names the kind of question, so the eye sorts the list before reading a line */}
-                    <span className="mt-2.5 flex-none rounded-full border border-line bg-paper px-2.5 text-[13px] font-semibold leading-6 whitespace-nowrap">{x.lookKinds[l.kind]}</span>
-                    <Link href={`/${lang}/money#entries`} className={`block min-w-0 py-2.5 leading-6 underline-offset-4 hover:underline ${focus}`}>{lookText(t, lang, l)}</Link>
+                  <li key={i} className="flex flex-col rounded-2xl bg-paper p-4">
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="rounded-full border border-line bg-surface px-2.5 text-[13px] font-semibold leading-6 whitespace-nowrap">{x.lookKinds[l.kind]}</span>
+                      <span className="font-semibold">{l.kind === 'missing' ? l.note : fmtDay(l.date, lang)}</span>
+                    </p>
+                    {l.kind === 'high' && (<>
+                      <div aria-hidden="true" className="mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 text-[13px]">
+                        <span>{x.lookThis}</span><span className="h-2.5 rounded-full bg-chili" /><span className="font-semibold tabular-nums">{fmtExact(l.amount)}</span>
+                        <span>{x.lookBefore}</span><span className="h-2.5 rounded-full bg-muted" style={{ width: `${(l.max / l.amount) * 100}%` }} /><span className="tabular-nums">{fmtExact(l.max)}</span>
+                      </div>
+                      <p className="mt-3 text-[15px]"><span className="sr-only">{x.lookThis} {fmtExact(l.amount)}. {x.lookBefore} {fmtExact(l.max)}. </span>
+                        {x.lookMore.replace('{p}', String(Math.max(1, Math.round(((l.amount - l.max) / l.max) * 100))))}</p>
+                    </>)}
+                    {l.kind === 'dup' && (<>
+                      <ul className="mt-3 space-y-1.5 text-[13px]">
+                        {Array.from({ length: l.n }, (_, k) => (
+                          <li key={k} className="flex justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-1.5">
+                            <span className="min-w-0 truncate">{l.note ?? t.money.types[l.type]}</span><span className="tabular-nums">{fmtExact(l.amount)}</span>
+                          </li>))}
+                      </ul>
+                      <p className="mt-3 text-[15px]">{x.lookSame.replace('{n}', String(l.n))}</p>
+                    </>)}
+                    {l.kind === 'missing' && (<>
+                      {/* the month as a track: the days gone in turmeric, a tick where it was usually in by */}
+                      <div aria-hidden="true" className="relative mt-5 h-2 rounded-full bg-line">
+                        <span className="absolute inset-y-0 left-0 rounded-full bg-turmeric" style={{ width: `${((upTo + 1) / days.length) * 100}%` }} />
+                        <span className="absolute -top-1.5 h-5 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${(l.day / days.length) * 100}%` }} />
+                      </div>
+                      <p className="mt-3 text-[15px]">{x.lookUsual.replace('{d}', String(l.day)).replace('{t}', String(upTo + 1))}</p>
+                    </>)}
+                    <Link href={`/${lang}/money#entries`} className={`mt-auto inline-flex min-h-11 items-center self-start pt-2 ${link}`}>{x.lookOpen}</Link>
                   </li>))}
               </ul>
             </section>)}
@@ -228,24 +259,25 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
           <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.lastMonths}</h2>
             {past.length === 0 ? <p className="mt-2 text-muted">{x.needTwo}</p> : (
-              // newest first; each number says how it moved from the month before, the way the tiles up top do
-              <div className="mt-4"><MonthTable head={[x.month, x.rate, x.spend]} rows={past.map((p, i) => {
+              // each number says how it moved from the month before, the way the tiles up top do
+              <div className="mt-4"><MonthCards words={{ rate: x.rate, spend: x.spend, latest: x.latest }} rows={past.map((p, i) => {
                 const before = past[i - 1] ?? null, rd = delta(x, p.rate, before?.rate ?? null, before?.month ?? null, true), sd = delta(x, p.spend, before?.spend ?? null, before?.month ?? null, true);
-                return { key: p.month, label: short(p.month), href: href(p.month), rate: p.rate, rateText: fmtRate(p.rate, 1), spend: p.spend, spendText: fmtTaka(p.spend),
+                return { key: p.month, label: short(p.month), long: fmtMonth(p.month), href: href(p.month), rate: p.rate, rateText: fmtRate(p.rate, 1), spend: p.spend, spendText: fmtTaka(p.spend),
                   rateNote: rd.note ? { text: rd.note, tone: rd.tone } : undefined, spendNote: sd.note ? { text: sd.note, tone: sd.tone } : undefined,
                   aria: [x.openMonth.replace('{month}', fmtMonth(p.month)).replace('{s}', fmtTaka(p.spend)).replace('{r}', fmtRate(p.rate, 1)), rd.note && `${x.rate} ${rd.note}`, sd.note && `${x.spend} ${sd.note}`].filter(Boolean).join('. ') };
-              }).reverse()} /></div>)}
+              })} /></div>)}
           </section>
 
           <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.myMonth}</h2>
             {mine && b ? (<>
-              {/* the answer first, then why: what came in against what was used, the gap between them being the answer */}
-              <p className={`mt-3 flex flex-wrap items-baseline justify-between gap-x-4 font-semibold ${b.tone}`}>
-                <span>{mine.balance < 0 ? x.tileOwe : mine.balance > 0 ? x.tileGet : x.tileEven}</span><span className="text-[28px] leading-tight font-bold tabular-nums">{fmtExact(mine.balance)}</span>
+              {/* the answer first, then why: how much of what came in was used, then the receipt that adds up to the answer */}
+              <p className={`mt-3 flex flex-wrap items-baseline justify-between gap-x-4 font-semibold ${vtone}`}>
+                <span>{verdict}</span><span className="text-[28px] leading-tight font-bold tabular-nums">{fmtExact(mine.balance)}</span>
               </p>
-              <div className="mt-4"><InOut fmt={fmtExact} sides={[x.cameIn, x.used]} gap={mine.balance ? { text: fmtExact(mine.balance), tone: mine.balance < 0 ? 'text-chili' : 'text-leaf' } : null}
-                came={named(inAndOut(mine).came)} used={named(inAndOut(mine).used)} /></div>
+              <div className="mt-4"><Meter fmt={fmtExact} came={named(inAndOut(mine).came)} used={named(inAndOut(mine).used)}
+                words={{ usedOf: x.usedOf, usedOnly: x.usedOnly, left: x.left, short: x.short, cameIn: x.cameIn }}
+                total={{ label: verdict, text: fmtExact(mine.balance), tone: vtone }} /></div>
               <Link href={`/${lang}/money${month !== thisMonth ? `?m=${month.slice(0, 7)}` : ''}`} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{t.money.breakdown}</Link>
             </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}
           </section>
@@ -260,9 +292,10 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
             <section className={`${card} md:col-span-12`}>
               <h2 className={h2}>{x.costPer}</h2>
               <p className="mt-1 text-[15px] text-muted">{x.costHint}</p>
-              <div className="mt-4"><HBars fmt={fmtTaka} tailColor="fill-muted" mark={avgCost} rows={costs.map(r => ({
-                key: r.id, text: name(r.id), value: r.food, tail: r.bills, valueText: fmtTaka(r.food + r.bills), strong: r.id === me.memberId,
-                label: <Link className={`underline-offset-4 hover:underline ${focus}`} href={`/${lang}/money?${new URLSearchParams({ ...(month !== thisMonth ? { m: month.slice(0, 7) } : {}), who: r.id })}`}>{name(r.id)}</Link> }))} /></div>
+              <div className="mt-4"><SplitBars fmt={fmtTaka} mark={avgCost} words={[x.food, x.bills]} rows={costs.map(r => ({
+                key: r.id, text: name(r.id), food: r.food, bills: r.bills, total: fmtTaka(r.food + r.bills), strong: r.id === me.memberId,
+                sr: `${x.food} ${fmtTaka(r.food)}, ${x.bills} ${fmtTaka(r.bills)}`,
+                label: <Link className={`inline-flex min-h-8 items-center underline-offset-4 hover:underline ${focus}`} href={`/${lang}/money?${new URLSearchParams({ ...(month !== thisMonth ? { m: month.slice(0, 7) } : {}), who: r.id })}`}>{name(r.id)}</Link> }))} /></div>
               <p className="mt-3 text-[13px] text-muted"><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-sm bg-turmeric" />{x.food} <span aria-hidden="true" className="mr-1 ml-3 inline-block size-3 rounded-sm bg-muted" />{billsWith(billNames(mo.entries, null, null, x.others))}<span aria-hidden="true" className="mr-1.5 ml-3 inline-block h-3 border-l-2 border-dashed border-ink align-middle" />{x.average.replace('{t}', fmtTaka(avgCost))}</p>
             </section>)}
         </div>

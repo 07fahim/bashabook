@@ -5,26 +5,35 @@ import { focus } from './ui';
 /** Charts drawn by the app: SVG and CSS only, no script, colours from the theme tokens. Values are poisha or hundredths of a
  *  meal; the caller formats them. A zero maximum draws nothing and never divides by zero. The words beside each chart already
  *  say everything, so the drawn parts are decorative. Each card gets the form its numbers need: bars to compare people, a
- *  grid for days, two bars for a balance, a table for months. */
+ *  grid for days, a meter and a receipt for a balance, bars and cards for months. */
 const pct = (v: number, max: number) => (max > 0 ? Math.max(0, Math.min(100, (v / max) * 100)) : 0);
 
-export type HRow = { key: string; label: ReactNode; text: string; value: number; valueText?: string; tail?: number; strong?: boolean };
+export type Split = { key: string; label: ReactNode; text: string; food: number; bills: number; total: string; sr: string; strong?: boolean };
 
-/** One slim bar per row: label, bar, value. `tail` draws a second part after the bar (bills); `mark` a dashed rule through every
- *  row at one value (the average), so whoever sits far from it stands out. */
-export function HBars({ rows, fmt, tailColor = 'fill-line', mark }: { rows: HRow[]; fmt: (v: number) => string; tailColor?: string; mark?: number }) {
-  const max = Math.max(...rows.map(r => r.value + (r.tail ?? 0)), 0);
+/** People's cost as one thick bar each, food then bills, on one scale, with a dashed rule at the average through every bar.
+ *  Each part says what it is inside it: the word and the amount when both fit, the amount alone when only that fits, nothing
+ *  when not even that does (the legend and the total still say it). Phones put the name and total above the bar, so the bar
+ *  gets the card's full width. */
+export function SplitBars({ rows, mark, words, fmt }: { rows: Split[]; mark?: number; words: [string, string]; fmt: (v: number) => string }) {
+  const max = Math.max(...rows.map(r => r.food + r.bills), 0);
+  const tag = 'hidden px-2 text-[13px] font-semibold tabular-nums';
+  // each part is its own container, so what fits inside is measured against the part itself
+  const part = (v: number, word: string, color: string) => v > 0 && (
+    <span className={`@container flex h-full flex-none items-center overflow-hidden whitespace-nowrap ${color}`} style={{ width: `${pct(v, max)}%` }}>
+      <span className={`${tag} @min-[7.5rem]:inline`}>{word} {fmt(v)}</span>
+      <span className={`${tag} @min-[4.5rem]:inline @min-[7.5rem]:hidden`}>{fmt(v)}</span>
+    </span>);
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-4 sm:space-y-3">
       {rows.map(r => (
-        <li key={r.key} className={`grid grid-cols-[minmax(0,7rem)_1fr_auto] items-center gap-3 ${r.strong ? 'font-semibold' : ''}`}>
+        <li key={r.key} className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 sm:grid-cols-[minmax(0,9rem)_1fr_5.5rem] ${r.strong ? 'font-semibold' : ''}`}>
           <span className="truncate" title={r.text}>{r.label}</span>
-          <svg aria-hidden="true" className="h-5 w-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 6">
-            <rect className="fill-turmeric" height="2" rx="1" width={pct(r.value, max)} y="2" />
-            {r.tail ? <rect className={tailColor} height="2" rx="1" width={pct(r.tail, max)} x={pct(r.value, max)} y="2" /> : null}
-            {mark !== undefined && <line className="stroke-ink" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" x1={pct(mark, max)} x2={pct(mark, max)} y1="-2" y2="8" />}
-          </svg>
-          <span className="tabular-nums">{r.valueText ?? fmt(r.value)}</span>
+          <span aria-hidden="true" className="relative col-span-2 row-start-2 flex h-8 overflow-hidden rounded-lg bg-paper font-normal sm:col-span-1 sm:row-start-auto">
+            {part(r.food, words[0], 'bg-turmeric text-on-turmeric')}
+            {part(r.bills, words[1], 'border-l-2 border-surface bg-muted text-paper')}
+            {mark !== undefined && max > 0 && <span className="absolute inset-y-0 border-l-2 border-dashed border-ink" style={{ left: `${pct(mark, max)}%` }} />}
+          </span>
+          <span className="text-right font-semibold tabular-nums">{r.total}<span className="sr-only">. {r.sr}</span></span>
         </li>
       ))}
     </ul>
@@ -70,31 +79,60 @@ export function MealGrid({ rows, n, legend }: { rows: { key: string; label: stri
   );
 }
 
-export type MonthRow = { key: string; label: string; aria: string; href: string; rate: number; rateText: string; spend: number; spendText: string;
+export type MonthRow = { key: string; label: string; long: string; aria: string; href: string; rate: number; rateText: string; spend: number; spendText: string;
   rateNote?: { text: string; tone: string }; spendNote?: { text: string; tone: string } };
 
-/** Closed months as a small table, newest first, each row a link to that month. Every number says in words how it moved from
- *  the month before (+4% vs Aug, chili when it costs more), with a thin bar from zero under it so the size reads at a glance. */
-export function MonthTable({ rows, head }: { rows: MonthRow[]; head: [string, string, string] }) {
-  const maxRate = Math.max(...rows.map(r => r.rate), 0), maxSpend = Math.max(...rows.map(r => r.spend), 0);
-  const cols = 'grid grid-cols-[minmax(0,3.5rem)_minmax(0,1fr)_minmax(0,1fr)_1rem] items-start gap-x-3';
-  const cell = (text: string, v: number, max: number, bar: string, note?: { text: string; tone: string }) => (
-    <span className="min-w-0">
-      <span className="block text-[15px] font-semibold tabular-nums sm:text-base">{text}</span>
-      <span aria-hidden="true" className="mt-1 block h-1 rounded-full bg-line"><span className={`block h-full rounded-full ${bar}`} style={{ width: `${pct(v, max)}%` }} /></span>
-      {note && <span className={`mt-1 block text-[13px] tabular-nums ${note.tone || 'text-muted'}`}>{note.text}</span>}
-    </span>);
+const Move = ({ tone }: { tone: string }) => tone === 'text-chili' || tone === 'text-leaf' ? (
+  <svg aria-hidden="true" className={`size-3.5 flex-none ${tone === 'text-chili' ? 'stroke-chili' : 'rotate-180 stroke-leaf'}`} fill="none" strokeWidth="2" viewBox="0 0 16 16"><path d="M8 13V3M3 8l5-5 5 5" /></svg>) : null;
+
+/** Closed months, oldest first in `rows`, shown twice. First two small bar charts, meal rate and spend, the latest month in full
+ *  colour, for the shape at a glance (a bar opens its month; the cards below carry the same links for the keyboard). Then one
+ *  card a month, newest first, every number saying how it moved from the month before (chili when it costs more); the cards
+ *  scroll sideways when they don't fit. */
+export function MonthCards({ rows, words }: { rows: MonthRow[]; words: { rate: string; spend: string; latest: string } }) {
+  const chart = (title: string, get: (r: MonthRow) => number, text: (r: MonthRow) => string, on: string, off: string) => {
+    const max = Math.max(...rows.map(get), 0);
+    return (
+      <div>
+        <p className="text-[13px] font-semibold text-muted">{title}</p>
+        <ol className="mt-2 flex gap-1.5">
+          {rows.map((r, i) => {
+            const last = i === rows.length - 1;
+            return (
+              <li key={r.key} className="min-w-0 flex-1">
+                <Link href={r.href} tabIndex={-1} title={`${r.long}: ${text(r)}`} className="group flex flex-col items-center gap-1">
+                  <span className="flex h-16 w-full items-end justify-center">
+                    <span className={`w-full max-w-9 rounded-t-[3px] group-hover:opacity-75 ${last ? on : off}`} style={{ height: `${Math.max(pct(get(r), max), 4)}%` }} />
+                  </span>
+                  <span className={`text-[13px] ${last ? 'font-semibold' : 'text-muted'}`}>{r.label}</span>
+                </Link>
+              </li>);
+          })}
+        </ol>
+      </div>);
+  };
+  const line = (title: string, value: string, note?: { text: string; tone: string }) => (
+    <>
+      <span className="mt-3 block text-[13px] text-muted">{title}</span>
+      <span className="flex items-center gap-1.5 text-lg font-bold tabular-nums">{value}{note && <Move tone={note.tone} />}</span>
+      {note && <span className={`block text-[13px] tabular-nums ${note.tone || 'text-muted'}`}>{note.text}</span>}
+    </>);
   return (
     <div>
-      <p aria-hidden="true" className={`${cols} px-2 pb-2 text-[13px] text-muted`}><span>{head[0]}</span><span>{head[1]}</span><span>{head[2]}</span></p>
-      <ol className="divide-y divide-line border-t border-line">
-        {rows.map(r => (
-          <li key={r.key}>
-            <Link aria-label={r.aria} href={r.href} className={`${cols} group rounded-xl px-2 py-3 hover:bg-paper ${focus}`}>
-              <span className="font-semibold">{r.label}</span>
-              {cell(r.rateText, r.rate, maxRate, 'bg-ink', r.rateNote)}
-              {cell(r.spendText, r.spend, maxSpend, 'bg-turmeric', r.spendNote)}
-              <svg aria-hidden="true" className="mt-1 size-4 stroke-muted group-hover:stroke-ink" fill="none" viewBox="0 0 16 16"><path d="m6 3 5 5-5 5" strokeWidth="1.5" /></svg>
+      {/* side by side while a phone's half fits the bars (three months), else only where the card is wide enough for six
+          bars each: stacked on a phone and in the half-width card at md */}
+      <div aria-hidden="true" className={`grid gap-5 ${rows.length > 3 ? 'sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2' : 'grid-cols-2'}`}>
+        {chart(words.rate, r => r.rate, r => r.rateText, 'bg-ink', 'bg-ink/25')}
+        {chart(words.spend, r => r.spend, r => r.spendText, 'bg-turmeric', 'bg-turmeric/40')}
+      </div>
+      <ol className="-mx-5 mt-5 flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto px-5 pb-2">
+        {[...rows].reverse().map((r, i) => (
+          <li key={r.key} className="w-44 flex-none snap-start">
+            <Link aria-label={r.aria} href={r.href} className={`block h-full rounded-2xl border border-line p-4 hover:bg-paper ${focus}`}>
+              <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 font-semibold">{r.long}
+                {i === 0 && <span className="rounded-full bg-turmeric px-2 text-[13px] text-on-turmeric">{words.latest}</span>}</span>
+              {line(words.rate, r.rateText, r.rateNote)}
+              {line(words.spend, r.spendText, r.spendNote)}
             </Link>
           </li>))}
       </ol>
@@ -104,43 +142,44 @@ export function MonthTable({ rows, head }: { rows: MonthRow[]; head: [string, st
 
 export type Part = { key: string; label: string; value: number; color: string };
 
-/** My month in two bars on one scale: the money that came in (from earlier months, paid in) over the money used (food, bills,
- *  advances). Where the shorter one stops, a bracket runs to the end of the longer: that gap is the balance, the same amount as
- *  the line above it. Under them every part with its exact amount, grouped by side. */
-export function InOut({ came, used, sides, gap, fmt }: { came: Part[]; used: Part[]; sides: [string, string]; gap: { text: string; tone: string } | null; fmt: (v: number) => string }) {
+/** My month as a meter, then a receipt. The meter is the money that came in, filled with what was used, part by part; what is
+ *  left shows in leaf. When more was used than came in, a tick marks where the money that came in ran out. The receipt lists
+ *  every part with its exact amount, plus in and minus out, down to the balance: the same sum as lib/money.ts. Its swatches
+ *  are the meter's legend. */
+export function Meter({ came, used, fmt, words, total }: {
+  came: Part[]; used: Part[]; fmt: (v: number) => string; total: { label: string; text: string; tone: string };
+  words: { usedOf: string; usedOnly: string; left: string; short: string; cameIn: string };
+}) {
   const sum = (ps: Part[]) => ps.reduce((a, p) => a + p.value, 0);
-  const a = sum(came), b = sum(used), max = Math.max(a, b);
-  const lo = pct(Math.min(a, b), max), hi = pct(Math.max(a, b), max), mid = (lo + hi) / 2;
-  const bar = (ps: Part[]) => (
-    <span aria-hidden="true" className="mt-1.5 flex h-3 gap-0.5">
-      {ps.map(p => <span key={p.key} className={`h-full rounded-[3px] ${p.color}`} style={{ width: `${pct(p.value, max)}%`, minWidth: 3 }} />)}
-    </span>);
-  const side = (label: string, ps: Part[], total: number) => (
-    <div>
-      <p className="flex justify-between gap-3 text-[15px]"><span className="font-semibold">{label}</span><span className="tabular-nums">{fmt(total)}</span></p>
-      {bar(ps)}
-    </div>);
-  const list = (label: string, ps: Part[]) => ps.length > 0 && (
-    <div>
-      <dt className="text-[13px] font-semibold text-muted">{label}</dt>
-      {ps.map(p => (
-        <dd key={p.key} className="flex items-center gap-2 py-1">
-          <span aria-hidden="true" className={`size-3 flex-none rounded-[3px] ${p.color}`} /><span className="min-w-0 flex-1">{p.label}</span><span className="tabular-nums">{fmt(p.value)}</span>
-        </dd>))}
+  const a = sum(came), b = sum(used), whole = Math.max(a, b), over = b > a && a > 0, at = pct(a, whole);
+  const row = (p: Part, sign: string, swatch: boolean) => (
+    <div key={`${sign}${p.key}`} className="flex items-center gap-2 py-1">
+      <dt className="flex min-w-0 flex-1 items-center gap-2"><span aria-hidden="true" className={`size-3 flex-none rounded-[3px] ${swatch ? p.color : ''}`} />{p.label}</dt>
+      <dd className="tabular-nums">{sign}{fmt(p.value)}</dd>
     </div>);
   return (
     <div>
-      <div className="space-y-3">
-        {side(sides[0], came, a)}
-        {side(sides[1], used, b)}
+      <div aria-hidden="true" className={`relative ${over ? 'pt-6' : ''}`}>
+        {/* the label slides by its own width, so it stays inside the card at either end */}
+        {over && <span className="absolute top-0 text-[13px] whitespace-nowrap text-muted" style={{ left: `${at}%`, transform: `translateX(-${at}%)` }}>{words.cameIn}</span>}
+        <div className="flex h-4 overflow-hidden rounded-full bg-line">
+          {used.map(p => <span key={p.key} className={`h-full border-r-2 border-surface last:border-r-0 ${p.color}`} style={{ width: `${pct(p.value, whole)}%` }} />)}
+          {a > b && <span className="h-full bg-leaf" style={{ width: `${pct(a - b, whole)}%` }} />}
+        </div>
+        {over && <span className="absolute -bottom-1 top-5 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at}%` }} />}
       </div>
-      {/* the bracket under the gap; its label slides by its own width, so it stays inside the card at either end */}
-      {gap && hi > lo && (
-        <div aria-hidden="true" className="relative mt-1 h-8">
-          <span className={`absolute top-0 h-2 rounded-b-[3px] border-x-2 border-b-2 border-current ${gap.tone}`} style={{ left: `${lo}%`, width: `${hi - lo}%` }} />
-          <span className={`absolute top-3 text-[13px] font-semibold whitespace-nowrap tabular-nums ${gap.tone}`} style={{ left: `${mid}%`, transform: `translateX(-${mid}%)` }}>{gap.text}</span>
-        </div>)}
-      <dl className="mt-4 grid gap-4 text-[15px] sm:grid-cols-2">{list(sides[0], came)}{list(sides[1], used)}</dl>
+      <p className="mt-2 flex flex-wrap justify-between gap-x-4 text-[13px]">
+        <span className="text-muted">{a > 0 ? words.usedOf.replace('{u}', fmt(b)).replace('{c}', fmt(a)) : words.usedOnly.replace('{u}', fmt(b))}</span>
+        {a !== b && <span className={`font-semibold ${a > b ? 'text-leaf' : 'text-chili'}`}>{(a > b ? words.left : words.short).replace('{t}', fmt(Math.abs(a - b)))}</span>}
+      </p>
+      <dl className="mt-4 rounded-2xl bg-paper p-4 text-[15px]">
+        {came.map(p => row(p, '+', false))}
+        {used.map(p => row(p, '−', true))}
+        <div className={`mt-2 flex items-center gap-2 border-t-2 border-dashed border-muted pt-3 text-lg font-bold ${total.tone}`}>
+          <dt className="flex min-w-0 flex-1 items-center gap-2"><span aria-hidden="true" className={`size-3 flex-none rounded-[3px] ${a > b ? 'bg-leaf' : ''}`} />{total.label}</dt>
+          <dd className="tabular-nums">{total.text}</dd>
+        </div>
+      </dl>
     </div>
   );
 }
