@@ -110,13 +110,22 @@ export async function fixAskTo(db: Db, flatId: string, id: string, marker: strin
   return r?.to && r.to !== marker ? r.to : null;
 }
 
+/** Unusual amount (trust feature 3): how many times a usual bazar this one is, when at least twice, else null. */
+export const unusualRatio = (amount: number, usual: number | null) =>
+  usual && amount >= 2 * usual ? Math.round((amount / usual) * 10) / 10 : null;
+/** SQL: the usual bazar for entry `l`: the median of the flat's other bazars dated in the 60 days up to it, at least 5 of
+ *  them; null otherwise and for a bill (their amounts differ by nature: rent, gas). */
+const usual = (l: string) => `case when ${l}.type = 'bazar' then (select percentile_cont(0.5) within group (order by u.amount_poisha)
+  from ledger u where u.flat_id = ${l}.flat_id and u.type = 'bazar' and u.status = 'ok' and u.id <> ${l}.id
+    and u.date between ${l}.date - 60 and ${l}.date having count(*) >= 5)::float8 end`;
+
 /** Bazars and bills of open months for this person: waiting ones may_check lets them check (the collector: everyone else's;
  *  a flatmate: the collector's own, monthly bills included), and entries sent back that are theirs to fix, with the reason:
  *  their own, and for the collector also any its adder can't fix (an earlier month's, or the adder moved out), as fixAskTo. */
 export const toCheck = (db: Db, flatId: string, memberId: string, today: string) => db<{
-  id: string; type: 'bazar' | 'bill'; amount: number; date: string; note: string | null; state: 'fix' | null; reason: string | null;
+  id: string; type: 'bazar' | 'bill'; amount: number; date: string; note: string | null; state: 'fix' | null; reason: string | null; usual: number | null;
 }>(
-  `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.note, c.state, c.note as reason
+  `select l.id, l.type, l.amount_poisha::int as amount, l.date::text as date, l.note, c.state, c.note as reason, ${usual('l')} as usual
    from ledger l join months mo on mo.flat_id = l.flat_id and mo.month = l.month and mo.status = 'open'
    left join entry_checks c on c.ledger_id = l.id
    where l.flat_id = $1 and l.type in ('bazar', 'bill') and l.status = 'ok'
@@ -127,7 +136,7 @@ export const toCheck = (db: Db, flatId: string, memberId: string, today: string)
 export type Detail = {
   id: string; type: 'bazar' | 'bill'; amount: number; date: string; month: string; note: string | null; paidBy: string | null;
   createdBy: string; addedBy: string; addedAt: string; open: boolean; check: 'ok' | 'fix' | null; reason: string | null;
-  checkedBy: string | null; checkedAt: string | null; receiptV: string | null; mayCheck: boolean; mayFix: boolean; adderMayFix: boolean; mayAddReceipt: boolean; items: Item[];
+  checkedBy: string | null; checkedAt: string | null; receiptV: string | null; mayCheck: boolean; mayFix: boolean; adderMayFix: boolean; mayAddReceipt: boolean; items: Item[]; usual: number | null;
 };
 /** One bazar or bill for its page: its lines, receipt and check, whether `me` may check it now (open month, no check yet, may_check) or fix it, whether its adder may fix it (Send back names
  *  them only then; else the collector fixes it, as fixAskTo), and the flat's people
@@ -141,6 +150,7 @@ export async function entryDetail(db: Db, flatId: string, id: string, me: string
          and coalesce(may_check(l.id, $3, $4::text::date), false) as "mayCheck",
        coalesce(${mayFix('$3', '$4')}, false) as "mayFix", coalesce(${fixer('l.created_by', '$4')}, false) as "adderMayFix",
        coalesce(${mayReceipt('$3', '$4')}, false) as "mayAddReceipt",
+       ${usual('l')} as usual,
        (select coalesce(json_agg(json_build_object('name', i.name, 'amount', i.amount_poisha::int) order by i.pos), '[]'::json)
           from bazar_items i where i.ledger_id = l.id) as items
      from ledger l join members a on a.flat_id = l.flat_id and a.id = l.created_by

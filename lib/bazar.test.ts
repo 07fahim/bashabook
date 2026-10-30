@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
-import { addReceipt, checkEntry, entryDetail, fixAskTo, fixEntry, itemsFor, itemsOk, monthTotals, otherItems, parseItems, receiptOf, receiptVersion, toCheck, type Fix } from './bazar';
+import { addReceipt, checkEntry, entryDetail, fixAskTo, fixEntry, itemsFor, itemsOk, monthTotals, otherItems, parseItems, receiptOf, receiptVersion, toCheck, unusualRatio, type Fix } from './bazar';
 import { closeMonth, closeInfo } from './close';
 import { acceptHandover, currentOffer, flatMoney, offerHandover } from './handover';
 import { addEntry, loadMonth, openMonth, putBack, removeEntry, type Actor, type NewEntry } from './money-db';
@@ -512,5 +512,31 @@ describe('a check carries the photo it saw', { timeout: 30000 }, () => {
     expect(await db(`select 1 from audit_log where entity_id = any($1::text[]) and after ? 'checked'`, [[none, id]])).toHaveLength(0);
     expect(await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY, await rv(id))).not.toBeNull();   // the new photo, seen
     expect(await checkEntry(db, flatId, nafis, none, 'ok', null, TODAY, await rv(none))).not.toBeNull();
+  });
+});
+
+describe('unusual amount', { timeout: 30000 }, () => {
+  it('ratio: at least twice the usual, one decimal; none without a usual', () => {
+    expect(unusualRatio(199900, 100000)).toBeNull();
+    expect(unusualRatio(200000, 100000)).toBe(2);
+    expect(unusualRatio(244900, 100000)).toBe(2.4);
+    expect(unusualRatio(900000, null)).toBeNull();
+  });
+
+  it('usual: the median of 5 or more other bazars in the 60 days up to it; never a bill', async () => {
+    const { flatId, ids, nafis, as, add } = await flat(['Tahsin', 'Zarif'], '2026-08-01');   // August to October open
+    for (const [d, a] of [['2026-10-01', 90000], ['2026-10-02', 100000], ['2026-10-03', 110000], ['2026-10-04', 100000]] as const)
+      await add(as('Tahsin'), { type: 'bazar', amount: a, paidBy: ids.Tahsin, date: d });
+    const big = await add(as('Tahsin'), { type: 'bazar', amount: 250000, paidBy: ids.Tahsin, date: '2026-10-06' });
+    expect((await entryDetail(db, flatId, big, ids.Nafis, TODAY))!.d.usual).toBeNull();   // only 4 others
+    const edge = await add(nafis, { type: 'bazar', amount: 100000, paidBy: ids.Tahsin, date: '2026-08-07' });   // 60 days before: counts (an earlier month: the collector adds it)
+    const old = await add(nafis, { type: 'bazar', amount: 900000, paidBy: ids.Tahsin, date: '2026-08-06' });   // 61 days: doesn't
+    expect((await entryDetail(db, flatId, big, ids.Nafis, TODAY))!.d.usual).toBe(100000);
+    expect((await toCheck(db, flatId, ids.Nafis, TODAY)).find(r => r.id === big)!.usual).toBe(100000);
+    expect(old).toBeTruthy();
+    expect(await removeEntry(db, flatId, nafis, edge, TODAY)).toBe(true);   // removed: not counted, and the 61-day one never was
+    expect((await entryDetail(db, flatId, big, ids.Nafis, TODAY))!.d.usual).toBeNull();
+    const bill = await add(nafis, { type: 'bill', amount: 900000, paidBy: ids.Nafis, split: 'equal', note: 'Rent' });
+    expect((await entryDetail(db, flatId, bill, ids.Tahsin, TODAY))!.d.usual).toBeNull();
   });
 });
