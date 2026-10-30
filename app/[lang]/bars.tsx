@@ -5,7 +5,7 @@ import { focus } from './ui';
 /** Charts drawn by the app: SVG and CSS only, no script, colours from the theme tokens. Values are poisha or hundredths of a
  *  meal; the caller formats them. A zero maximum draws nothing and never divides by zero. The words beside each chart already
  *  say everything, so the drawn parts are decorative. Each card gets the form its numbers need: bars to compare people, a
- *  grid for days, steps for a balance, a line for a rate over months. */
+ *  grid for days, two bars for a balance, a table for months. */
 const pct = (v: number, max: number) => (max > 0 ? Math.max(0, Math.min(100, (v / max) * 100)) : 0);
 
 export type HRow = { key: string; label: ReactNode; text: string; value: number; valueText?: string; tail?: number; strong?: boolean };

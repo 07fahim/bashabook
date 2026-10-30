@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { focus } from '../ui';
 
-const RING = ['stroke-turmeric', 'stroke-leaf', 'stroke-muted', 'stroke-chili', 'stroke-ink'] as const;   // each 3:1 on the card
+const RING = ['stroke-turmeric', 'stroke-leaf', 'stroke-muted', 'stroke-chili', 'stroke-ink'] as const;   // the legend beside it names every part
 const SWATCH = ['bg-turmeric', 'bg-leaf', 'bg-muted', 'bg-chili', 'bg-ink'] as const;
 
 /** A ring of up to five slices with the total in the middle and a legend beside it. Point at or tap a slice, or tap its legend
@@ -23,11 +23,12 @@ export function Ring({ slices, total }: { slices: { label: string; value: number
           {sum > 0 && slices.map((s, i) => (
             <circle key={i} className={`${RING[i]} ${dim(i)} ${fade} cursor-pointer`} cx="21" cy="21" fill="none" r="15.9155"
               strokeDasharray={`${(s.value / sum) * 100} ${100 - (s.value / sum) * 100}`} strokeDashoffset={-starts[i]} strokeWidth={on === i ? 6.5 : 5}
-              onClick={() => pick(i)} onPointerEnter={e => { if (e.pointerType === 'mouse') setOn(i); }} />
+              // a mouse already picked it on the way in, so its click keeps it; a tap toggles
+              onPointerDown={e => (e.pointerType === 'mouse' ? setOn(i) : pick(i))} onPointerEnter={e => { if (e.pointerType === 'mouse') setOn(i); }} />
           ))}
         </svg>
-        {/* the middle answers for the part picked, else for the whole */}
-        <p aria-live="polite" className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+        {/* the middle answers for the part picked, else for the whole; screen readers get the same from the pressed legend row */}
+        <p aria-hidden="true" className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
           {on === null ? <span className="text-lg font-bold tabular-nums">{total}</span> : (<>
             <span className="max-w-full truncate text-[13px] text-muted">{slices[on].label}</span>
             <span className="text-lg leading-tight font-bold tabular-nums">{slices[on].text}</span>
