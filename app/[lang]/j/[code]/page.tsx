@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -14,6 +15,13 @@ import { Header } from '../../header';
 import { focus, link, PinField, primary, PageSkeleton } from '../../ui';
 
 type Props = PageProps<'/[lang]/j/[code]'>;
+
+export async function generateMetadata({ params }: PageProps<'/[lang]/j/[code]'>): Promise<Metadata> {
+  const { lang } = await params;
+  if (!hasLocale(lang)) return {};
+  const t = getDictionary(lang);
+  return { title: `${t.app.joinTitle} · ${t.brand}${t.brandAccent}` };
+}
 
 export default function Join({ params, searchParams }: Props) {
   return <Suspense fallback={<PageSkeleton />}><JoinBody params={params} searchParams={searchParams} /></Suspense>;

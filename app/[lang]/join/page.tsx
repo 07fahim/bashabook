@@ -1,9 +1,17 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { joinByCodeAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { Header } from '../header';
 import { Field, primary } from '../ui';
+
+export async function generateMetadata({ params }: PageProps<'/[lang]/join'>): Promise<Metadata> {
+  const { lang } = await params;
+  if (!hasLocale(lang)) return {};
+  const t = getDictionary(lang);
+  return { title: `${t.app.joinTitle} · ${t.brand}${t.brandAccent}` };
+}
 
 export default async function JoinByCode({ params, searchParams }: PageProps<'/[lang]/join'>) {
   const { lang } = await params;

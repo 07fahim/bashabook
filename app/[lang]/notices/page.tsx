@@ -13,7 +13,7 @@ import { Nav } from '../nav';
 import { card, ICONS, insetFocus, LongList, PageSkeleton } from '../ui';
 
 /** Which icon each kind gets; a new kind without one fails to compile. A declined handover gets the wallet, not a tick. */
-const ICON: Record<Notice['kind'], keyof typeof ICONS> = { paid: 'wallet', handover: 'settle', handoverDone: 'wallet', closeMonth: 'bill', meal: 'meal', account: 'person' };
+const ICON: Record<Notice['kind'], keyof typeof ICONS> = { paid: 'wallet', handover: 'settle', handoverDone: 'wallet', closeMonth: 'bill', meal: 'meal', account: 'person', rejected: 'wallet' };
 
 export default function Notices({ params }: PageProps<'/[lang]/notices'>) {
   return <Suspense fallback={<PageSkeleton />}><Body params={params} /></Suspense>;

@@ -345,7 +345,9 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                 mc.by.length ? x.shareChecked.replace('{list}', mc.by.map(c => `${c.name} ${c.n}`).join(' · ')) : null,
                 mc.none ? x.shareUnchecked.replace('{n}', String(mc.none)) : null,
                 mc.fix ? x.shareFixClosed.replace('{n}', String(mc.fix)) : null].filter((l): l is string => !!l) : [];
-              const trust = cashLine ? [cashLine, ...checkLines] : checkLines;
+              // the count was of everything held on the day of the close, later entries too: say why it differs from the month's end
+              const split = cr && cr.actual !== mo.result.fund ? x.heldSplit.replace('{month}', fmtMonth(month)).replace('{a}', fmtSigned(mo.result.fund)).replace('{b}', fmtSigned(cr.actual - mo.result.fund)) : null;
+              const trust = cashLine ? [cashLine, ...(split ? [split] : []), ...checkLines] : checkLines;
               const text = [`${mo.flat.name} · ${fmtMonth(month)}`, ...lines, `${x.withName.replace('{name}', holder)}: ${fmtSigned(mo.result.fund)}`,
                 `${x.mealRate}: ${fmtExact(mo.result.mealRate)}`, ...(trust.length ? ['', ...trust] : []), ...(lines.length ? ['', note] : [])].join('\n');
               return (<>

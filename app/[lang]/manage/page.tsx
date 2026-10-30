@@ -22,6 +22,7 @@ import { FocusHere } from '../focus-here';
 import { Header, withQuery } from '../header';
 import { ConfirmList, lookText } from '../money/bits';
 import { Nav } from '../nav';
+import { ShowForm } from '../show-form';
 import { PendingButton } from '../pending-button';
 import { ShareButton } from '../share-button';
 import { checkChip, field, Field, Fold, focus, Group, link, MethodField, PinField, primary, secondary, PageSkeleton } from '../ui';
@@ -155,7 +156,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </Group>
           <Group title={m.groupMeals}>
             <Fold row title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
-              <form className="mt-4 space-y-4">
+              <ShowForm className="mt-4 space-y-4">
                 <label className="block font-semibold">
                   {m.who}
                   <select name="who" defaultValue={person.id} className={field}>
@@ -165,7 +166,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                 </label>
                 <DateField lang={lang} label={m.day} name="day" required min={from} max={to} defaultValue={day} />
                 <button className={secondary}>{m.show}</button>
-              </form>
+              </ShowForm>
               <p className="mt-5 font-semibold">{person.name} · {fmtDay(day, lang)}</p>
               {!isPresent(person, day) ? (
                 <p className="mt-2 text-muted">{m.notInFlat}</p>
@@ -445,7 +446,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </Fold>
           <Fold row title={a.joinLinkTitle} lead={a.joinLinkLead} level={3}>
             <p className="mt-3">{a.code}: <span className="font-bold tracking-widest">{me.joinCode}</span></p>
-            <div className="mt-3 sm:max-w-xs"><ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} /></div>
+            <div className="mt-3 sm:max-w-xs"><ShareButton path={`/${me.lang}/j/${me.joinCode}`} text={a.shareText.replace('{flat}', me.flatName)} label={a.share} copied={a.copied} /></div>
             {/* a second tap, as for every flat-wide or per-person change here: it sits right under Share and kills the old link */}
             <details className="mt-4">
               <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{a.newCodeBtn}</summary>

@@ -1,9 +1,17 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ActionForm } from '../action-form';
 import { createFlatAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { Header } from '../header';
 import { field, Field, PinField, primary } from '../ui';
+
+export async function generateMetadata({ params }: PageProps<'/[lang]/new'>): Promise<Metadata> {
+  const { lang } = await params;
+  if (!hasLocale(lang)) return {};
+  const t = getDictionary(lang);
+  return { title: `${t.app.newTitle} · ${t.brand}${t.brandAccent}` };
+}
 
 export default async function NewFlat({ params }: PageProps<'/[lang]/new'>) {
   const { lang } = await params;

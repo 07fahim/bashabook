@@ -194,7 +194,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
               {a.code}: <span className="font-bold tracking-widest">{me.joinCode}</span>
             </p>
             <div className="grow" />
-            <ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} />
+            <ShareButton path={`/${me.lang}/j/${me.joinCode}`} text={a.shareText.replace('{flat}', me.flatName)} label={a.share} copied={a.copied} />
           </section>}
         </div>
         {/* wider screens: the whole week at a glance, phones use the Meals tab */}

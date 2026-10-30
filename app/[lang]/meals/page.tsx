@@ -13,6 +13,7 @@ import { getDictionary, hasLocale } from '../dictionaries';
 import { dhakaDate, fmtDay, fmtExact, fmtMonth, fmtRange, fmtTime, fmtWhen } from '../format';
 import { Header, withQuery } from '../header';
 import { Nav } from '../nav';
+import { ShowForm } from '../show-form';
 import { card as baseCard, checkChip, field, Field, Fold, focus, link, LongList, primary, secondary, PageSkeleton } from '../ui';
 import { DateField } from '../date-field';
 import { WeekChart } from '../week-chart';
@@ -146,7 +147,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                   const dots = MEALS.map(x => (gridSelf ? ownPlate(gridSelf, gridData.changes, d, x) : 0) > 0);
                   const guests = gridData.changes.filter(c => c.memberId === me.memberId && c.date === d).reduce((a, c) => a + c.guests, 0);
                   const hc = headcount(gridData.members, gridData.changes, d), plates = hc.b + hc.l + hc.d;
-                  const label = m.cellLabel.replace('{d}', fmtDay(d, lang)).replace('{meals}', here ? MEALS.map((x, i) => `${m.names[x]} ${dots[i] ? m.on : m.off}`).join(', ') : m.notInFlatSelf).replace('{plates}', String(plates));
+                  const label = m.cellLabel.replace('{d}', fmtDay(d, lang)).replace('{meals}', here ? MEALS.map((x, i) => `${m.names[x]} ${dots[i] ? m.on : m.off}`).join(', ') : m.notInFlatSelf).replace('{plates}', (plates === 1 ? t.charts.plateOne : t.charts.platesN).replace('{n}', String(plates)));
                   const inner = (<>
                     <span className={`block font-semibold ${d === today ? 'text-turmeric-ink' : ''}`}>{Number(d.slice(8))}</span>
                     <span aria-hidden="true" className="mt-1 flex justify-center gap-1">
@@ -248,7 +249,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
 
           <Fold title={m.otherTitle} lead={m.otherLead} open={'who' in sp}>
             {!pick || !pickData ? <p className="mt-4 text-muted">{m.otherNone}</p> : (<>
-              <form className="mt-4 space-y-4">
+              <ShowForm className="mt-4 space-y-4">
                 {w !== 0 && <input type="hidden" name="week" value={w} />}
                 <label className="block font-semibold">
                   {m.who}
@@ -258,7 +259,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                 </label>
                 <DateField lang={lang} label={m.day} name="day" required min={firstOpen} max={addDays(today, 60)} defaultValue={pickDay} />
                 <button className={secondary}>{m.show}</button>
-              </form>
+              </ShowForm>
               <p className="mt-5 font-semibold">{pick.name} · {fmtDay(pickDay, lang)}</p>
               {(() => {
                 const person = pickData.members.find(x => x.id === pick.id);

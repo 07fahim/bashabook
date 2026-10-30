@@ -35,6 +35,7 @@ describe('noticeLine', () => {
     expect(noticeLine(n({ kind: 'paid', actor: 'Nafis', amount: 20000, detail: { type: 'deposit', gave: true } }), getDictionary('bn'), 'bn', today)).toEqual(['Nafis লিখেছে আপনি ৳200 দিয়েছেন', '/bn/home']);
     expect(noticeLine(n({ kind: 'handover', amount: 250000 }), t, 'en', today)![0]).toBe('Nafis wants to hand you the flat money, ৳2,500');
     expect(noticeLine(n({ kind: 'handoverDone', actor: 'Tahsin', detail: { status: 'declined' } }), t, 'en', today)![0]).toBe('Tahsin said no to the handover');
+    expect(noticeLine(n({ kind: 'rejected', actor: 'Tahsin', amount: 30000, date: '2026-10-09' }), t, 'en', today)![0]).toMatch(/^Tahsin said your ৳300 entry on .+ wasn’t right\. It was taken off$/);
     expect(noticeLine(n({ kind: 'closeMonth', actor: null, month: '2026-09-01' }), t, 'en', today)).toEqual(['September 2026 is ready to close', '/en/money?m=2026-09']);
   });
 });
