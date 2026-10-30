@@ -43,9 +43,15 @@ describe('timed reminders', { timeout: 30000 }, () => {
     await db(`update members set in_meals = false where id = $1`, [f.memberId]);
     expect((await runJobs(db, '2026-10-08T19:00', s.send)).meal).toBe(1);
     expect(s.calls.at(-1)!.ids).toEqual([]);
+    // someone moving in after tomorrow has no meals to set yet
+    await db(`update members set in_meals = true, left_on = null where flat_id = $1`, [f.flatId]);
+    await db(`update members set joined_on = '2026-10-11' where id = $1`, [t.id]);
+    expect((await runJobs(db, '2026-10-09T19:00', s.send)).meal).toBe(1);
+    expect(s.calls.at(-1)!.ids).toEqual([f.memberId]);
+    await db(`update members set joined_on = '2026-10-05' where id = $1`, [t.id]);
     // two runs at once: the claim, not the filter, keeps it to one
     await db(`update members set in_meals = true, left_on = null where flat_id = $1`, [f.flatId]);
-    const both = await Promise.all([runJobs(db, '2026-10-09T19:00', s.send), runJobs(db, '2026-10-09T19:00', s.send)]);
+    const both = await Promise.all([runJobs(db, '2026-10-10T19:00', s.send), runJobs(db, '2026-10-10T19:00', s.send)]);
     expect(both[0].meal + both[1].meal).toBe(1);
   });
 

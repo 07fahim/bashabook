@@ -180,6 +180,13 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             <div className="grow" />
             <Link href={`/${lang}/money`} className={`mt-5 ${secondary}`}>{x.seeMoney}</Link>
           </section>}
+          {/* a flat started without names: nobody can join until the collector adds them on the Flat tab */}
+          {people.length === 1 && me.role === 'manager' && <section className={`flex flex-col ${card}`}>
+            <h2 className="text-xl font-bold">{a.shareTitle}</h2>
+            <p className="mt-2 text-muted">{a.addFirst}</p>
+            <div className="grow" />
+            <Link href={`/${lang}/manage?add=1#add`} className={`mt-5 ${secondary}`}>{a.addMember}</Link>
+          </section>}
           {someoneMissing && <section className={`flex flex-col ${card}`}>
             <h2 className="text-xl font-bold">{a.shareTitle}</h2>
             <p className="mt-2 text-muted">{a.shareLead}</p>

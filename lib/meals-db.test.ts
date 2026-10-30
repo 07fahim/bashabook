@@ -119,6 +119,15 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await count('2026-10-12', 'd')).toBe(1);   // usual meal back
   });
 
+  it('no cooking saved twice over the same days still lets cooking again bring the plates back', async () => {
+    const { flatId, memberId, tahsin, count } = await flat();
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-13', meal: 'd', count: 3, guests: 2 }, false);
+    await noCooking(db, flatId, memberId, '2026-10-12', '2026-10-13', ['d'], '2026-10-09');
+    await noCooking(db, flatId, memberId, '2026-10-12', '2026-10-14', ['d'], '2026-10-09');   // re-entered longer, or sent twice
+    await cookAgain(db, flatId, memberId, '2026-10-12', '2026-10-14', ['d'], '2026-10-10');
+    expect([await count('2026-10-12', 'd'), await count('2026-10-13', 'd'), await count('2026-10-14', 'd')]).toEqual([1, 3, 1]);
+  });
+
   it('cooking for yourself clears plain booked meals but keeps guests', async () => {
     const { flatId, tahsin, count } = await flat();
     await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-12', meal: 'd', count: 1, guests: 0 }, false);

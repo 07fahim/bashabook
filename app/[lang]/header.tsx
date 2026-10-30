@@ -22,7 +22,7 @@ export function Header({ t, lang, path, notices, children }: { t: Dict; lang: Lo
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
       <div className="flex items-center gap-4 lg:gap-8">
         {/* under 375 px the name ran over the bell at full size: a smaller name and tighter controls there, so it stays */}
-        <Link href={`/${lang}`} className={`flex min-h-11 items-center gap-2 font-display text-2xl font-bold max-[374px]:gap-1 max-[374px]:text-lg ${focus}`}>
+        <Link href={notices === undefined ? `/${lang}` : `/${lang}/home`} className={`flex min-h-11 items-center gap-2 font-display text-2xl font-bold max-[374px]:gap-1 max-[374px]:text-lg ${focus}`}>
           <Image src="/logo-mark.png" alt="" width={32} height={32} priority className="max-[374px]:size-7" />
           <span>
             {t.brand}

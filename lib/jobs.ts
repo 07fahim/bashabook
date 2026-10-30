@@ -34,7 +34,7 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
        and not exists (select 1 from sent_jobs where flat_id = flats.id and date = $2::date and job_type = 'meal')`, [time, tomorrow]);
   for (const f of meals) {
     if (!await claim(db, f.id, tomorrow, 'meal')) continue;
-    const ids = (await db<{ id: string }>(`select id from members where flat_id = $1 and in_meals and (left_on is null or left_on > $2::date)`, [f.id, today])).map(m => m.id);
+    const ids = (await db<{ id: string }>(`select id from members where flat_id = $1 and in_meals and joined_on <= $2::date and (left_on is null or left_on >= $2::date)`, [f.id, tomorrow])).map(m => m.id);
     out.meal++; add(await send(db, ids, { ...mealMsg(f.lang, f.cutoff), ttl: 3600 }));   // after the lock the reminder is noise
   }
 

@@ -248,10 +248,10 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                       <legend className="font-semibold">{x.whoShares}</legend>
                       {(['equal', 'meals', 'selected'] as const).map(s => (
                         <label key={s} className="flex min-h-11 items-center gap-3">
-                          <input type="radio" name="split" value={s} defaultChecked={s === 'equal'} className="size-5 shrink-0 accent-turmeric" />{s === 'equal' ? x.splitEqualThatMonth : x.splits[s]}
+                          <input type="radio" name="split" value={s} id={s === 'selected' ? 'fix-some' : undefined} defaultChecked={s === 'equal'} className="size-5 shrink-0 accent-turmeric" />{s === 'equal' ? x.splitEqualThatMonth : x.splits[s]}
                         </label>
                       ))}
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="hidden grid-cols-2 gap-2 group-has-[#fix-some:checked]/c:grid">
                         {mo.all.map(p => <label key={p.id} className={`${checkChip} px-3`}><input type="checkbox" name="people" value={p.id} className="size-5 shrink-0 accent-on-turmeric" />{p.name}</label>)}
                       </div>
                     </fieldset>

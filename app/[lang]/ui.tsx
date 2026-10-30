@@ -53,7 +53,7 @@ export const MethodField = ({ label, labels }: { label: string; labels: Record<M
 );
 
 export const PinField = (p: { label: string; name: string; autoComplete: string }) => (
-  <Field type="password" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} required {...p} />
+  <Field type="password" inputMode="numeric" pattern="[0-9০-৯]{4}" minLength={4} maxLength={4} required {...p} />
 );
 
 /** A card that folds away: the title is the button, the content shows when opened. */

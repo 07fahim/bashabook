@@ -22,6 +22,7 @@ import { FocusHere } from '../focus-here';
 import { Header, withQuery } from '../header';
 import { ConfirmList, lookText } from '../money/bits';
 import { Nav } from '../nav';
+import { PendingButton } from '../pending-button';
 import { ShareButton } from '../share-button';
 import { checkChip, field, Field, Fold, focus, Group, link, MethodField, PinField, primary, secondary, PageSkeleton } from '../ui';
 
@@ -186,18 +187,18 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                         <form action={adminSetAction}>
                           {hidden}
                           <input type="hidden" name="guests" value={g} />
-                          <button name="own" value={own ? 0 : 1} aria-pressed={own > 0} aria-label={`${m.names[meal]}, ${m.ownLabel}`}
+                          <PendingButton name="own" value={own ? 0 : 1} aria-pressed={own > 0} aria-label={`${m.names[meal]}, ${m.ownLabel}`}
                             className={`min-h-11 rounded-full px-4 font-semibold ${own ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
                             {own ? m.onOther : m.offOther}
-                          </button>
+                          </PendingButton>
                         </form>
                         <form action={adminSetAction} className="flex items-center gap-2">
                           {hidden}
                           <input type="hidden" name="own" value={own} />
                           <span className="text-[15px] text-muted">{m.guestsLabel}</span>
-                          <button name="guests" value={g - 1} disabled={g === 0} aria-label={`${m.names[meal]}, ${m.guestsLabel}: ${m.less}`} className={step}>−</button>
+                          <PendingButton name="guests" value={g - 1} disabled={g === 0} aria-label={`${m.names[meal]}, ${m.guestsLabel}: ${m.less}`} className={step}>−</PendingButton>
                           <span className="w-6 text-center tabular-nums">{g}</span>
-                          <button name="guests" value={g + 1} disabled={g >= 9} aria-label={`${m.names[meal]}, ${m.guestsLabel}: ${m.more}`} className={step}>+</button>
+                          <PendingButton name="guests" value={g + 1} disabled={g >= 9} aria-label={`${m.names[meal]}, ${m.guestsLabel}: ${m.more}`} className={step}>+</PendingButton>
                         </form>
                       </li>
                     );
@@ -433,7 +434,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               </ul>
             </Fold>
           )}
-          <Fold row title={a.addMember} level={3}>
+          <Fold row id="add" title={a.addMember} level={3} open={'add' in sp}>
+            {'add' in sp && <FocusHere />}
             <ActionForm action={addMemberAction} className="mt-3">
               <input type="hidden" name="lang" value={lang} />
               <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />

@@ -4,7 +4,7 @@ import { refresh } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
-import { addMember, changePin, cleanName, cleanText, clearLock, clearedBefore, UUID, createFlat, isPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addMember, changePin, cleanName, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, isPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems, receiptVersion } from '@/lib/bazar';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, seeCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
@@ -38,9 +38,9 @@ export async function createFlatAction(_: FormState, d: FormData): Promise<FormS
   if (!name) return { error: e.name };
   if (others.includes(null) || others.length >= MAX_MEMBERS) return { error: e.others };
   if (!isPin(d.get('pin'))) return { error: e.pin };
-  if (str(d, 'pin') !== str(d, 'pin2')) return { error: e.pinMatch };
+  if (pinText(d.get('pin')) !== pinText(d.get('pin2'))) return { error: e.pinMatch };
   if (!(await allow(db, `new:${await ip()}`, 5))) return { error: e.tooMany };
-  const { memberId } = await createFlat(db, { flatName, name, pin: str(d, 'pin'), others: others as string[], today: todayDhaka(), lang });
+  const { memberId } = await createFlat(db, { flatName, name, pin: pinText(d.get('pin')), others: others as string[], today: todayDhaka(), lang });
   await startSession(memberId);
   redirect(`/${lang}/home`);
 }
@@ -51,9 +51,9 @@ export async function joinByCodeAction(d: FormData) {
 
 export async function loginAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), e = getDictionary(lang).app.errors;
-  const pin = str(d, 'pin'), newPin = d.has('newPin') ? str(d, 'newPin') : null;
+  const pin = pinText(d.get('pin')), newPin = d.has('newPin') ? pinText(d.get('newPin')) : null;
   if (!isPin(pin) || (newPin !== null && !isPin(newPin))) return { error: e.pin };
-  if (d.has('pin2') && (newPin ?? pin) !== str(d, 'pin2')) return { error: e.pinMatch };
+  if (d.has('pin2') && (newPin ?? pin) !== pinText(d.get('pin2'))) return { error: e.pinMatch };
   if (!(await allow(db, `pin:${await ip()}`, 60))) return { error: e.tooMany };
   const r = await login(db, str(d, 'code'), str(d, 'memberId'), pin, newPin);
   if ('error' in r) return { error: e[r.error] + (r.left ? ' ' + e.lastTries.replace('{n}', String(r.left)) : '') };
@@ -94,7 +94,7 @@ export async function resetPinAction(_: FormState, d: FormData): Promise<FormSta
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireManager(lang, true);
   if (!isPin(d.get('pin'))) return { error: a.errors.pin };
-  if (!(await resetPin(db, me.flatId, str(d, 'memberId'), str(d, 'pin'), { memberId: me.memberId }))) return { error: a.errors.notFound };
+  if (!(await resetPin(db, me.flatId, str(d, 'memberId'), pinText(d.get('pin')), { memberId: me.memberId }))) return { error: a.errors.notFound };
   refresh();
   return { done: a.resetDone };
 }
@@ -298,8 +298,8 @@ export async function changePinAction(_: FormState, d: FormData): Promise<FormSt
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireMember(lang, true);
   if (!isPin(d.get('pin')) || !isPin(d.get('newPin'))) return { error: a.errors.pin };
-  if (str(d, 'newPin') !== str(d, 'pin2')) return { error: a.errors.pinMatch };
-  const r = await changePin(db, me.memberId, str(d, 'pin'), str(d, 'newPin'), await currentToken());
+  if (pinText(d.get('newPin')) !== pinText(d.get('pin2'))) return { error: a.errors.pinMatch };
+  const r = await changePin(db, me.memberId, pinText(d.get('pin')), pinText(d.get('newPin')), await currentToken());
   if (r !== 'ok') return { error: a.errors[r.error === 'wrongPin' ? 'wrongCurrentPin' : r.error] + (r.left ? ' ' + a.errors.lastTries.replace('{n}', String(r.left)) : '') };
   return { done: a.pinChanged };
 }
