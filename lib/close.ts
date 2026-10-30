@@ -190,3 +190,28 @@ export async function addCorrection(db: Db, flatId: string, by: Actor, c: Correc
   // a retry finds its own row; anything else means the month or the people were wrong
   return (await db(`select 1 from ledger where flat_id = $1 and id = $2`, [flatId, c.id])).length ? 'ok' : await retiredId(db, c.id) ? 'bad' : 'month';
 }
+
+/** SQL (params $1 flat, $2 month, $3 member): may this person say they saw `month`'s counted cash — the flat's latest closed
+ *  month, they lived in it, they didn't count it, they haven't said so yet. Signed in means living here now. */
+const MAY_SEE = `exists (select 1 from months mo where mo.flat_id = $1 and mo.month = $2::text::date and mo.status = 'closed'
+      and mo.cash->>'by' <> $3::uuid::text
+      and not exists (select 1 from months l where l.flat_id = $1 and l.status = 'closed' and l.month > mo.month))
+    and exists (select 1 from month_balances b where b.flat_id = $1 and b.month = $2::text::date and b.member_id = $3::uuid and b.days_present > 0)
+    and not exists (select 1 from cash_seen s where s.flat_id = $1 and s.month = $2::text::date and s.member_id = $3::uuid)`;
+
+/** Who said they saw a closed month's counted cash, oldest first (trust feature 1). */
+export const cashSeen = (db: Db, flatId: string, month: string) => db<{ id: string; name: string }>(
+  `select m.id, m.name from cash_seen s join members m on m.flat_id = s.flat_id and m.id = s.member_id
+   where s.flat_id = $1 and s.month = $2::text::date order by s.at, m.name`, [flatId, month]);
+
+export const maySeeCash = async (db: Db, flatId: string, month: string, me: string) =>
+  (await db<{ ok: boolean }>(`select ${MAY_SEE} as ok`, [flatId, month, me]))[0].ok;
+
+/** I saw the cash: saved with its history row in one statement, only while MAY_SEE holds; a second tap saves nothing. */
+export async function seeCash(db: Db, flatId: string, month: string, me: string) {
+  return (await db(
+    `with s as (insert into cash_seen (flat_id, month, member_id) select $1, $2::text::date, $3::uuid where ${MAY_SEE}
+       on conflict do nothing returning *)
+     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'cash_seen', s.month::text, to_jsonb(s), $3::uuid from s returning 1`,
+    [flatId, month, me])).length > 0;
+}

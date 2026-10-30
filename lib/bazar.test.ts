@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, migrate, pg } from '../db/test-db';
 import { createFlat } from './auth';
-import { addReceipt, checkEntry, entryDetail, fixAskTo, fixEntry, itemsFor, itemsOk, monthTotals, otherItems, parseItems, receiptOf, receiptVersion, toCheck, unusualRatio, type Fix } from './bazar';
+import { addReceipt, checkEntry, entryDetail, fixAskTo, fixEntry, itemsFor, itemsOk, monthChecks, monthTotals, otherItems, parseItems, receiptOf, receiptVersion, toCheck, unusualRatio, type Fix } from './bazar';
 import { closeMonth, closeInfo } from './close';
 import { acceptHandover, currentOffer, flatMoney, offerHandover } from './handover';
 import { addEntry, loadMonth, openMonth, putBack, removeEntry, type Actor, type NewEntry } from './money-db';
@@ -538,5 +538,20 @@ describe('unusual amount', { timeout: 30000 }, () => {
     expect((await entryDetail(db, flatId, big, ids.Nafis, TODAY))!.d.usual).toBeNull();
     const bill = await add(nafis, { type: 'bill', amount: 900000, paidBy: ids.Nafis, split: 'equal', note: 'Rent' });
     expect((await entryDetail(db, flatId, bill, ids.Tahsin, TODAY))!.d.usual).toBeNull();
+  });
+});
+
+describe('month checks', { timeout: 30000 }, () => {
+  it('who Verified how many, most first; not checked and sent back counted apart', async () => {
+    const { flatId, ids, nafis, as, add } = await flat();
+    const a = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
+    const b2 = await add(as('Tahsin'), { type: 'bazar', amount: 1000, paidBy: ids.Tahsin });
+    const c = await add(nafis, { type: 'bazar', amount: 1000 });
+    await add(as('Zarif'), { type: 'bazar', amount: 1000, paidBy: ids.Zarif });   // not checked
+    const f = await add(as('Zarif'), { type: 'bazar', amount: 1000, paidBy: ids.Zarif });
+    for (const id of [a, b2]) expect(await checkEntry(db, flatId, nafis, id, 'ok', null, TODAY, '')).not.toBeNull();
+    expect(await checkEntry(db, flatId, as('Tahsin'), c, 'ok', null, TODAY, '')).not.toBeNull();
+    expect(await checkEntry(db, flatId, nafis, f, 'fix', 'wrong total', TODAY, '')).not.toBeNull();
+    expect(await monthChecks(db, flatId, OCT)).toEqual({ by: [{ name: 'Nafis', n: 2 }, { name: 'Tahsin', n: 1 }], none: 1, fix: 1 });
   });
 });

@@ -25,6 +25,7 @@ describe('deleting a flat', { timeout: 30000 }, () => {
       await saveMeal(db, f.flatId, t.id, { memberId: t.id, date: '2026-10-10', meal: 'l', count: 0, guests: 0 }, false);
       await noCooking(db, f.flatId, f.memberId, '2026-10-12', '2026-10-12', ['d'], '2026-10-09');
       expect((await closeMonth(db, f.flatId, boss, '2026-09-01', '2026-10-09', { cash: 0, bkash: 0, nagad: 0, bank: 0 })).result).toBe('ok');
+      await db(`insert into cash_seen (flat_id, month, member_id) values ($1, '2026-09-01'::text::date, $2)`, [f.flatId, t.id]);
       await createSession(db, f.memberId);
       await db(`update members set pin_hash = 'x' where id = $1`, [t.id]);
       await addEntry(db, f.flatId, boss, { type: 'deposit', amount: 30000, date: '2026-10-06', note: null, paidBy: null, memberId: f.memberId, split: null, selected: [] }, '2026-10-09');   // flat money back to 0

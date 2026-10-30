@@ -238,3 +238,16 @@ export async function addReceipt(db: Db, flatId: string, by: Actor, id: string, 
 export const blocksClose = (m: string, today: string) => `(status = 'pending' or (month = ${m} and type in ('bazar', 'bill')
   and ${today} < (${m} + interval '1 month' + interval '3 days')::date
   and not exists (select 1 from entry_checks c where c.ledger_id = ledger.id and c.state = 'ok')))`;
+
+/** A month's checks for its month-end message (trust feature 4): who Verified how many of its bazars and bills, most first;
+ *  how many have no check and how many are sent back. A check with no name kept (020's backfill) counts in no one's total. */
+export async function monthChecks(db: Db, flatId: string, month: string) {
+  const rows = await db<{ name: string | null; state: 'ok' | 'fix' | null; n: number }>(
+    `select m.name, c.state, count(*)::int as n from ledger l
+       left join entry_checks c on c.ledger_id = l.id
+       left join members m on m.flat_id = c.flat_id and m.id = c.by_member
+     where l.flat_id = $1 and l.month = $2::text::date and l.type in ('bazar', 'bill') and l.status = 'ok'
+     group by m.name, c.state order by n desc, m.name`, [flatId, month]);
+  const sum = (s: 'fix' | null) => rows.filter(r => r.state === s).reduce((a, r) => a + r.n, 0);
+  return { by: rows.filter(r => r.state === 'ok' && r.name).map(r => ({ name: r.name!, n: r.n })), none: sum(null), fix: sum('fix') };
+}
