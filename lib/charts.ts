@@ -34,6 +34,9 @@ export function runningSpend(entries: Entry[], days: string[]) {
   return days.map(d => { sum += ok.filter(e => e.date === d).reduce((a, e) => a + e.amount, 0); return { day: d, value: sum }; });
 }
 
+/** The day under the pointer: `rel` is how far across the chart (0 to 1) over `n` days, held to the days drawn (0 to `upTo`). */
+export const pickDay = (rel: number, n: number, upTo: number) => Math.max(0, Math.min(upTo, Math.round(rel * (n - 1))));
+
 /** One person's plates per meal over `days`, guests included, and how many of those were guests. */
 export function myPlates(m: MealMember, changes: MealChange[], days: string[]): { meal: Meal; plates: number; guests: number }[] {
   const idx = indexChanges(changes);

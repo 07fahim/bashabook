@@ -8,13 +8,14 @@ import { addDays, daysOfMonth, todayDhaka, weightedMeals } from '@/lib/meals';
 import { loadMonth, monthOf } from '@/lib/money-db';
 import { noticeCount } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
-import { Area, HBars, Ring, Stacked, VBars } from '../bars';
+import { HBars, Ring, Stacked, VBars } from '../bars';
 import { getDictionary, hasLocale, type Dict } from '../dictionaries';
 import { fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
 import { Header, withQuery } from '../header';
 import { balanceText, lookText } from '../money/bits';
 import { Nav } from '../nav';
 import { card, focus, link, PageSkeleton } from '../ui';
+import { SpendLine } from './spend-line';
 
 export default function Charts({ params, searchParams }: PageProps<'/[lang]/charts'>) {
   return <Suspense fallback={<PageSkeleton />}><Body params={params} searchParams={searchParams} /></Suspense>;
@@ -74,6 +75,9 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const self = mo.members.find(p => p.id === me.memberId);
   const plates = self ? myPlates(self, mo.changes, days.slice(0, upTo + 1)) : [];
   const spent = runningSpend(mo.entries, days);
+  // what the line says at each drawn day: the date, the spend by then and what that day added
+  const tips = spent.slice(0, upTo + 1).map((p, k) => { const add = p.value - (k ? spent[k - 1].value : 0);
+    return { date: fmtDay(p.day, lang), total: fmtTaka(p.value), add: add ? x.thatDay.replace('{t}', fmtTaka(add)) : null }; });
   const empty = !mo.entries.some(e => e.status === 'ok') && totalMeals === 0;
   const b = mine ? balanceText(t.money, mine.balance, closed) : null;
   // money with the collector, as Money shows it (this month adds every open month up while an earlier one is still open)
@@ -174,7 +178,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
               <h2 className={h2}>{x.through}</h2>
               <p className="text-[15px] text-muted">{x.throughNote.replace('{t}', fmtTaka(spent[upTo].value)).replace('{d}', fmtDay(days[upTo], lang))}</p>
             </div>
-            <div className="mt-4"><Area points={spent} upTo={upTo} running={running} /></div>
+            <div className="mt-4"><SpendLine values={spent.map(p => p.value)} upTo={upTo} running={running} label={x.through} tips={tips} /></div>
             <ol aria-hidden="true" className="mt-1 flex justify-between text-[13px] text-muted tabular-nums">
               {axis.map(i => <li key={i}>{i + 1}</li>)}
             </ol>

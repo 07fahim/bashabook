@@ -70,22 +70,6 @@ export function Stacked({ rows, fmt }: { rows: Part[][]; fmt: (v: number) => str
   );
 }
 
-/** A line climbing across the month on ruled paper, the way a khata page runs: the spend so far by day. Days after `upTo`
- *  are left blank, and a dashed rule marks today while the month is still running. */
-export function Area({ points, upTo, running }: { points: { day: string; value: number }[]; upTo: number; running: boolean }) {
-  const n = points.length, max = Math.max(...points.slice(0, upTo + 1).map(p => p.value), 1);
-  const x = (i: number) => (i / (n - 1)) * 100, y = (v: number) => 38 - (v / max) * 34;
-  const line = points.slice(0, upTo + 1).map((p, i) => `${x(i)},${y(p.value)}`).join(' ');
-  return (
-    <svg aria-hidden="true" className="h-40 w-full sm:h-48" preserveAspectRatio="none" viewBox="0 0 100 40">
-      {[4, 15.33, 26.67, 38].map(r => <line key={r} className="stroke-line" vectorEffect="non-scaling-stroke" x1="0" x2="100" y1={r} y2={r} />)}
-      <polygon className="fill-turmeric opacity-15" points={`0,38 ${line} ${x(upTo)},38`} />
-      <polyline className="fill-none stroke-turmeric" fill="none" points={line} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-      {running && <line className="stroke-ink" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" x1={x(upTo)} x2={x(upTo)} y1="2" y2="38" />}
-    </svg>
-  );
-}
-
 const RING = ['stroke-turmeric', 'stroke-leaf', 'stroke-muted', 'stroke-chili', 'stroke-line'] as const;
 const SWATCH = ['bg-turmeric', 'bg-leaf', 'bg-muted', 'bg-chili', 'bg-line'] as const;
 

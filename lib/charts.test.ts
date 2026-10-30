@@ -4,7 +4,7 @@ import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
-import { billShareIn, costRows, forecast, history, lastMonths, myPlates, runningSpend, slices, spendByKind, worthALook } from './charts';
+import { billShareIn, costRows, forecast, history, lastMonths, myPlates, pickDay, runningSpend, slices, spendByKind, worthALook } from './charts';
 import type { MealChange, MealMember } from './meals';
 
 const row = (p: Partial<Entry> & Pick<Entry, 'type' | 'amount'>): Entry =>
@@ -144,5 +144,16 @@ describe('the day series and the ring', () => {
   });
   it('a day outside the month stays out of the running spend', () => {
     expect(runningSpend([row({ type: 'bazar', amount: 5, date: '2026-08-31' })], ['2026-09-01']).map(d => d.value)).toEqual([0]);
+  });
+});
+
+describe('pickDay', () => {
+  it('snaps the pointer to the nearest drawn day and never past the last one', () => {
+    expect(pickDay(0, 31, 30)).toBe(0);
+    expect(pickDay(0.49 / 30, 31, 30)).toBe(0);
+    expect(pickDay(0.51 / 30, 31, 30)).toBe(1);
+    expect(pickDay(1, 31, 30)).toBe(30);
+    expect(pickDay(0.9, 31, 9)).toBe(9);      // day 10 of a running month: later days are blank
+    expect(pickDay(-0.2, 31, 9)).toBe(0);     // a drag past the left edge
   });
 });
