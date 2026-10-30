@@ -43,9 +43,15 @@ describe('timed reminders', { timeout: 30000 }, () => {
     await db(`update members set in_meals = false where id = $1`, [f.memberId]);
     expect((await runJobs(db, '2026-10-08T19:00', s.send)).meal).toBe(1);
     expect(s.calls.at(-1)!.ids).toEqual([]);
+    // someone moving in after tomorrow has no meals to set yet
+    await db(`update members set in_meals = true, left_on = null where flat_id = $1`, [f.flatId]);
+    await db(`update members set joined_on = '2026-10-11' where id = $1`, [t.id]);
+    expect((await runJobs(db, '2026-10-09T19:00', s.send)).meal).toBe(1);
+    expect(s.calls.at(-1)!.ids).toEqual([f.memberId]);
+    await db(`update members set joined_on = '2026-10-05' where id = $1`, [t.id]);
     // two runs at once: the claim, not the filter, keeps it to one
     await db(`update members set in_meals = true, left_on = null where flat_id = $1`, [f.flatId]);
-    const both = await Promise.all([runJobs(db, '2026-10-09T19:00', s.send), runJobs(db, '2026-10-09T19:00', s.send)]);
+    const both = await Promise.all([runJobs(db, '2026-10-10T19:00', s.send), runJobs(db, '2026-10-10T19:00', s.send)]);
     expect(both[0].meal + both[1].meal).toBe(1);
   });
 
@@ -73,7 +79,7 @@ describe('timed reminders', { timeout: 30000 }, () => {
     expect((await runJobs(db, '2026-10-01T10:10', s.send)).close).toBe(1);
     const w = s.calls.find(c => c.msg.url === '/en/money')!;
     expect(w.ids).toEqual([g.memberId]);
-    expect(w.msg.title).toBe('September: 1 still to confirm or check');
+    expect(w.msg.title).toBe('September: 1 still to confirm, check or pay');
   });
 
   it('close: a bazar not Verified counts as still waiting', async () => {
@@ -84,7 +90,7 @@ describe('timed reminders', { timeout: 30000 }, () => {
     expect(await addEntry(db, f.flatId, { memberId: t.id, role: 'member' }, { type: 'bazar', amount: 50000, date: '2026-09-10', note: null, paidBy: t.id, memberId: null, split: null, selected: [] }, '2026-09-10')).toBe('ok');
     const s = spy();
     await runJobs(db, '2026-10-01T10:00', s.send);
-    expect(s.calls.filter(c => c.ids.includes(f.memberId)).map(c => c.msg.title)).toEqual(['September: 1 still to confirm or check']);
+    expect(s.calls.filter(c => c.ids.includes(f.memberId)).map(c => c.msg.title)).toEqual(['September: 1 still to confirm, check or pay']);
   });
 
   it('authorized: bearer secret only, timing-safe, no secret configured means nobody', () => {

@@ -368,6 +368,21 @@ describe('close anyway', { timeout: 30000 }, () => {
     expect((await closeInfo(db, flatId, '2026-10-04'))!.pending).toBe(0);
     expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-04', cash(0))).result).toBe('ok');
   });
+
+  it('a monthly bill still due blocks its own month, not the month before; the count is the cash really held', async () => {
+    const { flatId, ids, nafis } = await flat();
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 6500000, memberId: ids.Tahsin }))).toBe('ok');
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 6000000, note: 'Rent', split: 'equal', repeat: true }))).toBe('ok');
+    await openMonth(db, flatId, '2026-10-01');                       // October's rent is copied, due
+    await checkAll(flatId);
+    const info = (await closeInfo(db, flatId, '2026-10-01'))!;
+    expect([info.pending, info.due, info.held]).toEqual([0, 0, 500000]);
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(500000))).result).toBe('ok');
+    // October's rent never marked paid: October can't close until it is Paid or removed
+    const oct = (await closeInfo(db, flatId, '2026-11-01'))!;
+    expect([oct.pending, oct.due]).toEqual([1, 1]);
+    expect((await closeMonth(db, flatId, nafis, '2026-10-01', '2026-11-01', cash(500000))).result).toBe('pending');
+  });
 });
 
 describe('cash seen', { timeout: 30000 }, () => {

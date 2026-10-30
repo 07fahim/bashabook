@@ -32,7 +32,7 @@ function Tile({ label, value, note, tone = '' }: { label: string; value: string;
   return (
     <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
       <p className="text-[13px] font-semibold text-muted">{label}</p>
-      <p className={`mt-1 text-[28px] leading-tight font-bold tabular-nums ${tone}`}>{value}</p>
+      <p className={`mt-1 text-[28px] leading-tight font-bold tabular-nums [overflow-wrap:anywhere] ${tone}`}>{value}</p>
       {note && <p className="mt-1 text-[13px] text-muted">{note}</p>}
     </div>
   );
@@ -113,7 +113,9 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   // bills no lower than last closed month's share (the cook's pay lands late). Only while the month runs, only for someone
   // living here this month (a leaver's carried balance is not a bill to come). Signs follow the whole taka shown, as on Money.
   const whole = running ? weightedMeals(mo.members, mo.changes, month, mo.flat.weights) : null;
-  const ahead = whole ? forecast(spend[0].value, upTo + 1, days.length, [...whole.values()].reduce((a, b) => a + b, 0), whole.get(me.memberId) ?? 0) : null;
+  // a flat that started mid-month has had bazar only since its first person moved in: the pace counts from that day
+  const start = Math.max(0, days.indexOf(mo.members.reduce((a, p) => (p.joinedOn < a ? p.joinedOn : a), days[upTo])));
+  const ahead = whole ? forecast(spend[0].value, upTo + 1 - start, days.length - start, [...whole.values()].reduce((a, b) => a + b, 0), whole.get(me.memberId) ?? 0) : null;
   const you = ahead && self && mine ? mine : null;
   const lastBills = you && mo.carriedFrom ? await billShareIn(db, me.flatId, me.memberId, mo.carriedFrom) : null;
   const bills = you ? Math.max(you.billShare, lastBills ?? 0) : 0;
@@ -177,7 +179,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
                   {you && pair(x.cost, fmtTaka(you.foodCost + you.billShare), fmtTaka(ahead.food + bills))}
                   {you && b && pair(x.paceLine, `${b.tone === 'text-chili' ? '−' : ''}${fmtTaka(you.balance)}`, fmtSigned(ending * 100), tone(ending), b.tone)}
                 </ul>
-                <p className="mt-4 text-[13px] text-muted">{x.paceNote.replace('{d}', String(upTo + 1)).replace('{b}', you && lastBills !== null && lastBills > you.billShare ? x.paceBillsLast : x.paceBillsSoFar)}</p>
+                <p className="mt-4 text-[13px] text-muted">{x.paceNote.replace('{d}', String(upTo + 1 - start)).replace('{b}', you && lastBills !== null && lastBills > you.billShare ? x.paceBillsLast : x.paceBillsSoFar)}</p>
               </>) : <p className="mt-4 text-muted">{x.paceWait}</p>}
             </section>)}
           {/* only when there is a question: a card that says nothing stands out is weight on every visit */}
@@ -242,11 +244,11 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
             {/* the card adds itself up: plates per meal, what they count as, the meals, then the food they cost */}
             <div className="flex flex-wrap items-baseline justify-between gap-x-4">
               <h2 className={h2}>{x.myMeals}</h2>
-              {self && <p className="text-[15px] font-semibold tabular-nums">{x.mealsTotal.replace('{n}', fmtMeals(myMeals))}</p>}
+              {self && <p className="text-[15px] font-semibold tabular-nums">{(Math.round(myMeals) === 100 ? x.mealOne : x.mealsTotal).replace('{n}', fmtMeals(myMeals))}</p>}
             </div>
             {self ? (<>
               <div className="mt-4"><MealGrid n={days.length} legend={[x.gridAte, x.gridGuest, x.gridSkipped, x.gridGuestOnly]} rows={plates.map(p => ({
-                key: p.meal, label: t.meals.names[p.meal], cells: grid![p.meal], total: x.platesN.replace('{n}', String(p.plates)),
+                key: p.meal, label: t.meals.names[p.meal], cells: grid![p.meal], total: (p.plates === 1 ? x.plateOne : x.platesN).replace('{n}', String(p.plates)),
                 note: [p.guests > 0 ? x.forGuests.replace('{g}', String(p.guests)) : '',
                   weightsHold && weights[p.meal] !== 100 ? x.countsAs.replace('{m}', fmtMeals(p.plates * weights[p.meal])) : ''].filter(Boolean).join(' · ') }))} /></div>
               {mine && totalMeals > 0 && mo.result.mealRate > 0 && (

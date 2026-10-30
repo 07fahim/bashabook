@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import type { Db } from './db';
+import { enDigits } from './money';
 
 export const SESSION_DAYS = 90;
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // no 0/O or 1/I/L
@@ -9,7 +10,9 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 /** Text people type: no control characters, line separators or bidi marks, which could fake a line in a shared breakdown or a notification. ZWJ and ZWNJ stay: Bangla needs them. */
 export const cleanText = (v: unknown) => String(v ?? '').replace(/[\p{Cc}\p{Zl}\p{Zp}\u061C\u200B\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/gu, '').trim();
 export const cleanName = (v: unknown) => { const s = cleanText(v); return s.length >= 1 && s.length <= 40 ? s : null; };
-export const isPin = (v: unknown) => /^\d{4}$/.test(String(v ?? ''));
+/** A typed PIN with Bangla digits as English ones. */
+export const pinText = (v: unknown) => enDigits(String(v ?? ''));
+export const isPin = (v: unknown) => /^\d{4}$/.test(pinText(v));
 const hashPin = (pin: string) => bcrypt.hash(pin, 10);
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 /** Still living here: no last day, or it hasn't passed yet (in Dhaka). Someone who moved out can't sign in or be picked. */
@@ -181,7 +184,7 @@ export async function addMember(db: Db, flatId: string, name: string, today: str
 
 /** A Bangladeshi mobile number as typed ('+880 1712-345678', Bangla digits) → '01712345678', else null. */
 export function normalizePhone(v: string): string | null {
-  const d = v.replace(/[০-৯]/g, c => String('০১২৩৪৫৬৭৮৯'.indexOf(c))).replace(/[\s\-()+]/g, '');
+  const d = enDigits(v).replace(/[\s\-()+]/g, '');
   return /^(?:88)?(01[3-9]\d{8})$/.exec(d)?.[1] ?? null;
 }
 

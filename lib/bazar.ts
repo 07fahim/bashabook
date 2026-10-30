@@ -234,8 +234,9 @@ export async function addReceipt(db: Db, flatId: string, by: Actor, id: string, 
 /** SQL (unaliased `ledger`): a row that keeps month `m` from closing. Money waiting for a tap, in this or a later open month
  *  (the caller limits to month >= m): it is in the hand but not in the books. Or a bazar or bill of month `m` itself that
  *  isn't Verified (waiting or Needs correction), until the 3rd of the next month: from the 4th (`today`, a SQL date) the
- *  month closes anyway and those show as Closed without a check. A later month's are checked before that month closes. */
-export const blocksClose = (m: string, today: string) => `(status = 'pending' or (month = ${m} and type in ('bazar', 'bill')
+ *  month closes anyway and those show as Closed without a check. A later month's are checked before that month closes.
+ *  And a monthly bill of month `m` still due: Paid or removed before its month closes (a later month's due bill counts nowhere). */
+export const blocksClose = (m: string, today: string) => `(status = 'pending' or (month = ${m} and status = 'due') or (month = ${m} and type in ('bazar', 'bill') and status = 'ok'
   and ${today} < (${m} + interval '1 month' + interval '3 days')::date
   and not exists (select 1 from entry_checks c where c.ledger_id = ledger.id and c.state = 'ok')))`;
 

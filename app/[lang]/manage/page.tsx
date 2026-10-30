@@ -22,6 +22,8 @@ import { FocusHere } from '../focus-here';
 import { Header, withQuery } from '../header';
 import { ConfirmList, lookText } from '../money/bits';
 import { Nav } from '../nav';
+import { ShowForm } from '../show-form';
+import { PendingButton } from '../pending-button';
 import { ShareButton } from '../share-button';
 import { checkChip, field, Field, Fold, focus, Group, link, MethodField, PinField, primary, secondary, PageSkeleton } from '../ui';
 
@@ -154,17 +156,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </Group>
           <Group title={m.groupMeals}>
             <Fold row title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
-              <form className="mt-4 space-y-4">
-                <label className="block font-semibold">
-                  {m.who}
-                  <select name="who" defaultValue={person.id} className={field}>
-                    {/* someone who moved out recently is here too: their last days can still need fixing */}
-                    {picked.members.filter(x => !x.leftOn || x.leftOn >= from).map(x => <option key={x.id} value={x.id}>{x.name}{note(x)}</option>)}
-                  </select>
-                </label>
-                <DateField lang={lang} label={m.day} name="day" required min={from} max={to} defaultValue={day} />
-                <button className={secondary}>{m.show}</button>
-              </form>
+              <ShowForm className="mt-4 space-y-4" hint={m.pressShow} panel={<>
               <p className="mt-5 font-semibold">{person.name} · {fmtDay(day, lang)}</p>
               {!isPresent(person, day) ? (
                 <p className="mt-2 text-muted">{m.notInFlat}</p>
@@ -186,24 +178,35 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                         <form action={adminSetAction}>
                           {hidden}
                           <input type="hidden" name="guests" value={g} />
-                          <button name="own" value={own ? 0 : 1} aria-pressed={own > 0} aria-label={`${m.names[meal]}, ${m.ownLabel}`}
+                          <PendingButton name="own" value={own ? 0 : 1} aria-pressed={own > 0} aria-label={`${m.names[meal]}, ${m.ownLabel}`}
                             className={`min-h-11 rounded-full px-4 font-semibold ${own ? 'bg-turmeric text-on-turmeric' : 'border border-muted'} ${focus}`}>
                             {own ? m.onOther : m.offOther}
-                          </button>
+                          </PendingButton>
                         </form>
                         <form action={adminSetAction} className="flex items-center gap-2">
                           {hidden}
                           <input type="hidden" name="own" value={own} />
                           <span className="text-[15px] text-muted">{m.guestsLabel}</span>
-                          <button name="guests" value={g - 1} disabled={g === 0} aria-label={`${m.names[meal]}, ${m.guestsLabel}: ${m.less}`} className={step}>−</button>
+                          <PendingButton name="guests" value={g - 1} disabled={g === 0} aria-label={`${m.names[meal]}, ${m.guestsLabel}: ${m.less}`} className={step}>−</PendingButton>
                           <span className="w-6 text-center tabular-nums">{g}</span>
-                          <button name="guests" value={g + 1} disabled={g >= 9} aria-label={`${m.names[meal]}, ${m.guestsLabel}: ${m.more}`} className={step}>+</button>
+                          <PendingButton name="guests" value={g + 1} disabled={g >= 9} aria-label={`${m.names[meal]}, ${m.guestsLabel}: ${m.more}`} className={step}>+</PendingButton>
                         </form>
                       </li>
                     );
                   })}
                 </ul>
               )}
+              </>}>
+                <label className="block font-semibold">
+                  {m.who}
+                  <select name="who" defaultValue={person.id} className={field}>
+                    {/* someone who moved out recently is here too: their last days can still need fixing */}
+                    {picked.members.filter(x => !x.leftOn || x.leftOn >= from).map(x => <option key={x.id} value={x.id}>{x.name}{note(x)}</option>)}
+                  </select>
+                </label>
+                <DateField lang={lang} label={m.day} name="day" required min={from} max={to} defaultValue={day} />
+                <button className={secondary}>{m.show}</button>
+              </ShowForm>
             </Fold>
 
             <Fold row title={m.noCookTitle} lead={m.noCookLead} level={3}>
@@ -283,7 +286,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                   ))}
                 </ul>
               )}
-              <ActionForm action={addRoomAction} className="mt-4">
+              <ActionForm action={addRoomAction} className="mt-4" clearOnDone>
                 <input type="hidden" name="lang" value={lang} />
                 <Field label={mn.roomName} name="name" required maxLength={40} />
                 <Field label={mn.rent} name="rent" inputMode="decimal" required placeholder="12000" />
@@ -353,7 +356,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                   {/* the member's actions sit on one line; an opened one takes the full width below */}
                   <div className="flex flex-wrap items-start gap-x-6">
                     <details className="open:basis-full">
-                      <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.rename}</summary>
+                      <summary className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden text-[15px] ${link}`}>{a.rename}</summary>
                       <ActionForm action={renameAction} className="mt-2">
                         <input type="hidden" name="lang" value={lang} />
                         <input type="hidden" name="memberId" value={x.id} />
@@ -373,7 +376,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     )}
                     {x.claimed && x.id !== me.memberId && (
                       <details className="open:basis-full">
-                        <summary className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.resetPin}</summary>
+                        <summary className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden text-[15px] ${link}`}>{a.resetPin}</summary>
                         <p className="mt-2 text-[15px] text-muted">{a.resetLead}</p>
                         <ActionForm action={resetPinAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />
@@ -385,7 +388,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                     )}
                     {x.id !== me.memberId && (
                       <details className="open:basis-full">
-                        <summary aria-label={`${a.movingOut}: ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.movingOut}</summary>
+                        <summary aria-label={`${a.movingOut}: ${x.name}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden text-[15px] ${link}`}>{a.movingOut}</summary>
                         <p className="mt-2 text-[15px] text-muted">{a.movingOutLead}</p>
                         <ActionForm action={leavingAction} className="mt-3">
                           <input type="hidden" name="lang" value={lang} />
@@ -420,7 +423,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                       <span className="text-[15px] text-muted">{a.lastDayBadge.replace('{d}', fmtDay(x.leftOn, lang))}</span>
                     </div>
                     <details>
-                      <summary aria-label={`${a.byMistake} ${x.name}`} className={`inline-flex min-h-11 cursor-pointer items-center text-[15px] ${link}`}>{a.byMistake}</summary>
+                      <summary aria-label={`${a.byMistake} ${x.name}`} className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden text-[15px] ${link}`}>{a.byMistake}</summary>
                       <p className="mt-2 text-[15px] text-muted">{a.bringBackLead.replace('{d}', fmtDay(addDays(x.leftOn, 1), lang))}</p>
                       <ActionForm action={bringBackAction} className="mt-3">
                         <input type="hidden" name="lang" value={lang} />
@@ -433,7 +436,8 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               </ul>
             </Fold>
           )}
-          <Fold row title={a.addMember} level={3}>
+          <Fold row id="add" title={a.addMember} level={3} open={'add' in sp}>
+            {'add' in sp && <FocusHere />}
             <ActionForm action={addMemberAction} className="mt-3">
               <input type="hidden" name="lang" value={lang} />
               <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
@@ -443,10 +447,10 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </Fold>
           <Fold row title={a.joinLinkTitle} lead={a.joinLinkLead} level={3}>
             <p className="mt-3">{a.code}: <span className="font-bold tracking-widest">{me.joinCode}</span></p>
-            <div className="mt-3 sm:max-w-xs"><ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} /></div>
+            <div className="mt-3 sm:max-w-xs"><ShareButton path={`/${me.lang}/j/${me.joinCode}`} text={a.shareText.replace('{flat}', me.flatName)} label={a.share} copied={a.copied} /></div>
             {/* a second tap, as for every flat-wide or per-person change here: it sits right under Share and kills the old link */}
             <details className="mt-4">
-              <summary className={`inline-flex min-h-11 cursor-pointer items-center ${link}`}>{a.newCodeBtn}</summary>
+              <summary className={`inline-flex min-h-11 cursor-pointer list-none items-center [&::-webkit-details-marker]:hidden ${link}`}>{a.newCodeBtn}</summary>
               <p className="mt-2 max-w-prose text-[15px] text-muted">{a.newCodeLead}</p>
               <ActionForm action={newCodeAction} className="mt-3">
                 <input type="hidden" name="lang" value={lang} />

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -15,8 +16,15 @@ import { focus, link, PinField, primary, PageSkeleton } from '../../ui';
 
 type Props = PageProps<'/[lang]/j/[code]'>;
 
+export async function generateMetadata({ params }: PageProps<'/[lang]/j/[code]'>): Promise<Metadata> {
+  const { lang } = await params;
+  if (!hasLocale(lang)) return {};
+  const t = getDictionary(lang);
+  return { title: `${t.app.joinTitle} · ${t.brand}${t.brandAccent}` };
+}
+
 export default function Join({ params, searchParams }: Props) {
-  return <Suspense fallback={<PageSkeleton />}><JoinBody params={params} searchParams={searchParams} /></Suspense>;
+  return <Suspense fallback={<PageSkeleton nav={false} />}><JoinBody params={params} searchParams={searchParams} /></Suspense>;
 }
 
 async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'searchParams'>) {
@@ -32,7 +40,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
 
   return (
     <>
-      <Header t={t} lang={lang} path={`/j/${code}`} />
+      <Header t={t} lang={lang} path={me ? `/j/${code}?m=${me.id}` : `/j/${code}`} />
       {/* one step of signing in: one centred column on wide screens, not two columns with empty space */}
       <main className="mx-auto max-w-md px-5 pb-16 pt-6 md:max-w-lg md:pt-16">
         {!flat ? (

@@ -2,7 +2,7 @@ import type { Db } from './db';
 import { CONFIRMER } from './money-db';
 
 export type Notice = {
-  at: string; kind: 'paid' | 'handover' | 'handoverDone' | 'closeMonth' | 'meal' | 'account';
+  at: string; kind: 'paid' | 'handover' | 'handoverDone' | 'closeMonth' | 'meal' | 'account' | 'rejected';
   actor: string | null; amount: number | null; date: string | null; meal: string | null; month: string | null;
   detail: Record<string, unknown> | null; pending: boolean;
 };
@@ -10,7 +10,7 @@ export type Notice = {
 /** Every important thing addressed to one person, from rows the app already writes. $1 flat, $2 me, $3 am I the collector. A waiting money row is mine when I answer it (CONFIRMER); its actor is whoever wrote it.
  *  Pending rows carry their creation time, so an old unconfirmed deposit is not new again on every visit.
  *  The meal row carries the change (own plate, and whether guests moved), not the stored state, so the text names what happened.
- *  An account row by the app team has no by_member: its actor is null. */
+ *  An account row by the app team has no by_member: its actor is null. A rejected row tells its writer who said That's not right. */
 const SOURCES = `
   select l.created_at as at, 'paid' as kind, w.name as actor, l.amount_poisha::int as amount, l.date::text as date, null::text as meal, null::text as month,
          jsonb_build_object('type', l.type, 'gave', l.type = 'deposit' and l.member_id = $2) as detail, true as pending
@@ -35,6 +35,10 @@ const SOURCES = `
     from audit_log a join members b on b.flat_id = a.flat_id and b.id = a.by_member
    where a.flat_id = $1 and a.entity = 'meal_changes' and a.entity_id like $2::text || '|%' and split_part(a.entity_id, '|', 1) = $2::text
      and a.by_member <> $2 and a.entity_id not like '%|away'
+  union all
+  select a.at, 'rejected', b.name, (a.before->>'amount_poisha')::int, a.before->>'date', null, null, null, false
+    from audit_log a join members b on b.flat_id = a.flat_id and b.id = a.by_member
+   where a.flat_id = $1 and a.entity = 'ledger' and a.after->>'rejected' = 'true' and a.before->>'created_by' = $2::text
   union all
   select a.at, 'account', b.name, null, null, null, null, a.after, false
     from audit_log a left join members b on b.flat_id = a.flat_id and b.id = a.by_member

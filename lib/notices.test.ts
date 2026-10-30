@@ -3,7 +3,7 @@ import { db, migrate } from '../db/test-db';
 import { bringBack, clearLock, createFlat, flatByCode, login, renameMember, resetPin, setLeaving } from './auth';
 import { acceptHandover, flatMoney, offerHandover } from './handover';
 import { saveMeal } from './meals-db';
-import { addEntry, confirmEntry, openMonth, type NewEntry } from './money-db';
+import { addEntry, confirmEntry, openMonth, rejectEntry, type NewEntry } from './money-db';
 import { listNotices, markNoticesSeen, noticeCount } from './notices';
 
 // The bell (spec 2026-10-15): one query over rows the app already writes, addressed to one person; opening marks seen,
@@ -36,6 +36,17 @@ describe('notices', { timeout: 60000 }, () => {
     const [{ id }] = await db<{ id: string }>(`select id from ledger where flat_id = $1 and status = 'pending'`, [flatId]);
     await confirmEntry(db, flatId, boss, id);
     expect(await listNotices(db, flatId, nafis, true)).toEqual([]);
+  });
+
+  it('That is not right tells the writer who said it, and nobody else', async () => {
+    const { flatId, nafis, tahsin, boss, member } = await flat();
+    expect(await addEntry(db, flatId, boss, e({ type: 'payout', amount: 30000, date: today, memberId: tahsin }))).toBe('ok');
+    const [{ id }] = await db<{ id: string }>(`select id from ledger where flat_id = $1 and status = 'pending'`, [flatId]);
+    expect(await rejectEntry(db, flatId, member(tahsin), id)).toBe(nafis);
+    const [n] = await listNotices(db, flatId, nafis, true);
+    expect([n.kind, n.actor, n.amount, n.date, n.pending]).toEqual(['rejected', 'Tahsin', 30000, today, false]);
+    expect(await noticeCount(db, flatId, nafis, true)).toBe(1);
+    expect(await listNotices(db, flatId, tahsin, false)).toEqual([]);
   });
 
   it('a payout waits for its receiver only', async () => {

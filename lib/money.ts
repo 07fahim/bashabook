@@ -21,7 +21,7 @@ export interface LedgerRow {
   memberId: string | null;   // deposit: payer; payout: receiver; adjustment: who it moves from
   split: Split | null;       // bills only
   selected: string[];        // split = 'selected'
-  status: 'ok' | 'pending';
+  status: 'ok' | 'pending' | 'due';   // due: a copied monthly bill not paid yet, counted nowhere
   moves?: string | null;     // adjustment: who it moves to
   weights?: [string, number][] | null;   // a correction for a closed month: that month's frozen split (person, weight)
 }
@@ -144,9 +144,12 @@ export function foodSplit(foodCost: number, meals: number, guestMeals: number) {
   return { own: foodCost - guests, guests };
 }
 
+/** Bangla digits as English ones: phones with a Bangla keyboard type ০-৯ in number fields. */
+export const enDigits = (v: string) => v.replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+
 /** What someone typed as taka -> poisha. Takes commas, ৳ and Bangla digits; null unless 0 < amount <= ৳1,00,00,000 with at most 2 decimals. */
 export function toPoisha(v: string): number | null {
-  const s = v.replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/[,\s৳]/g, '');
+  const s = enDigits(v).replace(/[,\s৳]/g, '');
   if (!/^\d{1,8}(\.\d{1,2})?$/.test(s)) return null;
   const p = Math.round(Number(s) * 100);
   return p > 0 && p <= 1_000_000_000 ? p : null;
@@ -159,7 +162,7 @@ export const CASH_KEYS = ['cash', 'bkash', 'nagad', 'bank'] as const;
 export function parseCash(raw: Record<keyof Cash, string>): Cash | null {
   const out = {} as Cash;
   for (const k of CASH_KEYS) {
-    const v = (raw[k] ?? '').replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/[,\s৳]/g, '');
+    const v = enDigits(raw[k] ?? '').replace(/[,\s৳]/g, '');
     const p = v === '' || /^0+(\.0+)?$/.test(v) ? 0 : toPoisha(v);
     if (p === null) return null;
     out[k] = p;

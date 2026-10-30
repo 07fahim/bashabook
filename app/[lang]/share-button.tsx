@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import { primary } from './ui';
 
-/** Opens the phone's share sheet for a link (path) or a text; copies it where sharing isn't available. */
+/** Opens the phone's share sheet for a link (path, with `text` as the sentence before it) or a text; copies it where sharing
+ *  isn't available. */
 export function ShareButton({ path, text, label, copied }: { path?: string; text?: string; label: string; copied: string }) {
   const [done, setDone] = useState(false);
   const share = async () => {
-    const value = path ? location.origin + path : text!;
-    if (navigator.share) return navigator.share(path ? { url: value } : { text: value }).catch(() => {});
-    await navigator.clipboard.writeText(value);
+    const url = path ? location.origin + path : undefined;
+    if (navigator.share) return navigator.share({ text, url }).catch(() => {});
+    await navigator.clipboard.writeText([text, url].filter(Boolean).join('\n'));
     setDone(true);
   };
   return (

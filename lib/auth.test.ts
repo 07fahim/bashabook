@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { openMonth } from './money-db';
-import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listGone, addMember } from './auth';
+import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listGone, addMember, isPin, pinText } from './auth';
 
 const today = '2026-10-09';
 
@@ -13,6 +13,13 @@ async function flat(others = ['Tahsin', 'Zarif']) {
   const id = (name: string) => f.members.find(m => m.name === name)!.id;
   return { flatId, memberId, code, f, id };
 }
+
+describe('PIN text', () => {
+  it('takes Bangla digits as English ones, and only four digits', () => {
+    expect(pinText('১২৩৪')).toBe('1234');
+    expect([isPin('১২৩৪'), isPin('12৩4'), isPin('123'), isPin('12a4'), isPin(null)]).toEqual([true, true, false, false, false]);
+  });
+});
 
 describe('auth', { timeout: 30000 }, () => {
   it('creates a flat with its starter and unclaimed names', async () => {

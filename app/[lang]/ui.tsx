@@ -53,7 +53,7 @@ export const MethodField = ({ label, labels }: { label: string; labels: Record<M
 );
 
 export const PinField = (p: { label: string; name: string; autoComplete: string }) => (
-  <Field type="password" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} required {...p} />
+  <Field type="password" inputMode="numeric" pattern="[0-9০-৯]{4}" minLength={4} maxLength={4} required {...p} />
 );
 
 /** A card that folds away: the title is the button, the content shows when opened. */
@@ -78,7 +78,7 @@ export function Fold({ id, title, lead, level = 2, open, row, children }: { id?:
 /** A list that can grow long. Wider screens: every row, scrolling inside the card so the card's title and the page around
  *  it stay put. Phones (a scroll box inside a scrolling page is a trap there): the first `keep` rows, then Show all.
  *  `fill`: on wider screens the box takes exactly the height left in a stretched card, so the card ends level with the
- *  column beside it; the absolute box adds no height of its own (at least 24rem, 16rem when `short`). `short`: about three rows, for a list
+ *  column beside it; the absolute box adds no height of its own (at least 24rem, 16rem when `short`). `short`: three rows and part of a fourth (so more shows), for a list
  *  that sits above a page's main content. Otherwise it stops at 70% of the screen.
  *  No tabIndex: browsers make a scroll box keyboard-focusable themselves, and on phones nothing here scrolls. */
 /** `screen`: on wider screens the box may be as tall as the screen below the sticky header. `head`: a column header row that
@@ -87,7 +87,7 @@ export function LongList({ items, keep, label, more, less, fill, short, screen, 
   const list = 'divide-y divide-line';
   return (
     <div className={fill ? `mt-3 md:relative md:flex-1 ${short ? 'md:min-h-64' : 'md:min-h-96'}` : 'mt-3'}>
-      <div role="group" aria-label={label} className={`md:overflow-y-auto md:pr-3 md:[scrollbar-width:thin] ${fill ? 'md:absolute md:inset-0' : short ? 'md:max-h-64' : screen ? 'md:max-h-[calc(100vh-5rem)]' : 'md:max-h-[70vh]'}`}>
+      <div role="group" aria-label={label} className={`md:overflow-y-auto md:pr-3 md:[scrollbar-width:thin] ${fill ? 'md:absolute md:inset-0' : short ? 'md:max-h-72' : screen ? 'md:max-h-[calc(100vh-5rem)]' : 'md:max-h-[70vh]'}`}>
         {head && <div className="sticky top-0 z-[1] bg-surface">{head}</div>}
         <ul className={list}>{items.slice(0, keep)}</ul>
         {items.length > keep && (<>
@@ -116,13 +116,29 @@ export function Group({ title, children, className = '' }: { title: string; chil
 }
 
 /** Shown for the moment a logged-in page waits for the database: the shape of the page, no words. */
-export function PageSkeleton() {
+/** While a page loads: the frame stays where the header and the tabs are (`nav`: signed-in pages), so a tap never blanks the
+ *  whole screen. */
+export function PageSkeleton({ nav = true }: { nav?: boolean }) {
   return (
-    <div aria-hidden="true" className="mx-auto max-w-md animate-pulse md:max-w-7xl md:px-8 px-5 pt-5 motion-reduce:animate-none">
-      <div className="h-8 w-32 rounded-lg bg-line" />
-      <div className="mt-10 h-9 w-56 rounded-lg bg-line" />
-      <div className="mt-8 h-40 rounded-2xl bg-line" />
-      <div className="mt-4 h-24 rounded-2xl bg-line" />
+    <div aria-hidden="true">
+      <div className="border-b border-line">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-5 py-4 md:px-8">
+          {/* a plain img: client components import this file, so it keeps next/image out of their bundles */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-mark.png" alt="" width={32} height={32} className="max-[374px]:size-7" />
+          <div className="h-7 w-28 rounded-lg bg-line" />
+        </div>
+      </div>
+      <div className="mx-auto max-w-md animate-pulse px-5 pt-6 motion-reduce:animate-none md:max-w-7xl md:px-8 md:pt-10">
+        <div className="h-9 w-56 rounded-lg bg-line" />
+        <div className="mt-8 h-40 rounded-2xl bg-line" />
+        <div className="mt-4 h-24 rounded-2xl bg-line" />
+      </div>
+      {nav && (
+        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+          <div className="mx-auto flex max-w-md gap-2 px-3 py-2">{[0, 1, 2, 3].map(k => <div key={k} className="h-12 flex-1 rounded-full bg-line/60" />)}</div>
+        </div>
+      )}
     </div>
   );
 }

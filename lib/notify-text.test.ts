@@ -9,8 +9,8 @@ describe('reminder texts', () => {
     expect(payoutMsg('en', 'Tahsin')).toEqual({ title: 'Tahsin says: I paid you', body: 'Confirm it if you got it.', url: '/en/money' });
     expect(handoverMsg('en', 'Zarif').url).toBe('/en/home');
     expect(closeMsg('en', '2026-09-01', 0).title).toBe('September is ready to close');
-    expect(closeMsg('bn', '2026-09-01', 3)).toEqual({ title: 'September: 3টা কনফার্ম বা চেক বাকি', body: 'টাকার পেজে দেখুন কী কী বাকি।', url: '/bn/money' });
-    expect(closeMsg('en', '2026-09-01', 2)).toEqual({ title: 'September: 2 still to confirm or check', body: 'See what still waits on Money.', url: '/en/money' });
+    expect(closeMsg('bn', '2026-09-01', 3)).toEqual({ title: 'September: 3টা কনফার্ম, চেক বা বিল দেওয়া বাকি', body: 'টাকার পেজে দেখুন কী কী বাকি।', url: '/bn/money' });
+    expect(closeMsg('en', '2026-09-01', 2)).toEqual({ title: 'September: 2 still to confirm, check or pay', body: 'See what still waits on Money.', url: '/en/money' });
     for (const m of [mealMsg('bn', '22:00'), depositMsg('bn', 'X'), closeMsg('en', '2026-09-01', 2)]) expect(`${m.title} ${m.body}`).not.toMatch(/৳|\d{4,}|ম্যানেজার|manager|মেস|mess/i);
   });
 

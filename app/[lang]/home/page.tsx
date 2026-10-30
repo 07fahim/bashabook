@@ -180,6 +180,13 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             <div className="grow" />
             <Link href={`/${lang}/money`} className={`mt-5 ${secondary}`}>{x.seeMoney}</Link>
           </section>}
+          {/* a flat started without names: nobody can join until the collector adds them on the Flat tab */}
+          {people.length === 1 && me.role === 'manager' && <section className={`flex flex-col ${card}`}>
+            <h2 className="text-xl font-bold">{a.shareTitle}</h2>
+            <p className="mt-2 text-muted">{a.addFirst}</p>
+            <div className="grow" />
+            <Link href={`/${lang}/manage?add=1#add`} className={`mt-5 ${secondary}`}>{a.addMember}</Link>
+          </section>}
           {someoneMissing && <section className={`flex flex-col ${card}`}>
             <h2 className="text-xl font-bold">{a.shareTitle}</h2>
             <p className="mt-2 text-muted">{a.shareLead}</p>
@@ -187,7 +194,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
               {a.code}: <span className="font-bold tracking-widest">{me.joinCode}</span>
             </p>
             <div className="grow" />
-            <ShareButton path={`/${me.lang}/j/${me.joinCode}`} label={a.share} copied={a.copied} />
+            <ShareButton path={`/${me.lang}/j/${me.joinCode}`} text={a.shareText.replace('{flat}', me.flatName)} label={a.share} copied={a.copied} />
           </section>}
         </div>
         {/* wider screens: the whole week at a glance, phones use the Meals tab */}
