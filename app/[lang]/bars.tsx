@@ -103,9 +103,9 @@ export function MonthCards({ rows, words }: { rows: MonthRow[]; words: { rate: s
                 <Link href={r.href} tabIndex={-1} className="group flex flex-col items-center gap-1">
                   <span className="flex h-16 w-full items-end justify-center">
                     <span className={`relative w-full max-w-9 rounded-t-[3px] ${last ? on : off}`} style={{ height: `${Math.max(pct(get(r), max), 4)}%` }}>
-                      {/* a mouse over a bar reads its value; the end bars' chips open inwards, so they never leave the card */}
+                      {/* a mouse over a bar reads its value; each chip opens towards the middle, so it never leaves the card */}
                       <span className={`pointer-events-none absolute bottom-full z-10 mb-1.5 hidden rounded-lg bg-ink px-2 py-1 text-[13px] font-semibold whitespace-nowrap text-paper tabular-nums group-hover:block ${
-                        i === 0 ? 'left-0' : last ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>{r.label} {text(r)}</span>
+                        i < rows.length / 2 ? 'left-0' : 'right-0'}`}>{r.label} {text(r)}</span>
                     </span>
                   </span>
                   <span className={`text-[13px] ${last ? 'font-semibold' : 'text-muted'}`}>{r.label}</span>

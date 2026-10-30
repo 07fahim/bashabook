@@ -63,8 +63,8 @@ export function mealGrid(m: MealMember, changes: MealChange[], days: string[]): 
 /** What "Bills" holds this month, by name, biggest first (an unnamed bill counts under `others`), so the word says what is in
  *  it: every bill the month charges, a correction for a closed month included, since the bill share beside it counts that too.
  *  With `me`: only the bills the engine charged me (its `lines`), biggest share first; a closed month keeps no lines, so null
- *  there. More than `n` names: the biggest n − 1, then `others` once. */
-export function billNames(entries: Entry[], lines: { rowId: string; memberId: string; amount: number }[] | null, me: string | null, others: string, n = 5) {
+ *  there. More than five names: the biggest four, then `others` once. */
+export function billNames(entries: Entry[], lines: { rowId: string; memberId: string; amount: number }[] | null, me: string | null, others: string) {
   if (me && !lines?.length) return null;
   const share = new Map<string, number>();
   if (me) for (const l of lines!) if (l.memberId === me && l.amount > 0) share.set(l.rowId, (share.get(l.rowId) ?? 0) + l.amount);
@@ -73,7 +73,7 @@ export function billNames(entries: Entry[], lines: { rowId: string; memberId: st
     const k = e.note?.trim() || others; by.set(k, (by.get(k) ?? 0) + (me ? share.get(e.id)! : e.amount));
   }
   const list = [...by].sort((a, b) => b[1] - a[1]).map(([k]) => k);
-  return list.length > n ? [...list.filter(k => k !== others).slice(0, n - 1), others] : list;
+  return list.length > 5 ? [...list.filter(k => k !== others).slice(0, 4), others] : list;
 }
 
 /** One person's month as money that came in and money used, every part positive and none of them zero: a balance carried

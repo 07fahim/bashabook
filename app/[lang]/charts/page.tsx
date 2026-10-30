@@ -85,7 +85,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const spent = runningSpend(mo.entries, days);
   // "Bills" says what it holds: the flat's bills on the cost card, and on My month only the ones charged to me (a closed month
   // keeps no per-bill shares, so there the word stands alone)
-  const billsWith = (list: string[] | null) => (list?.length ? x.billsOf.replace('{list}', names(list, t.money.and)) : x.bills);
+  const billsWith = (list: string[] | null) => (list?.length ? x.billsOf.replace('{list}', names(list.map(k => (k === x.others ? k.toLowerCase() : k)), t.money.and)) : x.bills);
   // My month's parts: came in in leaf (the carried part lighter), used in the colours food and bills have on the whole page
   const parts: Record<string, { label: string; color: string }> = {
     earlier: { label: x.earlier, color: 'bg-leaf/50' }, paid: { label: x.paidIn, color: 'bg-leaf' }, corrections: { label: x.corrections, color: 'bg-ink' },
