@@ -32,3 +32,9 @@ export const fixedMsg = (lang: Locale, name: string, type: 'bazar' | 'bill', id:
 /** The 21:00 reminder: how many bazars and bills wait for this person's check. */
 export const checkMsg = (lang: Locale, n: number): Msg =>
   ({ title: fill(n === 1 ? t(lang).checkOneTitle : t(lang).checkTitle, { n: String(n) }), body: t(lang).checkBody, url: `/${lang}/money` });
+/** Trust feature 2: bazars and bills with no check for 2 days, to everyone else living here. */
+export const lateMsg = (lang: Locale, n: number): Msg =>
+  ({ title: fill(n === 1 ? t(lang).lateOneTitle : t(lang).lateTitle, { n: String(n) }), body: t(lang).lateBody, url: `/${lang}/money` });
+/** Trust feature 1: a month closed, to each other person who lived in it: did you see the cash? No amount. */
+export const cashAskMsg = (lang: Locale, name: string, month: string): Msg =>
+  ({ title: fill(t(lang).cashAskTitle, { month: monthName(month), name }), body: t(lang).cashAskBody, url: `/${lang}/money?m=${month.slice(0, 7)}` });

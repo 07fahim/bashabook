@@ -340,6 +340,11 @@ const bn = {
     checkTitle: '{n}টা বাজারের হিসাব ও বিল চেকের অপেক্ষায়',
     checkOneTitle: '1টা বাজারের হিসাব বা বিল চেকের অপেক্ষায়',
     checkBody: 'টাকার পেজে দেখুন।',
+    cashAskTitle: '{month} ক্লোজ হয়েছে। {name} যে টাকা গুনেছে সেটা দেখেছেন?',
+    cashAskBody: 'টাকার পেজে আমি টাকাটা দেখেছি চাপুন।',
+    lateTitle: '{n}টা বাজারের হিসাব বা বিল 2 দিনের বেশি চেকের অপেক্ষায়',
+    lateOneTitle: '1টা বাজারের হিসাব বা বিল 2 দিনের বেশি চেকের অপেক্ষায়',
+    lateBody: 'কোনগুলো তা টাকার পেজে দেখুন।',
   },
   meals: {
     names: { b: 'সকাল', l: 'দুপুর', d: 'রাত' },
@@ -1104,6 +1109,11 @@ const en: Dict = {
     checkTitle: '{n} bazars and bills wait for your check',
     checkOneTitle: '1 bazar or bill waits for your check',
     checkBody: 'See Money.',
+    cashAskTitle: '{month} is closed. Did you see the cash {name} counted?',
+    cashAskBody: 'Tap I saw the cash on Money.',
+    lateTitle: '{n} bazars or bills have waited over 2 days for a check',
+    lateOneTitle: '1 bazar or bill has waited over 2 days for a check',
+    lateBody: 'See which on Money.',
   },
   meals: {
     names: { b: 'Breakfast', l: 'Lunch', d: 'Dinner' },
