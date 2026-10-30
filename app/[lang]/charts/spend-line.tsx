@@ -54,8 +54,9 @@ export function SpendLine({ values, upTo, running, label, tips }: { values: numb
       {/* under a finger: above the chart, where the hand never is. Otherwise above the point when there is room, else below.
           Sliding by its own width as the point moves right keeps it inside the card at both ends */}
       {i !== null && (
-        <span aria-hidden="true" className="pointer-events-none absolute z-10 rounded-xl border border-line bg-surface px-3 py-1.5 text-[13px] whitespace-nowrap shadow-card"
-          style={{ left: `${x(i)}%`, transform: `translateX(-${x(i)}%)`, ...(touch ? { bottom: 'calc(100% + 8px)' } : top > 50 ? { bottom: `calc(${100 - top}% + 14px)` } : { top: `calc(${top}% + 14px)` }) }}>
+        // from md the heading is one line, so under a finger it dips 12px into the chart's top, still above the line's highest point
+        <span aria-hidden="true" className={`pointer-events-none absolute z-10 rounded-xl border border-line bg-surface px-3 py-1.5 text-[13px] whitespace-nowrap shadow-card ${touch ? 'bottom-[calc(100%+8px)] md:bottom-[calc(100%-12px)]' : ''}`}
+          style={{ left: `${x(i)}%`, transform: `translateX(-${x(i)}%)`, ...(touch ? {} : top > 50 ? { bottom: `calc(${100 - top}% + 14px)` } : { top: `calc(${top}% + 14px)` }) }}>
           <span className="block text-muted">{tip.date}</span>
           <span className="block text-[15px] font-bold tabular-nums">{tip.total}</span>
           {tip.add && <span className="block text-muted tabular-nums">{tip.add}</span>}
