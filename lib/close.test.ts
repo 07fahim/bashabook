@@ -4,7 +4,7 @@ import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { saveMeal, setDefaults } from './meals-db';
 import { addEntry, addRoom, loadMonth, openMonth, removeEntry, setRoom, type NewEntry } from './money-db';
-import { addCorrection, closeMonth, closeInfo, coverGap, openFrom, openStart, parseCash } from './close';
+import { addCorrection, anywayFrom, cashSeen, closeMonth, closeInfo, coverGap, latestClosed, maySeeCash, openFrom, openStart, parseCash, seeCash } from './close';
 import { allocate } from './money';
 
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount'>): NewEntry =>
@@ -348,5 +348,53 @@ describe('corrections', { timeout: 30000 }, () => {
     const id = randomUUID();
     for (const want of ['ok', 'again']) expect(await addEntry(db, flatId, nafis, e({ id, type: 'deposit', amount: 7000, memberId: ids.Zarif }))).toBe(want);   // the retry says so, and sends no second nudge
     expect(await db(`select 1 from ledger where id = $1`, [id])).toHaveLength(1);
+  });
+});
+
+describe('close anyway', { timeout: 30000 }, () => {
+  it('a bazar not Verified blocks until the 3rd; from the 4th the month closes; waiting money still blocks', async () => {
+    const { flatId, ids, nafis } = await flat();
+    expect(await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 50000, paidBy: ids.Tahsin }))).toBe('ok');   // out of pocket: fund 0
+    expect(anywayFrom('2026-09-01')).toBe('2026-10-04');
+    const on3 = (await closeInfo(db, flatId, '2026-10-03'))!;
+    expect([on3.pending, on3.unchecked, on3.anywayFrom, on3.anyway]).toEqual([1, 1, '2026-10-04', false]);
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-03', cash(0))).result).toBe('pending');
+    const tahsin = { memberId: ids.Tahsin, role: 'member' as const };
+    expect(await addEntry(db, flatId, tahsin, e({ type: 'deposit', amount: 1000, memberId: ids.Tahsin }))).toBe('ok');   // waits for the collector
+    const on4 = (await closeInfo(db, flatId, '2026-10-04'))!;
+    expect([on4.pending, on4.unchecked, on4.anyway]).toEqual([1, 1, true]);   // only the waiting deposit blocks now
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-04', cash(0))).result).toBe('pending');
+    await db(`delete from ledger where flat_id = $1 and type = 'deposit'`, [flatId]);
+    expect((await closeInfo(db, flatId, '2026-10-04'))!.pending).toBe(0);
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-04', cash(0))).result).toBe('ok');
+  });
+});
+
+describe('cash seen', { timeout: 30000 }, () => {
+  it('after a close: anyone who lived that month except the counter, once, only on the latest closed month', async () => {
+    const { flatId, ids, nafis } = await flat();
+    await db(`update members set pin_hash = 'x' where flat_id = $1`, [flatId]);
+    await db(`update members set joined_on = '2026-10-02' where id = $1`, [ids.Zarif]);   // Zarif moved in after September
+    expect(await addEntry(db, flatId, nafis, e({ type: 'deposit', amount: 300000, memberId: ids.Nafis }))).toBe('ok');
+    await checkAll(flatId);
+    expect((await closeMonth(db, flatId, nafis, '2026-09-01', '2026-10-01', cash(300000))).result).toBe('ok');
+    expect(await maySeeCash(db, flatId, '2026-09-01', ids.Nafis)).toBe(false);   // counted it
+    expect(await maySeeCash(db, flatId, '2026-09-01', ids.Zarif)).toBe(false);   // not here in September
+    expect(await maySeeCash(db, flatId, '2026-09-01', ids.Tahsin)).toBe(true);
+    expect(await seeCash(db, flatId, '2026-09-01', ids.Tahsin)).toBe(true);
+    expect(await seeCash(db, flatId, '2026-09-01', ids.Tahsin)).toBe(false);   // once
+    expect(await seeCash(db, flatId, '2026-09-01', ids.Zarif)).toBe(false);
+    expect((await cashSeen(db, flatId, '2026-09-01')).map(s => s.name)).toEqual(['Tahsin']);
+    expect(await db(`select 1 from audit_log where flat_id = $1 and entity = 'cash_seen'`, [flatId])).toHaveLength(1);
+    await openMonth(db, flatId, '2026-10-01');
+    expect(await maySeeCash(db, flatId, '2026-10-01', ids.Tahsin)).toBe(false);   // October is open
+    await checkAll(flatId);
+    expect((await closeMonth(db, flatId, nafis, '2026-10-01', '2026-11-01', cash(300000))).result).toBe('ok');
+    await db(`delete from cash_seen where flat_id = $1`, [flatId]);   // as if Tahsin had never said so
+    expect(await maySeeCash(db, flatId, '2026-09-01', ids.Tahsin)).toBe(false);   // September is no longer the latest closed
+    expect(await maySeeCash(db, flatId, '2026-10-01', ids.Tahsin)).toBe(true);
+    expect(await maySeeCash(db, flatId, '2026-10-01', ids.Zarif)).toBe(true);   // lived in October
+    expect(await latestClosed(db, flatId, '2026-09-01')).toBe(false);   // the page's nobody-saw-it-yet line: October only
+    expect(await latestClosed(db, flatId, '2026-10-01')).toBe(true);
   });
 });

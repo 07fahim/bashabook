@@ -1,11 +1,16 @@
 import { MEALS, plates, type Meal } from '../../lib/meals';
 import type { Dict, Locale } from './dictionaries';
 
+/** '10 October' in both languages: English digits and month. */
+export function fmtDate(date: string) {
+  const d = new Date(`${date}T00:00:00Z`);
+  return `${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })}`;
+}
+
 /** 'Fri, 10 October' or 'শুক্র, 10 October': weekday in the page language, English digits and month. */
 export function fmtDay(date: string, lang: Locale) {
-  const d = new Date(`${date}T00:00:00Z`);
-  const weekday = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-GB', { weekday: 'short', timeZone: 'UTC' });
-  return `${weekday}, ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })}`;
+  const weekday = new Date(`${date}T00:00:00Z`).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-GB', { weekday: 'short', timeZone: 'UTC' });
+  return `${weekday}, ${fmtDate(date)}`;
 }
 
 /** '9 – 15 October' or '27 November – 3 December' (no weekday, same in both languages). */
@@ -59,3 +64,7 @@ export const fmtMeals = (h: number) => String(Math.round(h) / 100);
 /** Poisha per meal -> '৳31.72'; '—' before any meal or bazar (no rate yet, never ৳0.00). */
 export const fmtRate = (p: number, meals: number) =>
   meals > 0 && p > 0 ? `৳${(p / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+
+/** 'Tahsin', 'Tahsin and Zarif', 'Nafis, Tahsin and Zarif': no comma before and/আর. */
+export const names = (list: string[], and: string) =>
+  list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} ${and} ${list.at(-1)}`;

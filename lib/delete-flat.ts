@@ -1,7 +1,7 @@
 import type { Db } from './db';
 
 /** Every table a flat's rows live in, for the count before and after. */
-export const FLAT_TABLES = ['flats', 'members', 'rooms', 'months', 'ledger', 'bill_split_members', 'bill_templates', 'month_balances', 'meal_changes', 'no_cook', 'audit_log', 'handovers', 'sessions', 'entry_checks', 'bazar_items', 'receipts'] as const;
+export const FLAT_TABLES = ['flats', 'members', 'rooms', 'months', 'ledger', 'bill_split_members', 'bill_templates', 'month_balances', 'meal_changes', 'no_cook', 'audit_log', 'handovers', 'sessions', 'entry_checks', 'bazar_items', 'receipts', 'cash_seen'] as const;
 
 /** How many rows of each table belong to the flat (sessions through its members). */
 export async function flatRowCounts(db: Db, flatId: string) {

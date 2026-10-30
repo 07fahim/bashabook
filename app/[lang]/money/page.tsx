@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { monthTotals, toCheck } from '@/lib/bazar';
-import { closeInfo } from '@/lib/close';
+import { monthChecks, monthTotals, toCheck } from '@/lib/bazar';
+import { cashSeen, closeInfo, latestClosed, maySeeCash } from '@/lib/close';
 import { db } from '@/lib/db';
 import { flatMoney, handoverHistory } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka } from '@/lib/meals';
@@ -12,18 +12,18 @@ import { loadMonth, monthOf, toConfirm, type Entry } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
-import { correctionAction, entryAction, putBackAction, removeAction } from '../actions';
+import { correctionAction, entryAction, putBackAction, removeAction, seeCashAction } from '../actions';
 import { CloseCard } from '../close-card';
 import { DateField } from '../date-field';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { dhakaDate, fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka, fmtTaka2 } from '../format';
+import { dhakaDate, fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka, fmtTaka2, names } from '../format';
 import { Header, withQuery } from '../header';
 import { Nav } from '../nav';
 import { PendingButton } from '../pending-button';
 import { PayerSelect } from '../payer-select';
 import { ReceiptPicker } from '../receipt-picker';
 import { ShareButton } from '../share-button';
-import { card, checkChip, field, Field, focal, Fold, focus, link, LongList, MethodField, PageSkeleton, primary } from '../ui';
+import { card, checkChip, field, Field, focal, Fold, focus, link, LongList, MethodField, PageSkeleton, primary, secondary } from '../ui';
 import { balanceText, CheckList, ConfirmList, lookText, StatusChip } from './bits';
 import { breakdownOf, breakdownText, pickWho, type Labels } from './breakdown';
 
@@ -45,6 +45,10 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const [mo, waiting, closing, history, checks] = await Promise.all([loadMonth(db, me.flatId, month, today), toConfirm(db, me.flatId, me.memberId),
     boss && month < thisMonth ? closeInfo(db, me.flatId, today) : null, handoverHistory(db, me.flatId), toCheck(db, me.flatId, me.memberId, today)]);   // the card only shows on the month to close
   const closed = mo.info?.status === 'closed';
+  // a closed month's cash seen and checks (trust features 1 and 4): one more round trip, only for a closed month
+  const [seen, maySee, mc, latest] = closed
+    ? await Promise.all([cashSeen(db, me.flatId, month), maySeeCash(db, me.flatId, month, me.memberId), monthChecks(db, me.flatId, month), latestClosed(db, me.flatId, month)])
+    : [[], false, null, false] as const;
   // where entries can be added: this month for everyone; an earlier month still open for the collector only
   const canAdd = month === thisMonth ? !closed : boss && mo.info?.status === 'open';
   // money with the collector: a month's own fund, but for this month what they hold now. While last month is still open,
@@ -52,7 +56,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
   const held = month === thisMonth && mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
   const name = (id: string | null) => mo.all.find(p => p.id === id)?.name ?? '?';
   const collector = mo.all.find(p => p.role === 'manager')!;
-  const totals = monthTotals(mo.entries), waitingBazar = mo.entries.filter(e => e.type === 'bazar' && !e.check).length;
+  const totals = monthTotals(mo.entries), waitingBazar = closed ? 0 : mo.entries.filter(e => e.type === 'bazar' && !e.check).length;   // a closed month's no longer wait
   const prev = monthOf(addDays(month, -1)), next = addDays(daysOfMonth(month).at(-1)!, 1);
   const href = (m: string, only: boolean, who?: string) => `/${lang}/money?${new URLSearchParams({ ...(m !== thisMonth ? { m: m.slice(0, 7) } : {}), ...(only ? { mine: '1' } : {}), ...(who ? { who } : {}) })}`;
   const arrow = `inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-muted font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 ${focus}`;
@@ -331,12 +335,42 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                   : x.paysTo.replace('{a}', l.kind === 'pays' ? a : collector.name).replace('{b}', l.kind === 'pays' ? collector.name : a).replace('{t}', amt);
               });
               const note = x.settleNote.replaceAll('{name}', collector.name).replace('{next}', fmtMonth(next));
+              // who counted the cash and who saw it, who checked the bazars and bills: on the page and in the shared text
+              const cr = mo.info?.cash ?? null, counter = cr ? name(cr.by) : '';
+              const seenNames = names(seen.map(p => p.name), x.and);
+              // nobody saw it yet only where a tap is still possible: the latest closed month
+              const cashLine = cr ? (seen.length ? x.shareCash.replace('{names}', seenNames) : latest ? x.shareCashNobody : x.shareCashOnly)
+                .replace('{t}', fmtExact(cr.actual)).replace('{name}', counter) : null;
+              const checkLines = mc ? [
+                mc.by.length ? x.shareChecked.replace('{list}', mc.by.map(c => `${c.name} ${c.n}`).join(' · ')) : null,
+                mc.none ? x.shareUnchecked.replace('{n}', String(mc.none)) : null,
+                mc.fix ? x.shareFixClosed.replace('{n}', String(mc.fix)) : null].filter((l): l is string => !!l) : [];
+              const trust = cashLine ? [cashLine, ...checkLines] : checkLines;
               const text = [`${mo.flat.name} · ${fmtMonth(month)}`, ...lines, `${x.withName.replace('{name}', holder)}: ${fmtSigned(mo.result.fund)}`,
-                `${x.mealRate}: ${fmtExact(mo.result.mealRate)}`, ...(lines.length ? ['', note] : [])].join('\n');
+                `${x.mealRate}: ${fmtExact(mo.result.mealRate)}`, ...(trust.length ? ['', ...trust] : []), ...(lines.length ? ['', note] : [])].join('\n');
               return (<>
                 <h3 className="mt-5 font-semibold">{x.settleUp}</h3>
                 {lines.length ? <ul className="mt-1 list-disc space-y-1 pl-5 md:columns-2 md:gap-10">{lines.map(s => <li key={s}>{s}</li>)}</ul> : <p className="mt-1 text-muted">{x.nobodyOwes}</p>}
                 {lines.length > 0 && <p className="mt-3 max-w-prose text-[15px] text-muted">{note}</p>}
+                {cr && (
+                  <div className="mt-4 text-[15px]">
+                    <p>{x.cashCounted.replace('{name}', counter).replace('{t}', fmtExact(cr.actual)).replace('{d}', fmtDay(dhakaDate(mo.info!.closedAt!), lang))}{' '}
+                      {seen.length ? x.seenBy.replace('{names}', seenNames) : latest ? x.seenNobody : null}</p>
+                    {/* a second, deliberate tap that names the amount: I saw this much with this person */}
+                    {maySee && (
+                      <div className="group mt-2">
+                        <details><summary className={`${secondary} cursor-pointer list-none sm:inline-flex sm:w-auto [&::-webkit-details-marker]:hidden`}>{x.iSaw}</summary></details>
+                        <form action={seeCashAction} className="mt-2 hidden flex-wrap items-center gap-3 group-has-[details[open]]:flex">
+                          <input type="hidden" name="lang" value={lang} />
+                          <input type="hidden" name="month" value={month} />
+                          <span id="see-cash">{x.iSawConfirm.replace('{t}', fmtExact(cr.actual)).replace('{name}', counter)}</span>
+                          <PendingButton aria-describedby="see-cash" className={`${primary} sm:w-auto`}>{x.yesSaw}</PendingButton>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {checkLines.length > 0 && <ul className="mt-2 space-y-1 text-[15px] text-muted">{checkLines.map(l => <li key={l}>{l}</li>)}</ul>}
                 <div className="mt-4 sm:max-w-xs"><ShareButton text={text} label={t.meals.share} copied={t.meals.copied} /></div>
               </>);
             })() : (<>
@@ -363,8 +397,8 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                           {(e.forMonth || e.method || e.note) && <p className="text-[15px]">{[e.forMonth && x.correctionFor.replace('{month}', fmtMonth(e.forMonth)), e.method && x.cashMethods[e.method], e.note].filter(Boolean).join(' · ')}</p>}
                           {(e.type === 'bazar' || e.type === 'bill') && (
                             <p className="flex flex-wrap items-center gap-x-3">
-                              <Link href={`/${lang}/money/bazar/${e.id}`} aria-label={`${x.types[e.type]} ${fmtExact(e.amount)}: ${e.check === 'ok' ? x.bazar.ok : e.check === 'fix' ? x.bazar.fix : x.bazar.waiting}`}
-                                className={`inline-flex min-h-11 items-center rounded-full ${focus}`}><StatusChip state={e.check} b={x.bazar} /></Link>
+                              <Link href={`/${lang}/money/bazar/${e.id}`} aria-label={`${x.types[e.type]} ${fmtExact(e.amount)}: ${e.check === 'ok' ? x.bazar.ok : e.check === 'fix' ? x.bazar.fix : closed ? x.bazar.closedUnchecked : x.bazar.waiting}`}
+                                className={`inline-flex min-h-11 items-center rounded-full ${focus}`}><StatusChip state={e.check} b={x.bazar} closed={closed} /></Link>
                               {e.receiptV && <a href={`/api/receipt/${e.id}?v=${e.receiptV}`} target="_blank" rel="noopener" aria-label={`${x.bazar.viewReceipt}: ${x.types[e.type]} ${fmtExact(e.amount)} (${x.bazar.newTab})`}
                                 className={`inline-flex min-h-11 items-center text-[15px] ${link}`}>{x.bazar.viewReceipt}</a>}
                             </p>

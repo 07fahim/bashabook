@@ -54,8 +54,8 @@ describe('live pings (migration 022)', { timeout: 30000 }, () => {
     expect((await sent()).map(s => s.topic)).toEqual([await topicOf(a.flatId), await topicOf(a.flatId)]);
   });
 
-  it('has the trigger on all 14 tables a page shows', async () => {
-    expect((await db<{ n: number }>(`select count(*)::int as n from pg_trigger where tgname = 'live_ping'`))[0].n).toBe(14);
+  it('has the trigger on all 15 tables a page shows', async () => {
+    expect((await db<{ n: number }>(`select count(*)::int as n from pg_trigger where tgname = 'live_ping'`))[0].n).toBe(15);
   });
 
   it('sends nothing when the Notices page marks itself seen, nor for an update that changes nothing', async () => {

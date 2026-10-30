@@ -47,6 +47,8 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
   const bazars = mo.entries.filter(e => e.type === 'bazar');
   const waiting = bazars.filter(e => !e.check), fixing = bazars.filter(e => e.check === 'fix');
   const shown = only === 'waiting' ? waiting : only === 'fix' ? fixing : bazars;
+  // in a closed month nothing waits any more: an entry with no check was closed without one (trust feature 2)
+  const closed = mo.info?.status === 'closed', waitWord = closed ? b.closedUnchecked : b.waiting;
   const href = (m: string, f: string | null) => `/${lang}/money/bazar?${new URLSearchParams({ ...(m !== thisMonth ? { m: m.slice(0, 7) } : {}), ...(f ? { f } : {}) })}`;
   const prev = monthOf(addDays(month, -1)), next = addDays(daysOfMonth(month).at(-1)!, 1);
   const arrow = `inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-muted font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 ${focus}`;
@@ -70,7 +72,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
         {e.receiptV ? <a href={`/api/receipt/${e.id}?v=${e.receiptV}`} target="_blank" rel="noopener" aria-label={`${b.viewReceipt}: ${x.types[e.type]} ${fmtExact(e.amount)}, ${fmtDay(e.date, lang)} (${b.newTab})`}
           className={`inline-flex min-h-11 items-center ${link}`}>{b.viewReceipt}</a>
           : <span className="text-[15px] text-muted">{b.noReceipt}</span>}
-        <span><StatusChip state={e.check} b={b} /></span>
+        <span><StatusChip state={e.check} b={b} closed={closed} /></span>
       </li>
     );
   };
@@ -90,7 +92,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
               : <Link href={href(next, only)} aria-label={x.nextMonth} className={arrow}>→</Link>}
           </span>
         </nav>
-        {mo.info?.status === 'closed' && <p className="mt-2 text-muted">{b.closedNote}</p>}
+        {closed && <p className="mt-2 text-muted">{b.closedNote}</p>}
         {/* one column at every width: the month's figures as a strip, Add bazar folded, then the list at full width, so no
             column ends far above its neighbour */}
         <div className="mt-6 flex flex-col gap-6 [&>details]:mt-0">
@@ -98,7 +100,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
           <dl className={`grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 ${card}`}>
             {([[x.totalBazar, fmtTaka(total), ''], [b.count, String(bazars.length), ''],
               [b.withReceipt, b.nOfN.replace('{n}', String(bazars.filter(e => e.receiptV).length)).replace('{m}', String(bazars.length)), ''],
-              [b.waiting, String(waiting.length), ''], [b.fix, String(fixing.length), fixing.length ? 'text-chili' : '']] as const).map(([k, v, tone], i) => (
+              [waitWord, String(waiting.length), ''], [b.fix, String(fixing.length), fixing.length ? 'text-chili' : '']] as const).map(([k, v, tone], i) => (
               <div key={k} className={`min-w-0 rounded-xl bg-paper p-3 ${i === 0 ? 'col-span-2 sm:col-span-1' : i === 4 ? 'sm:col-span-2 lg:col-span-1' : ''}`}>
                 <dt className="text-[15px] text-muted">{k}</dt>
                 <dd className={`text-xl font-bold tabular-nums [overflow-wrap:anywhere] xl:text-2xl ${tone}`}>{v}</dd>
@@ -122,7 +124,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
           )}
           <section className={card}>
             <nav aria-label={b.filterLabel} className="flex flex-wrap gap-2">
-              {([[null, b.all, bazars.length], ['waiting', b.waiting, waiting.length], ['fix', b.fix, fixing.length]] as const).map(([f, label, n]) => (
+              {([[null, b.all, bazars.length], ['waiting', waitWord, waiting.length], ['fix', b.fix, fixing.length]] as const).map(([f, label, n]) => (
                 <Link key={label} href={href(month, f)} aria-current={only === f ? 'true' : undefined} className={pill(only === f)}>{label} ({n})</Link>
               ))}
             </nav>

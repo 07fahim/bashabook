@@ -4,7 +4,7 @@ import { blocksClose } from './bazar';
 import type { Db } from './db';
 import { addDays } from './meals';
 import { monthOf } from './money-db';
-import { checkMsg, closeMsg, mealMsg } from './notify-text';
+import { checkMsg, closeMsg, lateMsg, mealMsg } from './notify-text';
 import { sendPush } from './push';
 
 /** Claims one logical reminder: true for the first caller only (the primary key is the lock). */
@@ -18,11 +18,13 @@ const claim = async (db: Db, flatId: string, date: string, job: string) =>
  *  01:00 (settingsAction), so the window never wraps midnight. Close: once per month to the collector, from the
  *  1st at 10:00, for the oldest month still open.
  *  Check: from 21:00, once a day per flat, to each person with bazars or bills to check.
+ *  CheckLate: from 21:00, once a day per flat, to everyone living here who claimed their name when a bazar or bill has had
+ *  no check for 2 days.
  *  ponytail: each due reminder is three round trips (claim, members, subscriptions), about 0.25 s from Singapore; the route
  *  has 25 s, so ~80 due reminders per run. A pilot has a handful of flats; batch the claims if flats ever reach dozens. */
 export async function runJobs(db: Db, now: string, send: typeof sendPush = sendPush) {
   const today = now.slice(0, 10), tomorrow = addDays(today, 1), time = now.slice(11);
-  const out = { meal: 0, close: 0, check: 0, sent: 0, gone: 0, failed: 0, receipts: 0, purged: 0 };
+  const out = { meal: 0, close: 0, check: 0, sent: 0, gone: 0, failed: 0, receipts: 0, purged: 0, checkLate: 0 };
   const add = (r: { sent: number; gone: number; failed: number }) => { out.sent += r.sent; out.gone += r.gone; out.failed += r.failed; };
 
   const meals = await db<{ id: string; cutoff: string; lang: Locale }>(
@@ -39,10 +41,10 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
   if (time >= '10:00') {
     const closes = await db<{ id: string; lang: Locale; month: string; pending: number; collector: string }>(
       `select f.id, f.language as lang, o.month::text as month,
-         (select count(*)::int from ledger where flat_id = f.id and month >= o.month and ${blocksClose('o.month')}) as pending,
+         (select count(*)::int from ledger where flat_id = f.id and month >= o.month and ${blocksClose('o.month', '$2::text::date')}) as pending,
          (select id from members where flat_id = f.id and role = 'manager') as collector
        from flats f join lateral (select min(month) as month from months where flat_id = f.id and status = 'open' and month < $1::date) o on o.month is not null
-       where not exists (select 1 from sent_jobs where flat_id = f.id and date = o.month and job_type = 'close')`, [monthOf(today)]);
+       where not exists (select 1 from sent_jobs where flat_id = f.id and date = o.month and job_type = 'close')`, [monthOf(today), today]);
     for (const f of closes) {
       if (!await claim(db, f.id, f.month, 'close')) continue;
       out.close++; add(await send(db, [f.collector], closeMsg(f.lang, f.month, f.pending)));
@@ -68,6 +70,27 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
       if (!people.length || !await claim(db, f.id, today, 'check')) continue;   // nobody may check today: tried again next run
       out.check++;
       for (const p of people) add(await send(db, [p.id], checkMsg(p.lang ?? f.lang, p.n)));
+    }
+  }
+
+  // Late checks (trust feature 2): a bazar or bill of an open month with no check at all 2 days after it was added (database
+  // clock): once a day from 21:00 to everyone living here who claimed their name, checkers included, so the whole flat
+  // sees the checks are late.
+  if (time >= '21:00') {
+    const LATE = `l.type in ('bazar', 'bill') and l.status = 'ok' and l.created_at < now() - interval '2 days'
+      and not exists (select 1 from entry_checks c where c.ledger_id = l.id)`;
+    const flats = await db<{ id: string; lang: Locale; n: number }>(
+      `select f.id, f.language as lang, count(*)::int as n from flats f
+         join ledger l on l.flat_id = f.id join months mo on mo.flat_id = l.flat_id and mo.month = l.month and mo.status = 'open'
+       where ${LATE} and not exists (select 1 from sent_jobs where flat_id = f.id and date = $1::date and job_type = 'checkLate')
+       group by f.id, f.language`, [today]);
+    for (const f of flats) {
+      const people = await db<{ id: string; lang: Locale | null }>(
+        `select id, language as lang from members where flat_id = $1 and pin_hash is not null
+           and joined_on <= $2::text::date and (left_on is null or left_on >= $2::text::date)`, [f.id, today]);
+      if (!people.length || !await claim(db, f.id, today, 'checkLate')) continue;
+      out.checkLate++;
+      for (const p of people) add(await send(db, [p.id], lateMsg(p.lang ?? f.lang, f.n)));
     }
   }
 

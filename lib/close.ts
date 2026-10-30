@@ -13,6 +13,9 @@ export type CloseResult = 'ok' | 'closed' | 'early' | 'order' | 'pending' | 'pro
 
 const nextMonth = (month: string) => addDays(daysOfMonth(month).at(-1)!, 1);
 
+/** From this day (the 4th of the next month) a month's bazars and bills not Verified no longer hold its close. */
+export const anywayFrom = (month: string) => addDays(nextMonth(month), 3);
+
 /** First day of the oldest open month: the day after the latest closed month; null when none has closed (all are open). */
 export async function openStart(db: Db, flatId: string) {
   const [r] = await db<{ m: string | null }>(`select max(month)::text as m from months where flat_id = $1 and status = 'closed'`, [flatId]);
@@ -40,15 +43,17 @@ export async function closeInfo(db: Db, flatId: string, today: string) {
   // the count covers the later open months too, so an entry still waiting there (money handed over or received, not yet
   // tapped) blocks it as well: it is in the hand but not in the books; and a bazar or bill of this month not yet Verified.
   // `pendingMonth`: where to go and fix the first one
-  const [total, [p], past] = await Promise.all([flatMoney(db, flatId, today), db<{ n: number; m: string | null }>(
-    `select count(*)::int as n, min(month)::text as m from ledger where flat_id = $1 and month >= $2::date and ${blocksClose('$2::date')}`, [flatId, month]),
-    history(db, flatId, month)]);
+  const [total, [p], past, [u]] = await Promise.all([flatMoney(db, flatId, today), db<{ n: number; m: string | null }>(
+    `select count(*)::int as n, min(month)::text as m from ledger where flat_id = $1 and month >= $2::date and ${blocksClose('$2::date', '$3::text::date')}`, [flatId, month, today]),
+    history(db, flatId, month),
+    db<{ n: number }>(`select count(*)::int as n from ledger l where l.flat_id = $1 and l.month = $2::date and l.type in ('bazar', 'bill')
+      and l.status = 'ok' and not exists (select 1 from entry_checks c where c.ledger_id = l.id and c.state = 'ok')`, [flatId, month])]);
   const fund = mo.result.fund;
   // `later`: what the months after it added or spent since, so the card can say why the count differs from its own fund
   // questions about the month, never blockers: after the close only a correction can mend a twin or a bill that never came
   const looks = worthALook(mo.entries, past, today, true);
   return { month, fund, held: cashFrom(fund, total), later: total - fund, pending: p.n, pendingMonth: p.m ?? month,
-    problems: mo.result.problems.length, looks };
+    problems: mo.result.problems.length, looks, unchecked: u.n, anywayFrom: anywayFrom(month), anyway: today >= anywayFrom(month) };
 }
 
 /** The cash the collector must count to close a month whose own fund is `fund`, when every open month together holds `total`
@@ -117,7 +122,7 @@ export async function closeMonth(db: Db, flatId: string, by: Actor, month: strin
   // pending money in this or a later open month is in the hand but not in the books, so the count can't come out right: the
   // close card blocks on it (closeInfo), and so does the statement below, whatever the card showed when it was opened; and a
   // bazar or bill of this month not yet Verified
-  const [p] = await db<{ n: number }>(`select count(*)::int as n from ledger where flat_id = $1 and month >= $2::date and ${blocksClose('$2::date')}`, [flatId, month]);
+  const [p] = await db<{ n: number }>(`select count(*)::int as n from ledger where flat_id = $1 and month >= $2::date and ${blocksClose('$2::date', '$3::text::date')}`, [flatId, month, today]);
   if (p.n > 0) return out('pending', expected);
   if (!mo.result.invariantOk) return out('problems', expected);
   // ponytail: the count is checked against later open months too, but only this month's version guards the close; an entry
@@ -133,14 +138,14 @@ export async function closeMonth(db: Db, flatId: string, by: Actor, month: strin
          where flat_id = $1 and month = $2::date and status = 'open' and version = $3
            and exists (select 1 from members where flat_id = $1 and id = $8 and role = 'manager')
            and not exists (select 1 from months e where e.flat_id = $1 and e.month < $2::date and e.status = 'open')
-           and not exists (select 1 from ledger where flat_id = $1 and month >= $2::date and ${blocksClose('$2::date')})
+           and not exists (select 1 from ledger where flat_id = $1 and month >= $2::date and ${blocksClose('$2::date', '$10::text::date')})
          returning month),
        b as (insert into month_balances (flat_id, month, member_id, weighted_meals, days_present, opening, paid_in, food_cost, bill_share, payouts, adjustments, balance)
          select $1, m.month, (x->>'id')::uuid, (x->>'meals')::int, (x->>'days')::int, (x->>'opening')::bigint, (x->>'paidIn')::bigint,
            (x->>'foodCost')::bigint, (x->>'billShare')::bigint, (x->>'payouts')::bigint, (x->>'adjustments')::bigint, (x->>'balance')::bigint
          from m, jsonb_array_elements($9::text::jsonb) x)
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'months', $2::date::text, $7::text::jsonb, $8 from m returning 1`,
-    [flatId, month, mo.info.version, expected, mo.result.mealRate, actual, JSON.stringify(record), by.memberId, JSON.stringify(rows)]);
+    [flatId, month, mo.info.version, expected, mo.result.mealRate, actual, JSON.stringify(record), by.memberId, JSON.stringify(rows), today]);
   if (r.length) return out('ok', expected);
   const [now] = await db<{ status: string }>(`select status from months where flat_id = $1 and month = $2`, [flatId, month]);
   return out(now?.status === 'closed' ? 'closed' : 'changed', expected);
@@ -184,4 +189,33 @@ export async function addCorrection(db: Db, flatId: string, by: Actor, c: Correc
   if (r.length) return 'ok';
   // a retry finds its own row; anything else means the month or the people were wrong
   return (await db(`select 1 from ledger where flat_id = $1 and id = $2`, [flatId, c.id])).length ? 'ok' : await retiredId(db, c.id) ? 'bad' : 'month';
+}
+
+/** SQL (params $1 flat, $2 month, $3 member): may this person say they saw `month`'s counted cash — the flat's latest closed
+ *  month, they lived in it, they didn't count it, they haven't said so yet. Signed in means living here now. */
+const MAY_SEE = `exists (select 1 from months mo where mo.flat_id = $1 and mo.month = $2::text::date and mo.status = 'closed'
+      and mo.cash->>'by' <> $3::uuid::text
+      and not exists (select 1 from months l where l.flat_id = $1 and l.status = 'closed' and l.month > mo.month))
+    and exists (select 1 from month_balances b where b.flat_id = $1 and b.month = $2::text::date and b.member_id = $3::uuid and b.days_present > 0)
+    and not exists (select 1 from cash_seen s where s.flat_id = $1 and s.month = $2::text::date and s.member_id = $3::uuid)`;
+
+/** No later month is closed: the only closed month where saying "I saw the cash" is still possible. */
+export const latestClosed = async (db: Db, flatId: string, month: string) => (await db<{ ok: boolean }>(
+  `select not exists (select 1 from months where flat_id = $1 and status = 'closed' and month > $2::text::date) as ok`, [flatId, month]))[0].ok;
+
+/** Who said they saw a closed month's counted cash, oldest first (trust feature 1). */
+export const cashSeen = (db: Db, flatId: string, month: string) => db<{ id: string; name: string }>(
+  `select m.id, m.name from cash_seen s join members m on m.flat_id = s.flat_id and m.id = s.member_id
+   where s.flat_id = $1 and s.month = $2::text::date order by s.at, m.name`, [flatId, month]);
+
+export const maySeeCash = async (db: Db, flatId: string, month: string, me: string) =>
+  (await db<{ ok: boolean }>(`select ${MAY_SEE} as ok`, [flatId, month, me]))[0].ok;
+
+/** I saw the cash: saved with its history row in one statement, only while MAY_SEE holds; a second tap saves nothing. */
+export async function seeCash(db: Db, flatId: string, month: string, me: string) {
+  return (await db(
+    `with s as (insert into cash_seen (flat_id, month, member_id) select $1, $2::text::date, $3::uuid where ${MAY_SEE}
+       on conflict do nothing returning *)
+     insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'cash_seen', s.month::text, to_jsonb(s), $3::uuid from s returning 1`,
+    [flatId, month, me])).length > 0;
 }
