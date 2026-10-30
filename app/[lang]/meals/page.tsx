@@ -249,17 +249,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
 
           <Fold title={m.otherTitle} lead={m.otherLead} open={'who' in sp}>
             {!pick || !pickData ? <p className="mt-4 text-muted">{m.otherNone}</p> : (<>
-              <ShowForm className="mt-4 space-y-4">
-                {w !== 0 && <input type="hidden" name="week" value={w} />}
-                <label className="block font-semibold">
-                  {m.who}
-                  <select name="who" defaultValue={pick.id} className={field}>
-                    {others.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
-                  </select>
-                </label>
-                <DateField lang={lang} label={m.day} name="day" required min={firstOpen} max={addDays(today, 60)} defaultValue={pickDay} />
-                <button className={secondary}>{m.show}</button>
-              </ShowForm>
+              <ShowForm className="mt-4 space-y-4" hint={m.pressShow} panel={<>
               <p className="mt-5 font-semibold">{pick.name} · {fmtDay(pickDay, lang)}</p>
               {(() => {
                 const person = pickData.members.find(x => x.id === pick.id);
@@ -298,6 +288,17 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                   </ul>
                 );
               })()}
+              </>}>
+                {w !== 0 && <input type="hidden" name="week" value={w} />}
+                <label className="block font-semibold">
+                  {m.who}
+                  <select name="who" defaultValue={pick.id} className={field}>
+                    {others.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                  </select>
+                </label>
+                <DateField lang={lang} label={m.day} name="day" required min={firstOpen} max={addDays(today, 60)} defaultValue={pickDay} />
+                <button className={secondary}>{m.show}</button>
+              </ShowForm>
             </>)}
           </Fold>
         </div>

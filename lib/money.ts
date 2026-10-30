@@ -144,9 +144,12 @@ export function foodSplit(foodCost: number, meals: number, guestMeals: number) {
   return { own: foodCost - guests, guests };
 }
 
+/** Bangla digits as English ones: phones with a Bangla keyboard type ০-৯ in number fields. */
+export const enDigits = (v: string) => v.replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+
 /** What someone typed as taka -> poisha. Takes commas, ৳ and Bangla digits; null unless 0 < amount <= ৳1,00,00,000 with at most 2 decimals. */
 export function toPoisha(v: string): number | null {
-  const s = v.replace(/[০-৯]/g, d => String('০১২৩৪৫৬৭৮৯'.indexOf(d))).replace(/[,\s৳]/g, '');
+  const s = enDigits(v).replace(/[,\s৳]/g, '');
   if (!/^\d{1,8}(\.\d{1,2})?$/.test(s)) return null;
   const p = Math.round(Number(s) * 100);
   return p > 0 && p <= 1_000_000_000 ? p : null;

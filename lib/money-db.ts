@@ -298,7 +298,7 @@ export async function payDue(db: Db, flatId: string, by: Actor, id: string, amou
   if (by.role !== 'manager' || !Number.isInteger(amount) || amount <= 0) return false;
   const r = await db(
     `with x as (update ledger l set status = 'ok', amount_poisha = $3,
-         date = least($4::date, (l.month + interval '1 month' - interval '1 day')::date)
+         date = greatest(l.month, least($4::date, (l.month + interval '1 month' - interval '1 day')::date))
        where l.flat_id = $1 and l.id = $2 and l.status = 'due'
          and exists (select 1 from months mo where mo.flat_id = $1 and mo.month = l.month and mo.status = 'open') returning l.*)
      insert into audit_log (flat_id, entity, entity_id, after, by_member) select $1, 'ledger', x.id::text, to_jsonb(x) || '{"paid":true}', $5 from x returning 1`,

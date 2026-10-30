@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Hind_Siliguri } from 'next/font/google';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { Analytics } from './analytics';
 import { getDictionary, hasLocale, locales } from './dictionaries';
@@ -38,7 +38,9 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children, params }: LayoutProps<'/[lang]'>) {
   const { lang } = await params;
-  if (!hasLocale(lang)) redirect('/en');   // an unknown language falls back to English (Next's own 404 is an unstyled white page)
+  // an unknown language code falls back to English (Next's own 404 is an unstyled white page); any other unknown first part
+  // (an icon a phone guesses at, a bot probe) stays a cheap 404
+  if (!hasLocale(lang)) { if (/^[a-z]{2}(-[a-z]{2})?$/i.test(lang)) redirect('/en'); notFound(); }
   return (
     <html lang={lang} className={hind.variable} suppressHydrationWarning>
       <head>

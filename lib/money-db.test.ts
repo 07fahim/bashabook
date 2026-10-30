@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { flatMoney } from './handover';
 import { randomUUID } from 'node:crypto';
 import { db, migrate } from '../db/test-db';
 import { addMember, bringBack, createFlat, setLeaving } from './auth';
@@ -211,6 +212,7 @@ describe('money storage', { timeout: 30000 }, () => {
     await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 120000, note: 'Wi-Fi', split: 'equal', repeat: true }));
     const nov = await loadMonth(db, flatId, '2026-11-01', '2026-11-03');
     const [wifi] = nov.entries;
+    expect(await flatMoney(db, flatId, '2026-11-03')).toBe(-120000);   // the collector's money leaves the due bill out
     expect([wifi.status, nov.result.fund, nov.result.perMember.reduce((a, p) => a + p.billShare, 0)]).toEqual(['due', 0, 0]);
     expect(await payDue(db, flatId, as('Tahsin'), wifi.id, 125000, '2026-11-05')).toBe(false);   // the collector's
     expect(await payDue(db, flatId, nafis, wifi.id, 0, '2026-11-05')).toBe(false);
@@ -219,6 +221,7 @@ describe('money storage', { timeout: 30000 }, () => {
     const paid = await loadMonth(db, flatId, '2026-11-01', '2026-11-06');
     expect([paid.entries[0].status, paid.entries[0].amount, paid.entries[0].date, paid.result.fund]).toEqual(['ok', 125000, '2026-11-05', -125000]);
     expect(paid.result.perMember.reduce((a, p) => a + p.billShare, 0)).toBe(125000);
+    expect(await flatMoney(db, flatId, '2026-11-06')).toBe(-120000 - 125000);   // October's own Wi-Fi and November's, now paid
     // paid after its month ended (the month still open): dated its last day, so it stays in its month
     const [dec] = (await loadMonth(db, flatId, '2026-12-01', '2026-12-01')).entries;
     expect(await payDue(db, flatId, nafis, dec.id, 120000, '2027-01-02')).toBe(true);

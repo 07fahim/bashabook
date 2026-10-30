@@ -156,17 +156,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </Group>
           <Group title={m.groupMeals}>
             <Fold row title={m.editTitle} lead={m.editLead} level={3} open={'who' in sp}>
-              <ShowForm className="mt-4 space-y-4">
-                <label className="block font-semibold">
-                  {m.who}
-                  <select name="who" defaultValue={person.id} className={field}>
-                    {/* someone who moved out recently is here too: their last days can still need fixing */}
-                    {picked.members.filter(x => !x.leftOn || x.leftOn >= from).map(x => <option key={x.id} value={x.id}>{x.name}{note(x)}</option>)}
-                  </select>
-                </label>
-                <DateField lang={lang} label={m.day} name="day" required min={from} max={to} defaultValue={day} />
-                <button className={secondary}>{m.show}</button>
-              </ShowForm>
+              <ShowForm className="mt-4 space-y-4" hint={m.pressShow} panel={<>
               <p className="mt-5 font-semibold">{person.name} · {fmtDay(day, lang)}</p>
               {!isPresent(person, day) ? (
                 <p className="mt-2 text-muted">{m.notInFlat}</p>
@@ -206,6 +196,17 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
                   })}
                 </ul>
               )}
+              </>}>
+                <label className="block font-semibold">
+                  {m.who}
+                  <select name="who" defaultValue={person.id} className={field}>
+                    {/* someone who moved out recently is here too: their last days can still need fixing */}
+                    {picked.members.filter(x => !x.leftOn || x.leftOn >= from).map(x => <option key={x.id} value={x.id}>{x.name}{note(x)}</option>)}
+                  </select>
+                </label>
+                <DateField lang={lang} label={m.day} name="day" required min={from} max={to} defaultValue={day} />
+                <button className={secondary}>{m.show}</button>
+              </ShowForm>
             </Fold>
 
             <Fold row title={m.noCookTitle} lead={m.noCookLead} level={3}>
