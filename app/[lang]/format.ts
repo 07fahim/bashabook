@@ -1,11 +1,16 @@
 import { MEALS, plates, type Meal } from '../../lib/meals';
 import type { Dict, Locale } from './dictionaries';
 
+/** '10 October' in both languages: English digits and month. */
+export function fmtDate(date: string) {
+  const d = new Date(`${date}T00:00:00Z`);
+  return `${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })}`;
+}
+
 /** 'Fri, 10 October' or 'শুক্র, 10 October': weekday in the page language, English digits and month. */
 export function fmtDay(date: string, lang: Locale) {
-  const d = new Date(`${date}T00:00:00Z`);
-  const weekday = d.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-GB', { weekday: 'short', timeZone: 'UTC' });
-  return `${weekday}, ${d.getUTCDate()} ${d.toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })}`;
+  const weekday = new Date(`${date}T00:00:00Z`).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-GB', { weekday: 'short', timeZone: 'UTC' });
+  return `${weekday}, ${fmtDate(date)}`;
 }
 
 /** '9 – 15 October' or '27 November – 3 December' (no weekday, same in both languages). */

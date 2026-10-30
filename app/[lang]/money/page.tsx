@@ -23,7 +23,7 @@ import { PendingButton } from '../pending-button';
 import { PayerSelect } from '../payer-select';
 import { ReceiptPicker } from '../receipt-picker';
 import { ShareButton } from '../share-button';
-import { card, checkChip, field, Field, focal, Fold, focus, link, LongList, MethodField, PageSkeleton, primary } from '../ui';
+import { card, checkChip, field, Field, focal, Fold, focus, link, LongList, MethodField, PageSkeleton, primary, secondary } from '../ui';
 import { balanceText, CheckList, ConfirmList, lookText, StatusChip } from './bits';
 import { breakdownOf, breakdownText, pickWho, type Labels } from './breakdown';
 
@@ -358,7 +358,7 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
                     {/* a second, deliberate tap that names the amount: I saw this much with this person */}
                     {maySee && (
                       <div className="group mt-2">
-                        <details><summary className={`inline-flex min-h-11 cursor-pointer list-none items-center rounded-full border border-muted px-5 font-semibold ${focus}`}>{x.iSaw}</summary></details>
+                        <details><summary className={`${secondary} cursor-pointer list-none sm:inline-flex sm:w-auto [&::-webkit-details-marker]:hidden`}>{x.iSaw}</summary></details>
                         <form action={seeCashAction} className="mt-2 hidden flex-wrap items-center gap-3 group-has-[details[open]]:flex">
                           <input type="hidden" name="lang" value={lang} />
                           <input type="hidden" name="month" value={month} />

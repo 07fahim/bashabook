@@ -47,7 +47,7 @@ export async function closeInfo(db: Db, flatId: string, today: string) {
     `select count(*)::int as n, min(month)::text as m from ledger where flat_id = $1 and month >= $2::date and ${blocksClose('$2::date', '$3::text::date')}`, [flatId, month, today]),
     history(db, flatId, month),
     db<{ n: number }>(`select count(*)::int as n from ledger l where l.flat_id = $1 and l.month = $2::date and l.type in ('bazar', 'bill')
-      and not exists (select 1 from entry_checks c where c.ledger_id = l.id and c.state = 'ok')`, [flatId, month])]);
+      and l.status = 'ok' and not exists (select 1 from entry_checks c where c.ledger_id = l.id and c.state = 'ok')`, [flatId, month])]);
   const fund = mo.result.fund;
   // `later`: what the months after it added or spent since, so the card can say why the count differs from its own fund
   // questions about the month, never blockers: after the close only a correction can mend a twin or a bill that never came

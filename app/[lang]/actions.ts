@@ -604,7 +604,7 @@ export async function closeAction(_: FormState, d: FormData): Promise<FormState>
         `select m.id, m.language as lang from members m join month_balances b on b.flat_id = m.flat_id and b.member_id = m.id
          where m.flat_id = $1 and b.month = $2::text::date and b.days_present > 0 and m.id <> $3 and m.pin_hash is not null
            and (m.left_on is null or m.left_on >= $4::text::date)`, [me.flatId, month, me.memberId, todayDhaka()]);
-      for (const p of people) await sendPush(db, [p.id], cashAskMsg(p.lang ?? me.lang, me.name, month));
+      await Promise.all(people.map(p => sendPush(db, [p.id], cashAskMsg(p.lang ?? me.lang, me.name, month))));
     } catch (e) { console.warn('push failed', String(e)); }
   });
   redirect(`/${lang}/money?m=${month.slice(0, 7)}`);   // the closed month, with its settlement to share; 'closed' means a second tap already got it there

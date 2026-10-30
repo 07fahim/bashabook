@@ -4,7 +4,7 @@ import { closeAction, coverGapAction } from './actions';
 import { CashCount } from './cash-count';
 import type { Look } from '@/lib/charts';
 import type { Dict, Locale } from './dictionaries';
-import { fmtDay, fmtExact, fmtMonth, fmtSigned } from './format';
+import { fmtDate, fmtExact, fmtMonth, fmtSigned } from './format';
 import { alertCard, link, primary, secondary } from './ui';
 
 /** `fund`: the month's own fund (below 0 = its gap is paid first); `held`: the cash to count, every open month's money now. */
@@ -17,7 +17,7 @@ export function CloseCard({ lang, x, c, collector, warn }: { lang: Locale; x: Di
   const gap = fmtExact(c.fund), name = fmtMonth(c.month), blocked = c.pending > 0 || c.problems > 0;
   // bazars and bills not Verified: before the 4th they are in the pending line; from then on the month closes without them
   const anyway = c.unchecked > 0 && (c.anyway ? (c.unchecked === 1 ? x.anywayNowOne : x.anywayNow.replace('{n}', String(c.unchecked)))
-    : x.anywayLater.replace('{d}', fmtDay(c.anywayFrom, lang)));
+    : x.anywayLater.replace('{d}', fmtDate(c.anywayFrom)));
   // @container: full width on Money, one column on Flat; when wide, the four boxes sit in a row and text keeps a readable measure
   return (
     <section className={`@container ${alertCard}`}>

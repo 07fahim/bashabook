@@ -89,7 +89,7 @@ export function CheckList({ lang, x, a, items }: { lang: Locale; x: Dict['money'
       <LongList short label={b.checkTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(c => (
         <li key={c.id} className="py-2">
           <Link href={`/${lang}/money/bazar/${c.id}`} className={`inline-flex min-h-11 items-center ${link}`}>{x.types[c.type]} · {fmtExact(c.amount)}</Link>
-          {unusualRatio(c.amount, c.usual) !== null && <span className="ml-2 inline-flex min-h-8 items-center rounded-full border border-chili px-3 text-[15px] font-semibold text-chili">{b.unusualTag}</span>}
+          {!c.state && unusualRatio(c.amount, c.usual) !== null && <span className="ml-2 inline-flex min-h-8 items-center rounded-full border border-chili px-3 text-[15px] font-semibold text-chili">{b.unusualTag}</span>}
           <span className="block text-[15px] text-muted [overflow-wrap:anywhere]">
             {[fmtDay(c.date, lang), c.state === 'fix' ? b.toFix.replace('{reason}', c.reason ?? '') : b.toCheck, c.note].filter(Boolean).join(' · ')}
           </span>
