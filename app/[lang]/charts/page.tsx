@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { billShareIn, costRows, forecast, history, inAndOut, lastMonths, mealGrid, myPlates, runningSpend, slices, spendByKind, worthALook } from '@/lib/charts';
+import { billNames, billShareIn, costRows, forecast, history, inAndOut, lastMonths, mealGrid, myPlates, runningSpend, slices, spendByKind, worthALook } from '@/lib/charts';
 import { db } from '@/lib/db';
 import { flatMoney } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka, weightedMeals } from '@/lib/meals';
@@ -10,7 +10,7 @@ import { noticeCount } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
 import { HBars, InOut, Lollipops, MealGrid, MonthTable } from '../bars';
 import { getDictionary, hasLocale, type Dict } from '../dictionaries';
-import { fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
+import { fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka, names } from '../format';
 import { Header, withQuery } from '../header';
 import { balanceText, lookText } from '../money/bits';
 import { Nav } from '../nav';
@@ -83,10 +83,13 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const weights = mo.flat.weights, myMeals = mo.meals.get(me.memberId) ?? 0;
   const weightsHold = plates.reduce((a, p) => a + p.plates * weights[p.meal], 0) === myMeals;
   const spent = runningSpend(mo.entries, days);
+  // "Bills" says what it holds: the flat's bills on the cost card, and on My month only the ones charged to me (a closed month
+  // keeps no per-bill shares, so there the word stands alone)
+  const billsWith = (list: string[] | null) => (list?.length ? x.billsOf.replace('{list}', names(list, t.money.and)) : x.bills);
   // My month's parts: came in in leaf (the carried part lighter), used in the colours food and bills have on the whole page
   const parts: Record<string, { label: string; color: string }> = {
     earlier: { label: x.earlier, color: 'bg-leaf/50' }, paid: { label: x.paidIn, color: 'bg-leaf' }, corrections: { label: x.corrections, color: 'bg-ink' },
-    owed: { label: x.owedEarlier, color: 'bg-chili/50' }, food: { label: x.food, color: 'bg-turmeric' }, bills: { label: x.bills, color: 'bg-muted' }, advances: { label: x.advances, color: 'bg-chili' } };
+    owed: { label: x.owedEarlier, color: 'bg-chili/50' }, food: { label: x.food, color: 'bg-turmeric' }, bills: { label: billsWith(billNames(mo.entries, mo.result.lines, me.memberId, x.others)), color: 'bg-muted' }, advances: { label: x.advances, color: 'bg-chili' } };
   const named = (ps: { key: string; value: number }[]) => ps.map(p => ({ ...p, ...parts[p.key] }));
   const costs = boss ? costRows(mo.result.perMember) : [];
   const avgCost = costs.length ? Math.round(costs.reduce((a, r) => a + r.food + r.bills, 0) / costs.length) : 0;
@@ -260,7 +263,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
               <div className="mt-4"><HBars fmt={fmtTaka} tailColor="fill-muted" mark={avgCost} rows={costs.map(r => ({
                 key: r.id, text: name(r.id), value: r.food, tail: r.bills, valueText: fmtTaka(r.food + r.bills), strong: r.id === me.memberId,
                 label: <Link className={`underline-offset-4 hover:underline ${focus}`} href={`/${lang}/money?${new URLSearchParams({ ...(month !== thisMonth ? { m: month.slice(0, 7) } : {}), who: r.id })}`}>{name(r.id)}</Link> }))} /></div>
-              <p className="mt-3 text-[13px] text-muted"><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-sm bg-turmeric" />{x.food} <span aria-hidden="true" className="mr-1 ml-3 inline-block size-3 rounded-sm bg-muted" />{x.bills}<span aria-hidden="true" className="mr-1.5 ml-3 inline-block h-3 border-l-2 border-dashed border-ink align-middle" />{x.average.replace('{t}', fmtTaka(avgCost))}</p>
+              <p className="mt-3 text-[13px] text-muted"><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-sm bg-turmeric" />{x.food} <span aria-hidden="true" className="mr-1 ml-3 inline-block size-3 rounded-sm bg-muted" />{billsWith(billNames(mo.entries, null, null, x.others))}<span aria-hidden="true" className="mr-1.5 ml-3 inline-block h-3 border-l-2 border-dashed border-ink align-middle" />{x.average.replace('{t}', fmtTaka(avgCost))}</p>
             </section>)}
         </div>
       </main>

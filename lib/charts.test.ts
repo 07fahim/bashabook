@@ -4,7 +4,7 @@ import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
-import { billShareIn, costRows, forecast, history, lastMonths, inAndOut, mealGrid, myPlates, pickDay, runningSpend, slices, spendByKind, worthALook } from './charts';
+import { billNames, billShareIn, costRows, forecast, history, lastMonths, inAndOut, mealGrid, myPlates, pickDay, runningSpend, slices, spendByKind, worthALook } from './charts';
 import type { MealChange, MealMember } from './meals';
 import type { MemberResult } from './money';
 
@@ -199,5 +199,21 @@ describe('inAndOut', () => {
   it('a correction in my favour comes in; nothing at all leaves both sides empty', () => {
     expect(inAndOut(m({ adjustments: 120, balance: 120 })).came).toEqual([{ key: 'corrections', value: 120 }]);
     expect(inAndOut(m({}))).toEqual({ came: [], used: [] });
+  });
+});
+
+describe('billNames', () => {
+  const bills = [row({ id: 'w', type: 'bill', amount: 1200, note: 'Wi-Fi' }), row({ id: 'c', type: 'bill', amount: 6000, note: ' Cook ' }),
+    row({ id: 'r', type: 'bill', amount: 9000, note: 'Rent' }), row({ id: 'x', type: 'bill', amount: 500, note: null }),
+    row({ id: 'p', type: 'bill', amount: 700, note: 'Gas', status: 'pending' }), row({ id: 'b', type: 'bazar', amount: 900 })];
+  it('the flat saves: bills by name, biggest first, unnamed ones as others', () => {
+    expect(billNames(bills, null, null, 'Others')).toEqual(['Rent', 'Cook', 'Wi-Fi', 'Others']);
+  });
+  it('mine: only the bills the month charged me, by the engine lines', () => {
+    const lines = [{ rowId: 'c', memberId: 'a', amount: 750 }, { rowId: 'w', memberId: 'a', amount: 150 }, { rowId: 'r', memberId: 'b', amount: 9000 }, { rowId: 'x', memberId: 'a', amount: 0 }];
+    expect(billNames(bills, lines, 'a', 'Others')).toEqual(['Cook', 'Wi-Fi']);
+  });
+  it('a closed month keeps no lines: no list for one person', () => {
+    expect(billNames(bills, [], 'a', 'Others')).toBeNull();
   });
 });

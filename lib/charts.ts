@@ -60,6 +60,18 @@ export function mealGrid(m: MealMember, changes: MealChange[], days: string[]): 
   })])) as Record<Meal, ({ own: number; guests: number } | null)[]>;
 }
 
+/** What "Bills" holds this month, by name, biggest first (an unnamed bill counts under `others`), so the word says what is in
+ *  it. With `me`: only the bills the engine charged me (its `lines`); a closed month keeps no lines, so null there. */
+export function billNames(entries: Entry[], lines: { rowId: string; memberId: string; amount: number }[] | null, me: string | null, others: string) {
+  if (me && !lines?.length) return null;
+  const mine = me ? new Set(lines!.filter(l => l.memberId === me && l.amount > 0).map(l => l.rowId)) : null;
+  const by = new Map<string, number>();
+  for (const e of entries) if (e.status === 'ok' && !e.forMonth && e.type === 'bill' && (!mine || mine.has(e.id))) {
+    const k = e.note?.trim() || others; by.set(k, (by.get(k) ?? 0) + e.amount);
+  }
+  return [...by].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+}
+
 /** One person's month as money that came in and money used, every part positive and none of them zero: a balance carried
  *  from before, a correction or an advance goes to whichever side it is on. Came in less used is the balance, the same sum as
  *  lib/money.ts. */
