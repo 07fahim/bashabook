@@ -48,6 +48,21 @@ export function myPlates(m: MealMember, changes: MealChange[], days: string[]): 
   }));
 }
 
+/** My month as a grid: for each meal, one cell per day in `days`. Null when I didn't live here that day; else my plates
+ *  (guests included) and how many were guests. Same rule as myPlates, so the cells add up to its totals. */
+export function mealGrid(m: MealMember, changes: MealChange[], days: string[]): Record<Meal, ({ plates: number; guests: number } | null)[]> {
+  const idx = indexChanges(changes);
+  const guests = new Map(changes.filter(c => c.memberId === m.id).map(c => [`${c.date}|${c.meal}`, c.guests ?? 0]));
+  return Object.fromEntries(MEALS.map(meal => [meal, days.map(d => isPresent(m, d)
+    ? { plates: mealCount(m, idx, d, meal), guests: guests.get(`${d}|${meal}`) ?? 0 } : null)])) as Record<Meal, ({ plates: number; guests: number } | null)[]>;
+}
+
+/** Steps of a waterfall: each starts where the one before ended, so the last ends on the sum. */
+export function waterfall<R extends { value: number }>(rows: R[]) {
+  let at = 0;
+  return rows.map(r => ({ ...r, from: at, to: (at += r.value) }));
+}
+
 /** At most five slices for a ring: the biggest named rows keep their names, everything else (including rows already called
  *  `others`) adds up under one `others` slice, so the legend never shows that word twice. */
 export function slices(rows: { label: string; value: number }[], others: string, n = 5) {

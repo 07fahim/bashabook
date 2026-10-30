@@ -4,7 +4,7 @@ import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
-import { billShareIn, costRows, forecast, history, lastMonths, myPlates, pickDay, runningSpend, slices, spendByKind, worthALook } from './charts';
+import { billShareIn, costRows, forecast, history, lastMonths, mealGrid, myPlates, pickDay, runningSpend, slices, spendByKind, waterfall, worthALook } from './charts';
 import type { MealChange, MealMember } from './meals';
 
 const row = (p: Partial<Entry> & Pick<Entry, 'type' | 'amount'>): Entry =>
@@ -155,5 +155,30 @@ describe('pickDay', () => {
     expect(pickDay(1, 31, 30)).toBe(30);
     expect(pickDay(0.9, 31, 9)).toBe(9);      // day 10 of a running month: later days are blank
     expect(pickDay(-0.2, 31, 9)).toBe(0);     // a drag past the left edge
+  });
+});
+
+describe('mealGrid', () => {
+  it('one cell per drawn day and meal: blank before I moved in, plates and guests after, adding up to my plates', () => {
+    const me: MealMember = { id: 'a', joinedOn: '2026-09-02', leftOn: null, defaults: { b: false, l: true, d: true } };
+    const rows: MealChange[] = [{ memberId: 'a', date: '2026-09-02', meal: 'd', count: 3, guests: 2 }, { memberId: 'a', date: '2026-09-03', meal: 'l', count: 0 },
+      { memberId: 'b', date: '2026-09-02', meal: 'd', count: 5, guests: 4 }];
+    const days = ['2026-09-01', '2026-09-02', '2026-09-03'];
+    const g = mealGrid(me, rows, days);
+    expect(g.d).toEqual([null, { plates: 3, guests: 2 }, { plates: 1, guests: 0 }]);
+    expect(g.l).toEqual([null, { plates: 1, guests: 0 }, { plates: 0, guests: 0 }]);
+    expect(g.b).toEqual([null, { plates: 0, guests: 0 }, { plates: 0, guests: 0 }]);
+    for (const p of myPlates(me, rows, days)) {
+      const cells = g[p.meal].filter(c => c !== null);
+      expect([cells.reduce((a, c) => a + c.plates, 0), cells.reduce((a, c) => a + c.guests, 0)]).toEqual([p.plates, p.guests]);
+    }
+  });
+});
+
+describe('waterfall', () => {
+  it('each step starts where the last ended and the last ends on the sum', () => {
+    expect(waterfall([{ key: 'earlier', value: 500 }, { key: 'paid', value: 400 }, { key: 'cost', value: -1200 }])).toEqual([
+      { key: 'earlier', value: 500, from: 0, to: 500 }, { key: 'paid', value: 400, from: 500, to: 900 }, { key: 'cost', value: -1200, from: 900, to: -300 }]);
+    expect(waterfall([])).toEqual([]);
   });
 });

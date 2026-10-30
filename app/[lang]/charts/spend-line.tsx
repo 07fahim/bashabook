@@ -32,11 +32,12 @@ export function SpendLine({ values, upTo, running, label, tips }: { values: numb
   return (
     <div role="slider" tabIndex={0} aria-label={label} aria-valuemin={1} aria-valuemax={upTo + 1} aria-valuenow={shown + 1}
       aria-valuetext={[tip.date, tip.total, tip.add].filter(Boolean).join(', ')}
-      className={`relative h-40 cursor-crosshair touch-pan-y touch-pinch-zoom select-none rounded-lg sm:h-48 ${focus}`}
+      className={`relative h-40 cursor-crosshair lg:h-auto lg:min-h-48 lg:flex-1 touch-pan-y touch-pinch-zoom select-none rounded-lg sm:h-48 ${focus}`}
       onBlur={() => setAt(null)} onFocus={() => setAt(a => a ?? upTo)} onKeyDown={key}
       // a scroll that starts on the chart cancels the pointer without focusing it, so nothing else would clear the tooltip
       onPointerDown={move} onPointerMove={move} onPointerCancel={() => setAt(null)} onPointerLeave={e => { if (e.pointerType !== 'touch') setAt(null); }}>
-      <svg aria-hidden="true" className="size-full text-turmeric" preserveAspectRatio="none" viewBox="0 0 100 40">
+      {/* the one moment of motion on the page: the line writes itself in, left to right, like an entry in a khata */}
+      <svg aria-hidden="true" className="write size-full text-turmeric" preserveAspectRatio="none" viewBox="0 0 100 40">
         <defs>
           <linearGradient id={fill} x1="0" x2="0" y1="0" y2="1">
             <stop offset="0" stopColor="currentColor" stopOpacity="0.4" /><stop offset="1" stopColor="currentColor" stopOpacity="0" />
