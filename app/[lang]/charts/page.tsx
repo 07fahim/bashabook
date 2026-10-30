@@ -1,25 +1,29 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { billShareIn, costRows, forecast, history, lastMonths, myPlates, runningSpend, slices, spendByKind, worthALook } from '@/lib/charts';
+import { billNames, billShareIn, costRows, forecast, history, inAndOut, lastMonths, mealGrid, myPlates, runningSpend, slices, spendByKind, worthALook } from '@/lib/charts';
 import { db } from '@/lib/db';
 import { flatMoney } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka, weightedMeals } from '@/lib/meals';
 import { loadMonth, monthOf } from '@/lib/money-db';
 import { noticeCount } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
-import { Area, HBars, Ring, Stacked, VBars } from '../bars';
+import { Lollipops, MealGrid, Meter, MonthCards, SplitBars } from '../bars';
 import { getDictionary, hasLocale, type Dict } from '../dictionaries';
-import { fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
+import { fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka, names } from '../format';
 import { Header, withQuery } from '../header';
-import { balanceText, lookText } from '../money/bits';
+import { balanceText } from '../money/bits';
 import { Nav } from '../nav';
 import { card, focus, link, PageSkeleton } from '../ui';
+import { Ring } from './ring';
+import { SpendLine } from './spend-line';
 
 export default function Charts({ params, searchParams }: PageProps<'/[lang]/charts'>) {
   return <Suspense fallback={<PageSkeleton />}><Body params={params} searchParams={searchParams} /></Suspense>;
 }
 
+/** The first letter as a reader sees it (a Bangla letter with its marks), for the lollipop discs. */
+const initial = (name: string) => ([...new Intl.Segmenter().segment(name.trim())][0]?.segment ?? '?').toUpperCase();
 const short = (month: string) => new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
 const h2 = 'font-display text-xl font-bold';
 
@@ -73,9 +77,30 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const meals = mo.members.map(p => ({ id: p.id, meals: mo.meals.get(p.id) ?? 0, guests: mo.guestMeals.get(p.id) ?? 0 })).sort((a, b) => b.meals - a.meals);
   const self = mo.members.find(p => p.id === me.memberId);
   const plates = self ? myPlates(self, mo.changes, days.slice(0, upTo + 1)) : [];
+  const grid = self ? mealGrid(self, mo.changes, days.slice(0, upTo + 1)) : null;
+  // what each meal's plates count as (breakfast is often half). A closed month's meals are frozen: if the flat's weights moved
+  // since, the rows would not add up to the frozen total, so the counts-as lines stay out rather than show a sum that is off
+  const weights = mo.flat.weights, myMeals = mo.meals.get(me.memberId) ?? 0;
+  const weightsHold = plates.reduce((a, p) => a + p.plates * weights[p.meal], 0) === myMeals;
   const spent = runningSpend(mo.entries, days);
+  // "Bills" says what it holds: the flat's bills on the cost card, and on My month only the ones charged to me (a closed month
+  // keeps no per-bill shares, so there the word stands alone)
+  const billsWith = (list: string[] | null) => (list?.length ? x.billsOf.replace('{list}', names(list.map(k => (k === x.others ? k.toLowerCase() : k)), t.money.and)) : x.bills);
+  // My month's parts: came in in leaf (the carried part lighter), used in the colours food and bills have on the whole page
+  const parts: Record<string, { label: string; color: string }> = {
+    earlier: { label: x.earlier, color: 'bg-leaf/50' }, paid: { label: x.paidIn, color: 'bg-leaf' }, corrections: { label: x.corrections, color: 'bg-ink' },
+    owed: { label: x.owedEarlier, color: 'bg-chili/50' }, food: { label: x.food, color: 'bg-turmeric' }, bills: { label: billsWith(billNames(mo.entries, mo.result.lines, me.memberId, x.others)), color: 'bg-muted' }, advances: { label: x.advances, color: 'bg-chili' } };
+  const named = (ps: { key: string; value: number }[]) => ps.map(p => ({ ...p, ...parts[p.key] }));
+  const costs = boss ? costRows(mo.result.perMember) : [];
+  const avgCost = costs.length ? Math.round(costs.reduce((a, r) => a + r.food + r.bills, 0) / costs.length) : 0;
+  // what the line says at each drawn day: the date, the spend by then and what that day added
+  const tips = spent.slice(0, upTo + 1).map((p, k) => { const add = p.value - (k ? spent[k - 1].value : 0);
+    return { date: fmtDay(p.day, lang), total: fmtTaka(p.value), add: add ? x.thatDay.replace('{t}', fmtTaka(add)) : null }; });
   const empty = !mo.entries.some(e => e.status === 'ok') && totalMeals === 0;
   const b = mine ? balanceText(t.money, mine.balance, closed) : null;
+  // My month speaks in exact amounts, so its words and colour follow the exact sign (the tile above rounds to whole taka)
+  const verdict = !mine ? '' : mine.balance < 0 ? x.tileOwe : mine.balance > 0 ? x.tileGet : x.tileEven;
+  const vtone = !mine ? '' : mine.balance < 0 ? 'text-chili' : mine.balance > 0 ? 'text-leaf' : '';
   // money with the collector, as Money shows it (this month adds every open month up while an earlier one is still open)
   const held = running && mo.earlierOpen ? await flatMoney(db, me.flatId, today) : mo.result.fund;
   const holder = closed && mo.info?.cash ? name(mo.info.cash.by) : mo.all.find(p => p.role === 'manager')?.name ?? '';
@@ -160,21 +185,49 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
             <section className={`${card} md:col-span-12`}>
               <h2 className={h2}>{x.look}</h2>
               <p className="mt-1 text-[15px] text-muted">{x.lookHint}</p>
-              <ul className="mt-3 divide-y divide-line text-[15px]">
+              {/* each question drawn the way it is asked: how big against the biggest before, the twin rows, when it usually comes */}
+              <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {looks.map((l, i) => (
-                  <li key={i} className="flex items-start gap-3 py-3">
-                    {/* the tag names the kind of question, so the eye sorts the list before reading a line */}
-                    <span className="mt-2.5 flex-none rounded-full border border-line bg-paper px-2.5 text-[13px] font-semibold leading-6 whitespace-nowrap">{x.lookKinds[l.kind]}</span>
-                    <Link href={`/${lang}/money#entries`} className={`block min-w-0 py-2.5 leading-6 underline-offset-4 hover:underline ${focus}`}>{lookText(t, lang, l)}</Link>
+                  <li key={i} className="flex flex-col rounded-2xl bg-paper p-4">
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="rounded-full border border-line bg-surface px-2.5 text-[13px] font-semibold leading-6 whitespace-nowrap">{x.lookKinds[l.kind]}</span>
+                      <span className="font-semibold">{l.kind === 'missing' ? l.note : fmtDay(l.date, lang)}</span>
+                    </p>
+                    {l.kind === 'high' && (<>
+                      <div aria-hidden="true" className="mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 text-[13px]">
+                        <span>{x.lookThis}</span><span className="h-2.5 rounded-full bg-chili" /><span className="font-semibold tabular-nums">{fmtExact(l.amount)}</span>
+                        <span>{x.lookBefore}</span><span className="h-2.5 rounded-full bg-muted" style={{ width: `${(l.max / l.amount) * 100}%` }} /><span className="tabular-nums">{fmtExact(l.max)}</span>
+                      </div>
+                      <p className="mt-3 text-[15px]"><span className="sr-only">{x.lookThis} {fmtExact(l.amount)}. {x.lookBefore} {fmtExact(l.max)}. </span>
+                        {x.lookMore.replace('{p}', String(Math.max(1, Math.round(((l.amount - l.max) / l.max) * 100))))}</p>
+                    </>)}
+                    {l.kind === 'dup' && (<>
+                      <ul aria-hidden="true" className="mt-3 space-y-1.5 text-[13px]">
+                        {Array.from({ length: l.n }, (_, k) => (
+                          <li key={k} className="flex justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-1.5">
+                            <span className="min-w-0 truncate">{l.note ?? t.money.types[l.type]}</span><span className="tabular-nums">{fmtExact(l.amount)}</span>
+                          </li>))}
+                      </ul>
+                      <p className="mt-3 text-[15px]"><span className="sr-only">{l.note ?? t.money.types[l.type]} {fmtExact(l.amount)}. </span>{x.lookSame.replace('{n}', String(l.n))}</p>
+                    </>)}
+                    {l.kind === 'missing' && (<>
+                      {/* the month as a track: the days gone in turmeric, a tick where it was usually in by */}
+                      <div aria-hidden="true" className="relative mt-5 h-2 rounded-full bg-line">
+                        <span className="absolute inset-y-0 left-0 rounded-full bg-turmeric" style={{ width: `${((upTo + 1) / days.length) * 100}%` }} />
+                        <span className="absolute -top-1.5 h-5 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${(l.day / days.length) * 100}%` }} />
+                      </div>
+                      <p className="mt-3 text-[15px]">{x.lookUsual.replace('{d}', String(l.day)).replace('{t}', String(upTo + 1))}</p>
+                    </>)}
+                    <Link href={`/${lang}/money#entries`} className={`mt-auto inline-flex min-h-11 items-center self-start pt-2 ${link}`}>{x.lookOpen}<span className="sr-only">: {x.lookKinds[l.kind]}, {l.kind === 'missing' ? l.note : fmtDay(l.date, lang)}</span></Link>
                   </li>))}
               </ul>
             </section>)}
-          <section className={`${card} md:col-span-12 lg:col-span-8`}>
+          <section className={`${card} md:col-span-12 lg:col-span-8 lg:flex lg:flex-col`}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <h2 className={h2}>{x.through}</h2>
               <p className="text-[15px] text-muted">{x.throughNote.replace('{t}', fmtTaka(spent[upTo].value)).replace('{d}', fmtDay(days[upTo], lang))}</p>
             </div>
-            <div className="mt-4"><Area points={spent} upTo={upTo} running={running} /></div>
+            <div className="mt-4 lg:flex lg:flex-1 lg:flex-col"><SpendLine values={spent.map(p => p.value)} upTo={upTo} running={running} label={x.through} tips={tips} /></div>
             <ol aria-hidden="true" className="mt-1 flex justify-between text-[13px] text-muted tabular-nums">
               {axis.map(i => <li key={i}>{i + 1}</li>)}
             </ol>
@@ -182,56 +235,56 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
           </section>
           <section className={`${card} md:col-span-12 lg:col-span-4`}>
             <h2 className={h2}>{x.whereWent}</h2>
-            <div className="mt-4"><Ring fmt={fmtTaka} slices={slices(spend, x.others)} /></div>
+            <div className="mt-4"><Ring total={fmtTaka(total)} slices={slices(spend, x.others).map(r => ({ ...r, text: fmtTaka(r.value) }))} /></div>
           </section>
 
           <section className={`${card} md:col-span-6`}>
-            <h2 className={h2}>{x.myMeals}</h2>
+            {/* the card adds itself up: plates per meal, what they count as, the meals, then the food they cost */}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+              <h2 className={h2}>{x.myMeals}</h2>
+              {self && <p className="text-[15px] font-semibold tabular-nums">{x.mealsTotal.replace('{n}', fmtMeals(myMeals))}</p>}
+            </div>
             {self ? (<>
-              <div className="mt-4"><HBars fmt={String} rows={plates.map(p => ({
-                key: p.meal, text: t.meals.names[p.meal], value: p.plates - p.guests, tail: p.guests, valueText: String(p.plates),
-                label: <>{t.meals.names[p.meal]}{p.guests > 0 && <span className="ml-1 text-[13px] text-muted">{x.guests.replace('{n}', String(p.guests))}</span>}</> }))} /></div>
-              {mine && totalMeals > 0 && mo.result.mealRate > 0 && <p className="mt-4 text-[15px] text-muted">{x.mealsNote.replace('{n}', fmtMeals(mo.meals.get(me.memberId) ?? 0)).replace('{r}', fmtRate(mo.result.mealRate, totalMeals))}</p>}
+              <div className="mt-4"><MealGrid n={days.length} legend={[x.gridAte, x.gridGuest, x.gridSkipped, x.gridGuestOnly]} rows={plates.map(p => ({
+                key: p.meal, label: t.meals.names[p.meal], cells: grid![p.meal], total: x.platesN.replace('{n}', String(p.plates)),
+                note: [p.guests > 0 ? x.forGuests.replace('{g}', String(p.guests)) : '',
+                  weightsHold && weights[p.meal] !== 100 ? x.countsAs.replace('{m}', fmtMeals(p.plates * weights[p.meal])) : ''].filter(Boolean).join(' · ') }))} /></div>
+              {mine && totalMeals > 0 && mo.result.mealRate > 0 && (
+                <div className="mt-4 border-t border-line pt-3">
+                  <p className="flex justify-between gap-3 font-semibold"><span>{x.food}</span><span className="tabular-nums">{fmtExact(mine.foodCost)}</span></p>
+                  <p className="text-[13px] text-muted">{x.mealsNote.replace('{n}', fmtMeals(myMeals)).replace('{r}', fmtRate(mo.result.mealRate, totalMeals))}</p>
+                </div>)}
             </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}
           </section>
           <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.lastMonths}</h2>
-            {past.length < 2 ? <p className="mt-2 text-muted">{x.needTwo}</p> : (
-              <div className="mt-4 grid gap-6 lg:grid-cols-2">
-                <div><h3 className="font-semibold">{x.rate}</h3><div className="mt-2"><VBars fmt={v => fmtRate(v, 1)} cols={past.map(p => ({ key: p.month, label: short(p.month), value: p.rate }))} /></div></div>
-                <div><h3 className="font-semibold">{x.spend}</h3><div className="mt-2"><VBars fmt={fmtTaka} cols={past.map(p => ({ key: p.month, label: short(p.month), value: p.spend }))} /></div></div>
-              </div>)}
+            {past.length === 0 ? <p className="mt-2 text-muted">{x.needTwo}</p> : (
+              // each number says how it moved from the month before, the way the tiles up top do
+              <div className="mt-4"><MonthCards words={{ rate: x.rate, spend: x.spend, latest: running ? x.latest : null }} rows={past.map((p, i) => {
+                const before = past[i - 1] ?? null, rd = delta(x, p.rate, before?.rate ?? null, before?.month ?? null, true), sd = delta(x, p.spend, before?.spend ?? null, before?.month ?? null, true);
+                return { key: p.month, label: short(p.month), long: fmtMonth(p.month), href: href(p.month), rate: p.rate, rateText: fmtRate(p.rate, 1), spend: p.spend, spendText: fmtTaka(p.spend),
+                  rateNote: rd.note ? { text: rd.note, tone: rd.tone } : undefined, spendNote: sd.note ? { text: sd.note, tone: sd.tone } : undefined,
+                  aria: [x.openMonth.replace('{month}', fmtMonth(p.month)).replace('{s}', fmtTaka(p.spend)).replace('{r}', fmtRate(p.rate, 1)), rd.note && `${x.rate} ${rd.note}`, sd.note && `${x.spend} ${sd.note}`].filter(Boolean).join('. ') };
+              })} /></div>)}
           </section>
 
           <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.myMonth}</h2>
-            {mine && b ? (<>
-              <div className="mt-4"><Stacked fmt={fmtTaka} rows={[
-                [{ key: 'food', label: x.food, value: mine.foodCost, color: 'fill-turmeric', swatch: 'bg-turmeric' },
-                 { key: 'bills', label: x.bills, value: mine.billShare, color: 'fill-muted', swatch: 'bg-muted' }],
-                [{ key: 'paid', label: x.paidIn, value: mine.paidIn, color: 'fill-leaf', swatch: 'bg-leaf' }]]} /></div>
-              {/* the receipt: each line is signed the way the result reads (+ adds to what you owe, or + adds to what you get
-                  back when the month is in your favour), so the lines add up to the last one by hand */}
-              <dl className="mt-4 divide-y divide-line text-[15px]">
-                {([
-                  [x.cost, mine.foodCost + mine.billShare],
-                  ...(mine.payouts ? [[x.advances, mine.payouts]] : []),
-                  [x.paidIn, -mine.paidIn],
-                  ...(mine.opening ? [[x.earlier, -mine.opening]] : []),
-                  ...(mine.adjustments ? [[x.corrections, -mine.adjustments]] : []),
-                ] as [string, number][]).map(([k, v]): [string, number] => [k, mine.balance > 0 ? -v : v]).map(([k, v]) => (
-                  <div key={k} className="flex justify-between gap-4 py-2"><dt>{k}</dt><dd className="whitespace-nowrap tabular-nums">{v > 0 ? '+' : ''}{fmtSigned(v)}</dd></div>
-                ))}
-                {/* the receipt follows the exact sign (40 poisha is still owed), while the strip tile keeps the whole-taka headline */}
-                <div className={`flex justify-between gap-4 py-2 font-semibold ${mine.balance < 0 ? 'text-chili' : mine.balance > 0 ? 'text-leaf' : ''}`}><dt>{mine.balance < 0 ? x.tileOwe : mine.balance > 0 ? x.tileGet : x.tileEven}</dt><dd className="whitespace-nowrap tabular-nums">{fmtExact(mine.balance)}</dd></div>
-              </dl>
+            {mine ? (<>
+              {/* the answer first, then why: how much of what came in was used, then the receipt that adds up to the answer */}
+              <p className={`mt-3 flex flex-wrap items-baseline justify-between gap-x-4 font-semibold ${vtone}`}>
+                <span>{verdict}</span><span className="text-[28px] leading-tight font-bold tabular-nums">{fmtExact(mine.balance)}</span>
+              </p>
+              <div className="mt-4"><Meter fmt={fmtExact} came={named(inAndOut(mine).came)} used={named(inAndOut(mine).used)}
+                words={{ usedOf: x.usedOf, usedOnly: x.usedOnly, usedOver: x.usedOver, left: x.left, short: x.short, cameIn: x.cameIn }}
+                total={{ label: verdict, text: fmtExact(mine.balance), tone: vtone }} /></div>
               <Link href={`/${lang}/money${month !== thisMonth ? `?m=${month.slice(0, 7)}` : ''}`} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{t.money.breakdown}</Link>
             </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}
           </section>
           <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.mealsPer}</h2>
-            <div className="mt-4"><HBars fmt={fmtMeals} rows={meals.map(p => ({
-              key: p.id, text: name(p.id), value: p.meals, tail: p.guests, strong: p.id === me.memberId,
+            <div className="mt-4"><Lollipops rows={meals.map(p => ({
+              key: p.id, text: name(p.id), initial: initial(name(p.id)), value: p.meals - p.guests, tail: p.guests, valueText: fmtMeals(p.meals), strong: p.id === me.memberId,
               label: <>{name(p.id)}{p.guests > 0 && <span className="ml-1 text-[13px] text-muted">{x.guests.replace('{n}', fmtMeals(p.guests))}</span>}</> }))} /></div>
           </section>
 
@@ -239,10 +292,11 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
             <section className={`${card} md:col-span-12`}>
               <h2 className={h2}>{x.costPer}</h2>
               <p className="mt-1 text-[15px] text-muted">{x.costHint}</p>
-              <div className="mt-4"><HBars fmt={fmtTaka} tailColor="fill-muted" rows={costRows(mo.result.perMember).map(r => ({
-                key: r.id, text: name(r.id), value: r.food, tail: r.bills, valueText: fmtTaka(r.food + r.bills), strong: r.id === me.memberId,
-                label: <Link className={`underline-offset-4 hover:underline ${focus}`} href={`/${lang}/money?${new URLSearchParams({ ...(month !== thisMonth ? { m: month.slice(0, 7) } : {}), who: r.id })}`}>{name(r.id)}</Link> }))} /></div>
-              <p className="mt-3 text-[13px] text-muted"><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-sm bg-turmeric" />{x.food} <span aria-hidden="true" className="mr-1 ml-3 inline-block size-3 rounded-sm bg-muted" />{x.bills}</p>
+              <div className="mt-4"><SplitBars fmt={fmtTaka} mark={avgCost} words={[x.food, x.bills]} rows={costs.map(r => ({
+                key: r.id, text: name(r.id), food: r.food, bills: r.bills, total: fmtTaka(r.food + r.bills), strong: r.id === me.memberId,
+                sr: `${x.food} ${fmtTaka(r.food)}, ${x.bills} ${fmtTaka(r.bills)}`,
+                label: <Link className={`block truncate leading-8 underline-offset-4 hover:underline ${focus}`} href={`/${lang}/money?${new URLSearchParams({ ...(month !== thisMonth ? { m: month.slice(0, 7) } : {}), who: r.id })}`}>{name(r.id)}</Link> }))} /></div>
+              <p className="mt-3 text-[13px] text-muted"><span aria-hidden="true" className="mr-1 inline-block size-3 rounded-sm bg-turmeric" />{x.food} <span aria-hidden="true" className="mr-1 ml-3 inline-block size-3 rounded-sm bg-muted" />{billsWith(billNames(mo.entries, null, null, x.others))}<span aria-hidden="true" className="mr-1.5 ml-3 inline-block h-3 border-l-2 border-dashed border-ink align-middle" />{x.average.replace('{t}', fmtTaka(avgCost))}</p>
             </section>)}
         </div>
       </main>

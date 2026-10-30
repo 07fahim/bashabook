@@ -34,6 +34,10 @@ export function runningSpend(entries: Entry[], days: string[]) {
   return days.map(d => { sum += ok.filter(e => e.date === d).reduce((a, e) => a + e.amount, 0); return { day: d, value: sum }; });
 }
 
+/** The day under the pointer: `rel` is how far across the chart (0 to 1) over `n` days, held to the days drawn (0 to `upTo`).
+ *  The spend line (a client component) imports this file: keep its other imports type-only, or the bundle pulls in the database. */
+export const pickDay = (rel: number, n: number, upTo: number) => Math.max(0, Math.min(upTo, Math.round(rel * (n - 1))));
+
 /** One person's plates per meal over `days`, guests included, and how many of those were guests. */
 export function myPlates(m: MealMember, changes: MealChange[], days: string[]): { meal: Meal; plates: number; guests: number }[] {
   const idx = indexChanges(changes);
@@ -42,6 +46,45 @@ export function myPlates(m: MealMember, changes: MealChange[], days: string[]): 
     plates: days.reduce((a, d) => a + mealCount(m, idx, d, meal), 0),
     guests: changes.filter(c => c.memberId === m.id && c.meal === meal && days.includes(c.date) && isPresent(m, c.date)).reduce((a, c) => a + (c.guests ?? 0), 0),
   }));
+}
+
+/** My month as a grid: for each meal, one cell per day in `days`. Null when I didn't live here that day; else my own plate
+ *  (0 or 1) and my guests' plates. Same rule as myPlates, so own plus guests adds up to its totals. */
+export function mealGrid(m: MealMember, changes: MealChange[], days: string[]): Record<Meal, ({ own: number; guests: number } | null)[]> {
+  const idx = indexChanges(changes);
+  const guests = new Map(changes.filter(c => c.memberId === m.id).map(c => [`${c.date}|${c.meal}`, c.guests ?? 0]));
+  return Object.fromEntries(MEALS.map(meal => [meal, days.map(d => {
+    if (!isPresent(m, d)) return null;
+    const g = guests.get(`${d}|${meal}`) ?? 0;
+    return { own: mealCount(m, idx, d, meal) - g, guests: g };
+  })])) as Record<Meal, ({ own: number; guests: number } | null)[]>;
+}
+
+/** What "Bills" holds this month, by name, biggest first (an unnamed bill counts under `others`), so the word says what is in
+ *  it: every bill the month charges, a correction for a closed month included, since the bill share beside it counts that too.
+ *  With `me`: only the bills the engine charged me (its `lines`), biggest share first; a closed month keeps no lines, so null
+ *  there. More than five names: the biggest four, then `others` once. */
+export function billNames(entries: Entry[], lines: { rowId: string; memberId: string; amount: number }[] | null, me: string | null, others: string) {
+  if (me && !lines?.length) return null;
+  const share = new Map<string, number>();
+  if (me) for (const l of lines!) if (l.memberId === me && l.amount > 0) share.set(l.rowId, (share.get(l.rowId) ?? 0) + l.amount);
+  const by = new Map<string, number>();
+  for (const e of entries) if (e.status === 'ok' && e.type === 'bill' && (!me || share.has(e.id))) {
+    const k = e.note?.trim() || others; by.set(k, (by.get(k) ?? 0) + (me ? share.get(e.id)! : e.amount));
+  }
+  const list = [...by].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  return list.length > 5 ? [...list.filter(k => k !== others).slice(0, 4), others] : list;
+}
+
+/** One person's month as money that came in and money used, every part positive and none of them zero: a balance carried
+ *  from before, a correction or an advance goes to whichever side it is on. Came in less used is the balance, the same sum as
+ *  lib/money.ts. */
+export function inAndOut(p: MemberResult) {
+  const came: { key: string; value: number }[] = [], used: { key: string; value: number }[] = [];
+  const add = (side: typeof came, key: string, v: number) => { if (v > 0) side.push({ key, value: v }); };
+  add(came, 'earlier', p.opening); add(came, 'paid', p.paidIn); add(came, 'corrections', p.adjustments);
+  add(used, 'owed', -p.opening); add(used, 'food', p.foodCost); add(used, 'bills', p.billShare); add(used, 'advances', p.payouts); add(used, 'corrections', -p.adjustments);
+  return { came, used };
 }
 
 /** At most five slices for a ring: the biggest named rows keep their names, everything else (including rows already called

@@ -4,8 +4,9 @@ import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
-import { billShareIn, costRows, forecast, history, lastMonths, myPlates, runningSpend, slices, spendByKind, worthALook } from './charts';
+import { billNames, billShareIn, costRows, forecast, history, lastMonths, inAndOut, mealGrid, myPlates, pickDay, runningSpend, slices, spendByKind, worthALook } from './charts';
 import type { MealChange, MealMember } from './meals';
+import type { MemberResult } from './money';
 
 const row = (p: Partial<Entry> & Pick<Entry, 'type' | 'amount'>): Entry =>
   ({ id: 'x', status: 'ok', note: null, paidBy: null, memberId: null, split: null, selected: [], date: '2026-09-05', createdBy: 'c', forMonth: null, moves: null, heldBy: null, ...p } as Entry);
@@ -144,5 +145,88 @@ describe('the day series and the ring', () => {
   });
   it('a day outside the month stays out of the running spend', () => {
     expect(runningSpend([row({ type: 'bazar', amount: 5, date: '2026-08-31' })], ['2026-09-01']).map(d => d.value)).toEqual([0]);
+  });
+});
+
+describe('pickDay', () => {
+  it('snaps the pointer to the nearest drawn day and never past the last one', () => {
+    expect(pickDay(0, 31, 30)).toBe(0);
+    expect(pickDay(0.49 / 30, 31, 30)).toBe(0);
+    expect(pickDay(0.51 / 30, 31, 30)).toBe(1);
+    expect(pickDay(1, 31, 30)).toBe(30);
+    expect(pickDay(0.9, 31, 9)).toBe(9);      // day 10 of a running month: later days are blank
+    expect(pickDay(-0.2, 31, 9)).toBe(0);     // a drag past the left edge
+  });
+});
+
+describe('mealGrid', () => {
+  it('one cell per drawn day and meal: blank before I moved in, plates and guests after, adding up to my plates', () => {
+    const me: MealMember = { id: 'a', joinedOn: '2026-09-02', leftOn: null, defaults: { b: false, l: true, d: true } };
+    const rows: MealChange[] = [{ memberId: 'a', date: '2026-09-02', meal: 'd', count: 3, guests: 2 }, { memberId: 'a', date: '2026-09-03', meal: 'l', count: 0 },
+      { memberId: 'b', date: '2026-09-02', meal: 'd', count: 5, guests: 4 }];
+    const days = ['2026-09-01', '2026-09-02', '2026-09-03'];
+    const g = mealGrid(me, rows, days);
+    // guests while I was out: not my plate, so not a day I ate
+    expect(mealGrid(me, [{ memberId: 'a', date: '2026-09-03', meal: 'b', count: 2, guests: 2 }], days).b[2]).toEqual({ own: 0, guests: 2 });
+    expect(g.d).toEqual([null, { own: 1, guests: 2 }, { own: 1, guests: 0 }]);
+    expect(g.l).toEqual([null, { own: 1, guests: 0 }, { own: 0, guests: 0 }]);
+    expect(g.b).toEqual([null, { own: 0, guests: 0 }, { own: 0, guests: 0 }]);
+    for (const p of myPlates(me, rows, days)) {
+      const cells = g[p.meal].filter(c => c !== null);
+      expect([cells.reduce((a, c) => a + c.own + c.guests, 0), cells.reduce((a, c) => a + c.guests, 0)]).toEqual([p.plates, p.guests]);
+    }
+  });
+});
+
+describe('inAndOut', () => {
+  const m = (p: Partial<MemberResult>): MemberResult => ({ id: 'a', opening: 0, paidIn: 0, foodCost: 0, billShare: 0, payouts: 0, adjustments: 0, balance: 0, ...p });
+  const sum = (r: { value: number }[]) => r.reduce((a, x) => a + x.value, 0);
+  it('money in and money used, every part positive, and in less used is the balance', () => {
+    const p = m({ opening: 500374, paidIn: 400000, foodCost: 158544, billShare: 132875, balance: 608955 });
+    const r = inAndOut(p);
+    expect(r.came.map(x => x.key)).toEqual(['earlier', 'paid']);
+    expect(r.used.map(x => x.key)).toEqual(['food', 'bills']);
+    expect(sum(r.came) - sum(r.used)).toBe(p.balance);
+  });
+  it('a debt from before, an advance and a correction against me land on the used side', () => {
+    const p = m({ opening: -2000, paidIn: 1000, foodCost: 700, billShare: 0, payouts: 300, adjustments: -50, balance: -2050 });
+    const r = inAndOut(p);
+    expect(r.came.map(x => x.key)).toEqual(['paid']);
+    expect(r.used.map(x => x.key)).toEqual(['owed', 'food', 'advances', 'corrections']);
+    expect(r.used.every(x => x.value > 0)).toBe(true);
+    expect(sum(r.came) - sum(r.used)).toBe(p.balance);
+  });
+  it('a correction in my favour comes in; nothing at all leaves both sides empty', () => {
+    expect(inAndOut(m({ adjustments: 120, balance: 120 })).came).toEqual([{ key: 'corrections', value: 120 }]);
+    expect(inAndOut(m({}))).toEqual({ came: [], used: [] });
+  });
+});
+
+describe('billNames', () => {
+  const bills = [row({ id: 'w', type: 'bill', amount: 1200, note: 'Wi-Fi' }), row({ id: 'c', type: 'bill', amount: 6000, note: ' Cook ' }),
+    row({ id: 'r', type: 'bill', amount: 9000, note: 'Rent' }), row({ id: 'x', type: 'bill', amount: 500, note: null }),
+    row({ id: 'p', type: 'bill', amount: 700, note: 'Gas', status: 'pending' }), row({ id: 'b', type: 'bazar', amount: 900 })];
+  it('the flat saves: bills by name, biggest first, unnamed ones as others', () => {
+    expect(billNames(bills, null, null, 'Others')).toEqual(['Rent', 'Cook', 'Wi-Fi', 'Others']);
+  });
+  it('mine: only the bills the month charged me, by the engine lines', () => {
+    const lines = [{ rowId: 'c', memberId: 'a', amount: 750 }, { rowId: 'w', memberId: 'a', amount: 150 }, { rowId: 'r', memberId: 'b', amount: 9000 }, { rowId: 'x', memberId: 'a', amount: 0 }];
+    expect(billNames(bills, lines, 'a', 'Others')).toEqual(['Cook', 'Wi-Fi']);
+  });
+  it('a closed month keeps no lines: no list for one person', () => {
+    expect(billNames(bills, [], 'a', 'Others')).toBeNull();
+  });
+  it('a correction bill for a closed month is named too: the bill share it sits next to counts it', () => {
+    const fix = row({ id: 'f', type: 'bill', amount: 300, note: 'Water', forMonth: '2026-09-01' });
+    expect(billNames([...bills, fix], null, null, 'Others')).toContain('Water');
+    expect(billNames([...bills, fix], [{ rowId: 'f', memberId: 'a', amount: 40 }], 'a', 'Others')).toEqual(['Water']);
+  });
+  it('mine: biggest share first, not biggest bill', () => {
+    const lines = [{ rowId: 'r', memberId: 'a', amount: 100 }, { rowId: 'w', memberId: 'a', amount: 400 }];
+    expect(billNames(bills, lines, 'a', 'Others')).toEqual(['Wi-Fi', 'Rent']);
+  });
+  it('more than five names: the biggest four, then Others once', () => {
+    const many = ['A', 'B', 'C', 'D', 'E', 'F'].map((n, i) => row({ id: n, type: 'bill', amount: 1000 - i, note: n }));
+    expect(billNames([...many, row({ id: 'u', type: 'bill', amount: 5000, note: null })], null, null, 'Others')).toEqual(['A', 'B', 'C', 'D', 'Others']);
   });
 });

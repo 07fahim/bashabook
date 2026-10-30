@@ -1,119 +1,214 @@
-import type { ReactNode } from 'react';
+import Link from 'next/link';
+import type { CSSProperties, ReactNode } from 'react';
+import { focus } from './ui';
 
-/** Bars drawn by the app: SVG only, no script, colours from the theme tokens. Values are poisha or hundredths of a meal; the
- *  caller formats them. A zero maximum draws empty bars and never divides by zero. The text beside each bar already says
- *  everything, so every SVG is decorative. */
+/** Charts drawn by the app: SVG and CSS only, no script, colours from the theme tokens. Values are poisha or hundredths of a
+ *  meal; the caller formats them. A zero maximum draws nothing and never divides by zero. The words beside each chart already
+ *  say everything, so the drawn parts are decorative. Each card gets the form its numbers need: bars to compare people, a
+ *  grid for days, a meter and a receipt for a balance, bars and cards for months. */
 const pct = (v: number, max: number) => (max > 0 ? Math.max(0, Math.min(100, (v / max) * 100)) : 0);
 
-export type HRow = { key: string; label: ReactNode; text: string; value: number; valueText?: string; tail?: number; strong?: boolean };
+export type Split = { key: string; label: ReactNode; text: string; food: number; bills: number; total: string; sr: string; strong?: boolean };
 
-/** One horizontal bar per row: label, bar, value. `tail` draws a second part after the bar (guest meals, bills). */
-export function HBars({ rows, fmt, tailColor = 'fill-line' }: { rows: HRow[]; fmt: (v: number) => string; tailColor?: string }) {
-  const max = Math.max(...rows.map(r => r.value + (r.tail ?? 0)), 0);
+/** People's cost as one thick bar each, food then bills, on one scale, with a dashed rule at the average through every bar.
+ *  Each part says what it is inside it: the word and the amount when both fit, the amount alone when only that fits, nothing
+ *  when not even that does (the legend and the total still say it). Phones put the name and total above the bar, so the bar
+ *  gets the card's full width. */
+export function SplitBars({ rows, mark, words, fmt }: { rows: Split[]; mark?: number; words: [string, string]; fmt: (v: number) => string }) {
+  const max = Math.max(...rows.map(r => r.food + r.bills), 0);
+  const tag = 'hidden px-2 text-[13px] font-semibold tabular-nums';
+  // each part is its own container, so what fits inside is measured against the part itself
+  const part = (v: number, word: string, color: string) => v > 0 && (
+    <span className={`@container flex h-full flex-none items-center overflow-hidden whitespace-nowrap ${color}`} style={{ width: `${pct(v, max)}%` }}>
+      <span className={`${tag} @min-[7.5rem]:inline`}>{word} {fmt(v)}</span>
+      <span className={`${tag} @min-[4.5rem]:inline @min-[7.5rem]:hidden`}>{fmt(v)}</span>
+    </span>);
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-4 sm:space-y-3">
       {rows.map(r => (
-        <li key={r.key} className={`grid grid-cols-[minmax(0,7rem)_1fr_auto] items-center gap-3 ${r.strong ? 'font-semibold' : ''}`}>
+        <li key={r.key} className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 sm:grid-cols-[minmax(0,9rem)_1fr_5.5rem] ${r.strong ? 'font-semibold' : ''}`}>
           <span className="truncate" title={r.text}>{r.label}</span>
-          <svg aria-hidden="true" className="h-4 w-full" preserveAspectRatio="none" viewBox="0 0 100 4">
-            <rect className="fill-turmeric" height="4" rx="1" width={pct(r.value, max)} />
-            {r.tail ? <rect className={tailColor} height="4" rx="1" width={pct(r.tail, max)} x={pct(r.value, max)} /> : null}
-          </svg>
-          <span className="tabular-nums">{r.valueText ?? fmt(r.value)}</span>
+          <span aria-hidden="true" className="relative col-span-2 row-start-2 flex h-8 overflow-hidden rounded-lg bg-paper font-normal sm:col-span-1 sm:row-start-auto">
+            {part(r.food, words[0], 'bg-turmeric text-on-turmeric')}
+            {part(r.bills, words[1], 'border-l-2 border-surface bg-muted text-paper')}
+            {mark !== undefined && max > 0 && <span className="absolute inset-y-0 border-l-2 border-dashed border-ink" style={{ left: `${pct(mark, max)}%` }} />}
+          </span>
+          <span className="text-right font-semibold tabular-nums">{r.total}<span className="sr-only">. {r.sr}</span></span>
         </li>
       ))}
     </ul>
   );
 }
 
-/** Vertical bars for a short series (months): value above, label below. */
-export function VBars({ cols, fmt }: { cols: { key: string; label: string; value: number }[]; fmt: (v: number) => string }) {
-  const max = Math.max(...cols.map(c => c.value), 0);
-  return (
-    <ol className="flex items-end gap-2">
-      {cols.map((c, i) => (
-        // six values do not fit a phone: the oldest columns beyond five show from sm up
-        <li key={c.key} className={`${i < cols.length - 5 ? 'hidden sm:flex' : 'flex'} min-w-0 flex-1 flex-col items-center gap-1 text-[13px]`}>
-          <span className="tabular-nums">{fmt(c.value)}</span>
-          {/* the bar box has its own height, so the tallest bar's label never climbs out of the chart */}
-          <div className="flex h-28 w-full items-end">
-            <svg aria-hidden="true" className="w-full" preserveAspectRatio="none" style={{ height: `${Math.max(pct(c.value, max), 2)}%` }} viewBox="0 0 4 100">
-              <rect className="fill-turmeric" height="100" rx="1" width="4" />
-            </svg>
-          </div>
-          <span className="text-muted">{c.label}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
+export type Cell = { own: number; guests: number } | null;
 
-/** Bars in parts on one scale, with one legend: a cost bar (food, bills) over a paid-in bar, so the eye compares the two. */
-export type Part = { key: string; label: string; value: number; color: string; swatch: string };
-export function Stacked({ rows, fmt }: { rows: Part[][]; fmt: (v: number) => string }) {
-  const max = Math.max(...rows.map(r => r.reduce((a, p) => a + p.value, 0)), 0);
+/** A month of one person's meals: a row of day squares per meal. Filled: I ate; an outline: I didn't; a dot: guests ate that
+ *  meal; nothing: not living here yet, or a day still to come. `n` is the month's length, so a running month leaves room.
+ *  Legend in the order shown: ate, guests, didn't eat, guests only (shown when the month has one). */
+export function MealGrid({ rows, n, legend }: { rows: { key: string; label: string; total: string; note: string; cells: Cell[] }[]; n: number; legend: [string, string, string, string] }) {
+  const cols: CSSProperties = { gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` };
+  const square = 'relative block aspect-square rounded-[3px] border';
+  const ate = `${square} border-turmeric-ink bg-turmeric`, skipped = `${square} border-muted`;
+  const dot = (on: boolean) => <span className={`absolute inset-[28%] rounded-full ${on ? 'bg-on-turmeric' : 'bg-ink'}`} />;
   return (
     <div>
-      {rows.map((parts, i) => {
-        const starts = parts.map((_, j) => parts.slice(0, j).reduce((a, p) => a + pct(p.value, max), 0));   // each part begins where the last ended
-        return (
-          <svg key={i} aria-hidden="true" className="mt-2 h-6 w-full first:mt-0" preserveAspectRatio="none" viewBox="0 0 100 6">
-            {parts.map((p, j) => <rect key={p.key} className={p.color} height="6" width={pct(p.value, max)} x={starts[j]} />)}
-          </svg>);
-      })}
-      <ul className="mt-3 grid grid-cols-3 gap-2 text-[15px]">
-        {rows.flat().map(p => (
-          <li key={p.key}><span aria-hidden="true" className={`mr-2 inline-block size-3 rounded-sm ${p.swatch}`} />{p.label}<span className="block font-semibold tabular-nums">{fmt(p.value)}</span></li>
-        ))}
+      <ul className="space-y-4">
+        {rows.map(r => (
+          <li key={r.key}>
+            <p className="flex justify-between gap-3"><span>{r.label}</span><span className="font-semibold tabular-nums">{r.total}</span></p>
+            {r.note && <p className="text-[13px] text-muted tabular-nums">{r.note}</p>}
+            <div aria-hidden="true" className="mt-1.5 grid gap-[2px] sm:gap-1" style={cols}>
+              {Array.from({ length: n }, (_, i) => {
+                const c = r.cells[i] ?? null;
+                if (!c) return <span key={i} className={`${square} border-transparent`} />;
+                return <span key={i} className={c.own ? ate : skipped}>{c.guests > 0 && dot(c.own > 0)}</span>;
+              })}
+            </div>
+          </li>))}
       </ul>
-    </div>
-  );
-}
-
-/** A line climbing across the month on ruled paper, the way a khata page runs: the spend so far by day. Days after `upTo`
- *  are left blank, and a dashed rule marks today while the month is still running. */
-export function Area({ points, upTo, running }: { points: { day: string; value: number }[]; upTo: number; running: boolean }) {
-  const n = points.length, max = Math.max(...points.slice(0, upTo + 1).map(p => p.value), 1);
-  const x = (i: number) => (i / (n - 1)) * 100, y = (v: number) => 38 - (v / max) * 34;
-  const line = points.slice(0, upTo + 1).map((p, i) => `${x(i)},${y(p.value)}`).join(' ');
-  return (
-    <svg aria-hidden="true" className="h-40 w-full sm:h-48" preserveAspectRatio="none" viewBox="0 0 100 40">
-      {[4, 15.33, 26.67, 38].map(r => <line key={r} className="stroke-line" vectorEffect="non-scaling-stroke" x1="0" x2="100" y1={r} y2={r} />)}
-      <polygon className="fill-turmeric opacity-15" points={`0,38 ${line} ${x(upTo)},38`} />
-      <polyline className="fill-none stroke-turmeric" fill="none" points={line} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-      {running && <line className="stroke-ink" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" x1={x(upTo)} x2={x(upTo)} y1="2" y2="38" />}
-    </svg>
-  );
-}
-
-const RING = ['stroke-turmeric', 'stroke-leaf', 'stroke-muted', 'stroke-chili', 'stroke-line'] as const;
-const SWATCH = ['bg-turmeric', 'bg-leaf', 'bg-muted', 'bg-chili', 'bg-line'] as const;
-
-/** A ring of up to five slices with the total in the middle and a legend beside it. */
-export function Ring({ slices, fmt }: { slices: { label: string; value: number }[]; fmt: (v: number) => string }) {
-  const total = slices.reduce((a, s) => a + s.value, 0);
-  const starts = slices.map((_, i) => slices.slice(0, i).reduce((a, s) => a + (s.value / total) * 100, 0));
-  return (
-    <div className="flex flex-col items-center gap-5">
-      <div className="relative size-40 flex-none">
-        <svg aria-hidden="true" className="size-full -rotate-90" viewBox="0 0 42 42">
-          <circle className="stroke-paper" cx="21" cy="21" fill="none" r="15.9155" strokeWidth="5" />
-          {total > 0 && slices.map((s, i) => (
-            <circle key={i} className={RING[i]} cx="21" cy="21" fill="none" r="15.9155" strokeDasharray={`${(s.value / total) * 100} ${100 - (s.value / total) * 100}`} strokeDashoffset={-starts[i]} strokeWidth="5" />
-          ))}
-        </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-lg font-bold tabular-nums">{fmt(total)}</span>
+      <div aria-hidden="true" className="mt-1.5 grid text-[13px] text-muted tabular-nums" style={cols}>
+        {[1, 8, 15, 22, 29].filter(d => d <= n).map(d => <span key={d} className="whitespace-nowrap" style={{ gridColumnStart: d }}>{d}</span>)}
       </div>
-      <ul className="w-full min-w-0 flex-1 space-y-2 text-[15px]">
-        {slices.map((s, i) => (
-          <li key={i} className="flex items-center gap-2">
-            <span aria-hidden="true" className={`size-3 flex-none rounded-sm ${SWATCH[i]}`} />
-            <span className="min-w-0 flex-1">{s.label}</span>
-            <span className="tabular-nums">{fmt(s.value)}</span>
-            <span className="w-11 text-right text-[13px] text-muted tabular-nums">{total ? Math.round((s.value / total) * 100) : 0}%</span>
-          </li>
-        ))}
+      <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-muted">
+        <li className="flex items-center gap-2"><span aria-hidden="true" className={`${ate} size-3`} />{legend[0]}</li>
+        <li className="flex items-center gap-2"><span aria-hidden="true" className={`${ate} size-3`}>{dot(true)}</span>{legend[1]}</li>
+        <li className="flex items-center gap-2"><span aria-hidden="true" className={`${skipped} size-3`} />{legend[2]}</li>
+        {rows.some(r => r.cells.some(c => c && !c.own && c.guests > 0)) && <li className="flex items-center gap-2"><span aria-hidden="true" className={`${skipped} size-3`}>{dot(false)}</span>{legend[3]}</li>}
       </ul>
     </div>
+  );
+}
+
+export type MonthRow = { key: string; label: string; long: string; aria: string; href: string; rate: number; rateText: string; spend: number; spendText: string;
+  rateNote?: { text: string; tone: string }; spendNote?: { text: string; tone: string } };
+
+const Move = ({ tone }: { tone: string }) => tone === 'text-chili' || tone === 'text-leaf' ? (
+  <svg aria-hidden="true" className={`size-3.5 flex-none ${tone === 'text-chili' ? 'stroke-chili' : 'rotate-180 stroke-leaf'}`} fill="none" strokeWidth="2" viewBox="0 0 16 16"><path d="M8 13V3M3 8l5-5 5 5" /></svg>) : null;
+
+/** Closed months, oldest first in `rows`, shown twice. First two small bar charts, meal rate and spend, the latest month in full
+ *  colour, for the shape at a glance (a bar opens its month; the cards below carry the same links for the keyboard). Then one
+ *  card a month, newest first, every number saying how it moved from the month before (chili when it costs more); the cards
+ *  scroll sideways when they don't fit. */
+export function MonthCards({ rows, words }: { rows: MonthRow[]; words: { rate: string; spend: string; latest: string | null } }) {
+  const chart = (title: string, get: (r: MonthRow) => number, text: (r: MonthRow) => string, on: string, off: string) => {
+    const max = Math.max(...rows.map(get), 0);
+    return (
+      <div>
+        <p className="text-[13px] font-semibold text-muted">{title}</p>
+        <ol className="mt-2 flex gap-1.5">
+          {rows.map((r, i) => {
+            const last = i === rows.length - 1;
+            return (
+              <li key={r.key} className="min-w-0 flex-1">
+                <Link href={r.href} tabIndex={-1} className="group flex flex-col items-center gap-1">
+                  <span className="flex h-16 w-full items-end justify-center">
+                    <span className={`relative w-full max-w-9 rounded-t-[3px] ${last ? on : off}`} style={{ height: `${Math.max(pct(get(r), max), 4)}%` }}>
+                      {/* a mouse over a bar reads its value; each chip opens towards the middle, so it never leaves the card */}
+                      <span className={`pointer-events-none absolute bottom-full z-10 mb-1.5 hidden rounded-lg bg-ink px-2 py-1 text-[13px] font-semibold whitespace-nowrap text-paper tabular-nums group-hover:block ${
+                        i < rows.length / 2 ? 'left-0' : 'right-0'}`}>{r.label} {text(r)}</span>
+                    </span>
+                  </span>
+                  <span className={`text-[13px] ${last ? 'font-semibold' : 'text-muted'}`}>{r.label}</span>
+                </Link>
+              </li>);
+          })}
+        </ol>
+      </div>);
+  };
+  const line = (title: string, value: string, note?: { text: string; tone: string }) => (
+    <>
+      <span className="mt-3 block text-[13px] text-muted">{title}</span>
+      <span className="flex items-center gap-1.5 text-lg font-bold tabular-nums">{value}{note && <Move tone={note.tone} />}</span>
+      {note && <span className={`block text-[13px] tabular-nums ${note.tone || 'text-muted'}`}>{note.text}</span>}
+    </>);
+  return (
+    <div>
+      {/* side by side while a phone's half fits the bars (three months), else only where the card is wide enough for six
+          bars each: stacked on a phone and in the half-width card at md */}
+      <div aria-hidden="true" className={`grid gap-5 ${rows.length > 3 ? 'sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2' : 'grid-cols-2'}`}>
+        {chart(words.rate, r => r.rate, r => r.rateText, 'bg-ink', 'bg-ink/25')}
+        {chart(words.spend, r => r.spend, r => r.spendText, 'bg-turmeric', 'bg-turmeric/40')}
+      </div>
+      <ol className="-mx-5 mt-5 flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto px-5 pb-2">
+        {[...rows].reverse().map((r, i) => (
+          <li key={r.key} className="w-44 flex-none snap-start">
+            <Link aria-label={r.aria} href={r.href} className={`block h-full rounded-2xl border border-line p-4 hover:bg-paper ${focus}`}>
+              <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 font-semibold">{r.long}
+                {i === 0 && words.latest && <span className="rounded-full bg-turmeric px-2 text-[13px] text-on-turmeric">{words.latest}</span>}</span>
+              {line(words.rate, r.rateText, r.rateNote)}
+              {line(words.spend, r.spendText, r.spendNote)}
+            </Link>
+          </li>))}
+      </ol>
+    </div>
+  );
+}
+
+export type Part = { key: string; label: string; value: number; color: string };
+
+/** My month as a meter, then a receipt. The meter is the money that came in, filled with what was used, part by part; what is
+ *  left shows in leaf. When more was used than came in, a tick marks where the money that came in ran out. The receipt lists
+ *  every part with its exact amount, plus in and minus out, down to the balance: the same sum as lib/money.ts. Its swatches
+ *  are the meter's legend. */
+export function Meter({ came, used, fmt, words, total }: {
+  came: Part[]; used: Part[]; fmt: (v: number) => string; total: { label: string; text: string; tone: string };
+  words: { usedOf: string; usedOnly: string; usedOver: string; left: string; short: string; cameIn: string };
+}) {
+  const sum = (ps: Part[]) => ps.reduce((a, p) => a + p.value, 0);
+  const a = sum(came), b = sum(used), whole = Math.max(a, b), over = b > a && a > 0, at = pct(a, whole);
+  const row = (p: Part, sign: string, swatch: boolean) => (
+    <div key={`${sign}${p.key}`} className="flex items-center gap-2 py-1">
+      <dt className="flex min-w-0 flex-1 items-center gap-2"><span aria-hidden="true" className={`size-3 flex-none rounded-[3px] ${swatch ? p.color : ''}`} />{p.label}</dt>
+      <dd className="tabular-nums">{sign}{fmt(p.value)}</dd>
+    </div>);
+  return (
+    <div>
+      <div aria-hidden="true" className={`relative ${over ? 'pt-6' : ''}`}>
+        {/* the label slides by its own width, so it stays inside the card at either end */}
+        {over && <span className="absolute top-0 text-[13px] whitespace-nowrap text-muted" style={{ left: `${at}%`, transform: `translateX(-${at}%)` }}>{words.cameIn}</span>}
+        <div className="flex h-4 overflow-hidden rounded-full bg-line">
+          {used.map(p => <span key={p.key} className={`h-full border-r-2 border-surface last:border-r-0 ${p.color}`} style={{ width: `${pct(p.value, whole)}%` }} />)}
+          {a > b && <span className="h-full bg-leaf" style={{ width: `${pct(a - b, whole)}%` }} />}
+        </div>
+        {over && <span className="absolute -bottom-1 top-5 w-0.5 -translate-x-1/2 bg-ink" style={{ left: `${at}%` }} />}
+      </div>
+      <p className="mt-2 flex flex-wrap justify-between gap-x-4 text-[13px]">
+        <span className="text-muted">{(a === 0 ? words.usedOnly : b > a ? words.usedOver : words.usedOf).replace('{u}', fmt(b)).replace('{c}', fmt(a))}</span>
+        {a !== b && <span className={`font-semibold ${a > b ? 'text-leaf' : 'text-chili'}`}>{(a > b ? words.left : words.short).replace('{t}', fmt(Math.abs(a - b)))}</span>}
+      </p>
+      <dl className="mt-4 rounded-2xl bg-paper p-4 text-[15px]">
+        {came.map(p => row(p, '+', false))}
+        {used.map(p => row(p, '−', true))}
+        <div className={`mt-2 flex items-center gap-2 border-t-2 border-dashed border-muted pt-3 text-lg font-bold ${total.tone}`}>
+          <dt className="flex min-w-0 flex-1 items-center gap-2"><span aria-hidden="true" className={`size-3 flex-none rounded-[3px] ${a > b ? 'bg-leaf' : ''}`} />{total.label}</dt>
+          <dd className="tabular-nums">{total.text}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+export type Pop = { key: string; label: ReactNode; text: string; initial: string; value: number; tail?: number; valueText: string; strong?: boolean };
+
+/** People as lollipops: a thin stem to their count, a disc with their initial at its end, guests as a dotted stem beyond it.
+ *  Lighter than bars, and it reads as people. Mine is the ink disc. */
+export function Lollipops({ rows }: { rows: Pop[] }) {
+  const max = Math.max(...rows.map(r => r.value + (r.tail ?? 0)), 0);
+  return (
+    <ul className="space-y-2">
+      {rows.map(r => (
+        <li key={r.key} className={`grid grid-cols-[minmax(0,7rem)_1fr_auto] items-center gap-3 ${r.strong ? 'font-semibold' : ''}`}>
+          <span className="truncate" title={r.text}>{r.label}</span>
+          {/* the track stops a disc's half short, so a full stem's disc never spills over the number */}
+          <span aria-hidden="true" className="relative mr-3.5 ml-3.5 block h-7">
+            <span className="absolute top-1/2 -left-3.5 h-0.5 -translate-y-1/2 bg-turmeric" style={{ width: `calc(${pct(r.value, max)}% + 0.875rem)` }} />
+            {r.tail ? <span className="absolute top-1/2 h-0 -translate-y-1/2 border-t-2 border-dotted border-muted" style={{ left: `${pct(r.value, max)}%`, width: `${pct(r.tail, max)}%` }} /> : null}
+            <span className={`absolute top-1/2 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-[13px] font-bold ${r.strong ? 'bg-ink text-paper' : 'bg-turmeric text-on-turmeric'}`}
+              style={{ left: `${pct(r.value, max)}%` }}>{r.initial}</span>
+          </span>
+          <span className="tabular-nums">{r.valueText}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
