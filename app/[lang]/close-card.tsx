@@ -4,7 +4,7 @@ import { closeAction, coverGapAction } from './actions';
 import { CashCount } from './cash-count';
 import type { Look } from '@/lib/charts';
 import type { Dict, Locale } from './dictionaries';
-import { fmtExact, fmtMonth, fmtSigned } from './format';
+import { fmtDay, fmtExact, fmtMonth, fmtSigned } from './format';
 import { alertCard, link, primary, secondary } from './ui';
 
 /** `fund`: the month's own fund (below 0 = its gap is paid first); `held`: the cash to count, every open month's money now. */
@@ -15,6 +15,9 @@ export type CloseInfo = { month: string; fund: number; held: number; later: numb
 /** `warn`: the look-over questions about this month, already worded (lookText); they never block. */
 export function CloseCard({ lang, x, c, collector, warn }: { lang: Locale; x: Dict['money']; c: CloseInfo; collector: string; warn: string[] }) {
   const gap = fmtExact(c.fund), name = fmtMonth(c.month), blocked = c.pending > 0 || c.problems > 0;
+  // bazars and bills not Verified: before the 4th they are in the pending line; from then on the month closes without them
+  const anyway = c.unchecked > 0 && (c.anyway ? (c.unchecked === 1 ? x.anywayNowOne : x.anywayNow.replace('{n}', String(c.unchecked)))
+    : x.anywayLater.replace('{d}', fmtDay(c.anywayFrom, lang)));
   // @container: full width on Money, one column on Flat; when wide, the four boxes sit in a row and text keeps a readable measure
   return (
     <section className={`@container ${alertCard}`}>
@@ -29,7 +32,7 @@ export function CloseCard({ lang, x, c, collector, warn }: { lang: Locale; x: Di
           <p className="mt-1 text-[15px] text-muted">{x.closeLookHint}</p>
         </div>
       )}
-      {blocked ? (
+      {blocked ? (<>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           {c.pending > 0 && (
             <li>
@@ -40,7 +43,8 @@ export function CloseCard({ lang, x, c, collector, warn }: { lang: Locale; x: Di
           )}
           {c.problems > 0 && <li>{x.blockProblems}</li>}
         </ul>
-      ) : c.fund < 0 ? (
+        {anyway && <p className="mt-2 max-w-prose text-[15px]">{anyway}</p>}
+      </>) : c.fund < 0 ? (
         // nothing to count below ৳0. If the collector paid the gap themselves it becomes their deposit first: two taps, as Remove
         <div className="mt-4">
           <p className="max-w-prose font-semibold">{x.coverLead.replaceAll('{t}', gap)}</p>
@@ -62,6 +66,7 @@ export function CloseCard({ lang, x, c, collector, warn }: { lang: Locale; x: Di
           {c.later !== 0 && <p className="max-w-prose text-[15px] text-muted">{x.heldSplit.replace('{month}', name).replace('{a}', fmtSigned(c.fund)).replace('{b}', fmtSigned(c.later))}</p>}
           {/* spent past what the flat held: the rest came from the collector's own pocket, so there is nothing more to count */}
           {c.fund + c.later < 0 && <p className="max-w-prose text-[15px] font-semibold">{x.flatOwes.replace('{name}', collector).replace('{t}', fmtExact(-(c.fund + c.later)))}</p>}
+          {anyway && <p className="max-w-prose text-[15px]">{anyway}</p>}
           <CashCount x={x} fund={c.held} />
           <button className={`${primary} @xl:w-auto`}>{x.closeBtn.replace('{month}', name)}</button>
         </ActionForm>

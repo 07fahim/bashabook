@@ -59,3 +59,7 @@ export const fmtMeals = (h: number) => String(Math.round(h) / 100);
 /** Poisha per meal -> '৳31.72'; '—' before any meal or bazar (no rate yet, never ৳0.00). */
 export const fmtRate = (p: number, meals: number) =>
   meals > 0 && p > 0 ? `৳${(p / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+
+/** 'Tahsin', 'Tahsin and Zarif', 'Nafis, Tahsin and Zarif': no comma before and/আর. */
+export const names = (list: string[], and: string) =>
+  list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} ${and} ${list.at(-1)}`;

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { UUID } from '@/lib/auth';
-import { entryDetail, otherItems } from '@/lib/bazar';
+import { entryDetail, otherItems, unusualRatio } from '@/lib/bazar';
 import { db } from '@/lib/db';
 import { daysOfMonth, todayDhaka } from '@/lib/meals';
 import { monthOf } from '@/lib/money-db';
@@ -47,6 +47,8 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
     : sp.fixed === '1' ? b.fixed : '';   // waiting, or verified with no name kept: the chip already says so
   // their own entry sent back, but too late for them to fix (an earlier month): say who will
   const othersFix = d.open && d.check === 'fix' && !d.mayFix && d.createdBy === me.memberId;
+  // only for someone who may check it: about how many usual bazars this one is (trust feature 3)
+  const ratio = d.mayCheck ? unusualRatio(d.amount, d.usual) : null;
   const src = d.receiptV ? `/api/receipt/${d.id}?v=${d.receiptV}` : null;
   const hidden = (s?: 'ok' | 'fix') => (<><input type="hidden" name="lang" value={lang} /><input type="hidden" name="id" value={d.id} />{s && <><input type="hidden" name="state" value={s} /><input type="hidden" name="rv" value={d.receiptV ?? ''} /></>}</>);
 
@@ -62,7 +64,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
             <h1 className="font-display text-3xl font-bold">{x.types[d.type]} · {fmtExact(d.amount)}</h1>
             <p className="mt-1 text-muted [overflow-wrap:anywhere]">{[fmtDay(d.date, lang), d.paidBy ? x.paidBy.replace('{name}', name(d.paidBy)) : x.fundPaid, d.note].filter(Boolean).join(' · ')}</p>
             <p role="status" className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <StatusChip state={d.check} b={b} />{state && <span className="[overflow-wrap:anywhere]">{state}</span>}
+              <StatusChip state={d.check} b={b} closed={!d.open} />{state && <span className="[overflow-wrap:anywhere]">{state}</span>}
             </p>
             {d.type === 'bazar' && (
               <div className="mt-4">
@@ -100,6 +102,7 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/money/baza
             {d.mayCheck && (
               <div className="space-y-3">
                 <h2 className="sr-only">{b.status}</h2>
+                {ratio && <p className="font-semibold text-chili">{b.unusual.replace('{r}', String(ratio)).replace('{t}', fmtExact(Math.round(d.usual!)))}</p>}
                 <ActionForm action={checkAction}>{hidden('ok')}<button className={`${primary} sm:w-auto`}>{b.ok}</button></ActionForm>
                 <details>
                   <summary className={`${secondary} cursor-pointer list-none sm:inline-flex sm:w-auto [&::-webkit-details-marker]:hidden`}>{b.fix}</summary>

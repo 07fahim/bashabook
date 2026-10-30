@@ -6,7 +6,7 @@ import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
 import { addMember, changePin, cleanName, cleanText, clearLock, clearedBefore, UUID, createFlat, isPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems, receiptVersion } from '@/lib/bazar';
-import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, type Correction } from '@/lib/close';
+import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, seeCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
 import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, plates as platesOf, todayDhaka } from '@/lib/meals';
@@ -15,7 +15,7 @@ import {
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
 import { addEntry, addRoom, confirmEntry, confirmerOf, endedOpenMonth, monthOf, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
-import { depositMsg, fixAskMsg, fixedMsg, gaveAskMsg, handoverMsg, payoutMsg, rejectedMsg } from '@/lib/notify-text';
+import { cashAskMsg, depositMsg, fixAskMsg, fixedMsg, gaveAskMsg, handoverMsg, payoutMsg, rejectedMsg } from '@/lib/notify-text';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
 import { removePush, savePush, type PushSub } from '@/lib/push-db';
@@ -598,7 +598,24 @@ export async function closeAction(_: FormState, d: FormData): Promise<FormState>
       .replace('{a}', fmtExact(r.actual)).replace('{b}', fmtSigned(r.expected)).replace('{d}', fmtExact(r.actual - r.expected)) };
   }
   if (r.result !== 'ok' && r.result !== 'closed') return { error: r.result === 'notCollector' ? x.errors.bad : x.errors[r.result] };
+  if (r.result === 'ok') after(async () => {
+    try {   // each other person who lived that month and is still here: did you see the cash? (no amount in a push)
+      const people = await db<{ id: string; lang: Locale | null }>(
+        `select m.id, m.language as lang from members m join month_balances b on b.flat_id = m.flat_id and b.member_id = m.id
+         where m.flat_id = $1 and b.month = $2::text::date and b.days_present > 0 and m.id <> $3 and m.pin_hash is not null
+           and (m.left_on is null or m.left_on >= $4::text::date)`, [me.flatId, month, me.memberId, todayDhaka()]);
+      for (const p of people) await sendPush(db, [p.id], cashAskMsg(p.lang ?? me.lang, me.name, month));
+    } catch (e) { console.warn('push failed', String(e)); }
+  });
   redirect(`/${lang}/money?m=${month.slice(0, 7)}`);   // the closed month, with its settlement to share; 'closed' means a second tap already got it there
+}
+
+/** I saw the cash (trust feature 1): the rules live in seeCash; a refusal (not allowed, or a second tap) says nothing new. */
+export async function seeCashAction(d: FormData) {
+  const lang = langOf(d), month = str(d, 'month');
+  const me = await requireMember(lang, true);   // signed in: living here and claimed
+  if (/^\d{4}-\d{2}-01$/.test(month) && isDate(month)) await seeCash(db, me.flatId, month, me.memberId);
+  refresh();
 }
 
 /** The collector paid more than flat money held: records their own deposit of the gap into the month to close (amount from the server). */

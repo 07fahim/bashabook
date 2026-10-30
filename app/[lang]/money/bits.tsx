@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { toCheck } from '@/lib/bazar';
+import { unusualRatio, type toCheck } from '@/lib/bazar';
 import type { Look } from '@/lib/charts';
 import type { toConfirm } from '@/lib/money-db';
 import { confirmAction, rejectAction } from '../actions';
@@ -70,10 +70,11 @@ export function ConfirmList({ lang, x, a, items, collector, fill }: {
   );
 }
 
-/** A bazar's or bill's check state as a chip: the word says it, the colour only repeats it. */
-export const StatusChip = ({ state, b }: { state: 'ok' | 'fix' | null; b: Dict['money']['bazar'] }) => (
-  <span className={`inline-flex min-h-8 shrink-0 items-center whitespace-nowrap rounded-full border px-3 text-[15px] font-semibold ${state === 'ok' ? 'border-leaf text-leaf' : state === 'fix' ? 'border-chili text-chili' : 'border-muted'}`}>
-    {state === 'ok' ? b.ok : state === 'fix' ? b.fix : b.waiting}
+/** A bazar's or bill's check state as a chip: the word says it, the colour only repeats it. In a closed month no check
+ *  means it was closed without one (trust feature 2). */
+export const StatusChip = ({ state, b, closed = false }: { state: 'ok' | 'fix' | null; b: Dict['money']['bazar']; closed?: boolean }) => (
+  <span className={`inline-flex min-h-8 shrink-0 items-center whitespace-nowrap rounded-full border px-3 text-[15px] font-semibold ${state === 'ok' ? 'border-leaf text-leaf' : state === 'fix' || closed ? 'border-chili text-chili' : 'border-muted'}`}>
+    {state === 'ok' ? b.ok : state === 'fix' ? b.fix : closed ? b.closedUnchecked : b.waiting}
   </span>
 );
 
@@ -88,6 +89,7 @@ export function CheckList({ lang, x, a, items }: { lang: Locale; x: Dict['money'
       <LongList short label={b.checkTitle} keep={3} more={a.showAll.replace('{n}', String(items.length))} less={a.showLess} items={items.map(c => (
         <li key={c.id} className="py-2">
           <Link href={`/${lang}/money/bazar/${c.id}`} className={`inline-flex min-h-11 items-center ${link}`}>{x.types[c.type]} · {fmtExact(c.amount)}</Link>
+          {unusualRatio(c.amount, c.usual) !== null && <span className="ml-2 inline-flex min-h-8 items-center rounded-full border border-chili px-3 text-[15px] font-semibold text-chili">{b.unusualTag}</span>}
           <span className="block text-[15px] text-muted [overflow-wrap:anywhere]">
             {[fmtDay(c.date, lang), c.state === 'fix' ? b.toFix.replace('{reason}', c.reason ?? '') : b.toCheck, c.note].filter(Boolean).join(' · ')}
           </span>
