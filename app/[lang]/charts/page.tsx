@@ -1,14 +1,14 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { billShareIn, costRows, forecast, history, lastMonths, mealGrid, myPlates, runningSpend, slices, spendByKind, waterfall, worthALook } from '@/lib/charts';
+import { billShareIn, costRows, forecast, history, inAndOut, lastMonths, mealGrid, myPlates, runningSpend, slices, spendByKind, worthALook } from '@/lib/charts';
 import { db } from '@/lib/db';
 import { flatMoney } from '@/lib/handover';
 import { addDays, daysOfMonth, todayDhaka, weightedMeals } from '@/lib/meals';
 import { loadMonth, monthOf } from '@/lib/money-db';
 import { noticeCount } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
-import { HBars, Lollipops, MealGrid, Months, Waterfall } from '../bars';
+import { HBars, InOut, Lollipops, MealGrid, MonthTable } from '../bars';
 import { getDictionary, hasLocale, type Dict } from '../dictionaries';
 import { fmtDay, fmtExact, fmtMeals, fmtMonth, fmtRate, fmtSigned, fmtTaka } from '../format';
 import { Header, withQuery } from '../header';
@@ -22,6 +22,8 @@ export default function Charts({ params, searchParams }: PageProps<'/[lang]/char
   return <Suspense fallback={<PageSkeleton />}><Body params={params} searchParams={searchParams} /></Suspense>;
 }
 
+/** The first letter as a reader sees it (a Bangla letter with its marks), for the lollipop discs. */
+const initial = (name: string) => ([...new Intl.Segmenter().segment(name.trim())][0]?.segment ?? '?').toUpperCase();
 const short = (month: string) => new Date(`${month}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
 const h2 = 'font-display text-xl font-bold';
 
@@ -76,7 +78,16 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
   const self = mo.members.find(p => p.id === me.memberId);
   const plates = self ? myPlates(self, mo.changes, days.slice(0, upTo + 1)) : [];
   const grid = self ? mealGrid(self, mo.changes, days.slice(0, upTo + 1)) : null;
+  // what each meal's plates count as (breakfast is often half). A closed month's meals are frozen: if the flat's weights moved
+  // since, the rows would not add up to the frozen total, so the counts-as lines stay out rather than show a sum that is off
+  const weights = mo.flat.weights, myMeals = mo.meals.get(me.memberId) ?? 0;
+  const weightsHold = plates.reduce((a, p) => a + p.plates * weights[p.meal], 0) === myMeals;
   const spent = runningSpend(mo.entries, days);
+  // My month's parts: came in in leaf (the carried part lighter), used in the colours food and bills have on the whole page
+  const parts: Record<string, { label: string; color: string }> = {
+    earlier: { label: x.earlier, color: 'bg-leaf/50' }, paid: { label: x.paidIn, color: 'bg-leaf' }, corrections: { label: x.corrections, color: 'bg-ink' },
+    owed: { label: x.owedEarlier, color: 'bg-chili/50' }, food: { label: x.food, color: 'bg-turmeric' }, bills: { label: x.bills, color: 'bg-muted' }, advances: { label: x.advances, color: 'bg-chili' } };
+  const named = (ps: { key: string; value: number }[]) => ps.map(p => ({ ...p, ...parts[p.key] }));
   const costs = boss ? costRows(mo.result.perMember) : [];
   const avgCost = costs.length ? Math.round(costs.reduce((a, r) => a + r.food + r.bills, 0) / costs.length) : 0;
   // what the line says at each drawn day: the date, the spend by then and what that day added
@@ -194,48 +205,51 @@ async function Body({ params, searchParams }: Pick<PageProps<'/[lang]/charts'>, 
           </section>
 
           <section className={`${card} md:col-span-6`}>
-            <h2 className={h2}>{x.myMeals}</h2>
+            {/* the card adds itself up: plates per meal, what they count as, the meals, then the food they cost */}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+              <h2 className={h2}>{x.myMeals}</h2>
+              {self && <p className="text-[15px] font-semibold tabular-nums">{x.mealsTotal.replace('{n}', fmtMeals(myMeals))}</p>}
+            </div>
             {self ? (<>
-              <div className="mt-4"><MealGrid n={days.length} legend={[x.gridAte, x.gridSkipped, x.gridGuest]} rows={plates.map(p => ({
-                key: p.meal, label: t.meals.names[p.meal], cells: grid![p.meal],
-                total: p.guests > 0 ? `${p.plates} · ${x.guests.replace('{n}', String(p.guests))}` : String(p.plates) }))} /></div>
-              {mine && totalMeals > 0 && mo.result.mealRate > 0 && <p className="mt-4 text-[15px] text-muted">{x.mealsNote.replace('{n}', fmtMeals(mo.meals.get(me.memberId) ?? 0)).replace('{r}', fmtRate(mo.result.mealRate, totalMeals))}</p>}
+              <div className="mt-4"><MealGrid n={days.length} legend={[x.gridAte, x.gridGuest, x.gridSkipped]} rows={plates.map(p => ({
+                key: p.meal, label: t.meals.names[p.meal], cells: grid![p.meal], total: x.platesN.replace('{n}', String(p.plates)),
+                note: [p.guests > 0 ? x.forGuests.replace('{g}', String(p.guests)) : '',
+                  weightsHold && weights[p.meal] !== 100 ? x.countsAs.replace('{m}', fmtMeals(p.plates * weights[p.meal])) : ''].filter(Boolean).join(' · ') }))} /></div>
+              {mine && totalMeals > 0 && mo.result.mealRate > 0 && (
+                <div className="mt-4 border-t border-line pt-3">
+                  <p className="flex justify-between gap-3 font-semibold"><span>{x.food}</span><span className="tabular-nums">{fmtExact(mine.foodCost)}</span></p>
+                  <p className="text-[13px] text-muted">{x.mealsNote.replace('{n}', fmtMeals(myMeals)).replace('{r}', fmtRate(mo.result.mealRate, totalMeals))}</p>
+                </div>)}
             </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}
           </section>
           <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.lastMonths}</h2>
-            {past.length < 2 ? <p className="mt-2 text-muted">{x.needTwo}</p> : (
-              <div className="mt-2">
-                <p aria-hidden="true" className="flex flex-wrap gap-x-5 text-[13px] text-muted">
-                  <span className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-ink" />{x.rate}</span>
-                  <span className="flex items-center gap-2"><span className="h-3 w-1.5 rounded-t-[2px] bg-turmeric" />{x.spend}</span>
-                </p>
-                <div className="mt-2"><Months cols={past.map(p => ({ key: p.month, label: short(p.month), href: href(p.month), rate: p.rate, rateText: fmtRate(p.rate, 1), spend: p.spend, spendText: fmtTaka(p.spend),
-                  aria: x.openMonth.replace('{month}', fmtMonth(p.month)).replace('{s}', fmtTaka(p.spend)).replace('{r}', fmtRate(p.rate, 1)) }))} /></div>
-                <p className="mt-1 text-[13px] text-muted">{x.tapMonth}</p>
-              </div>)}
+            {past.length === 0 ? <p className="mt-2 text-muted">{x.needTwo}</p> : (
+              // newest first; each number says how it moved from the month before, the way the tiles up top do
+              <div className="mt-4"><MonthTable head={[x.month, x.rate, x.spend]} rows={past.map((p, i) => {
+                const before = past[i - 1] ?? null, rd = delta(x, p.rate, before?.rate ?? null, before?.month ?? null, true), sd = delta(x, p.spend, before?.spend ?? null, before?.month ?? null, true);
+                return { key: p.month, label: short(p.month), href: href(p.month), rate: p.rate, rateText: fmtRate(p.rate, 1), spend: p.spend, spendText: fmtTaka(p.spend),
+                  rateNote: rd.note ? { text: rd.note, tone: rd.tone } : undefined, spendNote: sd.note ? { text: sd.note, tone: sd.tone } : undefined,
+                  aria: x.openMonth.replace('{month}', fmtMonth(p.month)).replace('{s}', fmtTaka(p.spend)).replace('{r}', fmtRate(p.rate, 1)) };
+              }).reverse()} /></div>)}
           </section>
 
           <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.myMonth}</h2>
             {mine && b ? (<>
-              {/* the receipt drawn: each step starts where the last ended and lands on the balance; signed the plain way, + for you */}
-              <div className="mt-4"><Waterfall fmt={fmtSigned} total={{ label: mine.balance < 0 ? x.tileOwe : mine.balance > 0 ? x.tileGet : x.tileEven, value: mine.balance, text: fmtExact(mine.balance),
-                tone: mine.balance < 0 ? 'text-chili' : mine.balance > 0 ? 'text-leaf' : '' }} steps={waterfall([
-                ...(mine.opening ? [{ key: 'earlier', label: x.earlier, value: mine.opening }] : []),
-                { key: 'paid', label: x.paidIn, value: mine.paidIn },
-                ...(mine.payouts ? [{ key: 'advances', label: x.advances, value: -mine.payouts }] : []),
-                ...(mine.adjustments ? [{ key: 'corrections', label: x.corrections, value: mine.adjustments }] : []),
-                { key: 'food', label: x.food, value: -mine.foodCost },
-                ...(mine.billShare ? [{ key: 'bills', label: x.bills, value: -mine.billShare }] : []),
-              ])} /></div>
+              {/* the answer first, then why: what came in against what was used, the gap between them being the answer */}
+              <p className={`mt-3 flex flex-wrap items-baseline justify-between gap-x-4 font-semibold ${b.tone}`}>
+                <span>{mine.balance < 0 ? x.tileOwe : mine.balance > 0 ? x.tileGet : x.tileEven}</span><span className="text-[28px] leading-tight font-bold tabular-nums">{fmtExact(mine.balance)}</span>
+              </p>
+              <div className="mt-4"><InOut fmt={fmtExact} sides={[x.cameIn, x.used]} gap={mine.balance ? { text: fmtExact(mine.balance), tone: mine.balance < 0 ? 'text-chili' : 'text-leaf' } : null}
+                came={named(inAndOut(mine).came)} used={named(inAndOut(mine).used)} /></div>
               <Link href={`/${lang}/money${month !== thisMonth ? `?m=${month.slice(0, 7)}` : ''}`} className={`mt-2 inline-flex min-h-11 items-center ${link}`}>{t.money.breakdown}</Link>
             </>) : <p className="mt-2 text-muted">{t.money.notHere}</p>}
           </section>
           <section className={`${card} md:col-span-6`}>
             <h2 className={h2}>{x.mealsPer}</h2>
             <div className="mt-4"><Lollipops rows={meals.map(p => ({
-              key: p.id, text: name(p.id), initial: Array.from(name(p.id))[0]?.toUpperCase() ?? '?', value: p.meals, tail: p.guests, valueText: fmtMeals(p.meals), strong: p.id === me.memberId,
+              key: p.id, text: name(p.id), initial: initial(name(p.id)), value: p.meals - p.guests, tail: p.guests, valueText: fmtMeals(p.meals), strong: p.id === me.memberId,
               label: <>{name(p.id)}{p.guests > 0 && <span className="ml-1 text-[13px] text-muted">{x.guests.replace('{n}', fmtMeals(p.guests))}</span>}</> }))} /></div>
           </section>
 

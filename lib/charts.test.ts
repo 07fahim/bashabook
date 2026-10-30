@@ -4,8 +4,9 @@ import { checkAll, db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { addEntry, type Entry, type NewEntry } from './money-db';
 import { addCorrection, closeMonth } from './close';
-import { billShareIn, costRows, forecast, history, lastMonths, mealGrid, myPlates, pickDay, runningSpend, slices, spendByKind, waterfall, worthALook } from './charts';
+import { billShareIn, costRows, forecast, history, lastMonths, inAndOut, mealGrid, myPlates, pickDay, runningSpend, slices, spendByKind, worthALook } from './charts';
 import type { MealChange, MealMember } from './meals';
+import type { MemberResult } from './money';
 
 const row = (p: Partial<Entry> & Pick<Entry, 'type' | 'amount'>): Entry =>
   ({ id: 'x', status: 'ok', note: null, paidBy: null, memberId: null, split: null, selected: [], date: '2026-09-05', createdBy: 'c', forMonth: null, moves: null, heldBy: null, ...p } as Entry);
@@ -165,20 +166,38 @@ describe('mealGrid', () => {
       { memberId: 'b', date: '2026-09-02', meal: 'd', count: 5, guests: 4 }];
     const days = ['2026-09-01', '2026-09-02', '2026-09-03'];
     const g = mealGrid(me, rows, days);
-    expect(g.d).toEqual([null, { plates: 3, guests: 2 }, { plates: 1, guests: 0 }]);
-    expect(g.l).toEqual([null, { plates: 1, guests: 0 }, { plates: 0, guests: 0 }]);
-    expect(g.b).toEqual([null, { plates: 0, guests: 0 }, { plates: 0, guests: 0 }]);
+    // guests while I was out: not my plate, so not a day I ate
+    expect(mealGrid(me, [{ memberId: 'a', date: '2026-09-03', meal: 'b', count: 2, guests: 2 }], days).b[2]).toEqual({ own: 0, guests: 2 });
+    expect(g.d).toEqual([null, { own: 1, guests: 2 }, { own: 1, guests: 0 }]);
+    expect(g.l).toEqual([null, { own: 1, guests: 0 }, { own: 0, guests: 0 }]);
+    expect(g.b).toEqual([null, { own: 0, guests: 0 }, { own: 0, guests: 0 }]);
     for (const p of myPlates(me, rows, days)) {
       const cells = g[p.meal].filter(c => c !== null);
-      expect([cells.reduce((a, c) => a + c.plates, 0), cells.reduce((a, c) => a + c.guests, 0)]).toEqual([p.plates, p.guests]);
+      expect([cells.reduce((a, c) => a + c.own + c.guests, 0), cells.reduce((a, c) => a + c.guests, 0)]).toEqual([p.plates, p.guests]);
     }
   });
 });
 
-describe('waterfall', () => {
-  it('each step starts where the last ended and the last ends on the sum', () => {
-    expect(waterfall([{ key: 'earlier', value: 500 }, { key: 'paid', value: 400 }, { key: 'cost', value: -1200 }])).toEqual([
-      { key: 'earlier', value: 500, from: 0, to: 500 }, { key: 'paid', value: 400, from: 500, to: 900 }, { key: 'cost', value: -1200, from: 900, to: -300 }]);
-    expect(waterfall([])).toEqual([]);
+describe('inAndOut', () => {
+  const m = (p: Partial<MemberResult>): MemberResult => ({ id: 'a', opening: 0, paidIn: 0, foodCost: 0, billShare: 0, payouts: 0, adjustments: 0, balance: 0, ...p });
+  const sum = (r: { value: number }[]) => r.reduce((a, x) => a + x.value, 0);
+  it('money in and money used, every part positive, and in less used is the balance', () => {
+    const p = m({ opening: 500374, paidIn: 400000, foodCost: 158544, billShare: 132875, balance: 608955 });
+    const r = inAndOut(p);
+    expect(r.came.map(x => x.key)).toEqual(['earlier', 'paid']);
+    expect(r.used.map(x => x.key)).toEqual(['food', 'bills']);
+    expect(sum(r.came) - sum(r.used)).toBe(p.balance);
+  });
+  it('a debt from before, an advance and a correction against me land on the used side', () => {
+    const p = m({ opening: -2000, paidIn: 1000, foodCost: 700, billShare: 0, payouts: 300, adjustments: -50, balance: -2050 });
+    const r = inAndOut(p);
+    expect(r.came.map(x => x.key)).toEqual(['paid']);
+    expect(r.used.map(x => x.key)).toEqual(['owed', 'food', 'advances', 'corrections']);
+    expect(r.used.every(x => x.value > 0)).toBe(true);
+    expect(sum(r.came) - sum(r.used)).toBe(p.balance);
+  });
+  it('a correction in my favour comes in; nothing at all leaves both sides empty', () => {
+    expect(inAndOut(m({ adjustments: 120, balance: 120 })).came).toEqual([{ key: 'corrections', value: 120 }]);
+    expect(inAndOut(m({}))).toEqual({ came: [], used: [] });
   });
 });

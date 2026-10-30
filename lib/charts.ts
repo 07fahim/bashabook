@@ -48,19 +48,27 @@ export function myPlates(m: MealMember, changes: MealChange[], days: string[]): 
   }));
 }
 
-/** My month as a grid: for each meal, one cell per day in `days`. Null when I didn't live here that day; else my plates
- *  (guests included) and how many were guests. Same rule as myPlates, so the cells add up to its totals. */
-export function mealGrid(m: MealMember, changes: MealChange[], days: string[]): Record<Meal, ({ plates: number; guests: number } | null)[]> {
+/** My month as a grid: for each meal, one cell per day in `days`. Null when I didn't live here that day; else my own plate
+ *  (0 or 1) and my guests' plates. Same rule as myPlates, so own plus guests adds up to its totals. */
+export function mealGrid(m: MealMember, changes: MealChange[], days: string[]): Record<Meal, ({ own: number; guests: number } | null)[]> {
   const idx = indexChanges(changes);
   const guests = new Map(changes.filter(c => c.memberId === m.id).map(c => [`${c.date}|${c.meal}`, c.guests ?? 0]));
-  return Object.fromEntries(MEALS.map(meal => [meal, days.map(d => isPresent(m, d)
-    ? { plates: mealCount(m, idx, d, meal), guests: guests.get(`${d}|${meal}`) ?? 0 } : null)])) as Record<Meal, ({ plates: number; guests: number } | null)[]>;
+  return Object.fromEntries(MEALS.map(meal => [meal, days.map(d => {
+    if (!isPresent(m, d)) return null;
+    const g = guests.get(`${d}|${meal}`) ?? 0;
+    return { own: mealCount(m, idx, d, meal) - g, guests: g };
+  })])) as Record<Meal, ({ own: number; guests: number } | null)[]>;
 }
 
-/** Steps of a waterfall: each starts where the one before ended, so the last ends on the sum. */
-export function waterfall<R extends { value: number }>(rows: R[]) {
-  let at = 0;
-  return rows.map(r => ({ ...r, from: at, to: (at += r.value) }));
+/** One person's month as money that came in and money used, every part positive and none of them zero: a balance carried
+ *  from before, a correction or an advance goes to whichever side it is on. Came in less used is the balance, the same sum as
+ *  lib/money.ts. */
+export function inAndOut(p: MemberResult) {
+  const came: { key: string; value: number }[] = [], used: { key: string; value: number }[] = [];
+  const add = (side: typeof came, key: string, v: number) => { if (v > 0) side.push({ key, value: v }); };
+  add(came, 'earlier', p.opening); add(came, 'paid', p.paidIn); add(came, 'corrections', p.adjustments);
+  add(used, 'owed', -p.opening); add(used, 'food', p.foodCost); add(used, 'bills', p.billShare); add(used, 'advances', p.payouts); add(used, 'corrections', -p.adjustments);
+  return { came, used };
 }
 
 /** At most five slices for a ring: the biggest named rows keep their names, everything else (including rows already called
