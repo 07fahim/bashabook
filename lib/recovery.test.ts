@@ -110,7 +110,7 @@ describe('recovery by email code', { timeout: 30000 }, () => {
   });
 
   it(`at most ${PER_DAY} codes per email in 24 hours, a backstop against many connections; another email is separate`, async () => {
-    expect(PER_DAY).toBe(100);   // 100 codes x 5 tries = 500 guesses a day at 100 million codes
+    expect(PER_DAY).toBe(200);   // 200 codes x 5 tries = 1,000 guesses a day at 100 million codes
     const { email } = await flat();
     for (let i = 0; i < PER_DAY; i++) expect(await startRecovery(db, email)).not.toBeNull();
     expect(await startRecovery(db, email)).toBeNull();

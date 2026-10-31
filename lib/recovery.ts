@@ -10,13 +10,15 @@ export const RECOVER_COOKIE = 'recover';
  *  the step's token lives in its own cookie and never works as a recovery token, nor the reverse. */
 export type Check = 'new' | 'claim' | 'email';
 export const CHECK_COOKIE = 'check';
-export const CODE_MINUTES = 10, PROVEN_MINUTES = 15, TRIES = 5, PER_DAY = 100;
+export const CODE_MINUTES = 10, PROVEN_MINUTES = 15, TRIES = 5, PER_DAY = 200;
+// PER_DAY must stay above twice the day's recover + check mail budgets (actions.ts BUDGET): the budgets then always refuse
+// first, so the backstop never answers differently for an email someone else used, even across midnight UTC.
 /** The typed code as its 8 digits (Bangla digits, spaces and a pasted label are fine), or null: refused before any try. */
 export const codeOf = (v: unknown) => { const d = enDigits(String(v ?? '')).replace(/\D/g, ''); return d.length === 8 ? d : null; };
 
 /** "Send me a code": a new step with a random code for this email, made the same way whether or not anyone has the email,
  *  so the screen never tells. `send`: a person still living in a flat has it (only then is the code emailed). Null once
- *  this email had PER_DAY codes in 24 hours: a backstop against many connections (5 tries each, 500 guesses a day at 100
+ *  this email had PER_DAY codes in 24 hours: a backstop against many connections (5 tries each, at most 1,000 guesses a day at 100
  *  million codes). The everyday limit is per connection and email (the actions: 5 an hour), so a stranger who knows the
  *  email can't use up the owner's codes from the owner's own phone.
  *  ponytail: requests at the same instant can each pass the count, so a parallel burst can go a little past PER_DAY.
