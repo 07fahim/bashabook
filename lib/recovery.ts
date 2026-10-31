@@ -33,7 +33,7 @@ export async function checkCode(db: Db, token: string, code: string): Promise<'o
   if (r.code_hash !== hashToken(code)) return { wrong: TRIES - r.tries };
   await db(
     `with p as (update recoveries set proven = true, expires_at = now() + interval '${PROVEN_MINUTES} minutes'
-       where token_hash = $1 and not proven returning email)
+       where token_hash = $1 and not proven and expires_at > now() returning email)
      update members set email_ok = true, email_token = null where email in (select email from p) and ${STAYING}`, [hashToken(token)]);
   return 'ok';
 }

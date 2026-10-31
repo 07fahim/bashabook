@@ -804,6 +804,8 @@ export async function removePushAction(lang: string, endpoint: string) {
 
 const recoverToken = async () => (await cookies()).get(RECOVER_COOKIE)?.value ?? '';
 const endStep = async () => (await cookies()).delete(RECOVER_COOKIE);
+const keepStep = async (token: string) =>
+  (await cookies()).set(RECOVER_COOKIE, token, { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: PROVEN_MINUTES * 60 });
 
 /** Forgot the code or PIN, step 1: the same work for any email, so nothing tells whether it is known; the code goes out
  *  after the response, and only to an email someone living in a flat has. */
@@ -814,19 +816,20 @@ export async function forgotEmailAction(_: FormState, d: FormData): Promise<Form
   if (!(await allow(db, `forgot:${await ip()}`, 10))) return { error: e.tooMany };
   const r = await startRecovery(db, email);
   if (!r) return { error: e.tooMany };
-  (await cookies()).set(RECOVER_COOKIE, r.token, { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: PROVEN_MINUTES * 60 });
+  await keepStep(r.token);
   if (r.send) mail(email, t.recover.codeSubject.replace('{code}', r.code), t.recover.codeBody.replace('{code}', r.code));
   redirect(`/${lang}/forgot`);
 }
 
-/** Step 2: the 6 digits (Bangla digits too). */
+/** Step 2: the 6 digits (Bangla digits too; a pasted "code: 123456" works). Proven: the cookie lives as long as the step. */
 export async function forgotCodeAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), r = getDictionary(lang).recover;
-  const code = enDigits(str(d, 'code')).replace(/\s/g, '');
+  const code = enDigits(str(d, 'code')).replace(/\D/g, '');
   if (!/^\d{6}$/.test(code)) return { error: r.wrongCode };
-  const res = await checkCode(db, await recoverToken(), code);
+  const token = await recoverToken(), res = await checkCode(db, token, code);
   if (res === 'expired' || (res !== 'ok' && res.wrong === 0)) return { error: r.expired };
   if (res !== 'ok') return { error: `${r.wrongCode} ${r.left.replace('{n}', String(res.wrong))}` };
+  await keepStep(token);
   redirect(`/${lang}/forgot`);
 }
 
@@ -847,6 +850,7 @@ export async function recoverSignInAction(_: FormState, d: FormData): Promise<Fo
   const f = email ? (await flatsFor(db, email)).find(x => x.memberId === str(d, 'memberId')) : undefined;
   if (!f) return { error: t.recover.again };
   const r = await login(db, f.code, f.memberId, pin, null, null);
+  if ('error' in r && r.error === 'newPinNeeded') return { error: t.recover.useNewPin };   // e.newPinNeeded says reload: a loop here
   if ('error' in r) return { error: e[r.error] + (r.left ? ' ' + e.lastTries.replace('{n}', String(r.left)) : '') };
   await endRecovery(db, token);
   await endStep();

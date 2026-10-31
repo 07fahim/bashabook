@@ -62,7 +62,7 @@ async function ForgotBody({ params }: Pick<PageProps<'/[lang]/forgot'>, 'params'
             <p className="mt-2 break-words text-muted">{r.sentLead.replace('{email}', () => step.email)}</p>
             <ActionForm action={forgotCodeAction} className={box}>
               <input type="hidden" name="lang" value={lang} />
-              <Field label={r.code} name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9০-৯]{6}" minLength={6} maxLength={6} required className="tracking-widest" />
+              <Field label={r.code} name="code" inputMode="numeric" autoComplete="one-time-code" required className="tracking-widest" />
               <button className={primary}>{r.check}</button>
             </ActionForm>
             {restart}

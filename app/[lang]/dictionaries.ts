@@ -397,8 +397,9 @@ const bn = {
     none: 'এই ইমেইলটা আপনি এখন থাকেন এমন কোনো ফ্ল্যাটে নেই।',
     noneLead: 'ফ্ল্যাটের কাউকে জিজ্ঞেস করুন বা আমাদের লিখুন।',
     again: 'এই ধাপের সময় শেষ। আবার শুরু করুন।',
+    useNewPin: 'আপনার PIN রিসেট হয়েছে। নিচে নতুন একটা দিন।',
     codeSubject: 'বাসাবুক কোড: {code}',
-    codeBody: 'আপনার বাসাবুক কোড {code}। যে পাতায় চেয়েছে সেখানে লিখুন। 10 মিনিট কাজ করবে।\n\nআপনি চাননি? এই ইমেইলটা বাদ দিন। কোড ছাড়া কেউ ঢুকতে পারবে না।',
+    codeBody: 'আপনার বাসাবুক কোড {code}। যে পাতায় চেয়েছে সেখানে লিখুন। 10 মিনিট কাজ করবে।\n\nকোডটা কাউকে বলবেন না। ফ্ল্যাটের কাউকেও না।\n\nআপনি চাননি? এই ইমেইলটা বাদ দিন। কোড ছাড়া কেউ ঢুকতে পারবে না।',
   },
   push: {
     on: 'এই ফোনে রিমাইন্ডার: চালু',
@@ -1286,8 +1287,9 @@ const en: Dict = {
     none: 'This email isn’t in any flat you live in now.',
     noneLead: 'Ask a flatmate or message us.',
     again: 'This step has expired. Start again.',
+    useNewPin: 'Your PIN was reset. Set a new one below.',
     codeSubject: 'BashaBook code: {code}',
-    codeBody: 'Your BashaBook code is {code}. Type it on the page that asked for it. It works for 10 minutes.\n\nDidn’t ask for it? Ignore this email. Nobody gets in without the code.',
+    codeBody: 'Your BashaBook code is {code}. Type it on the page that asked for it. It works for 10 minutes.\n\nNever tell this code to anyone. Not even a flatmate.\n\nDidn’t ask for it? Ignore this email. Nobody gets in without the code.',
   },
   push: {
     on: 'Reminders on this phone: on',

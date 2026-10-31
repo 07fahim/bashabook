@@ -66,6 +66,20 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     expect(await checkCode(db, r.token, r.code)).toBe('expired');   // a proven step takes no more tries
   });
 
+  it('a restart landing between the try and the proof stays retired', async () => {
+    const { email } = await flat();
+    const r = (await startRecovery(db, email))!;
+    let first = true;
+    const between: typeof db = async (text, params) => {
+      const rows = await db(text, params);
+      if (first) { first = false; await endRecovery(db, r.token); }
+      return rows as never;
+    };
+    await checkCode(between, r.token, r.code);
+    expect(await provenEmail(db, r.token)).toBeNull();
+    expect(await recoveryOf(db, r.token)).toBeNull();
+  });
+
   it('a new PIN only for the proven email’s own person: clears a permanent lock, signs every phone out, says so in the history, works once', async () => {
     const a = await flat(), b = await flat();
     const r = (await startRecovery(db, a.email))!;
