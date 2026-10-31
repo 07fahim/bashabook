@@ -62,5 +62,15 @@ describe('today’s meal pushes', { timeout: 30000 }, () => {
   it('never throws, so the change it follows is never undone', async () => {
     await migrate();
     await expect(pushToday(db, randomUUID(), randomUUID(), TODAY, 'on', { meals: ['b'] }, spy().send)).resolves.toBeUndefined();
+    const down = (async () => { throw new Error('database down'); }) as never;
+    await expect(pushToday(down, randomUUID(), randomUUID(), TODAY, 'on', { meals: ['b'] }, spy().send)).resolves.toBeUndefined();
+  });
+
+  it('no cooking has its own tag, so it never replaces the collector’s own meal notice; it expires at Dhaka midnight', async () => {
+    const { flatId, ids } = await flat();
+    const s = spy();
+    await pushToday(db, flatId, ids.Nafis, TODAY, 'noCook', { meals: ['d'] }, s.send);
+    expect(s.calls[0].msg.tag).toBe(`cook:${TODAY}:d`);
+    expect(s.calls[0].msg.ttl).toBe(60);   // a past day: the shortest life
   });
 });
