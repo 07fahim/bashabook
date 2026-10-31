@@ -13,7 +13,7 @@ export function SecretField({ label, className = '', ...input }: { label: string
   const id = useId();
   return (
     <div className="font-semibold">
-      <label id={`${id}l`} htmlFor={id}>{label}</label>
+      <label id={`${id}l`} htmlFor={id} className="block">{label}</label>
       <span className="relative block">
         {/* ms-reveal: Edge's own eye, which would sit next to this one */}
         <input {...input} id={id} type={shown ? 'text' : 'password'} className={`${field} pr-14 [&::-ms-reveal]:hidden ${className}`} />
