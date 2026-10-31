@@ -43,6 +43,10 @@ describe('today’s meal pushes', { timeout: 30000 }, () => {
     await setMealPush(db, ids.Zarif, true);
     await pushToday(db, flatId, ids.Tahsin, TODAY, 'on', { meals: ['d'] }, s.send);
     expect(s.calls.slice(2).map(c => c.ids[0])).toContain(ids.Zarif);   // turned back on: told again
+    await setMealPush(db, ids.Zarif, false);
+    const own = spy();
+    await pushToday(db, flatId, ids.Tahsin, TODAY, 'other', { who: ids.Zarif, meals: ['l'] }, own.send);
+    expect(own.calls.map(c => c.ids[0])).toContain(ids.Zarif);   // muted, but it's his own meal someone changed
   });
 
   it('the body is today’s plates for the cook, each person in their own language', async () => {
