@@ -23,8 +23,10 @@ export function Live({ topic }: { topic: string }) {
     };
     if (document.visibilityState === 'visible') show();
     document.addEventListener('visibilitychange', onVisibility);
-    // a page left open past Dhaka midnight (UTC+6) redraws then, so "Today" moves on with the date
-    const midnight = whenFree(isBusy, refresh, 864e5 - ((Date.now() + 6 * 36e5) % 864e5) + 1000);
+    // a page left open past Dhaka midnight (UTC+6) redraws a minute after it (a phone clock may run a little fast), every night
+    let midnight = () => {};
+    const arm = () => { midnight = whenFree(isBusy, () => { refresh(); arm(); }, 864e5 - ((Date.now() + 6 * 36e5) % 864e5) + 60_000); };
+    arm();
     return () => { document.removeEventListener('visibilitychange', onVisibility); stop?.(); back?.(); midnight(); };
   }, [topic, router]);
   return null;

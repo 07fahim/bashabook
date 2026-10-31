@@ -158,7 +158,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
           <section className={`mt-6 ${alertCard}`}>
             <h2 className="text-xl font-bold">{m.remindTitle}</h2>
             <p className="mt-1 mb-4 max-w-prose text-[15px] text-muted">{m.remindLead}</p>
-            <Reminders lang={lang} t={t.push} />
+            <Reminders lang={lang} t={t.push} redraw />
           </section>
         )}
         <InstallApp t={t.install} className="mt-6" />

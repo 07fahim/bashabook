@@ -36,8 +36,10 @@ const ip = async () => firstIp((await headers()).get('x-forwarded-for'));
  *  outlives the 2 hours an IP may be kept, so the address is kept only as a keyed hash (CRON_SECRET: never in the
  *  database, so the table alone can't be turned back into addresses).
  *  ponytail: many connections together can still spend a budget; a paid Resend plan or per-flat budgets if that happens. */
-const connDay = async (kind: string, limit: number) =>
-  allow(db, `day:${kind}:${hashToken(`${await ip()}|${process.env.CRON_SECRET ?? ''}`)}`, limit, 'day');
+const connDay = async (kind: string, limit: number) => {
+  const salt = process.env.CRON_SECRET;
+  return !salt || allow(db, `day:${kind}:${hashToken(`${await ip()}|${salt}`)}`, limit, 'day');   // no secret (local): no day cap
+};
 
 /** Three day budgets of email, 95 under Resend's free 100 a day: 35 recovery codes, 45 check codes and 15 notices of a PIN
  *  or email change. Anyone can ask for codes with any address, so each kind has its own budget: checks can't starve
@@ -69,7 +71,8 @@ const keepCheck = async (token: string) =>
  *  mail on codes to any address. */
 async function sendCheck(lang: Locale, email: string, purpose: Check, payload: Record<string, unknown>): Promise<FormState> {
   const t = getDictionary(lang), r = t.recover;
-  if (!(await connDay('check', 15)) || !(await codeAllowed(email))) return { error: t.app.errors.tooMany };
+  if (!(await connDay('check', 15))) return { error: t.app.errors.tooManyToday };
+  if (!(await codeAllowed(email))) return { error: t.app.errors.tooMany };
   // the address is the person's own: saying no mail goes out today tells nothing about anyone
   if (!(await takeMail('check'))) return { error: r.noMail };
   const c = await startCheck(db, email, purpose, payload);
@@ -284,7 +287,7 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
   const was = from <= today && to >= today ? await blockedOn(db, me.flatId, today) : MEALS;
   if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, today)) === 'closed') return { error: m.errors.monthClosed };
   const news = meals.filter(x => !was.includes(x));
-  if (news.length) tellToday(me, today, 'noCook', { meals: news });
+  if (news.length) tellToday(me, today, 'noCook', { meals });
   refresh();
   return { done: m.saved };
 }
@@ -907,7 +910,8 @@ export async function forgotEmailAction(_: FormState, d: FormData): Promise<Form
   const lang = langOf(d), t = getDictionary(lang), e = t.app.errors;
   const email = normalizeEmail(d.get('email'));
   if (!email) return { error: e.email };
-  if (!(await allow(db, `forgot:${await ip()}`, 10)) || !(await connDay('forgot', 8)) || !(await codeAllowed(email))) return { error: e.tooMany };
+  if (!(await allow(db, `forgot:${await ip()}`, 10)) || !(await codeAllowed(email))) return { error: e.tooMany };
+  if (!(await connDay('forgot', 8))) return { error: e.tooManyToday };
   // counted for every email alike, sent or not: the budget can't tell a known email from an unknown one
   if (!(await takeMail('recover'))) return { error: t.recover.noMail };
   const r = await startRecovery(db, email);

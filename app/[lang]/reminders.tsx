@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { logoutAction, removePushAction, savePushAction } from './actions';
 import { apple, focus, link, secondary } from './ui';
@@ -23,10 +24,12 @@ async function detect(lang: string): Promise<State> {
   return 'on';
 }
 
-/** Reminders on this browser: one button, four states. */
-export function Reminders({ lang, t }: { lang: string; t: Copy }) {
+/** Reminders on this browser: one button, four states. `redraw`: once on, the page is drawn again (Home's ask card goes). */
+export function Reminders({ lang, t, redraw }: { lang: string; t: Copy; redraw?: boolean }) {
   const [state, setState] = useState<State>('loading');
+  const router = useRouter();
   useEffect(() => { detect(lang).then(setState, () => setState('unsupported')); }, [lang]);
+  useEffect(() => { if (redraw && state === 'on') router.refresh(); }, [redraw, state, router]);
   const on = async () => {
     setState('busy');
     try {

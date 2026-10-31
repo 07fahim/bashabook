@@ -325,7 +325,7 @@ export async function bringBack(db: Db, flatId: string, by: string, memberId: st
 }
 
 /** Sets a one-time PIN: the next sign-in must choose a new one. Every phone is signed out (its notifications stop too: they
- *  turn reminders on again after signing in) and the flat's history says so.
+ *  get them again when they open Home signed in on their own phone) and the flat's history says so.
  *  `by`: the collector resetting a flatmate in the app, or the app team (scripts/reset-collector-pin.mts), which may reset
  *  only the collector living here now and must give a reason. In the app only the collector, never their own PIN, and only
  *  someone living here now. The PIN fields change and the email is cleared (they add it again from Home): a reset is the

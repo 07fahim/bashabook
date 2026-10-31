@@ -36,7 +36,7 @@ BashaBook: our flat's meals, bazar, bills and money in one place. It runs in the
 1. Tap this link: <link>
 2. Pick your name, type your email and choose a 4-digit PIN. The PIN is yours alone; don't share it.
 3. An 8-digit code comes to your email; type it and you're in. No code? Look in spam.
-4. On Home open My account and turn on reminders, so your phone tells you when someone changes today's meals or about money.
+4. On Home open My account and turn on reminders. Then your phone tells you when someone changes today's meals or about money.
 
 **Three things about the PIN**
 - 5 wrong PINs lock you out for 15 minutes, longer if it keeps happening. 25 wrong and it locks for good.
