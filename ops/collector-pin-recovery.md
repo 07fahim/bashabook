@@ -47,6 +47,20 @@ app are checked against the verified numbers in the log, never trusted on their 
 Why numbers and not faces: the app team doesn't know anyone's face, so meeting someone or seeing them on video proves
 nothing by itself. What proves identity is a flatmate reached on their own verified number, whose phone wasn't lost.
 
+## Lost flat code
+
+Someone signed out and lost the flat code. First ask them to check with anyone in the flat: every signed-in person sees the
+code on Home (and the phone they used shows Back to the flat on the landing page). Only when nobody can:
+
+1. Ask the flat's name and the collector's name. Run (read-only)
+   `node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/find-flat.mts "<flat name part>" "<collector name part>"`.
+2. Verify before telling the code: call back the saved number the script prints (the collector's) or the asker's own saved
+   number, never a number the person gives you now. No saved number: ask two things only someone in that flat knows (two
+   flatmates' names and a recent bazar amount) and check them in the app data.
+3. Tell the code on that call. The code alone opens nothing: it shows the flat's name and names; the PIN is still needed.
+4. They forgot the PIN too: a flatmate's PIN is reset by the collector on the Flat tab; the collector's PIN follows Steps
+   below.
+
 ## Never
 
 - Never ask for, or accept, the old PIN. Nobody can read it; it is stored only as a hash.
