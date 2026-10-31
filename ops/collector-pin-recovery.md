@@ -54,9 +54,9 @@ code on Home (and the phone they used shows Back to the flat on the landing page
 
 1. Ask the flat's name and the collector's name. Run (read-only)
    `node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/find-flat.mts "<flat name part>" "<collector name part>"`.
-2. Verify before telling the code: call back the saved number the script prints (the collector's) or the asker's own saved
-   number, never a number the person gives you now. No saved number: ask two things only someone in that flat knows (two
-   flatmates' names and a recent bazar amount) and check them in the app data.
+2. Verify before telling the code: call back a saved number the script prints (the asker's own or the collector's), never
+   a number the person gives you now. No saved number: ask the names of two people living in the flat and check them
+   against the script's list.
 3. Tell the code on that call. The code alone opens nothing: it shows the flat's name and names; the PIN is still needed.
 4. They forgot the PIN too: a flatmate's PIN is reset by the collector on the Flat tab; the collector's PIN follows Steps
    below.
@@ -89,7 +89,8 @@ code on Home (and the phone they used shows Back to the flat on the landing page
    node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/reset-collector-pin.mts <join code> "<collector name>" "<reason>" "<your name>"
    ```
 
-   Check the first line says the production database (`ep-noisy-forest-…`), and that the name asking is the collector shown.
+   Check the first line shows the production user name `postgres.ccmueosbxifibfbigowg` and that the name asking is the
+   collector shown.
 
 3. **Choose the check.** Use 4a only if none of these is true; if any is, use 4b:
    - the collector has no verified number in the log, can't be reached on it, or its saved number in the app differs;
