@@ -6,7 +6,8 @@ import { getDictionary, hasLocale } from '../dictionaries';
 import { ForgotCode } from '../forgot-code';
 import { Header } from '../header';
 import { BackToFlat } from '../remember-flat';
-import { Field, primary } from '../ui';
+import { SecretField } from '../secret-field';
+import { primary } from '../ui';
 
 export async function generateMetadata({ params }: PageProps<'/[lang]/join'>): Promise<Metadata> {
   const { lang } = await params;
@@ -33,10 +34,10 @@ export default async function JoinByCode({ params, searchParams }: PageProps<'/[
         </div>
         <form action={joinByCodeAction} className="mt-8 space-y-5 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
           <input type="hidden" name="lang" value={lang} />
-          <Field label={a.code} name="code" required maxLength={12} autoComplete="off" autoCapitalize="characters" className="uppercase tracking-widest" />
+          <SecretField label={a.code} name="code" required maxLength={12} autoComplete="off" autoCapitalize="characters" className="uppercase tracking-widest" />
           <button className={primary}>{a.joinBtn}</button>
         </form>
-        <ForgotCode t={t} className="mt-8" />
+        <ForgotCode t={t} lang={lang} className="mt-8" />
       </main>
     </>
   );

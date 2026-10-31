@@ -16,7 +16,7 @@ async function main() {
   const { flatId } = await createFlat(db, { flatName: 'Race PIN lock', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-10-12', lang: 'en' });
   const [{ join_code: code }] = await db<{ join_code: string }>(`select join_code from flats where id = $1`, [flatId]);
   const tahsin = (await flatByCode(db, code))!.members.find(m => m.name === 'Tahsin')!.id;
-  await login(db, code, tahsin, '5678', null);   // claims the name
+  await login(db, code, tahsin, '5678', null, 'x@test.bd');   // claims the name
   const state = async () => (await db<{ n: number; lock: string | null; rows: number }>(
     `select failed_pin_count as n, locked_until::text as lock, (select count(*)::int from audit_log where entity_id = m.id::text and after ? 'locked') as rows from members m where id = $1`, [tahsin]))[0];
   let failed = 0;
@@ -26,7 +26,7 @@ async function main() {
     await db(`delete from audit_log where entity_id = $1 and after ? 'locked'`, [tahsin]);
     const t0 = Date.now();
     const seen: Record<string, number> = {};
-    for (const r of await Promise.all(Array.from({ length: 40 }, () => login(db, code, tahsin, '0000', null)))) {
+    for (const r of await Promise.all(Array.from({ length: 40 }, () => login(db, code, tahsin, '0000', null, 'x@test.bd')))) {
       const k = 'error' in r ? r.error + (r.left ? ':' + r.left : '') : 'in';
       seen[k] = (seen[k] ?? 0) + 1;
     }
@@ -36,7 +36,7 @@ async function main() {
   }
   await db(`update members set failed_pin_count = 0, locked_until = null where id = $1`, [tahsin]);
   const seen: Record<string, number> = {};
-  for (const r of await Promise.all(Array.from({ length: 40 }, () => login(db, code, tahsin, '0000', null)))) {
+  for (const r of await Promise.all(Array.from({ length: 40 }, () => login(db, code, tahsin, '0000', null, 'x@test.bd')))) {
     const k = 'error' in r ? r.error : 'in';
     seen[k] = (seen[k] ?? 0) + 1;
   }
