@@ -60,6 +60,8 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   // after a clear the action comes back here with ?cleared=; the line goes once they are locked again (a reloaded old URL)
   const justCleared = typeof cleared === 'string' ? people.find(p => p.id === cleared && !p.locked) : undefined;
   const self = people.find(p => p.id === me.memberId), myPhone = self?.phone ?? '';   // the invite card only matters while someone hasn't joined
+  // the collector relays changes to the cook: until a phone of theirs gets reminders, Home asks (muting meal notices hides it)
+  const ask = me.role === 'manager' && pushed === false && !!self?.mealPush;
   const decide = (date: string) => mealDecision(date, today);
   const starter = meals.members.find(x => x.role === 'manager');
   const hc = headcount(meals.members, meals.changes, tomorrow);
@@ -154,7 +156,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
         )}
         {/* the collector relays changes to the cook: until a phone of theirs gets reminders, ask here, not only in My account
             (muting meal notices hides it too) */}
-        {me.role === 'manager' && pushed === false && self?.mealPush && (
+        {ask && (
           <section className={`mt-6 ${alertCard}`}>
             <h2 className="text-xl font-bold">{m.remindTitle}</h2>
             <p className="mt-1 mb-4 max-w-prose text-[15px] text-muted">{m.remindLead}</p>
@@ -296,7 +298,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
               </div>
             )}
             <div className="mt-6 border-t border-line pt-6">
-              <Reminders lang={lang} t={t.push} redraw={pushed === false} />
+              <Reminders lang={lang} t={t.push} redraw={ask} />
               {/* only the today-meal notices: muting them keeps the money ones (turning reminders off would lose both) */}
               <ActionForm action={mealPushAction} className="mt-3">
                 <input type="hidden" name="lang" value={lang} />

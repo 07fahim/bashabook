@@ -283,8 +283,9 @@ export async function noCooking(db: Db, flatId: string, by: string, from: string
 
 /** The cook is back early: unblock from..to. From `firstOpen` on, each blocked meal still at the no-cooking 0 goes back to
  *  what it was before no cooking (away, an Off, guest plates) or, if nothing was saved, to the usual meal.
- *  Takes the newest no-cooking snapshot per meal; a meal already blocked is not snapshotted again (migration 025), so a
- *  range saved twice restores the plates from before the first save. */
+ *  Takes this block's snapshot per meal (one saved after the last Cook again over it, migration 030); a meal already
+ *  blocked is not snapshotted again (025), so a range saved twice restores the plates from before the first save. Someone
+ *  still away by an away saved during the block stays off. */
 export async function cookAgain(db: Db, flatId: string, by: string, from: string, to: string, meals: Meal[], firstOpen: string) {
   // set_cook_again (migration 012): the same flat lock first, then the statement with a fresh snapshot
   await db(`select set_cook_again($1, $2::text::date, $3::text::date, $4, $5::text::jsonb, $6, $7::text::date)`,
