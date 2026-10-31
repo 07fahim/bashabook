@@ -225,18 +225,19 @@ export async function changePin(db: Db, memberId: string, current: string, next:
 
 /** My email, added or changed with my current PIN (wrong tries count toward the lock, as for a PIN change): someone holding
  *  my unlocked phone can't plant their own address for a later takeover. A new address waits for confirmation again; the
- *  same address keeps its state. */
+ *  same address keeps its state. A PIN reset landing at the same moment wins: nothing changes. */
 export async function changeEmail(db: Db, memberId: string, pin: string, email: string): Promise<'ok' | { error: 'locked' | 'lockedForGood' | 'wrongPin'; left?: number }> {
   const [m] = await db<{ pin_hash: string | null }>(`select pin_hash from members where id = $1`, [memberId]);
   const may = await countTry(db, memberId);
   if (typeof may === 'string') return { error: may };
   if (!m?.pin_hash || !(await bcrypt.compare(pin, m.pin_hash))) return wrongPin(db, memberId, may);
-  // every right-hand side reads the row as it was, so "same address" compares with the old email
-  await db(`update members set failed_pin_count = 0, locked_until = null, email = $2,
+  // every right-hand side reads the row as it was, so "same address" compares with the old email;
+  // pin_hash = the one we checked, so a reset that lands at the same moment wins (and the email stays as it was)
+  const done = await db(`update members set failed_pin_count = 0, locked_until = null, email = $2,
       email_ok = email_ok and email is not distinct from $2,
       email_token = case when email is not distinct from $2 then email_token end
-    where id = $1`, [memberId, email]);
-  return 'ok';
+    where id = $1 and pin_hash = $3 returning id`, [memberId, email, m.pin_hash]);
+  return done.length ? 'ok' : { error: 'wrongPin' };
 }
 
 /** A new confirmation link for my email, replacing any earlier one; null when there is no email or it is confirmed. */

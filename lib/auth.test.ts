@@ -358,4 +358,23 @@ describe('email on accounts', { timeout: 30000 }, () => {
     expect(await confirmEmail(db, fresh.token)).toBe(false);
     expect(await confirmEmail(db, '')).toBe(false);
   });
+
+  it('a locked account cannot change its email, a too-long link is refused', async () => {
+    const { memberId } = await flat();
+    await db(`update members set locked_until = now() + interval '15 minutes' where id = $1`, [memberId]);
+    expect(await changeEmail(db, memberId, '1234', 'nafis@gmail.com')).toEqual({ error: 'locked' });
+    expect(await emailOf(db, memberId)).toEqual({ email: null, ok: false });
+    expect(await confirmEmail(db, 'x'.repeat(101))).toBe(false);
+  });
+
+  it('a PIN reset that lands while the email is being changed wins', async () => {
+    const { memberId } = await flat();
+    // the reset lands between the PIN check and the write
+    const racing: typeof db = async (text, params) => {
+      if (text.includes('email = $2')) await db(`update members set pin_hash = 'reset' where id = $1`, [memberId]);
+      return db(text, params);
+    };
+    expect(await changeEmail(racing, memberId, '1234', 'nafis@gmail.com')).toEqual({ error: 'wrongPin' });
+    expect(await emailOf(db, memberId)).toEqual({ email: null, ok: false });
+  });
 });
