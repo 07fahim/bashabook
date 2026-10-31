@@ -6,8 +6,8 @@ import { db } from '@/lib/db';
 import { flatsFor, RECOVER_COOKIE, recoveryOf } from '@/lib/recovery';
 import { ActionForm } from '../action-form';
 import { forgotCodeAction, forgotEmailAction, forgotRestartAction, recoverPinAction, recoverSignInAction } from '../actions';
-import { EMAIL, WHATSAPP } from '../contacts';
 import { getDictionary, hasLocale } from '../dictionaries';
+import { Contacts } from '../forgot-code';
 import { Header } from '../header';
 import { card, Field, Fold, link, PageSkeleton, PinField, primary, secondary } from '../ui';
 
@@ -71,10 +71,7 @@ async function ForgotBody({ params }: Pick<PageProps<'/[lang]/forgot'>, 'params'
           <>
             <h1 className={h1}>{r.none}</h1>
             <p className="mt-2 text-muted">{r.noneLead}</p>
-            <div className="mt-4 flex flex-wrap gap-x-6">
-              {WHATSAPP && <a href={WHATSAPP} target="_blank" rel="noopener noreferrer" className={contact}>{t.footer.whatsapp}</a>}
-              {EMAIL && <a href={EMAIL} className={contact}>{t.footer.email}</a>}
-            </div>
+            <Contacts t={t} className="mt-4 flex flex-wrap gap-x-6" />
             {restart}
           </>
         ) : (

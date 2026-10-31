@@ -13,10 +13,17 @@ export function ForgotCode({ t, lang, className }: { t: Dict; lang: Locale; clas
       <p className="mt-1 text-[15px] text-muted">{t.app.forgotLead}</p>
       <Link href={`/${lang}/forgot`} className={contact}>{t.app.forgotLink}</Link>
       <p className="mt-3 text-[15px] text-muted">{t.app.forgotNoEmail}</p>
-      <div className="flex flex-wrap gap-x-6">
-        {WHATSAPP && <a href={WHATSAPP} target="_blank" rel="noopener noreferrer" className={contact}>{t.footer.whatsapp}</a>}
-        {EMAIL && <a href={EMAIL} className={contact}>{t.footer.email}</a>}
-      </div>
+      <Contacts t={t} />
+    </div>
+  );
+}
+
+/** The app team's WhatsApp and email links (also on the forgot page when an email has no flat). */
+export function Contacts({ t, className = 'flex flex-wrap gap-x-6' }: { t: Dict; className?: string }) {
+  return (
+    <div className={className}>
+      {WHATSAPP && <a href={WHATSAPP} target="_blank" rel="noopener noreferrer" className={contact}>{t.footer.whatsapp}</a>}
+      {EMAIL && <a href={EMAIL} className={contact}>{t.footer.email}</a>}
     </div>
   );
 }
