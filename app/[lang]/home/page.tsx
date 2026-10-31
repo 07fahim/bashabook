@@ -10,12 +10,13 @@ import { changedByOthers, loadMeals } from '@/lib/meals-db';
 import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { noticeCount } from '@/lib/notices';
+import { hasPush } from '@/lib/push-db';
 import { ActionForm } from '../action-form';
-import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, emailAction, logoutAction, mealPushAction, phoneAction, photoAction, removePhotoAction } from '../actions';
+import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, emailAction, mealPushAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { InstallApp } from '../install-app';
-import { Reminders } from '../reminders';
+import { Reminders, SignOut } from '../reminders';
 import { RememberFlat } from '../remember-flat';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka, fmtTaka2 } from '../format';
@@ -25,7 +26,7 @@ import { balanceText, CheckList, ConfirmList } from '../money/bits';
 import { Nav } from '../nav';
 import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
-import { alertCard, card, Field, focal, Fold, focus, link, LongList, PageSkeleton, PinField, primary, secondary } from '../ui';
+import { alertCard, card, Field, focal, Fold, link, LongList, PageSkeleton, PinField, primary, secondary } from '../ui';
 
 export default function Home({ params, searchParams }: PageProps<'/[lang]/home'>) {
   return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} searchParams={searchParams} /></Suspense>;
@@ -41,7 +42,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   const noticesP = noticeCount(db, me.flatId, me.memberId, me.role === 'manager');   // the bell's count, read alongside the page
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const [meals, people, mo, waiting, ho, byOthers, iCleared, checks, mail] = await Promise.all([
+  const [meals, people, mo, waiting, ho, byOthers, iCleared, checks, mail, pushed] = await Promise.all([
     loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId),
     loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId),
     myLatestHandover(db, me.flatId, me.memberId),
@@ -49,6 +50,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
     clearedBefore(db, me.flatId, me.memberId),
     toCheck(db, me.flatId, me.memberId, today),
     emailOf(db, me.memberId),
+    me.role === 'manager' && hasPush(db, me.memberId),
   ]);
   const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
@@ -148,6 +150,15 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             <h2 className="text-xl font-bold">{r.addTitle}</h2>
             <p className="mt-1 max-w-prose text-[15px] text-muted">{r.addLead}</p>
             {emailForm}
+          </section>
+        )}
+        {/* the collector relays changes to the cook: until a phone of theirs gets reminders, ask here, not only in My account
+            (muting meal notices hides it too) */}
+        {me.role === 'manager' && pushed === false && self?.mealPush && (
+          <section className={`mt-6 ${alertCard}`}>
+            <h2 className="text-xl font-bold">{m.remindTitle}</h2>
+            <p className="mt-1 mb-4 max-w-prose text-[15px] text-muted">{m.remindLead}</p>
+            <Reminders lang={lang} t={t.push} />
           </section>
         )}
         <InstallApp t={t.install} className="mt-6" />
@@ -284,12 +295,14 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             <div className="mt-6 border-t border-line pt-6">
               <Reminders lang={lang} t={t.push} />
               {/* only the today-meal notices: muting them keeps the money ones (turning reminders off would lose both) */}
-              <form action={mealPushAction} className="mt-3">
+              <ActionForm action={mealPushAction} className="mt-3">
                 <input type="hidden" name="lang" value={lang} />
                 <input type="hidden" name="on" value={self?.mealPush ? '0' : '1'} />
-                <p className="text-[15px]">{self?.mealPush ? t.push.mealOn : t.push.mealOff} · <button className={`min-h-11 text-[15px] ${link}`}>{self?.mealPush ? t.push.mealMute : t.push.mealUnmute}</button></p>
-                <p className="text-[15px] text-muted">{t.push.mealHint}</p>
-              </form>
+                <div>
+                  <p className="text-[15px]">{self?.mealPush ? t.push.mealOn : t.push.mealOff} · <button className={`min-h-11 text-[15px] ${link}`}>{self?.mealPush ? t.push.mealMute : t.push.mealUnmute}</button></p>
+                  <p className="text-[15px] text-muted">{t.push.mealHint}</p>
+                </div>
+              </ActionForm>
             </div>
             <div className="mt-8 border-t border-line pt-6">
               <h3 className="text-lg font-bold">{a.changePin}</h3>
@@ -306,10 +319,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             </div>
           </Fold>
         </div>
-        <form action={logoutAction} className="mt-8">
-          <input type="hidden" name="lang" value={lang} />
-          <button className={`inline-flex min-h-11 items-center text-muted underline-offset-4 hover:underline ${focus}`}>{a.logout}</button>
-        </form>
+        <SignOut lang={lang} label={a.logout} />
         {/* seen before leaving: the code is what brings you back */}
         <p className="text-[15px] text-muted">
           {codeBefore}<span className="font-bold tracking-widest text-ink">{me.joinCode}</span>{codeAfter}

@@ -244,8 +244,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
           </Group>
           </div>
           <Group title={m.groupSettings}>
-            <Fold row id="rules" title={m.rulesTitle} level={3} open={'rules' in sp}>
-              {'rules' in sp && <FocusHere />}
+            <Fold row id="rules" title={m.rulesTitle} level={3}>
               <ActionForm action={settingsAction} className="mt-4">
                 <input type="hidden" name="lang" value={lang} />
                 <fieldset>

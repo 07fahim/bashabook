@@ -13,7 +13,7 @@ import { acceptHandover, cancelHandover, declineHandover, offerHandover, pending
 import { addDays, isDate, isMeal, isPresent, MEALS, nowDhaka, todayDhaka, type Meal } from '@/lib/meals';
 import { pushToday } from '@/lib/meal-push';
 import {
-  addGuests, cancelAway, cookAgain, isInMeals, loadMeals, noCooking, removeGuests, saveMeal, setAway, setDefaults, setOtherMeal, setOwn, updateSettings,
+  addGuests, blockedOn, cancelAway, cookAgain, isInMeals, loadMeals, noCooking, removeGuests, saveMeal, setAway, setDefaults, setOtherMeal, setOwn, updateSettings,
 } from '@/lib/meals-db';
 import { toPoisha } from '@/lib/money';
 import { addEntry, addRoom, confirmEntry, confirmerOf, endedOpenMonth, monthOf, payDue, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
@@ -32,6 +32,12 @@ const str = (d: FormData, k: string) => String(d.get(k) ?? '');
 const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLocale(l) ? l : 'en'; };
 /** Anonymous actions are counted per connection and hour (lib/rate-limit): a script can't burn the database. */
 const ip = async () => firstIp((await headers()).get('x-forwarded-for'));
+/** One connection's share of a day's mail, so one phone can't spend the whole day's budget for every flat. A day key
+ *  outlives the 2 hours an IP may be kept, so the address is kept only as a keyed hash (CRON_SECRET: never in the
+ *  database, so the table alone can't be turned back into addresses).
+ *  ponytail: many connections together can still spend a budget; a paid Resend plan or per-flat budgets if that happens. */
+const connDay = async (kind: string, limit: number) =>
+  allow(db, `day:${kind}:${hashToken(`${await ip()}|${process.env.CRON_SECRET ?? ''}`)}`, limit, 'day');
 
 /** Three day budgets of email, 95 under Resend's free 100 a day: 35 recovery codes, 45 check codes and 15 notices of a PIN
  *  or email change. Anyone can ask for codes with any address, so each kind has its own budget: checks can't starve
@@ -58,11 +64,12 @@ const codeAllowed = async (email: string) => allow(db, `code:${await ip()}:${has
 const checkToken = async () => (await cookies()).get(CHECK_COOKIE)?.value ?? '';
 const keepCheck = async (token: string) =>
   (await cookies()).set(CHECK_COOKIE, token, { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: CODE_MINUTES * 60 });
-/** Mails a check code and sends the browser to /check. 10 an hour per connection on top of each caller's own limit, so
- *  one connection can't spend the day's check mail on codes to any address. */
+/** Mails a check code and sends the browser to /check. 15 a day per connection on top of each caller's own limit: a flat
+ *  of 10 joining on one Wi-Fi the same evening fits with a few retries, and one connection can't spend the day's check
+ *  mail on codes to any address. */
 async function sendCheck(lang: Locale, email: string, purpose: Check, payload: Record<string, unknown>): Promise<FormState> {
   const t = getDictionary(lang), r = t.recover;
-  if (!(await allow(db, `check:${await ip()}`, 10)) || !(await codeAllowed(email))) return { error: t.app.errors.tooMany };
+  if (!(await connDay('check', 15)) || !(await codeAllowed(email))) return { error: t.app.errors.tooMany };
   // the address is the person's own: saying no mail goes out today tells nothing about anyone
   if (!(await takeMail('check'))) return { error: r.noMail };
   const c = await startCheck(db, email, purpose, payload);
@@ -154,7 +161,15 @@ export async function resetPinAction(_: FormState, d: FormData): Promise<FormSta
   const me = await requireManager(lang, true);
   if (!isPin(d.get('pin'))) return { error: a.errors.pin };
   if (weakPin(d.get('pin'))) return { error: a.errors.weakPin };
-  if (!(await resetPin(db, me.flatId, str(d, 'memberId'), pinText(d.get('pin')), { memberId: me.memberId }))) return { error: a.errors.notFound };
+  const memberId = str(d, 'memberId');
+  // the reset removes the email: its owner hears about it there, so a reset they didn't ask for isn't silent
+  const [old] = UUID.test(memberId) ? await db<{ email: string | null; lang: Locale | null; name: string }>(
+    `select email, language as lang, name from members where flat_id = $1 and id = $2`, [me.flatId, memberId]) : [];
+  if (!(await resetPin(db, me.flatId, memberId, pinText(d.get('pin')), { memberId: me.memberId }))) return { error: a.errors.notFound };
+  if (old?.email) {
+    const r = getDictionary(old.lang ?? lang).recover, fill = (s: string) => s.replace(/\{by\}/g, () => me.name).replace('{name}', () => old.name).replace('{flat}', () => me.flatName);
+    mail('notice', old.email, r.resetSubject, fill(r.resetBody));
+  }
   refresh();
   return { done: a.resetDone };
 }
@@ -173,9 +188,10 @@ export async function clearLockAction(_: FormState, d: FormData): Promise<FormSt
 const plates = (v: string) => (/^\d{1,2}$/.test(v) && Number(v) <= 10 ? Number(v) : null);
 /** Today up to 60 days ahead. */
 const inRange = (date: string) => isDate(date) && date >= todayDhaka() && date <= addDays(todayDhaka(), 60);
-/** A change to today's meals tells everyone else in the flat, after the response (lib/meal-push). */
+/** A change to today's meals tells everyone else in the flat, after the response (lib/meal-push). 20 an hour per person:
+ *  past that the change still saves and shows on the bell, only the push is skipped, so nobody can flood the flat's phones. */
 const tellToday = (me: { flatId: string; memberId: string }, today: string, kind: TodayKind, v: { who?: string; meals: Meal[] }) =>
-  after(() => pushToday(db, me.flatId, me.memberId, today, kind, v));
+  after(async () => { if (await allow(db, `today:${me.memberId}`, 20)) await pushToday(db, me.flatId, me.memberId, today, kind, v); });
 
 /** A meal chip tap. The chip sends the count it wants; repeating the tap is harmless (nothing written, nobody told). */
 export async function setMealAction(d: FormData) {
@@ -215,10 +231,11 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireMember(lang, true);
   const from = str(d, 'from'), to = str(d, 'to');
-  if (!inRange(from) || !isDate(to) || to < from) return { error: m.errors.bad };
+  // tomorrow at the earliest: away zeroes whole days, and today's breakfast may already be eaten (it would leave the bill).
+  // Today's meals are switched with the chips, which tell the flat.
+  if (!inRange(from) || from === todayDhaka() || !isDate(to) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
   const dropped = await setAway(db, me.flatId, me.memberId, from, to);
-  if (from === todayDhaka()) tellToday(me, from, 'away', { meals: [] });
   refresh();
   if (!dropped.length) return { done: m.saved };
   // same shape as the guest list; dates hold commas, so items are split by semicolons
@@ -263,8 +280,11 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
   if (!editable(from, open) || !editable(to, open) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
   if (!meals.length) return { error: m.errors.pickMeal };
+  // only today's meals that weren't blocked already are news: saving the same range again tells nobody
+  const was = from <= today && to >= today ? await blockedOn(db, me.flatId, today) : MEALS;
   if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, today)) === 'closed') return { error: m.errors.monthClosed };
-  if (from <= today && to >= today) tellToday(me, today, 'noCook', { meals });
+  const news = meals.filter(x => !was.includes(x));
+  if (news.length) tellToday(me, today, 'noCook', { meals: news });
   refresh();
   return { done: m.saved };
 }
@@ -287,11 +307,13 @@ export async function adminSetAction(d: FormData) {
   // own plate and guests are set separately, so a guest change never touches someone's own meal and back
   const memberId = str(d, 'memberId'), date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own'), guests = plates(str(d, 'guests'));
   if (!isDate(date)) return back(lang, 'notSaved');   // before loadMeals, which would throw on a bad date
-  const member = (await loadMeals(db, me.flatId, date, date)).members.find(x => x.id === memberId);
+  const loaded = await loadMeals(db, me.flatId, date, date), member = loaded.members.find(x => x.id === memberId);
   if (member && editable(date, await openFrom(db, me.flatId, todayDhaka())) && isPresent(member, date) && isMeal(meal) && (own === '0' || own === '1') && guests !== null && guests <= 9) {
-    const today = todayDhaka();
+    const today = todayDhaka(), before = loaded.changes.find(c => c.memberId === memberId && c.meal === meal)?.guests ?? 0;
     const w = await unlessClosed(() => saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count: Number(own) + guests, guests }, date <= today));
-    if (w === true && date === today) tellToday(me, date, memberId === me.memberId ? 'changed' : 'other', { who: memberId, meals: [meal] });
+    // my own row in the bell's words (lib/notices): a guest change first, else eating or skipping
+    const kind = memberId !== me.memberId ? 'other' : guests > before ? 'guestsAdd' : guests < before ? 'guestsGone' : own === '1' ? 'on' : 'off';
+    if (w === true && date === today) tellToday(me, date, kind, { who: memberId, meals: [meal] });
     return back(lang, w === 'closed' ? 'notSaved' : undefined);
   }
   return back(lang, 'notSaved');
@@ -321,9 +343,11 @@ export async function noCookCancelAction(d: FormData) {
   const me = await requireManager(langOf(d), true);
   const date = str(d, 'date'), meals = str(d, 'meals').split(',').filter(isMeal);
   // today or later, as the screen offers: a past day was already cooked (or not), and un-blocking it would rewrite everyone's meals
-  if (editable(date, await openFrom(db, me.flatId, todayDhaka())) && date >= todayDhaka() && meals.length) {
-    const r = await unlessClosed(() => cookAgain(db, me.flatId, me.memberId, date, date, meals, date));
-    if (r !== 'closed' && date === todayDhaka()) tellToday(me, date, 'cookAgain', { meals });
+  // only meals still blocked: a second tap (or a stale page) writes no second history line and tells nobody again
+  const blocked = isDate(date) ? (await blockedOn(db, me.flatId, date)).filter(x => meals.includes(x)) : [];
+  if (editable(date, await openFrom(db, me.flatId, todayDhaka())) && date >= todayDhaka() && blocked.length) {
+    const r = await unlessClosed(() => cookAgain(db, me.flatId, me.memberId, date, date, blocked, date));
+    if (r !== 'closed' && date === todayDhaka()) tellToday(me, date, 'cookAgain', { meals: blocked });
   }
   refresh();
 }
@@ -501,8 +525,9 @@ async function back(lang: string, why?: 'notSaved'): Promise<void> {
   const ref = (await headers()).get('referer'), u = ref && URL.canParse(ref) ? new URL(ref) : null;
   const path = u && u.pathname.startsWith(`/${lang}/`) ? u.pathname : `/${lang}/home`, q = new URLSearchParams(u?.search ?? '');
   // a plain success redraws in place: no navigation, so the page keeps its scroll and nothing flashes
-  if (!why && !q.has('why')) return refresh();
+  if (!why && !q.has('why') && !q.has('email')) return refresh();
   if (why) q.set('why', why); else q.delete('why');
+  q.delete('email');   // "Email saved." is said once
   const s = q.toString();
   redirect(s ? `${path}?${s}` : path, RedirectType.replace);
 }
@@ -859,10 +884,11 @@ export async function savePushAction(lang: string, sub: PushSub) {
 }
 
 /** My own setting: notify me of changes to today's meals, or not. Other reminders are untouched. */
-export async function mealPushAction(d: FormData) {
-  const me = await requireMember(langOf(d), true);
+export async function mealPushAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), me = await requireMember(lang, true);
   await setMealPush(db, me.memberId, str(d, 'on') === '1');
   refresh();
+  return { done: getDictionary(lang).meals.saved };
 }
 
 export async function removePushAction(lang: string, endpoint: string) {
@@ -881,7 +907,7 @@ export async function forgotEmailAction(_: FormState, d: FormData): Promise<Form
   const lang = langOf(d), t = getDictionary(lang), e = t.app.errors;
   const email = normalizeEmail(d.get('email'));
   if (!email) return { error: e.email };
-  if (!(await allow(db, `forgot:${await ip()}`, 10)) || !(await codeAllowed(email))) return { error: e.tooMany };
+  if (!(await allow(db, `forgot:${await ip()}`, 10)) || !(await connDay('forgot', 8)) || !(await codeAllowed(email))) return { error: e.tooMany };
   // counted for every email alike, sent or not: the budget can't tell a known email from an unknown one
   if (!(await takeMail('recover'))) return { error: t.recover.noMail };
   const r = await startRecovery(db, email);

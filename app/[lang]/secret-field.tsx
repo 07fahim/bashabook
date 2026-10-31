@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useId, useState, type ComponentProps } from 'react';
+import { useEffect, useId, useRef, useState, type ComponentProps } from 'react';
 import { field, focus } from './ui';
 
 const copy = { bn: ['দেখান', 'লুকান'], en: ['Show', 'Hide'] };
@@ -10,13 +10,19 @@ const copy = { bn: ['দেখান', 'লুকান'], en: ['Show', 'Hide'] 
 export function SecretField({ label, className = '', ...input }: { label: string; name: string } & ComponentProps<'input'>) {
   const [shown, setShown] = useState(false);
   const { lang } = useParams<{ lang: string }>();
-  const id = useId();
+  const id = useId(), ref = useRef<HTMLInputElement>(null);
+  // a form cleared after a save (a PIN change on a shared phone) hides the next PIN typed again
+  useEffect(() => {
+    const f = ref.current?.form, hide = () => setShown(false);
+    f?.addEventListener('reset', hide);
+    return () => f?.removeEventListener('reset', hide);
+  }, []);
   return (
     <div className="font-semibold">
       <label id={`${id}l`} htmlFor={id} className="block">{label}</label>
       <span className="relative block">
         {/* ms-reveal: Edge's own eye, which would sit next to this one */}
-        <input {...input} id={id} type={shown ? 'text' : 'password'} className={`${field} pr-14 [&::-ms-reveal]:hidden ${className}`} />
+        <input {...input} ref={ref} id={id} type={shown ? 'text' : 'password'} className={`${field} pr-14 [&::-ms-reveal]:hidden ${className}`} />
         {/* the mousedown keeps focus (and the phone keyboard) in the field; one-word name, the field's label describes it */}
         <button
           type="button"

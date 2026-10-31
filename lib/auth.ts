@@ -21,12 +21,13 @@ export const pinText = (v: unknown) => enDigits(String(v ?? ''));
 export const isPin = (v: unknown) => /^\d{4}$/.test(pinText(v));
 // the most chosen PINs that no rule below catches (DataGenetics, 3.4 million real 4-digit PINs: the top 20 were a quarter of all)
 const COMMON = new Set(['1212', '1122', '1004', '2000', '6969', '1313', '2001', '1010', '2580']);
-/** A PIN anyone with the flat code would try first: one digit four times, a straight run up or down, or one of COMMON.
+/** A PIN anyone with the flat code would try first: one digit four times, a straight run up or down, a year 1950-2029
+ *  (a birth year: flatmates are students, so 25 tries cover theirs) or one of COMMON.
  *  Refused wherever a PIN is chosen (a code gives 25 tries per name): here in login for a claim or a new PIN after a reset,
  *  in the actions for a new flat, a PIN change and the collector's reset. A weak PIN chosen before still signs in. */
 export const weakPin = (v: unknown) => {
   const p = pinText(v), d = [...p].map(Number), step = d[1] - d[0];
-  return (Math.abs(step) <= 1 && d.every((x, i) => i === 0 || x - d[i - 1] === step)) || COMMON.has(p);
+  return (Math.abs(step) <= 1 && d.every((x, i) => i === 0 || x - d[i - 1] === step)) || /^(19[5-9]|20[0-2])\d$/.test(p) || COMMON.has(p);
 };
 export const hashPin = (pin: string) => bcrypt.hash(pin, 10);
 export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -323,7 +324,8 @@ export async function bringBack(db: Db, flatId: string, by: string, memberId: st
   }
 }
 
-/** Sets a one-time PIN: the next sign-in must choose a new one. Every phone is signed out and the flat's history says so.
+/** Sets a one-time PIN: the next sign-in must choose a new one. Every phone is signed out (its notifications stop too: they
+ *  turn reminders on again after signing in) and the flat's history says so.
  *  `by`: the collector resetting a flatmate in the app, or the app team (scripts/reset-collector-pin.mts), which may reset
  *  only the collector living here now and must give a reason. In the app only the collector, never their own PIN, and only
  *  someone living here now. The PIN fields change and the email is cleared (they add it again from Home): a reset is the
@@ -340,6 +342,7 @@ export async function resetPin(db: Db, flatId: string, memberId: string, pin: st
          then id <> $4::uuid and exists (select 1 from members c where c.flat_id = $1 and c.id = $4::uuid and c.role = 'manager')
          else role = 'manager' end returning id),
      s as (delete from sessions where member_id in (select id from m)),
+     p as (delete from push_subs where member_id in (select id from m)),
      a as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
        select $1, 'members', m.id::text, case when $5::text is null then '{"pinReset": true}'::jsonb
          else jsonb_build_object('pinReset', true, 'admin', $5::text, 'reason', $6::text) end, $4::uuid from m)

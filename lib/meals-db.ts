@@ -289,6 +289,10 @@ export async function cookAgain(db: Db, flatId: string, by: string, from: string
     [flatId, from, to, meals.join(','), JSON.stringify({ cookAgain: [from, to], meals: meals.join(',') }), by, firstOpen]);
 }
 
+/** The meals with no cooking on one day. */
+export const blockedOn = async (db: Db, flatId: string, date: string) =>
+  (await db<{ meal: Meal }>(`select meal from no_cook where flat_id = $1 and date = $2::text::date`, [flatId, date])).map(r => r.meal);
+
 /** The flat's first move-in day: meals start there. */
 export const flatStart = async (db: Db, flatId: string) =>
   (await db<{ start: string }>(`select min(joined_on)::text as start from members where flat_id = $1`, [flatId]))[0].start;
