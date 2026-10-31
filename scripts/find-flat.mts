@@ -13,8 +13,7 @@ const like = (s: string) => `%${s.trim().replace(/[\\%_]/g, c => `\\${c}`)}%`;
 const rows = await db<{ id: string; name: string; code: string; created: string; collector: string | null; phone: string | null }>(
   `select f.id, f.name, f.join_code as code, f.created_at::date::text as created, c.name as collector, c.phone
    from flats f
-   left join members c on c.flat_id = f.id and c.role = 'manager'
-     and (c.left_on is null or c.left_on >= (now() at time zone 'Asia/Dhaka')::date)
+   left join members c on c.flat_id = f.id and c.role = 'manager' and ${STAYING}
    where f.name ilike $1 and ($2::text is null or c.name ilike $2)
    order by f.created_at desc limit 20`, [like(flat), collector?.trim() ? like(collector) : null]);
 if (!rows.length) console.log('no flat matches');

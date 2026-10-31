@@ -67,6 +67,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   const plate = (h: typeof hc, date: string, x: Meal) => { const p = plates(h, meals.noCook, date, x); return p === 'off' ? m.noCook : p; };
   // only after the lock does a change matter: before it, the card already says the count can still move
   const changes = decision === 'open' ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, hc, now), hc);
+  const [codeBefore, codeAfter] = a.codeKeep.split('{code}');
   const status = decision === 'open' ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
   // under the week chart it has to say which day; in the phone card the heading already says tomorrow
   const lockLine = (wide: boolean) => (
@@ -283,7 +284,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
         </form>
         {/* seen before leaving: the code is what brings you back */}
         <p className="text-[15px] text-muted">
-          {a.codeKeep.split('{code}')[0]}<span className="font-bold tracking-widest text-ink">{me.joinCode}</span>{a.codeKeep.split('{code}')[1]}
+          {codeBefore}<span className="font-bold tracking-widest text-ink">{me.joinCode}</span>{codeAfter}
         </p>
       </main>
     </>

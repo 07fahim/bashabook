@@ -54,14 +54,15 @@ code on Home (and the phone they used shows Back to the flat on the landing page
 
 1. Ask the flat's name and the collector's name. Run (read-only)
    `node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/find-flat.mts "<flat name part>" "<collector name part>"`.
-2. Verify before telling the code: call back a saved number the script prints (the asker's own or the collector's).
-   Never a number the person gives you now. No saved number: ask the names of two people living in the flat and check them
-   against the script's list.
-3. Look for names the script marks not joined yet. Anyone with the code can take such a name and set its PIN, so the code
-   opens the flat. When any name shows not joined yet: tell the code only after a call-back to a saved number the script
-   prints (the names check alone is not enough) or ask the collector to remove or claim that name first. When every name
-   has joined: the code alone opens nothing because the PIN is still needed, so the names check is enough.
-4. Tell the code by voice on that call.
+2. Verify before telling the code: call back a saved number the script prints (the asker's own or the collector's) and
+   tell the code by voice on that call. Never a number the person gives you now. Knowing names is never enough: with the
+   code anyone gets 25 PIN guesses per name and can lock everyone out, and anyone with the code can claim a name the
+   script marks not joined yet and set its PIN.
+3. No saved number to call: a flatmate who is signed in passes the code on in person (they see it on Home under Sign out).
+4. No saved number and nobody else in the flat has joined: the team can't tell who is asking, so don't tell the code. They
+   start a new flat with Create a flat. An empty trial flat (at most one person joined, no money entries, no meal changes,
+   no history for 30 days) is removed on its own after a month. Suggest they save a mobile number on Home (My account) in
+   the new flat so a call-back works next time.
 5. They forgot the PIN too: a flatmate's PIN is reset by the collector on the Flat tab; the collector's PIN follows Steps
    below.
 
@@ -83,7 +84,7 @@ code on Home (and the phone they used shows Back to the flat on the landing page
 ## Steps
 
 1. **Request.** The collector writes to the published BashaBook WhatsApp (or email) with the flat's name and join code
-   (every flatmate can see the code on the Flat tab). Note who asked, from which number, and when. If that number is not
+   (every flatmate can see the code on Home under Sign out). Note who asked, from which number, and when. If that number is not
    the collector's verified number, treat it as a warning: the checks below decide, not the message.
 
 2. **Dry run.** It changes nothing and shows the flat, the collector's name, how many phones they are signed in on, the

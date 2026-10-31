@@ -1,8 +1,8 @@
 import { EMAIL, WHATSAPP } from './contacts';
 import type { Dict } from './dictionaries';
-import { focus } from './ui';
+import { link } from './ui';
 
-const contact = `inline-flex min-h-11 items-center font-semibold text-turmeric-ink underline-offset-4 hover:underline ${focus}`;
+const contact = `inline-flex min-h-11 items-center ${link}`;
 
 /** What to do when the flat code is lost: ask a flatmate first, else the app team (ops/collector-pin-recovery.md). */
 export function ForgotCode({ t, className }: { t: Dict; className?: string }) {
