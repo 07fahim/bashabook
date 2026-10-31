@@ -47,6 +47,14 @@ describe('sending email', () => {
     log.mockRestore(); warn.mockRestore();
   });
 
+  it('on Vercel EMAIL_LOG is ignored: a code never reaches the logs', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {}), warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await sendEmail('a@b.co', 'Code: 123456', 'Body', { EMAIL_LOG: '1', VERCEL: '1' }, vi.fn() as unknown as typeof fetch)).toBe(false);
+    expect(log).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith('email not sent: no RESEND_API_KEY');
+    log.mockRestore(); warn.mockRestore();
+  });
+
   it('links point to production, to a preview or to this machine, never the request host', () => {
     expect(siteUrl({ VERCEL_ENV: 'production', VERCEL_URL: 'x.vercel.app' })).toBe('https://bashabook.fahimfaiyaz.dev');
     expect(siteUrl({ VERCEL_ENV: 'preview', VERCEL_URL: 'x.vercel.app' })).toBe('https://x.vercel.app');
