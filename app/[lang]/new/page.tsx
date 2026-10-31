@@ -30,6 +30,7 @@ export default async function NewFlat({ params }: PageProps<'/[lang]/new'>) {
           <input type="hidden" name="lang" value={lang} />
           <Field label={a.flatName} name="flatName" hint={a.flatNameHint} required maxLength={40} />
           <Field label={a.yourName} name="name" required maxLength={40} autoComplete="given-name" />
+          <Field label={a.email} name="email" type="email" inputMode="email" autoComplete="email" required maxLength={254} hint={a.emailHint} />
           <PinField label={a.pin} name="pin" autoComplete="new-password" />
           <PinField label={a.pinAgain} name="pin2" autoComplete="new-password" />
           <label className="block font-semibold">

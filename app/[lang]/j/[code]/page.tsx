@@ -8,12 +8,12 @@ import { db } from '@/lib/db';
 import { todayDhaka } from '@/lib/meals';
 import { allow, firstIp } from '@/lib/rate-limit';
 import { ActionForm } from '../../action-form';
-import { loginAction } from '../../actions';
+import { claimAction, loginAction } from '../../actions';
 import { getDictionary, hasLocale } from '../../dictionaries';
 import { ForgotCode } from '../../forgot-code';
 import { fmtDay } from '../../format';
 import { Header } from '../../header';
-import { focus, link, PinField, primary, PageSkeleton } from '../../ui';
+import { Field, focus, link, PinField, primary, PageSkeleton } from '../../ui';
 
 type Props = PageProps<'/[lang]/j/[code]'>;
 
@@ -49,7 +49,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
             <h1 className={h1}>{a.joinTitle}</h1>
             <p role="alert" className="mt-3 font-semibold text-chili">{ok ? a.errors.badCode : a.errors.tooMany}</p>
             <Link href={`/${lang}/join`} className={`mt-6 inline-flex min-h-11 items-center ${link}`}>{a.tryCode}</Link>
-            <ForgotCode t={t} className="mt-8" />
+            <ForgotCode t={t} lang={lang} className="mt-8" />
           </div>
         ) : !me ? (
           <>
@@ -77,12 +77,13 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
               <p className="mt-2 text-muted">{!me.claimed ? a.setPinLead : me.must_change_pin ? a.changePinLead : a.enterPinLead}</p>
             </div>
             <div>
-            <ActionForm action={loginAction} className="mt-8 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
+            <ActionForm action={me.claimed ? loginAction : claimAction} className="mt-8 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="code" value={code} />
               <input type="hidden" name="memberId" value={me.id} />
               {!me.claimed ? (
                 <>
+                  <Field label={a.email} name="email" type="email" inputMode="email" autoComplete="email" required maxLength={254} hint={a.emailHint} />
                   <PinField label={a.pin} name="pin" autoComplete="new-password" />
                   <PinField label={a.pinAgain} name="pin2" autoComplete="new-password" />
                 </>
@@ -98,6 +99,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
               <button className={primary}>{a.enterBtn}</button>
             </ActionForm>
             <Link href={`/${lang}/j/${code}`} className={`mt-6 inline-flex min-h-11 items-center ${link}`}>{a.notYou}</Link>
+            {me.claimed && <Link href={`/${lang}/forgot`} className={`mt-2 flex w-fit min-h-11 items-center ${link}`}>{a.forgotPin}</Link>}
             </div>
           </>
         )}

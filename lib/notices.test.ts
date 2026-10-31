@@ -17,7 +17,7 @@ async function flat() {
   const members = (await flatByCode(db, code))!.members;
   const id = (name: string) => members.find(m => m.name === name)!.id;
   const tahsin = id('Tahsin'), zarif = id('Zarif');
-  await login(db, code, tahsin, '5827', null); await login(db, code, zarif, '9024', null);
+  await login(db, code, tahsin, '5827', null, 'x@test.bd'); await login(db, code, zarif, '9024', null, 'x@test.bd');
   await openMonth(db, flatId, '2026-10-01');
   // the flat was created a moment ago: push everyone's seen mark back so the rows below count as new
   await db(`update members set notices_seen_at = now() - interval '1 hour' where flat_id = $1`, [flatId]);
@@ -80,7 +80,7 @@ describe('notices', { timeout: 60000 }, () => {
   it('a PIN reset and a lock clear are mine; unread until I open the bell, pending rows stay', async () => {
     const { flatId, nafis, code, tahsin, zarif, boss } = await flat();
     expect(await resetPin(db, flatId, tahsin, '4321', { memberId: nafis })).toBe(true);
-    for (let i = 0; i < 25; i++) { await login(db, code, zarif, '0000', null); await db(`update members set locked_until = null where id = $1 and locked_until <> 'infinity'`, [zarif]); }
+    for (let i = 0; i < 25; i++) { await login(db, code, zarif, '0000', null, 'x@test.bd'); await db(`update members set locked_until = null where id = $1 and locked_until <> 'infinity'`, [zarif]); }
     expect(await clearLock(db, flatId, zarif, tahsin)).toBe(true);
     expect(await addEntry(db, flatId, boss, e({ type: 'payout', amount: 20000, date: today, memberId: zarif }))).toBe('ok');
     expect(kinds(await listNotices(db, flatId, tahsin, false))).toEqual(['account']);
