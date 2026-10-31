@@ -4,10 +4,11 @@ import { refresh } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
-import { addMember, changePin, cleanName, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, isPin, weakPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addMember, changeEmail, changePin, cleanName, confirmLink, normalizeEmail, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, isPin, weakPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems, receiptVersion } from '@/lib/bazar';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, seeCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
+import { sendEmail, siteUrl } from '@/lib/email';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
 import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhaka, plates as platesOf, todayDhaka } from '@/lib/meals';
 import {
@@ -30,18 +31,35 @@ const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLo
 /** Anonymous actions are counted per connection and hour (lib/rate-limit): a script can't burn the database. */
 const ip = async () => firstIp((await headers()).get('x-forwarded-for'));
 
+/** Sends an email after the response (so a page never waits on it, or shows by its speed whether one went), within the
+ *  global cap that keeps Resend's free 100 a day for real people. */
+const mail = (to: string, subject: string, text: string) =>
+  after(async () => { if (await allow(db, 'mail', 40)) await sendEmail(to, subject, text); });
+
+/** A new confirmation link for my email, mailed in the page's language; false when nothing waits for confirmation. */
+async function sendConfirm(memberId: string, lang: Locale) {
+  const c = await confirmLink(db, memberId);
+  if (!c) return false;
+  const r = getDictionary(lang).recover;
+  mail(c.email, r.confirmSubject, r.confirmBody.replace('{name}', () => c.name).replace('{link}', () => `${siteUrl()}/${lang}/confirm/${c.token}`));
+  return true;
+}
+
 export async function createFlatAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), e = getDictionary(lang).app.errors;
   const flatName = cleanName(d.get('flatName')), name = cleanName(d.get('name'));
   const others = str(d, 'others').split('\n').map(s => s.trim()).filter(Boolean).map(cleanName);
   if (!flatName) return { error: e.flatName };
   if (!name) return { error: e.name };
+  const email = normalizeEmail(d.get('email'));
+  if (!email) return { error: e.email };
   if (others.includes(null) || others.length >= MAX_MEMBERS) return { error: e.others };
   if (!isPin(d.get('pin'))) return { error: e.pin };
   if (weakPin(d.get('pin'))) return { error: e.weakPin };
   if (pinText(d.get('pin')) !== pinText(d.get('pin2'))) return { error: e.pinMatch };
   if (!(await allow(db, `new:${await ip()}`, 5))) return { error: e.tooMany };
-  const { memberId } = await createFlat(db, { flatName, name, pin: pinText(d.get('pin')), others: others as string[], today: todayDhaka(), lang });
+  const { memberId } = await createFlat(db, { flatName, name, pin: pinText(d.get('pin')), others: others as string[], today: todayDhaka(), lang, email });
+  await sendConfirm(memberId, lang);
   await startSession(memberId);
   redirect(`/${lang}/home`);
 }
@@ -53,11 +71,15 @@ export async function joinByCodeAction(d: FormData) {
 export async function loginAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), e = getDictionary(lang).app.errors;
   const pin = pinText(d.get('pin')), newPin = d.has('newPin') ? pinText(d.get('newPin')) : null;
+  // only the claim form has the field; login refuses a claim without it
+  const email = normalizeEmail(d.get('email'));
+  if (d.has('email') && !email) return { error: e.email };
   if (!isPin(pin) || (newPin !== null && !isPin(newPin))) return { error: e.pin };
   if (d.has('pin2') && (newPin ?? pin) !== pinText(d.get('pin2'))) return { error: e.pinMatch };
   if (!(await allow(db, `pin:${await ip()}`, 60))) return { error: e.tooMany };
-  const r = await login(db, str(d, 'code'), str(d, 'memberId'), pin, newPin, null);
+  const r = await login(db, str(d, 'code'), str(d, 'memberId'), pin, newPin, email);
   if ('error' in r) return { error: e[r.error] + (r.left ? ' ' + e.lastTries.replace('{n}', String(r.left)) : '') };
+  if (email) await sendConfirm(r.memberId, lang);   // a claim just stored it (a sign-in ignores the field)
   await startSession(r.memberId);
   redirect(`/${lang}/home`);
 }
@@ -316,6 +338,29 @@ export async function phoneAction(_: FormState, d: FormData): Promise<FormState>
   await setPhone(db, me.memberId, phone);
   refresh();
   return { done: a.saved };
+}
+
+/** My email, added or changed with my current PIN; a new address gets a confirmation link. */
+export async function emailAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), a = getDictionary(lang).app;
+  const me = await requireMember(lang, true);
+  const email = normalizeEmail(d.get('email'));
+  if (!email) return { error: a.errors.email };
+  if (!isPin(d.get('pin'))) return { error: a.errors.pin };
+  const r = await changeEmail(db, me.memberId, pinText(d.get('pin')), email);
+  if (r !== 'ok') return { error: a.errors[r.error === 'wrongPin' ? 'wrongCurrentPin' : r.error] + (r.left ? ' ' + a.errors.lastTries.replace('{n}', String(r.left)) : '') };
+  const sent = await sendConfirm(me.memberId, lang);
+  refresh();
+  return { done: sent ? a.emailSaved : a.saved };
+}
+
+/** Send the link again (3 an hour per person). */
+export async function confirmAgainAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), t = getDictionary(lang);
+  const me = await requireMember(lang, true);
+  if (!(await allow(db, `confirm:${me.memberId}`, 3))) return { error: t.app.errors.tooMany };
+  await sendConfirm(me.memberId, lang);
+  return { done: t.recover.linkSent };
 }
 
 /** The person who runs the flat fixes someone's name. */

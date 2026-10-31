@@ -13,7 +13,7 @@ import { getDictionary, hasLocale } from '../../dictionaries';
 import { ForgotCode } from '../../forgot-code';
 import { fmtDay } from '../../format';
 import { Header } from '../../header';
-import { focus, link, PinField, primary, PageSkeleton } from '../../ui';
+import { Field, focus, link, PinField, primary, PageSkeleton } from '../../ui';
 
 type Props = PageProps<'/[lang]/j/[code]'>;
 
@@ -83,6 +83,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
               <input type="hidden" name="memberId" value={me.id} />
               {!me.claimed ? (
                 <>
+                  <Field label={a.email} name="email" type="email" inputMode="email" autoComplete="email" required maxLength={254} hint={a.emailHint} />
                   <PinField label={a.pin} name="pin" autoComplete="new-password" />
                   <PinField label={a.pinAgain} name="pin2" autoComplete="new-password" />
                 </>
