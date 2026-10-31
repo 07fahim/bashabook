@@ -187,8 +187,12 @@ export async function setAway(db: Db, flatId: string, memberId: string, from: st
     [flatId, memberId, from, to, `${memberId}|away`, { away: [from, to] }]);
 }
 
-/** Cancels away from..to: the zeroed meals go back to the usual meals. `from` must already be an open day. */
-export async function cancelAway(db: Db, flatId: string, memberId: string, from: string, to: string) {
+/** Cancels away from..to: the zeroed meals go back to the usual meals. Never before tomorrow (`today` = todayDhaka()):
+ *  cancelling today would put back meals already past and bill them, so today's are switched on with the chips. */
+export async function cancelAway(db: Db, flatId: string, memberId: string, from: string, to: string, today: string) {
+  const first = addDays(today, 1);
+  if (from < first) from = first;
+  if (to < from) return;
   await db(
     `with gone as (delete from meal_changes where flat_id = $1 and member_id = $2 and date between $3::date and $4::date and count = 0)
      insert into audit_log (flat_id, entity, entity_id, after, by_member) values ($1, 'meal_changes', $5, $6, $2)`,

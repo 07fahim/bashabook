@@ -214,7 +214,7 @@ async function main() {
   {
     const f = await flat(); const { Fahim: F, Tahsin: T } = f.ids;
     await setAway(db, f.flatId, F, D, D);
-    const h = hold(tx => cancelAway(tx, f.flatId, F, D, D)); await h.started;
+    const h = hold(tx => cancelAway(tx, f.flatId, F, D, D, today)); await h.started;
     const b = f.other(db, T, F, D, 1, 0);
     await waits(b); h.release(); await h.done;
     check('6c cancel away in flight: flatmate closed (away still committed)', await b === 'closed' && await f.audits(T) === 0, { b: await b });

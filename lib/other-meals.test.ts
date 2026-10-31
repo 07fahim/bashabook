@@ -126,7 +126,7 @@ describe('away days', { timeout: 30000 }, () => {
     expect(await audits(ids.Tahsin)).toBe(0);
     expect(await changedByOthers(db, flatId, ids.Fahim, today)).toEqual([]);
     expect(await set(ids.Tahsin, ids.Fahim, outside, 0, 1)).toBe('ok');   // outside the away range: still works
-    await cancelAway(db, flatId, ids.Fahim, t3, t3);
+    await cancelAway(db, flatId, ids.Fahim, t3, t3, today);
     expect(await set(ids.Tahsin, ids.Fahim, t3, 0, 1)).toBe('ok');   // cancelled: works again
   });
 

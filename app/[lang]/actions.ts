@@ -200,12 +200,12 @@ const editable = (date: string, from: string) => isDate(date) && date >= from &&
 export async function noCookAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireManager(lang, true);
-  const from = str(d, 'from'), to = str(d, 'to'), meals = MEALS.filter(x => d.has(x)), open = await openFrom(db, me.flatId, todayDhaka());
+  const today = todayDhaka(), from = str(d, 'from'), to = str(d, 'to'), meals = MEALS.filter(x => d.has(x)), open = await openFrom(db, me.flatId, today);
   if (!editable(from, open) || !editable(to, open) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
   if (!meals.length) return { error: m.errors.pickMeal };
-  if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, todayDhaka())) === 'closed') return { error: m.errors.monthClosed };
-  { const today = todayDhaka(); if (from <= today && to >= today) tellToday(me, today, 'noCook', { meals }); }
+  if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, today)) === 'closed') return { error: m.errors.monthClosed };
+  if (from <= today && to >= today) tellToday(me, today, 'noCook', { meals });
   refresh();
   return { done: m.saved };
 }
@@ -215,9 +215,9 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
 export async function cancelAwayAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireMember(lang, true);
-  const first = addDays(todayDhaka(), 1), from = str(d, 'from'), to = str(d, 'to');
-  if (!isDate(from) || !isDate(to) || to < first) return { error: m.errors.bad };
-  await cancelAway(db, me.flatId, me.memberId, from < first ? first : from, to);
+  const today = todayDhaka(), from = str(d, 'from'), to = str(d, 'to');
+  if (!isDate(from) || !isDate(to) || to <= today) return { error: m.errors.bad };
+  await cancelAway(db, me.flatId, me.memberId, from, to, today);
   refresh();
   return { done: m.saved };
 }

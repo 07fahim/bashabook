@@ -143,7 +143,7 @@ describe('meal storage', { timeout: 30000 }, () => {
     const { flatId, tahsin, count } = await flat();
     await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');
     expect(await upcomingAway(db, flatId, tahsin, '2026-10-10')).toEqual([['2026-10-12', '2026-10-20']]);
-    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');
+    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-20', '2026-10-01');
     expect(await upcomingAway(db, flatId, tahsin, '2026-10-10')).toEqual([]);
     expect(await count('2026-10-15', 'l')).toBe(1);
   });
@@ -165,7 +165,7 @@ describe('meal storage', { timeout: 30000 }, () => {
     const { flatId, memberId, tahsin, load, count } = await flat();
     await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');
     await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-15', ['d'], '2026-10-09');
-    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');
+    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-20', '2026-10-01');
     expect(await count('2026-10-15', 'd')).toBe(0);
     expect(await count('2026-10-15', 'l')).toBe(1);
     await db(`insert into members (flat_id, name, joined_on) values ($1, 'Rafi', '2026-10-14')`, [flatId]);
@@ -207,7 +207,7 @@ describe('meal storage', { timeout: 30000 }, () => {
     await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');
     await setAway(db, flatId, tahsin, '2026-10-18', '2026-10-25');
     expect(await upcomingAway(db, flatId, tahsin, '2026-10-10')).toEqual([['2026-10-12', '2026-10-25']]);
-    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-14');
+    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-14', '2026-10-01');
     expect(await upcomingAway(db, flatId, tahsin, '2026-10-10')).toEqual([['2026-10-15', '2026-10-25']]);
     await setDefaults(db, flatId, tahsin, ALL_OFF, '2026-09-01', '2026-10-09', false);
     await setDefaults(db, flatId, tahsin, ALL_ON, '2026-09-01', '2026-10-09', true);
@@ -378,5 +378,14 @@ describe('meal storage', { timeout: 30000 }, () => {
       .filter(f => /[.]tsx?$/.test(f) && !f.endsWith('.test.ts'));
     const bad = files.flatMap(f => (readFileSync(f, 'utf8').match(/[$][0-9]+[ ]*::[ ]*(timestamp|json)/g) ?? []).map(m => `${f}: ${m}`));
     expect(bad).toEqual([]);
+  });
+
+  it('cancelling time away never reaches today: meals already past stay off and are not billed', async () => {
+    const { flatId, tahsin, count } = await flat();
+    await setAway(db, flatId, tahsin, '2026-10-09', '2026-10-12');
+    await cancelAway(db, flatId, tahsin, '2026-10-09', '2026-10-12', '2026-10-10');   // cancelled on the 10th
+    expect([await count('2026-10-09', 'l'), await count('2026-10-10', 'l'), await count('2026-10-11', 'l')]).toEqual([0, 0, 1]);
+    await cancelAway(db, flatId, tahsin, '2026-10-09', '2026-10-10', '2026-10-10');   // a range ending today: nothing to cancel
+    expect(await count('2026-10-10', 'l')).toBe(0);
   });
 });

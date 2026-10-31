@@ -7,7 +7,7 @@ How BashaBook's reminders work and what to check when they don't.
   getting reminders the day after `left_on`.
 - Timed reminders run from `GET /api/cron` (`Authorization: Bearer CRON_SECRET`), called every 5 minutes by cron-job.org
   (job "BashaBook reminders", failure e-mails to the app team). Each flat: the month-ready reminder to the collector once per
-  month, from the 1st at 10:00. A reminder is claimed in `sent_jobs (flat, date or month, job)` before it is sent: two
+  month, from the 1st at 10:00; from 21:00 once a day, the bazar and bill check reminder and the 2-days-late one. A reminder is claimed in `sent_jobs (flat, date or month, job)` before it is sent: two
   overlapping runs can't both send.
 - Event reminders (deposit to confirm, payout to confirm, handover offered, a change to today's meals) are sent by the server action itself after the
   write, via `after()`. A push failure never fails or undoes the write.
@@ -15,7 +15,7 @@ How BashaBook's reminders work and what to check when they don't.
 - Delivery is best effort. Nothing is retried: Home shows the same facts.
 - Capacity: each due reminder costs about a quarter second of database round trips and the route has 25 s, so about 80
   reminders per run. Measured 2026-10-11 on the test copy: 807 due reminders took 3.5 minutes. A run cut off at 25 s loses nothing: the
-  next run, five minutes later, picks up what is still due inside the hour-long window. Batch the claims before the app has
+  next run, five minutes later, picks up what is still due later the same day. Batch the claims before the app has
   dozens of flats.
 
 ## When something is off

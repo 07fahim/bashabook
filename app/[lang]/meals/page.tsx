@@ -43,7 +43,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const [meals, history, aways, guestList, gridData] = await Promise.all([
     loadMeals(db, me.flatId, week[0], week[6]),
     loadHistory(db, me.flatId, mine ? me.memberId : null, shownRows + 1),
-    upcomingAway(db, me.flatId, me.memberId, addDays(today, 1)),
+    upcomingAway(db, me.flatId, me.memberId, addDays(today, 1)),   // what Cancel can still reach: tomorrow on
     myGuests(db, me.flatId, me.memberId, today),
     loadMeals(db, me.flatId, gridDays[0], gridDays.at(-1)!),
   ]);
@@ -205,7 +205,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                 <ul className="mt-2 divide-y divide-line">
                   {aways.map(([f, t]) => (
                     <li key={`${f}${t}`} className="flex items-center justify-between gap-3 py-2">
-                      <span>{range([f, t])}</span>
+                      <span>{range([f < tomorrow ? tomorrow : f, t])}</span>{/* shows what Cancel changes */}
                       <ActionForm action={cancelAwayAction}>
                         <input type="hidden" name="lang" value={lang} />
                         <input type="hidden" name="from" value={f} />
