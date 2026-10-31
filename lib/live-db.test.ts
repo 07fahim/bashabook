@@ -66,6 +66,17 @@ describe('live pings (migration 022)', { timeout: 30000 }, () => {
     expect(await sent()).toEqual([]);
   });
 
+  it('sends nothing for an email write (migration 027), but still for a real change made with it', async () => {
+    const a = await mk('Live J');
+    await clear();
+    await db(`update members set email = 'nafis@gmail.com' where id = $1`, [a.memberId]);
+    await expect(db(`select email_ok from members`)).rejects.toThrow();   // no confirmation link any more: an email is proven before it is saved
+    await expect(db(`select email_token from members`)).rejects.toThrow();
+    expect(await sent()).toEqual([]);
+    await db(`update members set name = 'Nafis R', email = 'nafis2@gmail.com' where id = $1`, [a.memberId]);
+    expect((await sent()).map(s => s.topic)).toEqual([await topicOf(a.flatId)]);
+  });
+
   it('still saves the write when the send fails', async () => {
     const a = await mk('Live G');
     await pg.exec(`create or replace function realtime.send(payload jsonb, event text, topic text, private boolean) returns void language plpgsql

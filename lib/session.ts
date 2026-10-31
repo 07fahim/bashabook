@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createSession, deleteSession, memberBySession, SESSION_DAYS } from './auth';
 import { db } from './db';
+import { CHECK_COOKIE, endRecovery, RECOVER_COOKIE } from './recovery';
 
 const COOKIE = 'session';
 
@@ -11,11 +12,18 @@ export async function startSession(memberId: string) {
   (await cookies()).set(COOKIE, token, { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: SESSION_DAYS * 24 * 60 * 60 });
 }
 
+/** Sign-in and sign-out: also ends any email check or recovery step on this browser, so a shared phone never hands the
+ *  next person the previous one's step on /check or /forgot. */
 export async function endSession() {
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;
   if (token) await deleteSession(db, token);
   jar.delete(COOKIE);
+  for (const k of [CHECK_COOKIE, RECOVER_COOKIE]) {
+    const t = jar.get(k)?.value;
+    if (t) await endRecovery(db, t);
+    jar.delete(k);
+  }
 }
 
 /** This phone's session token (for keeping it signed in when my PIN changes). */

@@ -84,7 +84,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     if (h.entity === 'flats' && a.codeChanged) return `${actor} ${m.codeChangedHistory}`;
     if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
     if (h.entity === 'members') {
-      if (a.pinReset) return a.admin ? `${who} · ${m.pinResetTeam}` : `${actor} · ${who} · ${m.pinResetHistory}`;
+      if (a.pinReset) return a.admin ? `${who} · ${m.pinResetTeam}` : a.email ? `${who} · ${m.pinResetEmail}` : `${actor} · ${who} · ${m.pinResetHistory}`;
       if (a.locked) return `${who} · ${m.lockedHistory}`;
       if (a.lockCleared) return `${actor} · ${who} · ${m.lockClearedHistory}`;
       if (a.back) return `${actor} · ${who} · ${m.backHistory}: ${range(a.back)}`;

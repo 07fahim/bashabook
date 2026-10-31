@@ -39,7 +39,7 @@ describe('flat isolation', { timeout: 60000 }, () => {
     expect((await listMembers(db, b.flatId)).map(m => m.name)).toEqual(['Zarif', 'Rafi']);
 
     const [{ join_code }] = await db<{ join_code: string }>(`select join_code from flats where id = $1`, [a.flatId]);
-    expect(await login(db, join_code, b.memberId, '1234', null)).toEqual({ error: 'notFound' });
+    expect(await login(db, join_code, b.memberId, '1234', null, 'x@test.bd')).toEqual({ error: 'notFound' });
   });
 
   it('money: no entry, confirm, remove, put back, correction, room or monthly bill crosses a flat, even with the other flat’s ids', async () => {

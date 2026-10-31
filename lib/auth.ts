@@ -10,6 +10,12 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 /** Text people type: no control characters, line separators or bidi marks, which could fake a line in a shared breakdown or a notification. ZWJ and ZWNJ stay: Bangla needs them. */
 export const cleanText = (v: unknown) => String(v ?? '').replace(/[\p{Cc}\p{Zl}\p{Zp}\u061C\u200B\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/gu, '').trim();
 export const cleanName = (v: unknown) => { const s = cleanText(v); return s.length >= 1 && s.length <= 40 ? s : null; };
+/** A typed email as stored: trimmed, lowercase, one @ with a dot after it, at most 254 characters; else null. */
+export const normalizeEmail = (v: unknown) => {
+  const s = String(v ?? '').trim().toLowerCase();
+  // the same pattern as the members.email check in 027: plain letters, digits and ._%+- before the @, dotted labels after
+  return s.length <= 254 && /^[a-z0-9._%+-]+@([a-z0-9-]+\.)+[a-z]{2,}$/.test(s) ? s : null;
+};
 /** A typed PIN with Bangla digits as English ones. */
 export const pinText = (v: unknown) => enDigits(String(v ?? ''));
 export const isPin = (v: unknown) => /^\d{4}$/.test(pinText(v));
@@ -22,24 +28,26 @@ export const weakPin = (v: unknown) => {
   const p = pinText(v), d = [...p].map(Number), step = d[1] - d[0];
   return (Math.abs(step) <= 1 && d.every((x, i) => i === 0 || x - d[i - 1] === step)) || COMMON.has(p);
 };
-const hashPin = (pin: string) => bcrypt.hash(pin, 10);
-const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
+export const hashPin = (pin: string) => bcrypt.hash(pin, 10);
+export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 /** Still living here: no last day, or it hasn't passed yet (in Dhaka). Someone who moved out can't sign in or be picked. */
 export const STAYING = "(left_on is null or left_on >= (now() at time zone 'Asia/Dhaka')::date)";
 /** A name clash: unique, or the same name for two overlapping stays (one_name_per_stay). */
 const nameClash = (e: unknown) => ['23505', '23P01'].includes((e as { code?: string }).code ?? '');
 const newJoinCode = () => Array.from({ length: 6 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join('');
 
-/** Flat, its starter (role manager, already claimed) and unclaimed names, in one statement. */
-export async function createFlat(db: Db, f: { flatName: string; name: string; pin: string; others: string[]; today: string; lang: 'bn' | 'en' }) {
+/** Flat, its starter (role manager, already claimed) and unclaimed names, in one statement. The starter's PIN comes typed
+ *  (`pin`) or already hashed (`pinHash`, kept in a check step while the email is proven). */
+export async function createFlat(db: Db, f: { flatName: string; name: string; pin?: string; pinHash?: string; others: string[]; today: string; lang: 'bn' | 'en'; email?: string }) {
+  if (!f.pinHash && !f.pin) throw new Error('createFlat needs a pin or a pinHash');
   const others = [...new Set(f.others)].filter(n => n !== f.name);
   // ponytail: a join code clash (31^6 codes) fails the insert; add a retry if flats reach the hundreds of thousands
   const [row] = await db<{ flat_id: string; member_id: string }>(
     `with f as (insert into flats (name, join_code, language) values ($1, $2, $7) returning id),
-     m as (insert into members (flat_id, name, pin_hash, role, joined_on) select id, $3::text, $4::text, 'manager', $5::date from f returning id),
+     m as (insert into members (flat_id, name, pin_hash, role, joined_on, email) select id, $3::text, $4::text, 'manager', $5::date, $8::text from f returning id),
      o as (insert into members (flat_id, name, joined_on) select f.id, n, $5::date from f, json_array_elements_text($6::text::json) n)
      select f.id as flat_id, m.id as member_id from f, m`,
-    [f.flatName, newJoinCode(), f.name, await hashPin(f.pin), f.today, JSON.stringify(others), f.lang]);
+    [f.flatName, newJoinCode(), f.name, f.pinHash ?? await hashPin(f.pin!), f.today, JSON.stringify(others), f.lang, f.email ?? null]);
   return { flatId: row.flat_id, memberId: row.member_id };
 }
 
@@ -73,7 +81,7 @@ export async function flatByCode(db: Db, code: string) {
   return { ...flat, members };
 }
 
-export type LoginError = 'notFound' | 'taken' | 'locked' | 'lockedForGood' | 'wrongPin' | 'newPinNeeded' | 'weakPin';
+export type LoginError = 'notFound' | 'taken' | 'locked' | 'lockedForGood' | 'wrongPin' | 'newPinNeeded' | 'weakPin' | 'email';
 
 /** Counts a PIN try before it is checked, in one statement, so parallel guesses can't slip past the lock.
  *  Every 5th wrong try locks for longer (15 min, 30, 1 h …); the 25th locks for good, until a PIN reset (policy approved
@@ -104,16 +112,17 @@ async function wrongPin(db: Db, memberId: string, may: { forGood: boolean; left:
   return may.left <= 5 ? { error, left: may.left } : { error };
 }
 
-/** Claims an unclaimed name, or checks the PIN with lockout. newPin is required after a reset. */
-export async function login(db: Db, code: string, memberId: string, pin: string, newPin: string | null): Promise<{ memberId: string } | { error: LoginError; left?: number }> {
+/** Claims an unclaimed name (with the person's email, mandatory: it is how they get back in), or checks the PIN with
+ *  lockout. newPin is required after a reset. `email` is ignored once the name is claimed. */
+export async function login(db: Db, code: string, memberId: string, pin: string, newPin: string | null, email: string | null): Promise<{ memberId: string } | { error: LoginError; left?: number }> {
   if (!UUID.test(memberId)) return { error: 'notFound' };
   const [m] = await db<{ pin_hash: string | null; must_change_pin: boolean }>(
     `select m.pin_hash, m.must_change_pin from members m join flats f on f.id = m.flat_id where f.join_code = $1 and m.id = $2 and ${STAYING}`, [code.toUpperCase(), memberId]);
   if (!m) return { error: 'notFound' };
   if (m.pin_hash === null) {
+    if (!email) return { error: 'email' };
     if (weakPin(pin)) return { error: 'weakPin' };
-    const claimed = await db(`update members set pin_hash = $2 where id = $1 and pin_hash is null returning id`, [memberId, await hashPin(pin)]);
-    return claimed.length ? { memberId } : { error: 'taken' };
+    return (await claimName(db, code, memberId, await hashPin(pin), email)) ? { memberId } : { error: 'taken' };
   }
   const may = await countTry(db, memberId);
   if (typeof may === 'string') return { error: may };
@@ -216,6 +225,43 @@ export async function changePin(db: Db, memberId: string, current: string, next:
   return 'ok';
 }
 
+/** My current PIN, checked before adding or changing my email: wrong tries count toward the lock, a right one clears the
+ *  count. Returns the hash that was checked, so the later write can insist it is unchanged (a reset in between wins). */
+export async function checkPin(db: Db, memberId: string, pin: string): Promise<{ hash: string } | { error: 'locked' | 'lockedForGood' | 'wrongPin'; left?: number }> {
+  const [m] = await db<{ pin_hash: string | null }>(`select pin_hash from members where id = $1`, [memberId]);
+  const may = await countTry(db, memberId);
+  if (typeof may === 'string') return { error: may };
+  if (!m?.pin_hash || !(await bcrypt.compare(pin, m.pin_hash))) return wrongPin(db, memberId, may);
+  await db(`update members set failed_pin_count = 0, locked_until = null where id = $1 and pin_hash = $2`, [memberId, m.pin_hash]);
+  return { hash: m.pin_hash };
+}
+
+/** My proven email, saved only while my PIN is still the one checked and I still live here. Returns the address it
+ *  replaced (the notice goes there), or false when nothing was saved. */
+export async function setEmail(db: Db, memberId: string, email: string, pinHash: string): Promise<{ old: string | null } | false> {
+  const [r] = await db<{ old: string | null }>(
+    // the old address read under the row lock: of two saves at once the second returns the first's address
+    `with o as (select email as old from members where id = $1 for update)
+     update members m set email = $2 from o where m.id = $1 and m.pin_hash = $3 and ${STAYING} returning o.old`, [memberId, email, pinHash]);
+  return r ? { old: r.old } : false;
+}
+
+/** Claims an unclaimed name with a PIN hash and the person's proven email, only while it is still unclaimed and they live here. */
+export async function claimName(db: Db, code: string, memberId: string, pinHash: string, email: string) {
+  if (!UUID.test(memberId)) return false;
+  const rows = await db(
+    `update members m set pin_hash = $3, email = $4 from flats f
+     where f.id = m.flat_id and f.join_code = $1 and m.id = $2 and m.pin_hash is null and ${STAYING} returning m.id`,
+    [code.toUpperCase(), memberId, pinHash, email]);
+  return rows.length > 0;
+}
+
+/** My own email (Home's cards and My account). Nobody else's: flatmates never see an email. */
+export async function emailOf(db: Db, memberId: string) {
+  const [r] = await db<{ email: string | null }>(`select email from members where id = $1`, [memberId]);
+  return r ?? { email: null };
+}
+
 /** The person who runs the flat fixes a name. Refused if someone in the flat already has it; the change goes in the history. */
 export async function renameMember(db: Db, flatId: string, by: string, memberId: string, name: string): Promise<'ok' | 'taken' | 'notFound'> {
   if (!UUID.test(memberId)) return 'notFound';
@@ -280,13 +326,16 @@ export async function bringBack(db: Db, flatId: string, by: string, memberId: st
 /** Sets a one-time PIN: the next sign-in must choose a new one. Every phone is signed out and the flat's history says so.
  *  `by`: the collector resetting a flatmate in the app, or the app team (scripts/reset-collector-pin.mts), which may reset
  *  only the collector living here now and must give a reason. In the app only the collector, never their own PIN, and only
- *  someone living here now. Only PIN fields change: never the role, money or meals. */
+ *  someone living here now. The PIN fields change and the email is cleared (they add it again from Home): a reset is the
+ *  remedy for a stolen name, and an email the thief planted would let them recover the account again. Never the role,
+ *  money or meals. */
 export async function resetPin(db: Db, flatId: string, memberId: string, pin: string, by: { memberId: string } | { admin: string; reason: string }) {
   if (!UUID.test(memberId)) return false;
   const team = 'admin' in by ? by : null;
   if (team && (!team.admin.trim() || !team.reason.trim())) return false;
   const [r] = await db<{ n: number }>(
-    `with m as (update members set pin_hash = $3, must_change_pin = true, failed_pin_count = 0, locked_until = null
+    `with m as (update members set pin_hash = $3, must_change_pin = true, failed_pin_count = 0, locked_until = null,
+         email = null
        where flat_id = $1 and id = $2 and ${STAYING} and case when $5::text is null
          then id <> $4::uuid and exists (select 1 from members c where c.flat_id = $1 and c.id = $4::uuid and c.role = 'manager')
          else role = 'manager' end returning id),

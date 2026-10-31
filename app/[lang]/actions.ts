@@ -1,13 +1,14 @@
 'use server';
 
 import { refresh } from 'next/cache';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
-import { addMember, changePin, cleanName, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, isPin, weakPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addMember, changePin, checkPin, claimName, emailOf, hashToken, cleanName, normalizeEmail, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, flatByCode, hashPin, isPin, weakPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setEmail, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems, receiptVersion } from '@/lib/bazar';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, seeCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
+import { sendEmail } from '@/lib/email';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
 import { addDays, isDate, isMeal, isPresent, MEALS, nowDhaka, todayDhaka, type Meal } from '@/lib/meals';
 import { pushToday } from '@/lib/meal-push';
@@ -21,6 +22,7 @@ import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
 import { removePush, savePush, type PushSub } from '@/lib/push-db';
 import { allow, firstIp } from '@/lib/rate-limit';
+import { type Check, CHECK_COOKIE, checkCode, checkOf, codeOf, CODE_MINUTES, endRecovery, flatsFor, PROVEN_MINUTES, provenEmail, RECOVER_COOKIE, recoverPin, startCheck, startRecovery, takeCheck } from '@/lib/recovery';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
@@ -31,20 +33,76 @@ const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLo
 /** Anonymous actions are counted per connection and hour (lib/rate-limit): a script can't burn the database. */
 const ip = async () => firstIp((await headers()).get('x-forwarded-for'));
 
+/** Three day budgets of email, 95 under Resend's free 100 a day: 35 recovery codes, 45 check codes and 15 notices of a PIN
+ *  or email change. Anyone can ask for codes with any address, so each kind has its own budget: checks can't starve
+ *  recovery codes and neither can silence a notice (sent only after a proven change: only someone proving codes from their
+ *  own inbox can use it up, and each person makes at most 3 email changes a day). A spent budget is said on screen (noMail):
+ *  a check, a Forgot request or an email change is refused before anything is saved. Forgot takes its budget for every
+ *  address, known or not, so the budget never tells whether an email is known.
+ *  ponytail: upgrade to a paid Resend plan if real volume nears the budgets. */
+const BUDGET = { recover: 35, check: 45, notice: 15 };
+const takeMail = (kind: keyof typeof BUDGET) => allow(db, `day:mail:${kind}`, BUDGET[kind], 'day');
+/** Sends after the response, so a page never waits on it or shows by its speed whether one went. The budget is already taken. */
+const send = (to: string, subject: string, text: string) => after(() => sendEmail(to, subject, text));
+/** Counts the budget after the response: for the PIN-changed notice (the PIN is already changed, nothing to refuse). */
+const mail = (kind: keyof typeof BUDGET, to: string, subject: string, text: string) =>
+  after(async () => { if (await takeMail(kind)) await sendEmail(to, subject, text); });
+/** A code in an email, in two blocks of four for reading ("4829 1736"); the actions keep digits only, so a pasted one works. */
+const spaced = (code: string) => `${code.slice(0, 4)} ${code.slice(4)}`;
+/** 5 codes an hour per connection and email, before the email's own day backstop (lib/recovery PER_DAY): a stranger who
+ *  knows someone's email uses up only their own connection's tries, never the owner's from the owner's phone. An hour key
+ *  (it holds an IP): swept after about 2 hours. */
+const codeAllowed = async (email: string) => allow(db, `code:${await ip()}:${hashToken(email)}`, 5);   // never an IP beside a readable email
+
+/** An email is saved only after a code typed from its inbox proves it: the step waits in this cookie for /check. */
+const checkToken = async () => (await cookies()).get(CHECK_COOKIE)?.value ?? '';
+const keepCheck = async (token: string) =>
+  (await cookies()).set(CHECK_COOKIE, token, { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: CODE_MINUTES * 60 });
+/** Mails a check code and sends the browser to /check. 10 an hour per connection on top of each caller's own limit, so
+ *  one connection can't spend the day's check mail on codes to any address. */
+async function sendCheck(lang: Locale, email: string, purpose: Check, payload: Record<string, unknown>): Promise<FormState> {
+  const t = getDictionary(lang), r = t.recover;
+  if (!(await allow(db, `check:${await ip()}`, 10)) || !(await codeAllowed(email))) return { error: t.app.errors.tooMany };
+  // the address is the person's own: saying no mail goes out today tells nothing about anyone
+  if (!(await takeMail('check'))) return { error: r.noMail };
+  const c = await startCheck(db, email, purpose, payload);
+  if (!c) return { error: t.app.errors.tooMany };
+  send(email, r.checkSubject, r.checkBody.replace('{code}', () => spaced(c.code)));
+  await keepCheck(c.token);
+  redirect(`/${lang}/check`);
+}
+
+/** A new flat: nothing is made until the starter types the code sent to their email (checkCodeAction makes it). */
 export async function createFlatAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), e = getDictionary(lang).app.errors;
   const flatName = cleanName(d.get('flatName')), name = cleanName(d.get('name'));
   const others = str(d, 'others').split('\n').map(s => s.trim()).filter(Boolean).map(cleanName);
   if (!flatName) return { error: e.flatName };
   if (!name) return { error: e.name };
+  const email = normalizeEmail(d.get('email'));
+  if (!email) return { error: e.email };
   if (others.includes(null) || others.length >= MAX_MEMBERS) return { error: e.others };
   if (!isPin(d.get('pin'))) return { error: e.pin };
   if (weakPin(d.get('pin'))) return { error: e.weakPin };
   if (pinText(d.get('pin')) !== pinText(d.get('pin2'))) return { error: e.pinMatch };
   if (!(await allow(db, `new:${await ip()}`, 5))) return { error: e.tooMany };
-  const { memberId } = await createFlat(db, { flatName, name, pin: pinText(d.get('pin')), others: others as string[], today: todayDhaka(), lang });
-  await startSession(memberId);
-  redirect(`/${lang}/home`);
+  return sendCheck(lang, email, 'new', { flatName, name, others, lang, pinHash: await hashPin(pinText(d.get('pin'))) });
+}
+
+/** Claiming a name: the same checks as before, then the email is proven by a code before the name is claimed. */
+export async function claimAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), e = getDictionary(lang).app.errors;
+  const code = str(d, 'code'), memberId = str(d, 'memberId'), pin = pinText(d.get('pin'));
+  const email = normalizeEmail(d.get('email'));
+  if (!email) return { error: e.email };
+  if (!isPin(pin)) return { error: e.pin };
+  if (pin !== pinText(d.get('pin2'))) return { error: e.pinMatch };
+  if (weakPin(pin)) return { error: e.weakPin };
+  if (!(await allow(db, `pin:${await ip()}`, 60))) return { error: e.tooMany };
+  const m = (await flatByCode(db, code))?.members.find(x => x.id === memberId);
+  if (!m) return { error: e.notFound };
+  if (m.claimed) return { error: e.taken };
+  return sendCheck(lang, email, 'claim', { code, memberId, pinHash: await hashPin(pin) });
 }
 
 export async function joinByCodeAction(d: FormData) {
@@ -57,14 +115,15 @@ export async function loginAction(_: FormState, d: FormData): Promise<FormState>
   if (!isPin(pin) || (newPin !== null && !isPin(newPin))) return { error: e.pin };
   if (d.has('pin2') && (newPin ?? pin) !== pinText(d.get('pin2'))) return { error: e.pinMatch };
   if (!(await allow(db, `pin:${await ip()}`, 60))) return { error: e.tooMany };
-  const r = await login(db, str(d, 'code'), str(d, 'memberId'), pin, newPin);
+  // no email here: a name is claimed only through claimAction's proven email, so a hand-made claim post gets e.email
+  const r = await login(db, str(d, 'code'), str(d, 'memberId'), pin, newPin, null);
   if ('error' in r) return { error: e[r.error] + (r.left ? ' ' + e.lastTries.replace('{n}', String(r.left)) : '') };
   await startSession(r.memberId);
   redirect(`/${lang}/home`);
 }
 
 export async function logoutAction(d: FormData) {
-  await endSession();
+  await endSession();   // also ends any email step on this phone
   redirect(`/${langOf(d)}`);
 }
 
@@ -290,6 +349,85 @@ export async function phoneAction(_: FormState, d: FormData): Promise<FormState>
   await setPhone(db, me.memberId, phone);
   refresh();
   return { done: a.saved };
+}
+
+/** My email, added or changed with my current PIN: saved once the code sent to it is typed on /check. The step keeps the
+ *  checked PIN hash, so a PIN reset in between stops the save. */
+export async function emailAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), a = getDictionary(lang).app;
+  const me = await requireMember(lang, true);
+  const email = normalizeEmail(d.get('email'));
+  if (!email) return { error: a.errors.email };
+  if (!isPin(d.get('pin'))) return { error: a.errors.pin };
+  const r = await checkPin(db, me.memberId, pinText(d.get('pin')));
+  if ('error' in r) return { error: a.errors[r.error === 'wrongPin' ? 'wrongCurrentPin' : r.error] + (r.left ? ' ' + a.errors.lastTries.replace('{n}', String(r.left)) : '') };
+  // each change mails the old address: 3 a day per person, so one account can't spend the day's notices
+  if (!(await allow(db, `day:email:${me.memberId}`, 3, 'day'))) return { error: a.errors.tooMany };
+  return sendCheck(lang, email, 'email', { memberId: me.memberId, pinHash: r.hash });
+}
+
+/** The code from a check email: right, the step is taken once and does what it waited for. */
+export async function checkCodeAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), t = getDictionary(lang), r = t.recover;
+  const code = codeOf(d.get('code'));
+  if (!code) return { error: r.wrongCode };   // not 8 digits: no try used
+  const token = await checkToken(), res = await checkCode(db, token, code, 'check');
+  if (res === 'expired' || (res !== 'ok' && res.wrong === 0)) return { error: r.expired };
+  if (res !== 'ok') return { error: `${r.wrongCode} ${r.left.replace('{n}', () => String(res.wrong))}` };
+  const c = await takeCheck(db, token);
+  if (!c) return { error: r.expired };   // proven, then gone before it was taken (a restart in between)
+  // the cookie goes only on success: deleting it earlier refreshes the page into Start again and hides the error below
+  // (takeCheck already retired the step)
+  const done = async () => (await cookies()).delete(CHECK_COOKIE);
+  const p = c.payload as { code: string; memberId: string; pinHash: string; flatName: string; name: string; others: string[]; lang: Locale };
+  // the step is taken: a failed write says start again, not the error page (each redirect stays outside: it throws)
+  const step = async <T>(write: () => Promise<T>): Promise<T | null> => {
+    try { return await write(); } catch (e) { console.warn('check step failed', (e as Error).name); return null; }
+  };
+  if (c.purpose === 'new') {
+    // joined the day the code is typed
+    const made = await step(() => createFlat(db, { flatName: p.flatName, name: p.name, others: p.others, today: todayDhaka(), lang: p.lang, pinHash: p.pinHash, email: c.email }));
+    if (!made) return { error: r.again };
+    await done();
+    await startSession(made.memberId);
+    redirect(`/${lang}/home`);
+  }
+  if (c.purpose === 'claim') {
+    const claimed = await step(() => claimName(db, p.code, p.memberId, p.pinHash, c.email));
+    if (claimed === null) return { error: r.again };
+    if (!claimed) return { error: t.app.errors.taken };
+    await done();
+    await startSession(p.memberId);
+    redirect(`/${lang}/home`);
+  }
+  // 'email': only for the person signed in on this browser, the one who asked
+  const me = await requireMember(lang, true);
+  if (p.memberId !== me.memberId) return { error: r.again };
+  // a change always tells the old address: its notice is counted before saving, and no notice means no change
+  const { email: old } = await emailOf(db, me.memberId);
+  if (old && old !== c.email && !(await takeMail('notice'))) return { error: r.noMail };
+  const saved = await step(() => setEmail(db, me.memberId, c.email, p.pinHash));
+  if (!saved) return { error: r.again };
+  if (saved.old && saved.old !== c.email) {
+    const masked = `${c.email[0]}•••@${c.email.split('@')[1]}`;
+    const text = r.emailChangedBody.replace('{name}', () => me.name).replace('{flat}', () => me.flatName).replace('{email}', () => masked);
+    // counted above; only if another save changed the address between the read and this one is it counted after
+    if (saved.old === old) send(saved.old, r.emailChangedSubject, text);
+    else mail('notice', saved.old, r.emailChangedSubject, text);
+  }
+  await done();
+  redirect(`/${lang}/home?email=saved`);
+}
+
+/** Another email or a new code: the step ends and the browser goes back to the form it came from. */
+export async function checkBackAction(d: FormData) {
+  const lang = langOf(d), token = await checkToken(), c = token ? await checkOf(db, token) : null;
+  await endRecovery(db, token);
+  (await cookies()).delete(CHECK_COOKIE);
+  const p = (c?.payload ?? {}) as { code?: string; memberId?: string };
+  redirect(c?.purpose === 'new' ? `/${lang}/new`
+    : c?.purpose === 'claim' ? `/${lang}/j/${encodeURIComponent(p.code ?? '')}?m=${encodeURIComponent(p.memberId ?? '')}`
+    : `/${lang}/home`);
 }
 
 /** The person who runs the flat fixes someone's name. */
@@ -723,4 +861,81 @@ export async function savePushAction(lang: string, sub: PushSub) {
 export async function removePushAction(lang: string, endpoint: string) {
   const me = await requireMember(hasLocale(lang) ? lang : 'en');
   if (typeof endpoint === 'string') await removePush(db, me.memberId, endpoint);
+}
+
+const recoverToken = async () => (await cookies()).get(RECOVER_COOKIE)?.value ?? '';
+const endStep = async () => (await cookies()).delete(RECOVER_COOKIE);
+const keepStep = async (token: string) =>
+  (await cookies()).set(RECOVER_COOKIE, token, { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: PROVEN_MINUTES * 60 });
+
+/** Forgot the code or PIN, step 1: the same work for any email, so nothing tells whether it is known; the code goes out
+ *  after the response, and only to an email someone living in a flat has. */
+export async function forgotEmailAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), t = getDictionary(lang), e = t.app.errors;
+  const email = normalizeEmail(d.get('email'));
+  if (!email) return { error: e.email };
+  if (!(await allow(db, `forgot:${await ip()}`, 10)) || !(await codeAllowed(email))) return { error: e.tooMany };
+  // counted for every email alike, sent or not: the budget can't tell a known email from an unknown one
+  if (!(await takeMail('recover'))) return { error: t.recover.noMail };
+  const r = await startRecovery(db, email);
+  if (!r) return { error: e.tooMany };
+  await keepStep(r.token);
+  if (r.send) send(email, t.recover.codeSubject, t.recover.codeBody.replace('{code}', () => spaced(r.code)));
+  redirect(`/${lang}/forgot`);
+}
+
+/** Step 2: the 8 digits (Bangla digits too; a pasted "code: 4829 1736" works). Proven: the cookie lives as long as the step. */
+export async function forgotCodeAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), r = getDictionary(lang).recover;
+  const code = codeOf(d.get('code'));
+  if (!code) return { error: r.wrongCode };   // not 8 digits: no try used
+  const token = await recoverToken(), res = await checkCode(db, token, code, 'recover');
+  if (res === 'expired' || (res !== 'ok' && res.wrong === 0)) return { error: r.expired };
+  if (res !== 'ok') return { error: `${r.wrongCode} ${r.left.replace('{n}', () => String(res.wrong))}` };
+  await keepStep(token);
+  redirect(`/${lang}/forgot`);
+}
+
+/** Another email or a new code: back to step 1. */
+export async function forgotRestartAction(d: FormData) {
+  await endRecovery(db, await recoverToken());
+  await endStep();
+  redirect(`/${langOf(d)}/forgot`);
+}
+
+/** Step 3, the PIN still known: the usual sign-in (same lock, same limit) on the flat the proven email belongs to. */
+export async function recoverSignInAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), t = getDictionary(lang), e = t.app.errors;
+  const pin = pinText(d.get('pin'));
+  if (!isPin(pin)) return { error: e.pin };
+  if (!(await allow(db, `pin:${await ip()}`, 60))) return { error: e.tooMany };
+  const token = await recoverToken(), email = await provenEmail(db, token);
+  const f = email ? (await flatsFor(db, email)).find(x => x.memberId === str(d, 'memberId')) : undefined;
+  if (!f) return { error: t.recover.again };
+  const r = await login(db, f.code, f.memberId, pin, null, null);
+  if ('error' in r && r.error === 'newPinNeeded') return { error: t.recover.useNewPin };   // e.newPinNeeded says reload: a loop here
+  if ('error' in r) return { error: e[r.error] + (r.left ? ' ' + e.lastTries.replace('{n}', String(r.left)) : '') };
+  await endRecovery(db, token);
+  await endStep();
+  await startSession(r.memberId);
+  redirect(`/${lang}/home`);
+}
+
+/** Step 3, a new PIN: weak ones refused; counted like a sign-in; recoverPin re-checks the proven email and that they still live there. */
+export async function recoverPinAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), t = getDictionary(lang), e = t.app.errors;
+  const pin = pinText(d.get('newPin')), memberId = str(d, 'memberId');
+  if (!isPin(pin)) return { error: e.pin };
+  if (weakPin(pin)) return { error: e.weakPin };
+  if (pin !== pinText(d.get('pin2'))) return { error: e.pinMatch };
+  if (!(await allow(db, `pin:${await ip()}`, 60))) return { error: e.tooMany };
+  const token = await recoverToken(), email = token ? await provenEmail(db, token) : null;
+  // no bcrypt for a step never proven or someone else's name; the flat's name is read now for the notice after
+  const f = email ? (await flatsFor(db, email)).find(x => x.memberId === memberId) : undefined;
+  if (!email || !f) return { error: t.recover.again };
+  if (!(await recoverPin(db, token, memberId, pin))) return { error: t.recover.again };
+  mail('notice', email, t.recover.pinChangedSubject, t.recover.pinChangedBody.replace('{flat}', () => f.flatName));
+  await endStep();
+  await startSession(memberId);
+  redirect(`/${lang}/home`);
 }
