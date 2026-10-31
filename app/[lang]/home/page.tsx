@@ -79,13 +79,14 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
       {me.role === 'manager' && <> · <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link></>}
     </p>
   );
-  // the email form: in the Add card while there is no email, else in My account (never both, so its ids stay unique)
+  // the email form: in the Add card while there is no email, else in My account (never both, so its ids, email-hint
+  // included, stay unique)
   const emailForm = (
     <ActionForm action={emailAction} className="mt-4" clearOnDone>
       <input type="hidden" name="lang" value={lang} />
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {/* keyed on the saved address, so after a save the field shows it as stored */}
-        <Field key={mail.email ?? ''} label={a.email} name="email" type="email" inputMode="email" autoComplete="email" required maxLength={254} defaultValue={mail.email ?? ''} />
+        <Field key={mail.email ?? ''} label={a.email} name="email" type="email" inputMode="email" autoComplete="email" required maxLength={254} hint={a.emailHint} defaultValue={mail.email ?? ''} />
         <PinField label={a.currentPin} name="pin" autoComplete="current-password" />
       </div>
       <button className={`${secondary} sm:w-auto`}>{a.saveEmail}</button>
