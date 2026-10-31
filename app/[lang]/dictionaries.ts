@@ -420,6 +420,7 @@ const bn = {
     yourGuests: 'আপনার অতিথি',
     removeGuests: 'অতিথি বাদ দিন',
     lateSameDay: 'সেদিনই বদল',
+    changedBadge: 'বদলেছে',   // the chip's one-word badge: a phone chip has no room for more
     seeWeek: 'পুরো সপ্তাহ, অতিথি আর ছুটি দেখুন',
     weekTitle: 'এই সপ্তাহে আপনার মিল',
     mealsTitle: 'আপনার মিল',
@@ -1254,6 +1255,7 @@ const en: Dict = {
     yourGuests: 'Your guests',
     removeGuests: 'Remove guests',
     lateSameDay: 'Same-day change',
+    changedBadge: 'Changed',   // the chip's one-word badge: a phone chip has no room for more
     seeWeek: 'See the week, guests and time away',
     weekTitle: 'Your meals this week',
     mealsTitle: 'Your meals',

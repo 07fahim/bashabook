@@ -25,7 +25,7 @@ export function MealRow({ lang, m, meId, date, decision, members, changes, noCoo
         const own = ownPlate(self, changes, date, meal), guests = count - own;
         const off = noCook.some(n => n.date === date && n.meal === meal);
         // a same-day change: made on the meal's own day (or the collector's later fix)
-        const badge = off ? m.noCook : late && date <= todayDhaka() ? m.lateSameDay : null;
+        const badge = off ? m.noCook : late && date <= todayDhaka() ? m.changedBadge : null;
         return (
           <form key={meal} action={setMealAction}>
             <input type="hidden" name="lang" value={lang} />
