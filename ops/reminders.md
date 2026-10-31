@@ -7,7 +7,8 @@ How BashaBook's reminders work and what to check when they don't.
   getting reminders the day after `left_on`.
 - Timed reminders run from `GET /api/cron` (`Authorization: Bearer CRON_SECRET`), called every 5 minutes by cron-job.org
   (job "BashaBook reminders", failure e-mails to the app team). Each flat: the month-ready reminder to the collector once per
-  month, from the 1st at 10:00; from 21:00 once a day, the bazar and bill check reminder and the 2-days-late one. A reminder is claimed in `sent_jobs (flat, date or month, job)` before it is sent: two
+  month, from the 1st at 10:00. From 21:00 the bazar and bill check reminder and the 2-days-late one go out once a
+  day. A reminder is claimed in `sent_jobs (flat, date or month, job)` before it is sent: two
   overlapping runs can't both send.
 - Event reminders (deposit to confirm, payout to confirm, handover offered, a change to today's meals) are sent by the server action itself after the
   write, via `after()`. A push failure never fails or undoes the write.

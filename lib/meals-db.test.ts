@@ -385,7 +385,9 @@ describe('meal storage', { timeout: 30000 }, () => {
     await setAway(db, flatId, tahsin, '2026-10-09', '2026-10-12');
     await cancelAway(db, flatId, tahsin, '2026-10-09', '2026-10-12', '2026-10-10');   // cancelled on the 10th
     expect([await count('2026-10-09', 'l'), await count('2026-10-10', 'l'), await count('2026-10-11', 'l')]).toEqual([0, 0, 1]);
+    const rows = async () => (await db(`select 1 from audit_log where entity_id = $1`, [`${tahsin}|away`])).length;
+    const before = await rows();
     await cancelAway(db, flatId, tahsin, '2026-10-09', '2026-10-10', '2026-10-10');   // a range ending today: nothing to cancel
-    expect(await count('2026-10-10', 'l')).toBe(0);
+    expect([await count('2026-10-10', 'l'), await rows()]).toEqual([0, before]);   // and no backwards history line
   });
 });
