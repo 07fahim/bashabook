@@ -17,7 +17,23 @@ describe('sending email', () => {
     expect(await sendEmail('a@b.co', 'S', 'T', { RESEND_API_KEY: 'k' }, (async () => new Response('{}', { status: 422 })) as unknown as typeof fetch)).toBe(false);
     expect(await sendEmail('a@b.co', 'S', 'T', { RESEND_API_KEY: 'k' }, (async () => { throw new TypeError('fetch failed'); }) as unknown as typeof fetch)).toBe(false);
     expect(warn).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('a@b.co');
     warn.mockRestore();
+  });
+
+  it('a stalled send gives up after 10 seconds', async () => {
+    const real = AbortSignal.timeout.bind(AbortSignal);
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => real(10));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const stalled = (...a: unknown[]) => new Promise<Response>((_, reject) => {
+      const s = (a[1] as RequestInit).signal;
+      s?.addEventListener('abort', () => reject(s.reason));
+    });
+    expect(await sendEmail('a@b.co', 'S', 'T', { RESEND_API_KEY: 'k' }, stalled as unknown as typeof fetch)).toBe(false);
+    expect(timeout).toHaveBeenCalledWith(10_000);
+    expect(warn).toHaveBeenCalledWith('email failed', 'TimeoutError');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('a@b.co');
+    timeout.mockRestore(); warn.mockRestore();
   });
 
   it('without a key: prints the mail when EMAIL_LOG=1 (local checks), else only warns; nothing is posted', async () => {

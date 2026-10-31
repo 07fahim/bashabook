@@ -20,6 +20,7 @@ export async function sendEmail(to: string, subject: string, text: string, env: 
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: FROM, to: [to], subject, text }),
+      signal: AbortSignal.timeout(10_000), // a stalled send must not hold the after() invocation
     });
     if (!r.ok) console.warn('email failed', r.status);
     return r.ok;
