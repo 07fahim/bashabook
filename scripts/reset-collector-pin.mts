@@ -5,7 +5,7 @@
 //   node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/reset-collector-pin.mts <join code> "<collector name>" "<reason>" "<your name>"
 // Add --apply at the end to reset. The one-time PIN is printed once: tell it on a call, never as a chat message.
 import { randomInt } from 'node:crypto';
-import { resetPin } from '../lib/auth';
+import { resetPin, weakPin } from '../lib/auth';
 import { db } from '../lib/db';
 
 const args = process.argv.slice(2), apply = args.at(-1) === '--apply';
@@ -38,7 +38,8 @@ const [offer] = await db<{ to: string; at: string }>(
 if (offer) console.log(`WARNING: a handover to ${offer.to} is waiting (offered ${offer.at}). Ask the collector if they made it.`);
 if (!apply) { console.log('dry run: nothing changed. Add --apply to reset.'); process.exit(0); }
 
-const pin = String(randomInt(10000)).padStart(4, '0');
+let pin = '';
+do pin = String(randomInt(10000)).padStart(4, '0'); while (weakPin(pin));   // never hand out a PIN like 1234
 if (!(await resetPin(db, f.id, c.id, pin, { admin, reason }))) { console.log('reset refused: nothing changed'); process.exit(1); }
 const same = JSON.stringify(await versions()) === before;
 console.log(`done. One-time PIN for ${c.name}: ${pin}`);
