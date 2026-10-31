@@ -10,7 +10,8 @@ export const CODE_MINUTES = 10, PROVEN_MINUTES = 15, TRIES = 5, PER_DAY = 5;
 /** "Send me a code": a new step with a random code for this email, made the same way whether or not anyone has the email,
  *  so the screen never tells. `send`: a person still living in a flat has it (only then is the code emailed). Null once
  *  this email had PER_DAY codes in 24 hours: 5 tries each, 25 guesses a day at a million codes.
- *  ponytail: two requests at the same instant can both pass the count; the per-connection limit bounds that. */
+ *  ponytail: requests at the same instant can each pass the count. The per-connection limit bounds that for one IP only:
+ *  a parallel burst from many IPs can go past PER_DAY. Upgrade path: count with an atomic upsert. */
 export async function startRecovery(db: Db, email: string): Promise<{ token: string; code: string; send: boolean } | null> {
   const token = randomBytes(32).toString('base64url'), code = String(randomInt(1_000_000)).padStart(6, '0');
   const [r] = await db<{ send: boolean }>(
