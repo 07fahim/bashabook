@@ -1078,7 +1078,7 @@ const en: Dict = {
       'Your email address. It is used only to send you a code (to check the address or when you forget the flat code or your PIN) and a notice when your PIN or email changes. Your flatmates don’t see it. An email typed on the Forgot page is kept for a day to stop repeated tries.',
       'For each flat: meals, bazar and what it bought, bills, receipt photos someone adds to a bazar or bill, deposits, money paid out from the flat and a history of who changed what and when.',
       'Your browser’s address for reminders if you turn them on.',
-      'Your internet (IP) address for about 2 hours to stop anyone guessing codes or PINs. A scrambled form of it that can’t be turned back for 2 days to count how many emails one connection asks for.',
+      'Your internet (IP) address for about 2 hours to stop anyone guessing codes or PINs. For 2 days only a scrambled form of it to count how many emails one connection asks for. It can’t be turned back into the address.',
     ] },
     see: { h: 'Who can see it', p: [
       'Only the people in your flat see it in the app. They see the flat’s entries (deposits included), each person’s balance and meal count, the meal list, names and any phone number, photo or receipt photo someone added.',

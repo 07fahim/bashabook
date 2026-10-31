@@ -8,7 +8,7 @@ import { deleteFlat, flatRowCounts } from '../lib/delete-flat';
 
 const args = process.argv.slice(2), apply = args.includes('--apply'), prod = args.includes('--prod');
 const [code, name] = args.filter(a => !a.startsWith('--'));
-if (!code || !name) { console.log('usage: <join code> "<flat name>" [--apply]'); process.exit(1); }
+if (!code || !name) { console.log('usage: <join code> "<flat name>" [--apply] [--prod]'); process.exit(1); }
 
 // the pooler host is shared with production: only the username tells TEST apart
 const u = new URL(process.env.DATABASE_URL ?? ''), host = u.hostname.split('.')[0], test = decodeURIComponent(u.username) === 'postgres.wgvoshlmhauxcymwdwjt';

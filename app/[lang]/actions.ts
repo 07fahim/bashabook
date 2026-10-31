@@ -896,9 +896,9 @@ export async function mealPushAction(_: FormState, d: FormData): Promise<FormSta
 }
 
 /** The bell's page was really shown (not just prefetched): its notices are seen. */
-export async function noticesSeenAction(lang: string) {
+export async function noticesSeenAction(lang: string, upTo: string | null) {
   const me = await requireMember(hasLocale(lang) ? lang : 'en');
-  await markNoticesSeen(db, me.flatId, me.memberId);
+  await markNoticesSeen(db, me.flatId, me.memberId, typeof upTo === 'string' && /^\d{4}-\d{2}-\d{2}[ T][\d:.]+([+-]\d{2}(:?\d{2})?|Z)?$/.test(upTo) ? upTo : null);
 }
 
 export async function removePushAction(lang: string, endpoint: string) {

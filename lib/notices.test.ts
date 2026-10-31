@@ -94,7 +94,12 @@ describe('notices', { timeout: 60000 }, () => {
     expect(await addEntry(db, flatId, boss, e({ type: 'payout', amount: 20000, date: today, memberId: zarif }))).toBe('ok');
     expect(kinds(await listNotices(db, flatId, tahsin, false))).toEqual(['account']);
     expect(await noticeCount(db, flatId, zarif, false)).toBe(2);
-    await markNoticesSeen(db, flatId, zarif);
+    await markNoticesSeen(db, flatId, zarif, '2000-01-01 00:00:00+00');   // a page that showed only older notices
+    expect(await noticeCount(db, flatId, zarif, false)).toBe(2);
+    const shown = (await listNotices(db, flatId, zarif, false)).map(n => n.at).sort().at(-1)!;
+    await markNoticesSeen(db, flatId, zarif, shown);
+    expect(await noticeCount(db, flatId, zarif, false)).toBe(0);
+    await markNoticesSeen(db, flatId, zarif, '2000-01-01 00:00:00+00');   // Back to an old copy of the page: never unread again
     expect(await noticeCount(db, flatId, zarif, false)).toBe(0);
     expect(kinds(await listNotices(db, flatId, zarif, false)).sort()).toEqual(['account', 'paid']);   // read is not resolved
   });

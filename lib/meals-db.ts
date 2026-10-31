@@ -174,6 +174,8 @@ async function addGuestsOnce(db: Db, flatId: string, memberId: string, date: str
 
 /** Away: every meal off from..to, one audit row for the range. */
 /** Returns the booked guests it dropped (read before the update: every part of one statement sees the same snapshot). */
+// ponytail: no flat lock, so an away saved in the same instant as no cooking may be snapshotted by it; lock the flat row
+// (as set_no_cook does) if that is ever seen
 export async function setAway(db: Db, flatId: string, memberId: string, from: string, to: string) {
   return db<{ date: string; meal: Meal; guests: number }>(
     `with dropped as (select date::text as date, meal, guests from meal_changes

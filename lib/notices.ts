@@ -73,6 +73,9 @@ export const noticeCount = async (db: Db, flatId: string, memberId: string, boss
     `select count(*)::int as n from (${SOURCES}) n where n.at > (select notices_seen_at from members where flat_id = $1 and id = $2)`,
     [flatId, memberId, boss]))[0].n;
 
-export const markNoticesSeen = async (db: Db, flatId: string, memberId: string) => {
-  await db(`update members set notices_seen_at = now() where flat_id = $1 and id = $2`, [flatId, memberId]);
+/** Seen up to `upTo`, the newest notice the page showed (now when it showed none): one that came in after the page was
+ *  drawn stays new. Never moves back, and never past now. */
+export const markNoticesSeen = async (db: Db, flatId: string, memberId: string, upTo: string | null = null) => {
+  await db(`update members set notices_seen_at = greatest(notices_seen_at, least(coalesce($3::text::timestamptz, now()), now()))
+            where flat_id = $1 and id = $2`, [flatId, memberId, upTo]);
 };

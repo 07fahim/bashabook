@@ -29,7 +29,7 @@ async function Body({ params }: Pick<PageProps<'/[lang]/notices'>, 'params'>) {
     <>
       <Header t={t} lang={lang} path="/notices" notices={0}><Nav t={t} lang={lang} topic={me.liveTopic} showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-7xl px-5 pt-6 pb-28 md:px-8 md:pb-10">
-        <SeenNow lang={lang} />
+        <SeenNow lang={lang} upTo={rows.map(([n]) => n.at).sort().at(-1) ?? null} />
         <section className={`${card} md:max-w-2xl`}>
           <h1 className="font-display text-2xl font-bold">{t.notices.title}</h1>
           {rows.length === 0 ? <p className="mt-3 text-muted">{t.notices.empty}</p> : (

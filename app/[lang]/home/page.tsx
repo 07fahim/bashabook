@@ -296,7 +296,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
               </div>
             )}
             <div className="mt-6 border-t border-line pt-6">
-              <Reminders lang={lang} t={t.push} />
+              <Reminders lang={lang} t={t.push} redraw={pushed === false} />
               {/* only the today-meal notices: muting them keeps the money ones (turning reminders off would lose both) */}
               <ActionForm action={mealPushAction} className="mt-3">
                 <input type="hidden" name="lang" value={lang} />
