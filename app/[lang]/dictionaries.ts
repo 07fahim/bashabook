@@ -364,7 +364,7 @@ const bn = {
   },
   recover: {
     addTitle: 'আপনার ইমেইল দিন',
-    addLead: 'ফ্ল্যাটের কোড বা PIN ভুলে গেলে ইমেইলে একটা কোড পাঠিয়ে আবার ঢুকতে দেব। এখন ঢোকা অবস্থাতেই দিয়ে রাখুন।',
+    addLead: 'এখন ঢোকা অবস্থাতেই দিয়ে রাখুন।',
     confirmTitle: 'আপনার ইমেইল নিশ্চিত করুন',
     confirmLead: 'আমরা {email}-এ একটা লিংক পাঠিয়েছি। নিশ্চিত করতে ওটায় ট্যাপ করুন। না পেলে Spam দেখুন।',
     sendAgain: 'লিংকটা আবার পাঠান',
@@ -1254,7 +1254,7 @@ const en: Dict = {
   },
   recover: {
     addTitle: 'Add your email',
-    addLead: 'If you forget the flat code or your PIN we email you a code to get back in. Add it now while you’re signed in.',
+    addLead: 'Add it now while you’re signed in.',
     confirmTitle: 'Confirm your email',
     confirmLead: 'We sent a link to {email}. Tap it to confirm. Not there? Check Spam.',
     sendAgain: 'Send the link again',
