@@ -56,7 +56,7 @@ export async function loginAction(_: FormState, d: FormData): Promise<FormState>
   if (!isPin(pin) || (newPin !== null && !isPin(newPin))) return { error: e.pin };
   if (d.has('pin2') && (newPin ?? pin) !== pinText(d.get('pin2'))) return { error: e.pinMatch };
   if (!(await allow(db, `pin:${await ip()}`, 60))) return { error: e.tooMany };
-  const r = await login(db, str(d, 'code'), str(d, 'memberId'), pin, newPin);
+  const r = await login(db, str(d, 'code'), str(d, 'memberId'), pin, newPin, null);
   if ('error' in r) return { error: e[r.error] + (r.left ? ' ' + e.lastTries.replace('{n}', String(r.left)) : '') };
   await startSession(r.memberId);
   redirect(`/${lang}/home`);

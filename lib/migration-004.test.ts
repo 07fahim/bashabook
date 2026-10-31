@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import type { Db } from './db';
-import { createFlat } from './auth';
 
 const sql = (f: string) => readFileSync(join(__dirname, '../db/migrations', f), 'utf8');
 
@@ -12,7 +11,11 @@ describe('migration 004 (guests apart from the own plate)', { timeout: 30000 }, 
     const pg = new PGlite();
     const db: Db = async (text, params) => (await pg.query(text, params)).rows as never;
     for (const f of ['001_init.sql', '002_in_meals.sql', '003_no_cook.sql']) await pg.exec(sql(f));
-    const { flatId, memberId } = await createFlat(db, { flatName: 'Flat 4B', name: 'Nafis', pin: '1234', others: [], today: '2026-10-01', lang: 'bn' });
+    // plain inserts: createFlat writes columns from later migrations
+    const [{ flatId, memberId }] = await db<{ flatId: string; memberId: string }>(
+      `with f as (insert into flats (name, join_code) values ('Flat 4B', 'ABCDEF') returning id),
+       m as (insert into members (flat_id, name, joined_on, role) select id, 'Nafis', '2026-10-01', 'manager' from f returning id)
+       select f.id as "flatId", m.id as "memberId" from f, m`);
     const add = (date: string, count: number) =>
       db(`insert into meal_changes (flat_id, member_id, date, meal, count) values ($1, $2, $3, 'd', $4)`, [flatId, memberId, date, count]);
     await add('2026-10-02', 0);

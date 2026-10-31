@@ -10,6 +10,11 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 /** Text people type: no control characters, line separators or bidi marks, which could fake a line in a shared breakdown or a notification. ZWJ and ZWNJ stay: Bangla needs them. */
 export const cleanText = (v: unknown) => String(v ?? '').replace(/[\p{Cc}\p{Zl}\p{Zp}\u061C\u200B\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/gu, '').trim();
 export const cleanName = (v: unknown) => { const s = cleanText(v); return s.length >= 1 && s.length <= 40 ? s : null; };
+/** A typed email as stored: trimmed, lowercase, one @ with a dot after it, at most 254 characters; else null. */
+export const normalizeEmail = (v: unknown) => {
+  const s = String(v ?? '').trim().toLowerCase();
+  return s.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : null;
+};
 /** A typed PIN with Bangla digits as English ones. */
 export const pinText = (v: unknown) => enDigits(String(v ?? ''));
 export const isPin = (v: unknown) => /^\d{4}$/.test(pinText(v));
@@ -22,8 +27,8 @@ export const weakPin = (v: unknown) => {
   const p = pinText(v), d = [...p].map(Number), step = d[1] - d[0];
   return (Math.abs(step) <= 1 && d.every((x, i) => i === 0 || x - d[i - 1] === step)) || COMMON.has(p);
 };
-const hashPin = (pin: string) => bcrypt.hash(pin, 10);
-const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
+export const hashPin = (pin: string) => bcrypt.hash(pin, 10);
+export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 /** Still living here: no last day, or it hasn't passed yet (in Dhaka). Someone who moved out can't sign in or be picked. */
 export const STAYING = "(left_on is null or left_on >= (now() at time zone 'Asia/Dhaka')::date)";
 /** A name clash: unique, or the same name for two overlapping stays (one_name_per_stay). */
@@ -31,15 +36,15 @@ const nameClash = (e: unknown) => ['23505', '23P01'].includes((e as { code?: str
 const newJoinCode = () => Array.from({ length: 6 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join('');
 
 /** Flat, its starter (role manager, already claimed) and unclaimed names, in one statement. */
-export async function createFlat(db: Db, f: { flatName: string; name: string; pin: string; others: string[]; today: string; lang: 'bn' | 'en' }) {
+export async function createFlat(db: Db, f: { flatName: string; name: string; pin: string; others: string[]; today: string; lang: 'bn' | 'en'; email?: string }) {
   const others = [...new Set(f.others)].filter(n => n !== f.name);
   // ponytail: a join code clash (31^6 codes) fails the insert; add a retry if flats reach the hundreds of thousands
   const [row] = await db<{ flat_id: string; member_id: string }>(
     `with f as (insert into flats (name, join_code, language) values ($1, $2, $7) returning id),
-     m as (insert into members (flat_id, name, pin_hash, role, joined_on) select id, $3::text, $4::text, 'manager', $5::date from f returning id),
+     m as (insert into members (flat_id, name, pin_hash, role, joined_on, email) select id, $3::text, $4::text, 'manager', $5::date, $8::text from f returning id),
      o as (insert into members (flat_id, name, joined_on) select f.id, n, $5::date from f, json_array_elements_text($6::text::json) n)
      select f.id as flat_id, m.id as member_id from f, m`,
-    [f.flatName, newJoinCode(), f.name, await hashPin(f.pin), f.today, JSON.stringify(others), f.lang]);
+    [f.flatName, newJoinCode(), f.name, await hashPin(f.pin), f.today, JSON.stringify(others), f.lang, f.email ?? null]);
   return { flatId: row.flat_id, memberId: row.member_id };
 }
 
@@ -73,7 +78,7 @@ export async function flatByCode(db: Db, code: string) {
   return { ...flat, members };
 }
 
-export type LoginError = 'notFound' | 'taken' | 'locked' | 'lockedForGood' | 'wrongPin' | 'newPinNeeded' | 'weakPin';
+export type LoginError = 'notFound' | 'taken' | 'locked' | 'lockedForGood' | 'wrongPin' | 'newPinNeeded' | 'weakPin' | 'email';
 
 /** Counts a PIN try before it is checked, in one statement, so parallel guesses can't slip past the lock.
  *  Every 5th wrong try locks for longer (15 min, 30, 1 h …); the 25th locks for good, until a PIN reset (policy approved
@@ -104,15 +109,17 @@ async function wrongPin(db: Db, memberId: string, may: { forGood: boolean; left:
   return may.left <= 5 ? { error, left: may.left } : { error };
 }
 
-/** Claims an unclaimed name, or checks the PIN with lockout. newPin is required after a reset. */
-export async function login(db: Db, code: string, memberId: string, pin: string, newPin: string | null): Promise<{ memberId: string } | { error: LoginError; left?: number }> {
+/** Claims an unclaimed name (with the person's email, mandatory: it is how they get back in), or checks the PIN with
+ *  lockout. newPin is required after a reset. `email` is ignored once the name is claimed. */
+export async function login(db: Db, code: string, memberId: string, pin: string, newPin: string | null, email: string | null): Promise<{ memberId: string } | { error: LoginError; left?: number }> {
   if (!UUID.test(memberId)) return { error: 'notFound' };
   const [m] = await db<{ pin_hash: string | null; must_change_pin: boolean }>(
     `select m.pin_hash, m.must_change_pin from members m join flats f on f.id = m.flat_id where f.join_code = $1 and m.id = $2 and ${STAYING}`, [code.toUpperCase(), memberId]);
   if (!m) return { error: 'notFound' };
   if (m.pin_hash === null) {
+    if (!email) return { error: 'email' };
     if (weakPin(pin)) return { error: 'weakPin' };
-    const claimed = await db(`update members set pin_hash = $2 where id = $1 and pin_hash is null returning id`, [memberId, await hashPin(pin)]);
+    const claimed = await db(`update members set pin_hash = $2, email = $3 where id = $1 and pin_hash is null returning id`, [memberId, await hashPin(pin), email]);
     return claimed.length ? { memberId } : { error: 'taken' };
   }
   const may = await countTry(db, memberId);
@@ -214,6 +221,43 @@ export async function changePin(db: Db, memberId: string, current: string, next:
   if (!done.length) return { error: 'wrongPin' };
   await db(`delete from sessions where member_id = $1 and token_hash <> $2`, [memberId, hashToken(keepToken)]);
   return 'ok';
+}
+
+/** My email, added or changed with my current PIN (wrong tries count toward the lock, as for a PIN change): someone holding
+ *  my unlocked phone can't plant their own address for a later takeover. A new address waits for confirmation again; the
+ *  same address keeps its state. */
+export async function changeEmail(db: Db, memberId: string, pin: string, email: string): Promise<'ok' | { error: 'locked' | 'lockedForGood' | 'wrongPin'; left?: number }> {
+  const [m] = await db<{ pin_hash: string | null }>(`select pin_hash from members where id = $1`, [memberId]);
+  const may = await countTry(db, memberId);
+  if (typeof may === 'string') return { error: may };
+  if (!m?.pin_hash || !(await bcrypt.compare(pin, m.pin_hash))) return wrongPin(db, memberId, may);
+  // every right-hand side reads the row as it was, so "same address" compares with the old email
+  await db(`update members set failed_pin_count = 0, locked_until = null, email = $2,
+      email_ok = email_ok and email is not distinct from $2,
+      email_token = case when email is not distinct from $2 then email_token end
+    where id = $1`, [memberId, email]);
+  return 'ok';
+}
+
+/** A new confirmation link for my email, replacing any earlier one; null when there is no email or it is confirmed. */
+export async function confirmLink(db: Db, memberId: string): Promise<{ email: string; name: string; token: string } | null> {
+  const token = randomBytes(32).toString('base64url');
+  const [r] = await db<{ email: string; name: string }>(
+    `update members set email_token = $2 where id = $1 and email is not null and not email_ok returning email, name`, [memberId, hashToken(token)]);
+  return r ? { ...r, token } : null;
+}
+
+/** The link in the confirmation email was opened: that address is confirmed. A link works once. */
+export async function confirmEmail(db: Db, token: string) {
+  if (!token || token.length > 100) return false;
+  const rows = await db(`update members set email_ok = true, email_token = null where email_token = $1 returning id`, [hashToken(token)]);
+  return rows.length > 0;
+}
+
+/** My own email and whether it is confirmed (Home's cards and My account). Nobody else's: flatmates never see an email. */
+export async function emailOf(db: Db, memberId: string) {
+  const [r] = await db<{ email: string | null; ok: boolean }>(`select email, email_ok as ok from members where id = $1`, [memberId]);
+  return r ?? { email: null, ok: false };
 }
 
 /** The person who runs the flat fixes a name. Refused if someone in the flat already has it; the change goes in the history. */
