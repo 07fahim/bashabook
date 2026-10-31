@@ -2,6 +2,7 @@
 // asking before telling a code. Read-only: finds flats by part of the flat's name and, if given, part of the collector's.
 // Usage:
 //   node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/find-flat.mts "<flat name part>" ["<collector name part>"]
+import { STAYING } from '../lib/auth';
 import { db } from '../lib/db';
 
 const [flat, collector] = process.argv.slice(2);
@@ -18,11 +19,12 @@ const rows = await db<{ id: string; name: string; code: string; created: string;
    order by f.created_at desc limit 20`, [like(flat), collector?.trim() ? like(collector) : null]);
 if (!rows.length) console.log('no flat matches');
 for (const r of rows) {
-  // everyone living there now, with saved numbers: call back one of these, never a number the person asking gives you
-  const people = await db<{ name: string; role: string; phone: string | null; notJoined: boolean }>(
-    `select name, role, phone, pin_hash is null as "notJoined" from members where flat_id = $1 and joined_on <= (now() at time zone 'Asia/Dhaka')::date
-       and (left_on is null or left_on >= (now() at time zone 'Asia/Dhaka')::date) order by name`, [r.id]);
-  console.log(`${r.name} · code ${r.code} · collector ${r.collector ?? 'none'} · saved number ${r.phone ?? 'none'} · ${people.length} living there · started ${r.created}`);
-  for (const p of people) console.log(`  ${p.name}${p.role === 'manager' ? ' (collector)' : ''}${p.notJoined ? ' (not joined yet)' : ''} · saved number ${p.phone ?? 'none'}`);
+  // the names the join page offers (STAYING, moving in later too), with saved numbers: call back one of these, never a number the person asking gives you
+  const people = await db<{ name: string; role: string; phone: string | null; notJoined: boolean; movesIn: string | null }>(
+    `select name, role, phone, pin_hash is null as "notJoined",
+       case when joined_on > (now() at time zone 'Asia/Dhaka')::date then joined_on::text end as "movesIn"
+     from members where flat_id = $1 and ${STAYING} order by name`, [r.id]);
+  console.log(`${r.name} · code ${r.code} · collector ${r.collector ?? 'none'} · saved number ${r.phone ?? 'none'} · ${people.length} on the join page · started ${r.created}`);
+  for (const p of people) console.log(`  ${p.name}${p.role === 'manager' ? ' (collector)' : ''}${p.notJoined ? ' (not joined yet)' : ''} · saved number ${p.phone ?? 'none'}${p.movesIn ? ` · moves in ${p.movesIn}` : ''}`);
 }
 process.exit(0);

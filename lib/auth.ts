@@ -16,7 +16,7 @@ export const isPin = (v: unknown) => /^\d{4}$/.test(pinText(v));
 const hashPin = (pin: string) => bcrypt.hash(pin, 10);
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 /** Still living here: no last day, or it hasn't passed yet (in Dhaka). Someone who moved out can't sign in or be picked. */
-const STAYING = "(left_on is null or left_on >= (now() at time zone 'Asia/Dhaka')::date)";
+export const STAYING = "(left_on is null or left_on >= (now() at time zone 'Asia/Dhaka')::date)";
 /** A name clash: unique, or the same name for two overlapping stays (one_name_per_stay). */
 const nameClash = (e: unknown) => ['23505', '23P01'].includes((e as { code?: string }).code ?? '');
 const newJoinCode = () => Array.from({ length: 6 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join('');
