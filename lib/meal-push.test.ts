@@ -33,6 +33,18 @@ describe('today’s meal pushes', { timeout: 30000 }, () => {
     expect(s.calls[0].msg).toMatchObject({ title: 'Tahsin is skipping lunch today', url: '/en/home', tag: `meal:${ids.Tahsin}:${TODAY}:l` });
   });
 
+  it('someone who muted today-meal notices gets none; the rest still do', async () => {
+    const { flatId, ids } = await flat();
+    const { setMealPush } = await import('./push-db');
+    await setMealPush(db, ids.Zarif, false);
+    const s = spy();
+    await pushToday(db, flatId, ids.Tahsin, TODAY, 'on', { meals: ['d'] }, s.send);
+    expect(s.calls.map(c => c.ids[0]).sort()).toEqual([ids.Nafis, ids.Fahim].sort());   // not Zarif (muted), not Rafi (unclaimed), not Tahsin
+    await setMealPush(db, ids.Zarif, true);
+    await pushToday(db, flatId, ids.Tahsin, TODAY, 'on', { meals: ['d'] }, s.send);
+    expect(s.calls.slice(2).map(c => c.ids[0])).toContain(ids.Zarif);   // turned back on: told again
+  });
+
   it('the body is today’s plates for the cook, each person in their own language', async () => {
     const { flatId, ids } = await flat();
     await saveMeal(db, flatId, ids.Tahsin, { memberId: ids.Tahsin, date: TODAY, meal: 'l', count: 0, guests: 0 }, true);

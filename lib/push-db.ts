@@ -15,6 +15,11 @@ export const savePush = async (db: Db, flatId: string, memberId: string, s: Push
     [flatId, memberId, s.endpoint, s.keys.p256dh, s.keys.auth]);
 };
 
+/** My own choice: the push for changes to today's meals on or off (every other reminder stays). */
+export const setMealPush = async (db: Db, memberId: string, on: boolean) => {
+  await db(`update members set meal_push = $2 where id = $1`, [memberId, on]);
+};
+
 export const removePush = async (db: Db, memberId: string, endpoint: string) => {
   await db(`delete from push_subs where member_id = $1 and endpoint = $2`, [memberId, endpoint]);
 };

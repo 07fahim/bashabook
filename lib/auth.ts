@@ -158,8 +158,8 @@ export async function memberBySession(db: Db, token: string): Promise<Me | null>
 
 export const deleteSession = (db: Db, token: string) => db(`delete from sessions where token_hash = $1`, [hashToken(token)]);
 
-export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean; forGood: boolean; collector: boolean; phone: string | null; photoV: number | null; joinedOn: string; leftOn: string | null }>(
-  `select id, name, phone, joined_on::text as "joinedOn", left_on::text as "leftOn", case when photo is null then null else photo_v end as "photoV", pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked, coalesce(locked_until = 'infinity', false) as "forGood", role = 'manager' as collector
+export const listMembers = (db: Db, flatId: string) => db<{ id: string; name: string; claimed: boolean; failed: number; locked: boolean; forGood: boolean; collector: boolean; mealPush: boolean; phone: string | null; photoV: number | null; joinedOn: string; leftOn: string | null }>(
+  `select id, name, phone, joined_on::text as "joinedOn", left_on::text as "leftOn", case when photo is null then null else photo_v end as "photoV", pin_hash is not null as claimed, failed_pin_count as failed, coalesce(locked_until > now(), false) as locked, coalesce(locked_until = 'infinity', false) as "forGood", role = 'manager' as collector, meal_push as "mealPush"
    from members where flat_id = $1 and ${STAYING} order by role = 'manager' desc, name`, [flatId]);
 
 /** A flatmate clears another flatmate's lock (policy of 2026-10-13): the PIN stays, so this can't take an account over. A

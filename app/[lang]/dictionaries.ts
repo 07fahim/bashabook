@@ -406,6 +406,11 @@ const bn = {
     unsupported: 'এই ব্রাউজারে রিমাইন্ডার চলে না।',
     failed: 'রিমাইন্ডার চালু হয়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।',
     ios: 'iPhone বা iPad-এ: Safari-র Share থেকে Add to Home Screen করুন, তারপর হোম স্ক্রিনের বাসাবুক থেকে চালু করুন।',
+    mealOn: 'আজকের মিল বদলের নোটিফিকেশন: চালু',
+    mealOff: 'আজকের মিল বদলের নোটিফিকেশন: বন্ধ',
+    mealMute: 'বন্ধ করুন',
+    mealUnmute: 'চালু করুন',
+    mealHint: 'বন্ধ করলেও টাকা আর বাকি সব রিমাইন্ডার আসবে।',
     mealNames: { b: 'সকালে', l: 'দুপুরে', d: 'রাতে' },
     today: {
       on: '{name} আজ {meal} খাবে',
@@ -1288,6 +1293,11 @@ const en: Dict = {
     unsupported: 'Reminders don’t work in this browser.',
     failed: 'Reminders didn’t turn on. Check your internet and try again.',
     ios: 'On iPhone or iPad: use Safari’s Share, Add to Home Screen, then turn reminders on from the BashaBook on your home screen.',
+    mealOn: 'Notices of changes to today’s meals: on',
+    mealOff: 'Notices of changes to today’s meals: off',
+    mealMute: 'Turn off',
+    mealUnmute: 'Turn on',
+    mealHint: 'Money and every other reminder still come.',
     mealNames: { b: 'breakfast', l: 'lunch', d: 'dinner' },
     today: {
       on: '{name} is eating {meal} today',

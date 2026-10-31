@@ -11,7 +11,7 @@ import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
-import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, emailAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
+import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, emailAction, logoutAction, mealPushAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { InstallApp } from '../install-app';
@@ -283,6 +283,13 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             )}
             <div className="mt-6 border-t border-line pt-6">
               <Reminders lang={lang} t={t.push} />
+              {/* only the today-meal notices: muting them keeps the money ones (turning reminders off would lose both) */}
+              <form action={mealPushAction} className="mt-3">
+                <input type="hidden" name="lang" value={lang} />
+                <input type="hidden" name="on" value={self?.mealPush ? '0' : '1'} />
+                <p className="text-[15px]">{self?.mealPush ? t.push.mealOn : t.push.mealOff} · <button className={`min-h-11 text-[15px] ${link}`}>{self?.mealPush ? t.push.mealMute : t.push.mealUnmute}</button></p>
+                <p className="text-[15px] text-muted">{t.push.mealHint}</p>
+              </form>
             </div>
             <div className="mt-8 border-t border-line pt-6">
               <h3 className="text-lg font-bold">{a.changePin}</h3>

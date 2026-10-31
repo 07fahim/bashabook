@@ -20,7 +20,7 @@ import { addEntry, addRoom, confirmEntry, confirmerOf, endedOpenMonth, monthOf, 
 import { cashAskMsg, depositMsg, fixAskMsg, fixedMsg, gaveAskMsg, handoverMsg, payoutMsg, rejectedMsg, type TodayKind } from '@/lib/notify-text';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
-import { removePush, savePush, type PushSub } from '@/lib/push-db';
+import { removePush, savePush, setMealPush, type PushSub } from '@/lib/push-db';
 import { allow, firstIp } from '@/lib/rate-limit';
 import { type Check, CHECK_COOKIE, checkCode, checkOf, codeOf, CODE_MINUTES, endRecovery, flatsFor, PROVEN_MINUTES, provenEmail, RECOVER_COOKIE, recoverPin, startCheck, startRecovery, takeCheck } from '@/lib/recovery';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
@@ -856,6 +856,13 @@ export async function savePushAction(lang: string, sub: PushSub) {
     // a real P-256 public key: 65 bytes starting 0x04; a made-up key would sit in the table for good, failing every send
     && Buffer.from(sub.keys.p256dh, 'base64url').length === 65 && Buffer.from(sub.keys.p256dh, 'base64url')[0] === 4 && Buffer.from(sub.keys.auth, 'base64url').length === 16;
   if (ok) await savePush(db, me.flatId, me.memberId, { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } });
+}
+
+/** My own setting: notify me of changes to today's meals, or not. Other reminders are untouched. */
+export async function mealPushAction(d: FormData) {
+  const me = await requireMember(langOf(d), true);
+  await setMealPush(db, me.memberId, str(d, 'on') === '1');
+  refresh();
 }
 
 export async function removePushAction(lang: string, endpoint: string) {
