@@ -9,13 +9,14 @@ type State = 'loading' | 'unsupported' | 'ios' | 'denied' | 'off' | 'on' | 'busy
 
 const KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 const toKey = (b64: string) => Uint8Array.from(atob(b64.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(b64.length / 4) * 4, '=')), c => c.charCodeAt(0));
+/** iPhone or iPad (newer iPads say Mac but have touch). */
+export const apple = () => /iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
 const subscription = async () => (await navigator.serviceWorker.getRegistration('/sw.js'))?.pushManager.getSubscription();
 
 /** What this browser can do right now. iPhone or iPad in Safari (not installed) gets the Home Screen hint. A subscription
  *  that already exists is saved again for whoever is signed in now: a shared phone follows the person, not the browser. */
 async function detect(lang: string): Promise<State> {
-  const apple = /iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
-  const ios = apple && !matchMedia('(display-mode: standalone)').matches;
+  const ios = apple() && !matchMedia('(display-mode: standalone)').matches;
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined' || !KEY) return ios ? 'ios' : 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
   const sub = await subscription();

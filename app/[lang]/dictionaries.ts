@@ -339,6 +339,11 @@ const bn = {
       nameUsedSince: 'সে চলে যাওয়ার পর একই নামে আরেকজন এখানে থেকেছে। আলাদা করে চেনার মতো নাম দিয়ে তাকে নতুন করে যোগ করুন।',
     },
   },
+  install: {
+    button: 'অ্যাপটা ইনস্টল করুন',
+    lead: 'ফোনের হোম স্ক্রিন থেকে অন্য অ্যাপের মতোই খুলবে।',
+    ios: 'iPhone-এ অ্যাপ হিসেবে রাখতে: Share চাপুন তারপর Add to Home Screen।',
+  },
   push: {
     on: 'এই ফোনে রিমাইন্ডার: চালু',
     turnOn: 'রিমাইন্ডার চালু করুন',
@@ -1165,6 +1170,11 @@ const en: Dict = {
       sameNameNow: 'Someone living here now has the same name. Fix one of the names first.',
       nameUsedSince: 'Someone with the same name has lived here since they left. Add them as someone new with a name that tells them apart.',
     },
+  },
+  install: {
+    button: 'Install the app',
+    lead: 'It opens from your home screen like any other app.',
+    ios: 'To keep it as an app on iPhone: tap Share then Add to Home Screen.',
   },
   push: {
     on: 'Reminders on this phone: on',
