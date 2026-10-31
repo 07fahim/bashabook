@@ -343,7 +343,7 @@ describe('final review fixes', { timeout: 30000 }, () => {
     await addGuests(db, flatId, ids.Fahim, t, 'l', 2, now);
     // a flatmate changes the guest count after removeGuests' read, before its write
     const change = () => db(`update meal_changes set count = count + 1, guests = 3 where member_id = $1 and date = $2::date and meal = 'l'`, [ids.Fahim, t]);
-    expect(await removeGuests(racing(change), flatId, ids.Fahim, t, 'l', now)).toBe('open');
+    expect(await removeGuests(racing(change), flatId, ids.Fahim, t, 'l', now)).toBe('same');
     expect(await row(ids.Fahim, t)).toEqual({ count: 4, guests: 3 });   // stale read (2 guests): nothing written
   });
 });

@@ -1,5 +1,5 @@
 import { getDictionary, type Locale } from '../app/[lang]/dictionaries';
-import { fmtMonth, fmtTime } from '../app/[lang]/format';
+import { fmtMonth } from '../app/[lang]/format';
 import { MEALS, type Meal } from './meals';
 import type { Msg } from './push';
 
@@ -7,8 +7,6 @@ const t = (lang: Locale) => getDictionary(lang).push;
 const fill = (s: string, v: Record<string, string>) => s.replace(/\{(\w+)\}/g, (_, k) => v[k] ?? '');
 const monthName = (month: string) => fmtMonth(month).split(' ')[0];
 
-export const mealMsg = (lang: Locale, cutoff: string): Msg =>
-  ({ title: fill(t(lang).mealTitle, { time: fmtTime(cutoff.slice(0, 5)) }), body: t(lang).mealBody, url: `/${lang}/meals` });
 /** Every kind of change to today's meals that tells the flat (lib/meal-push). */
 export type TodayKind = 'on' | 'off' | 'guestsAdd' | 'guestsGone' | 'other' | 'changed' | 'away' | 'back' | 'noCook' | 'cookAgain';
 /** A change to today's meals: who changed what in the title, today's plates in the body to pass to the cook (no money). */

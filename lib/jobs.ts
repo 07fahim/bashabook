@@ -2,9 +2,8 @@ import { timingSafeEqual } from 'node:crypto';
 import type { Locale } from '../app/[lang]/dictionaries';
 import { blocksClose } from './bazar';
 import type { Db } from './db';
-import { addDays } from './meals';
 import { monthOf } from './money-db';
-import { checkMsg, closeMsg, lateMsg, mealMsg } from './notify-text';
+import { checkMsg, closeMsg, lateMsg } from './notify-text';
 import { sendPush } from './push';
 
 /** Claims one logical reminder: true for the first caller only (the primary key is the lock). */
@@ -13,30 +12,16 @@ const claim = async (db: Db, flatId: string, date: string, job: string) =>
 
 /** Every 5 minutes from cron-job.org. `now` is Dhaka 'YYYY-MM-DDTHH:MM'. Postgres picks the flats with something due (two
  *  queries for the whole run, however many flats there are); each is then claimed and sent one by one.
- *  Meal: in the hour before the flat's cutoff, to everyone in the flat's meals who still lives there tomorrow (nobody is ever
- *  "unset": they eat their usual meals unless they change them), skipped when nothing is cooked tomorrow. Cutoffs start at
- *  01:00 (settingsAction), so the window never wraps midnight. Close: once per month to the collector, from the
- *  1st at 10:00, for the oldest month still open.
+ *  Close: once per month to the collector, from the 1st at 10:00, for the oldest month still open.
  *  Check: from 21:00, once a day per flat, to each person with bazars or bills to check.
  *  CheckLate: from 21:00, once a day per flat, to everyone living here who claimed their name when a bazar or bill has had
  *  no check for 2 days.
  *  ponytail: each due reminder is three round trips (claim, members, subscriptions), about 0.25 s from Singapore; the route
  *  has 25 s, so ~80 due reminders per run. A pilot has a handful of flats; batch the claims if flats ever reach dozens. */
 export async function runJobs(db: Db, now: string, send: typeof sendPush = sendPush) {
-  const today = now.slice(0, 10), tomorrow = addDays(today, 1), time = now.slice(11);
-  const out = { meal: 0, close: 0, check: 0, sent: 0, gone: 0, failed: 0, receipts: 0, purged: 0, checkLate: 0 };
+  const today = now.slice(0, 10), time = now.slice(11);
+  const out = { close: 0, check: 0, sent: 0, gone: 0, failed: 0, receipts: 0, purged: 0, checkLate: 0 };
   const add = (r: { sent: number; gone: number; failed: number }) => { out.sent += r.sent; out.gone += r.gone; out.failed += r.failed; };
-
-  const meals = await db<{ id: string; cutoff: string; lang: Locale }>(
-    `select id, cutoff_time::text as cutoff, language as lang from flats
-     where $1::time >= cutoff_time - interval '60 minutes' and $1::time < cutoff_time
-       and (select count(*) from no_cook where flat_id = flats.id and date = $2::date) < 3
-       and not exists (select 1 from sent_jobs where flat_id = flats.id and date = $2::date and job_type = 'meal')`, [time, tomorrow]);
-  for (const f of meals) {
-    if (!await claim(db, f.id, tomorrow, 'meal')) continue;
-    const ids = (await db<{ id: string }>(`select id from members where flat_id = $1 and in_meals and joined_on <= $2::date and (left_on is null or left_on >= $2::date)`, [f.id, tomorrow])).map(m => m.id);
-    out.meal++; add(await send(db, ids, { ...mealMsg(f.lang, f.cutoff), ttl: 3600 }));   // after the lock the reminder is noise
-  }
 
   if (time >= '10:00') {
     const closes = await db<{ id: string; lang: Locale; month: string; pending: number; collector: string }>(

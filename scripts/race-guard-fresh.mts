@@ -54,8 +54,8 @@ async function flat() {
   await addEntry(db, flatId, nafis, e({ type: 'bill', amount: 400000, note: 'Rent', split: 'room' }));
   await addEntry(db, flatId, nafis, e({ type: 'bazar', amount: 900000 }));
   await openMonth(db, flatId, `${today.slice(0, 7)}-01`);
-  const [w] = await db<{ b: number; l: number; d: number; cutoff: string }>(
-    `select weight_b as b, weight_l as l, weight_d as d, to_char(cutoff_time, 'HH24:MI') as cutoff from flats where id = $1`, [flatId]);
+  const [w] = await db<{ b: number; l: number; d: number }>(
+    `select weight_b as b, weight_l as l, weight_d as d from flats where id = $1`, [flatId]);
   return { flatId, ids, nafis, big, small, w };
 }
 
@@ -85,8 +85,8 @@ try {
   {
     const f = await flat();
     const W1 = { b: 100, l: 100, d: 100 }, W0 = { b: f.w.b, l: f.w.l, d: f.w.d };
-    const h = hold(tx => updateSettings(tx, f.flatId, f.ids.Nafis, { cutoff: f.w.cutoff, weights: W1 }, NOW, true)); await h.started;
-    const back = updateSettings(db, f.flatId, f.ids.Nafis, { cutoff: f.w.cutoff, weights: W0 }, NOW, false);
+    const h = hold(tx => updateSettings(tx, f.flatId, f.ids.Nafis, { weights: W1 }, NOW, true)); await h.started;
+    const back = updateSettings(db, f.flatId, f.ids.Nafis, { weights: W0 }, NOW, false);
     const w = await waits(back);
     h.release(); await h.done;
     const r = await back;
@@ -111,7 +111,7 @@ try {
       await tx.unsafe(`select 1 from months where flat_id = $1 and month = $2::date for no key update`, [f.flatId, SEP]);
     }).then(() => 'ok', x => String((x as { code?: string }).code ?? x));
     await has;
-    const save = updateSettings(db, f.flatId, f.ids.Nafis, { cutoff: '21:30', weights: { b: f.w.b, l: f.w.l, d: f.w.d } }, NOW, false)
+    const save = updateSettings(db, f.flatId, f.ids.Nafis, { weights: { b: f.w.b, l: f.w.l, d: f.w.d } }, NOW, false)
       .then(r => r, x => String((x as { code?: string }).code ?? x));
     await new Promise(r => setTimeout(r, 800)); step();
     const [l, s] = await Promise.all([ledger, save]);

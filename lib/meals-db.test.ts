@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { addMember, bringBack, createFlat } from './auth';
-import { countChanges, headcount, indexChanges, mealCount, type Meal } from './meals';
+import { bringBack, createFlat } from './auth';
+import { headcount, indexChanges, mealCount, type Meal } from './meals';
 import {
-  addGuests, cancelAway, countAtLock, currentPlates, removeGuests, setOwn, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, seedLock, setAway, setDefaults, toldCook, upcomingAway, updateSettings,
+  addGuests, cancelAway, currentPlates, removeGuests, setOwn, cookAgain, loadHistory, loadMeals, noCooking, saveMeal, setAway, setDefaults, upcomingAway, updateSettings,
 } from './meals-db';
 
 const ALL_OFF = { b: false, l: false, d: false }, ALL_ON = { b: true, l: true, d: true };
-const LATE = '2026-10-31T23:00';   // a moment after every lock in these tests
 
 async function flat() {
   await migrate();
@@ -35,15 +34,18 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(log.map(l => [l.before, l.after.count])).toEqual([[null, 0], [null, 3]]);
   });
 
-  it('turns a change into a save, a late save or nothing', async () => {
+  it('saves later days plainly, today as a same-day change, refuses past days; a repeated tap writes nothing', async () => {
     const { flatId, tahsin, load } = await flat();
     const own = (date: string) => setOwn(db, flatId, tahsin, date, 'd', 0, '2026-10-09T23:00');
     expect(await own('2026-10-11')).toBe('open');
-    expect(await own('2026-10-10')).toBe('late');
-    expect(await own('2026-10-08')).toBe('closed');
-    expect(await own('2026-10-09')).toBe('closed');   // today
+    expect(await own('2026-10-10')).toBe('open');     // tomorrow, even at 11 pm
+    expect(await own('2026-10-09')).toBe('late');     // today
+    expect(await own('2026-10-09')).toBe('same');     // the same tap again
+    expect(await own('2026-10-08')).toBe('closed');   // yesterday
     const { changes } = await load();
-    expect(changes.map(x => [x.date, x.late]).sort()).toEqual([['2026-10-10', true], ['2026-10-11', false]]);
+    expect(changes.map(x => [x.date, x.late]).sort()).toEqual([['2026-10-09', true], ['2026-10-10', false], ['2026-10-11', false]]);
+    const log = await db<{ n: number }>(`select count(*)::int as n from audit_log where flat_id = $1 and entity = 'meal_changes'`, [flatId]);
+    expect(log[0].n).toBe(3);   // the repeated tap left no history line
   });
 
   it('away turns every meal off for the range', async () => {
@@ -102,11 +104,10 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await count('2026-10-10', 'l')).toBe(1);
   });
 
-  it('saves meal weights with the other rules', async () => {
+  it('saves meal weights', async () => {
     const { flatId, memberId, load } = await flat();
-    await updateSettings(db, flatId, memberId, { cutoff: '21:30', weights: { b: 75, l: 100, d: 125 } }, '2026-10-09T10:00');
-    const { flat: f } = await load();
-    expect([f.cutoff, f.weights]).toEqual(['21:30:00', { b: 75, l: 100, d: 125 }]);
+    await updateSettings(db, flatId, memberId, { weights: { b: 75, l: 100, d: 125 } }, '2026-10-09T10:00');
+    expect((await load()).flat.weights).toEqual({ b: 75, l: 100, d: 125 });
   });
 
   it('no-cooking days are closed to members, and cooking again brings usual meals back', async () => {
@@ -148,7 +149,7 @@ describe('meal storage', { timeout: 30000 }, () => {
 
   it('history shows rule changes and can be limited to my meals', async () => {
     const { flatId, memberId, tahsin } = await flat();
-    await updateSettings(db, flatId, memberId, { cutoff: '21:00', weights: { b: 50, l: 100, d: 100 } }, '2026-10-09T10:00');
+    await updateSettings(db, flatId, memberId, { weights: { b: 50, l: 100, d: 100 } }, '2026-10-09T10:00');
     await saveMeal(db, flatId, memberId, { memberId, date: '2026-10-09', meal: 'l', count: 0, guests: 0 }, true);   // Nafis, own, late
     await saveMeal(db, flatId, memberId, { memberId: tahsin, date: '2026-10-09', meal: 'd', count: 0, guests: 0 }, true);
     expect((await loadHistory(db, flatId))[2].entity).toBe('flats');
@@ -293,10 +294,11 @@ describe('meal storage', { timeout: 30000 }, () => {
     // switching my own plate keeps my guests
     await setOwn(db, flatId, tahsin, day, 'd', 1, now);
     expect(await plates('d')).toEqual({ own: 1, guests: 1 });
-    // today: guests can be added but not removed by a member
+    // today: guests can be added and removed by the member, both as same-day changes
     await addGuests(db, flatId, tahsin, '2026-10-09', 'd', 1, now);
-    expect(await removeGuests(db, flatId, tahsin, '2026-10-09', 'd', now)).toBe('closed');
-    expect((await currentPlates(db, flatId, tahsin, '2026-10-09', 'd'))!.guests).toBe(1);
+    expect(await removeGuests(db, flatId, tahsin, '2026-10-09', 'd', now)).toBe('late');
+    expect((await currentPlates(db, flatId, tahsin, '2026-10-09', 'd'))!.guests).toBe(0);
+    expect(await removeGuests(db, flatId, tahsin, '2026-10-08', 'd', now)).toBe('closed');   // yesterday
     expect(memberId).toBeTruthy();
   });
 
@@ -353,123 +355,6 @@ describe('meal storage', { timeout: 30000 }, () => {
     await addGuests(db, flatId, tahsin, '2026-10-14', 'l', 2, '2026-10-09T13:00');
     await setDefaults(db, flatId, tahsin, ALL_OFF, '2026-09-01', '2026-10-10', false);
     expect(await currentPlates(db, flatId, tahsin, '2026-10-14', 'l')).toEqual({ own: 0, guests: 2 });
-  });
-
-  it('keeps the count first seen after the lock, so any later change shows, even a new member', async () => {
-    const { flatId, memberId, load } = await flat();
-    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
-    const first = await hc();
-    expect(await countAtLock(db, flatId, '2026-10-10', first, LATE)).toEqual(first);   // first view saves it
-    await addMember(db, flatId, 'Rafi', '2026-10-10', memberId);                             // no meal row is written for this
-    const now = await hc();
-    expect(now.l).toBe(first.l + 1);
-    expect(await countAtLock(db, flatId, '2026-10-10', now, LATE)).toEqual(first);      // still the first one
-    expect(await countAtLock(db, flatId, '2026-10-11', now, LATE)).toEqual(now);        // a new day starts over
-  });
-
-  it('after the lock, deleted rows count as a change, and a count back at the baseline shows none', async () => {
-    const { flatId, tahsin, load } = await flat();
-    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-12'); };
-    await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');
-    await countAtLock(db, flatId, '2026-10-12', await hc(), LATE);        // first view after the lock
-    await cancelAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');            // deletes Tahsin's rows
-    expect(countChanges(await countAtLock(db, flatId, '2026-10-12', await hc(), LATE), await hc())).toEqual([{ meal: 'b', from: 1, to: 2 }, { meal: 'l', from: 1, to: 2 }, { meal: 'd', from: 1, to: 2 }]);
-    await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-12');               // back to what it was
-    expect(countChanges(await countAtLock(db, flatId, '2026-10-12', await hc(), LATE), await hc())).toEqual([]);
-  });
-
-  it('a change after the lock is flagged even if nobody opened the card first', async () => {
-    const { flatId, tahsin, load } = await flat();
-    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
-    const before = await hc();
-    await seedLock(db, flatId, '2026-10-09T22:05');                                  // what every action runs first
-    await addGuests(db, flatId, tahsin, '2026-10-10', 'l', 1, '2026-10-09T22:05');
-    expect(countChanges(await countAtLock(db, flatId, '2026-10-10', await hc(), LATE), await hc())).toEqual([{ meal: 'l', from: before.l, to: before.l + 1 }]);
-  });
-
-  it('before the lock, seeding saves no baseline', async () => {
-    const { flatId } = await flat();
-    await seedLock(db, flatId, '2026-10-09T21:00');
-    const [f] = await db<{ d: string | null }>(`select lock_date::text as d from flats where id = $1`, [flatId]);
-    expect(f.d).toBeNull();
-  });
-
-  it('telling the cook clears the warning for everyone; a later change shows from the told count', async () => {
-    const { flatId, memberId, tahsin, load } = await flat();
-    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
-    const warn = async () => countChanges(await countAtLock(db, flatId, '2026-10-10', await hc(), LATE), await hc());
-    await seedLock(db, flatId, '2026-10-09T22:05');
-    await addGuests(db, flatId, tahsin, '2026-10-10', 'l', 1, '2026-10-09T22:05');   // 2 → 3
-    expect(await warn()).toEqual([{ meal: 'l', from: 2, to: 3 }]);
-    await toldCook(db, flatId, memberId, '2026-10-10', await hc());
-    expect(await warn()).toEqual([]);
-    await addGuests(db, flatId, tahsin, '2026-10-10', 'l', 1, '2026-10-09T22:10');   // 3 → 4
-    expect(await warn()).toEqual([{ meal: 'l', from: 3, to: 4 }]);
-    // everyone can see who said they told the cook, and which count
-    const h = (await loadHistory(db, flatId)).find(x => x.entity === 'cook')!;
-    expect([h.entity, h.actor, h.after.told, h.after.plates]).toEqual(['cook', 'Nafis', '2026-10-10', { b: 2, l: 3, d: 2 }]);
-  });
-
-  it('a tap from an out-of-date screen changes nothing: no hidden change, no false alarm', async () => {
-    const { flatId, memberId, tahsin, load } = await flat();
-    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
-    await seedLock(db, flatId, '2026-10-09T22:05');
-    await addGuests(db, flatId, tahsin, '2026-10-10', 'l', 1, '2026-10-09T22:05');
-    const seen = await hc();                                                          // Lunch 3 on Nafis's screen
-    await addGuests(db, flatId, tahsin, '2026-10-10', 'l', 1, '2026-10-09T22:06');   // Lunch 4 before the tap
-    expect(await toldCook(db, flatId, memberId, '2026-10-10', seen)).toBe(false);    // the screen showed 3, the count is 4
-    expect(countChanges(await countAtLock(db, flatId, '2026-10-10', await hc(), LATE), await hc())).toEqual([{ meal: 'l', from: 2, to: 4 }]);
-    expect(await toldCook(db, flatId, memberId, '2026-10-10', await hc())).toBe(true);   // Tahsin tells the cook 4
-    expect(await toldCook(db, flatId, memberId, '2026-10-10', seen)).toBe(false);        // Nafis's old screen still shows 3
-    expect(countChanges(await countAtLock(db, flatId, '2026-10-10', await hc(), LATE), await hc())).toEqual([]);   // no false alarm
-    const lines = (await loadHistory(db, flatId)).length;
-    await toldCook(db, flatId, memberId, '2026-10-09', await hc());                            // a date the baseline is not for
-    expect((await loadHistory(db, flatId)).length).toBe(lines);                                 // changes nothing, so no history line
-    expect(countChanges(await countAtLock(db, flatId, '2026-10-10', await hc(), LATE), await hc())).toEqual([]);
-  });
-
-  it('telling the same count twice writes one history line', async () => {
-    const { flatId, memberId, tahsin, load } = await flat();
-    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
-    await seedLock(db, flatId, '2026-10-09T22:05');
-    await addGuests(db, flatId, tahsin, '2026-10-10', 'l', 1, '2026-10-09T22:05');
-    expect(await toldCook(db, flatId, memberId, '2026-10-10', await hc())).toBe(true);
-    expect(await toldCook(db, flatId, memberId, '2026-10-10', await hc())).toBe(false);   // a double tap
-    expect((await loadHistory(db, flatId)).filter(x => x.entity === 'cook')).toHaveLength(1);
-  });
-
-  it('the lock check and the save are one step: before the lock time nothing is saved', async () => {
-    const { flatId, load } = await flat();
-    const { members, changes } = await load();
-    const hc = headcount(members, changes, '2026-10-10');
-    expect(await countAtLock(db, flatId, '2026-10-10', hc, '2026-10-09T21:59')).toEqual(hc);   // no baseline, so no change
-    const [f] = await db<{ d: string | null }>(`select lock_date::text as d from flats where id = $1`, [flatId]);
-    expect(f.d).toBeNull();
-  });
-
-  it('a lock time that reopens tomorrow clears the baseline; one that keeps it locked does not', async () => {
-    const { flatId, memberId } = await flat();
-    const lock = async () => (await db<{ d: string | null }>(`select lock_date::text as d from flats where id = $1`, [flatId]))[0].d;
-    const weights = { b: 50, l: 100, d: 100 };
-    await seedLock(db, flatId, '2026-10-09T22:05');
-    await updateSettings(db, flatId, memberId, { cutoff: '22:00', weights: { ...weights, b: 100 } }, '2026-10-09T22:10');
-    expect(await lock()).toBe('2026-10-10');                                          // weights only
-    await updateSettings(db, flatId, memberId, { cutoff: '21:30', weights }, '2026-10-09T22:10');
-    expect(await lock()).toBe('2026-10-10');                                          // still locked: the cook may already know
-    await updateSettings(db, flatId, memberId, { cutoff: '23:00', weights }, '2026-10-09T22:10');
-    expect(await lock()).toBeNull();                                                  // open again until 11 pm: start over
-    await seedLock(db, flatId, '2026-10-09T22:30');                                   // before the new lock: nothing saved
-    expect(await lock()).toBeNull();
-  });
-
-  it('bringing someone back after the lock shows on the plates card as a change after the lock', async () => {
-    const { flatId, memberId, tahsin, load } = await flat();
-    await db(`update members set left_on = '2026-10-05' where id = $1`, [tahsin]);
-    const hc = async () => { const { members, changes } = await load(); return headcount(members, changes, '2026-10-10'); };
-    await seedLock(db, flatId, '2026-10-09T22:05');                                  // the action runs this first
-    expect(await bringBack(db, flatId, memberId, tahsin, '2026-10-09', '2026-09-01')).toBe('ok');
-    expect(countChanges(await countAtLock(db, flatId, '2026-10-10', await hc(), LATE), await hc()))
-      .toEqual(['b', 'l', 'd'].map(meal => ({ meal, from: 1, to: 2 })));
   });
 
   it('no cooking in the gap: the day stays at no meals; cancelling today’s no cooking gives everyone living here today their meal', async () => {

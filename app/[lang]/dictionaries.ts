@@ -359,8 +359,6 @@ const bn = {
     unsupported: 'এই ব্রাউজারে রিমাইন্ডার চলে না।',
     failed: 'রিমাইন্ডার চালু হয়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।',
     ios: 'iPhone বা iPad-এ: Safari-র Share থেকে Add to Home Screen করুন, তারপর হোম স্ক্রিনের বাসাবুক থেকে চালু করুন।',
-    mealTitle: 'কালকের মিল আজ {time}-এ লক হবে',
-    mealBody: 'যেমন খান তেমনই থাকবে? বদলাতে হলে এখনই বদলান।',
     mealNames: { b: 'সকালে', l: 'দুপুরে', d: 'রাতে' },
     today: {
       on: '{name} আজ {meal} খাবে',
@@ -540,7 +538,6 @@ const bn = {
       monthClosed: 'এই মাস ক্লোজ হয়ে গেছে, তাই এর দিনগুলো আর বদলানো যাবে না।',
       todayAddOnly: 'অন্তত 1 জন অতিথি দিন।',
       tooManyGuests: 'এক বেলায় সর্বোচ্চ 9 জন অতিথি দেওয়া যায়।',
-      awayFrom: 'এর আগের দিনগুলোর মিল লক হয়ে গেছে। ছুটি {d} থেকে দিন।',
       range: 'সর্বোচ্চ 60 দিন বাছতে পারবেন।',
       pickMeal: 'অন্তত একটা বেলা বাছুন।',
     },
@@ -1211,8 +1208,6 @@ const en: Dict = {
     unsupported: 'Reminders don’t work in this browser.',
     failed: 'Reminders didn’t turn on. Check your internet and try again.',
     ios: 'On iPhone or iPad: use Safari’s Share, Add to Home Screen, then turn reminders on from the BashaBook on your home screen.',
-    mealTitle: 'Tomorrow’s meals lock at {time}',
-    mealBody: 'Eating as usual? Change it before then.',
     mealNames: { b: 'breakfast', l: 'lunch', d: 'dinner' },
     today: {
       on: '{name} is eating {meal} today',
@@ -1392,7 +1387,6 @@ const en: Dict = {
       monthClosed: 'That month is closed, so its days can’t be changed anymore.',
       todayAddOnly: 'Add at least 1 guest.',
       tooManyGuests: 'At most 9 guests per meal.',
-      awayFrom: 'Earlier days are locked. Start your time away on {d} or later.',
       range: 'Pick up to 60 days.',
       pickMeal: 'Pick at least one meal.',
     },

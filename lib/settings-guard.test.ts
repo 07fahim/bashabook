@@ -48,9 +48,9 @@ describe('settings changes while an ended month is still open', { timeout: 30000
   it('meal weights: refused without the tick (September food stays ৳2,571.43), a deliberate fix with it (৳2,250)', async () => {
     const { flatId, ids, tahsin } = await flat();
     expect((await tahsin()).foodCost).toBe(257143);
-    expect(await updateSettings(db, flatId, ids.Nafis, { cutoff: '22:00', weights: W1 }, OCT2_NOW, false)).toBe('earlier');
+    expect(await updateSettings(db, flatId, ids.Nafis, { weights: W1 }, OCT2_NOW, false)).toBe('earlier');
     expect((await tahsin()).foodCost).toBe(257143);
-    expect(await updateSettings(db, flatId, ids.Nafis, { cutoff: '22:00', weights: W1 }, OCT2_NOW, true)).toBe('ok');
+    expect(await updateSettings(db, flatId, ids.Nafis, { weights: W1 }, OCT2_NOW, true)).toBe('ok');
     expect((await tahsin()).foodCost).toBe(225000);
     const [h] = await db<{ before: { weights: unknown }; after: { weights: unknown; fixFor?: string[] } }>(
       `select before, after from audit_log where flat_id = $1 and entity_id = 'flat|settings' order by id desc limit 1`, [flatId]);
@@ -65,12 +65,12 @@ describe('settings changes while an ended month is still open', { timeout: 30000
     expect((await loadMonth(db, flatId, SEP, OCT2)).rooms.map(r => r.name)).toEqual(['Big', 'Small']);
   });
 
-  it('not asked when September’s bill can’t change: an October newcomer’s room, a ৳0 room, the lock time alone', async () => {
+  it('not asked when September’s bill can’t change: an October newcomer’s room, a ৳0 room, the same weights again', async () => {
     const { flatId, ids, nafis, big } = await flat();
     const [rafi] = await db<{ id: string }>(`insert into members (flat_id, name, joined_on) values ($1, 'Rafi', '2026-10-03') returning id`, [flatId]);
     expect(await setRoom(db, flatId, nafis, rafi.id, big, fix(false))).toBe(true);
     expect(typeof await addRoom(db, flatId, nafis, 'Box', 0, fix(false))).toBe('string');
-    expect(await updateSettings(db, flatId, ids.Nafis, { cutoff: '21:30', weights: W }, OCT2_NOW, false)).toBe('ok');
+    expect(await updateSettings(db, flatId, ids.Nafis, { weights: W }, OCT2_NOW, false)).toBe('ok');
   });
 
   it('asked even with no rent bill in September yet: one can still be added later (backfill) or put back', async () => {
@@ -110,7 +110,7 @@ describe('settings changes while an ended month is still open', { timeout: 30000
     await checkAll(flatId);
     expect((await closeMonth(db, flatId, nafis, SEP, OCT2, cash(await fund()))).result).toBe('ok');
     expect(await setRoom(db, flatId, nafis, ids.Tahsin, big, fix(false))).toBe(true);
-    expect(await updateSettings(db, flatId, ids.Nafis, { cutoff: '22:00', weights: W1 }, OCT2_NOW, false)).toBe('ok');
+    expect(await updateSettings(db, flatId, ids.Nafis, { weights: W1 }, OCT2_NOW, false)).toBe('ok');
     expect([(await tahsin()).billShare, (await tahsin()).foodCost]).toEqual([50000, 257143]);
   });
 });
