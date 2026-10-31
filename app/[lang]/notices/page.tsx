@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { todayDhaka } from '@/lib/meals';
-import { listNotices, markNoticesSeen, type Notice } from '@/lib/notices';
+import { listNotices, type Notice } from '@/lib/notices';
 import { requireMember } from '@/lib/session';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { fmtWhen } from '../format';
 import { noticeLine } from '../notice-line';
 import { Header } from '../header';
 import { Nav } from '../nav';
+import { SeenNow } from './seen-now';
 import { card, ICONS, insetFocus, LongList, PageSkeleton } from '../ui';
 
 /** Which icon each kind gets; a new kind without one fails to compile. A declined handover gets the wallet, not a tick. */
@@ -23,12 +24,12 @@ async function Body({ params }: Pick<PageProps<'/[lang]/notices'>, 'params'>) {
   const { lang } = await params;
   if (!hasLocale(lang)) notFound();
   const t = getDictionary(lang), me = await requireMember(lang), today = todayDhaka();
-  await markNoticesSeen(db, me.flatId, me.memberId);   // seen first: the bell on this page shows no count
   const rows = (await listNotices(db, me.flatId, me.memberId, me.role === 'manager')).map(n => [n, noticeLine(n, t, lang, today)] as const).filter(([, l]) => l);
   return (
     <>
       <Header t={t} lang={lang} path="/notices" notices={0}><Nav t={t} lang={lang} topic={me.liveTopic} showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-7xl px-5 pt-6 pb-28 md:px-8 md:pb-10">
+        <SeenNow lang={lang} />
         <section className={`${card} md:max-w-2xl`}>
           <h1 className="font-display text-2xl font-bold">{t.notices.title}</h1>
           {rows.length === 0 ? <p className="mt-3 text-muted">{t.notices.empty}</p> : (

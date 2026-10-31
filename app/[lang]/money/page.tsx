@@ -131,7 +131,10 @@ async function MoneyBody({ params, searchParams }: Pick<PageProps<'/[lang]/money
         {closed && <p className="mt-1 text-muted">{x.closedOn.replace('{d}', fmtDay(dhakaDate(mo.info!.closedAt!), lang))}</p>}
         {closed && boss && <a href={`/${lang}/money/export?m=${month.slice(0, 7)}`} download className={`mt-1 inline-flex min-h-11 items-center ${link}`}>{x.exportCsv}</a>}
         {mo.earlierOpen && !closed && (
-          <p role="status" className="mt-4 rounded-2xl bg-paper p-4 font-semibold">{x.notClosedYet.replace('{month}', fmtMonth(mo.earlierOpen)).replace('{name}', collector.name)}</p>
+          <div role="status" className="mt-4 rounded-2xl bg-paper p-4">
+            <p className="font-semibold">{x.notClosedYet.replace('{month}', fmtMonth(mo.earlierOpen)).replace('{name}', collector.name)}</p>
+            <Link href={href(mo.earlierOpen, mine, whoId ?? undefined)} className={`inline-flex min-h-11 items-center gap-2 ${link}`}>{x.seeOpen.replace('{month}', fmtMonth(mo.earlierOpen))} <span aria-hidden="true">→</span></Link>
+          </div>
         )}
 
         {closing && closing.month === month && <div className="mt-6"><CloseCard lang={lang} x={x} c={closing} collector={collector.name} warn={closing.looks.map(l => lookText(t, lang, l))} /></div>}

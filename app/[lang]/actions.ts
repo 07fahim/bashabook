@@ -12,6 +12,7 @@ import { sendEmail } from '@/lib/email';
 import { acceptHandover, cancelHandover, declineHandover, offerHandover, pendingCount } from '@/lib/handover';
 import { addDays, isDate, isMeal, isPresent, MEALS, nowDhaka, todayDhaka, type Meal } from '@/lib/meals';
 import { pushToday } from '@/lib/meal-push';
+import { markNoticesSeen } from '@/lib/notices';
 import {
   addGuests, blockedOn, cancelAway, cookAgain, isInMeals, loadMeals, noCooking, removeGuests, saveMeal, setAway, setDefaults, setOtherMeal, setOwn, updateSettings,
 } from '@/lib/meals-db';
@@ -892,6 +893,12 @@ export async function mealPushAction(_: FormState, d: FormData): Promise<FormSta
   await setMealPush(db, me.memberId, str(d, 'on') === '1');
   refresh();
   return { done: getDictionary(lang).meals.saved };
+}
+
+/** The bell's page was really shown (not just prefetched): its notices are seen. */
+export async function noticesSeenAction(lang: string) {
+  const me = await requireMember(hasLocale(lang) ? lang : 'en');
+  await markNoticesSeen(db, me.flatId, me.memberId);
 }
 
 export async function removePushAction(lang: string, endpoint: string) {

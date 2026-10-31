@@ -196,7 +196,10 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             <h2 className="text-xl font-bold">{x.title}</h2>
             <p className={`mt-1 text-lg font-bold ${bal.tone}`}>{bal.text}</p>
             {/* the balance jumps when the earlier month closes: say why beforehand, as the Money page does */}
-            {mo.earlierOpen && <p className="mt-2 text-[15px] text-muted">{x.notClosedYet.replace('{month}', fmtMonth(mo.earlierOpen)).replace('{name}', starter?.name ?? '')}</p>}
+            {mo.earlierOpen && <>
+              <p className="mt-2 text-[15px] text-muted">{x.notClosedYet.replace('{month}', fmtMonth(mo.earlierOpen)).replace('{name}', starter?.name ?? '')}</p>
+              <Link href={`/${lang}/money?m=${mo.earlierOpen.slice(0, 7)}`} className={`inline-flex min-h-11 items-center gap-2 text-[15px] ${link}`}>{x.seeOpen.replace('{month}', fmtMonth(mo.earlierOpen))} <span aria-hidden="true">→</span></Link>
+            </>}
             {/* the same shape as the plates card beside it: three numbers in tiles, the button at the bottom */}
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
               {([[x.mealRate, fmtRate(mo.result.mealRate, totalMeals)], [x.myMeals, fmtMeals((mo.meals.get(me.memberId) ?? 0) - (mo.guestMeals.get(me.memberId) ?? 0))],

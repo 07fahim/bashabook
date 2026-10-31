@@ -65,7 +65,7 @@ const SOURCES = `
                                                        and coalesce(a.after->'nocook'->>1, a.after->'cookAgain'->>1)::date))`;
 
 export const listNotices = (db: Db, flatId: string, memberId: string, boss: boolean, limit = 50) => db<Notice>(
-  `select at::text as at, kind, actor, amount, date, meal, month, detail, pending from (${SOURCES}) n order by at desc limit $4::int`,
+  `select at::text as at, kind, actor, amount, date, meal, month, detail, pending from (${SOURCES}) n order by pending desc, kind = 'closeMonth' desc, at desc limit $4::int`,
   [flatId, memberId, boss, limit]);
 
 export const noticeCount = async (db: Db, flatId: string, memberId: string, boss: boolean) =>
