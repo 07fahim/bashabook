@@ -325,13 +325,16 @@ export async function bringBack(db: Db, flatId: string, by: string, memberId: st
 /** Sets a one-time PIN: the next sign-in must choose a new one. Every phone is signed out and the flat's history says so.
  *  `by`: the collector resetting a flatmate in the app, or the app team (scripts/reset-collector-pin.mts), which may reset
  *  only the collector living here now and must give a reason. In the app only the collector, never their own PIN, and only
- *  someone living here now. Only PIN fields change: never the role, money or meals. */
+ *  someone living here now. The PIN fields change and the email is cleared (they add it again from Home): a reset is the
+ *  remedy for a stolen name, and an email the thief planted would let them recover the account again. Never the role,
+ *  money or meals. */
 export async function resetPin(db: Db, flatId: string, memberId: string, pin: string, by: { memberId: string } | { admin: string; reason: string }) {
   if (!UUID.test(memberId)) return false;
   const team = 'admin' in by ? by : null;
   if (team && (!team.admin.trim() || !team.reason.trim())) return false;
   const [r] = await db<{ n: number }>(
-    `with m as (update members set pin_hash = $3, must_change_pin = true, failed_pin_count = 0, locked_until = null
+    `with m as (update members set pin_hash = $3, must_change_pin = true, failed_pin_count = 0, locked_until = null,
+         email = null, email_ok = false, email_token = null
        where flat_id = $1 and id = $2 and ${STAYING} and case when $5::text is null
          then id <> $4::uuid and exists (select 1 from members c where c.flat_id = $1 and c.id = $4::uuid and c.role = 'manager')
          else role = 'manager' end returning id),

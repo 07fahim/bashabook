@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { createFlat, createSession, emailOf, login, memberBySession } from './auth';
+import { createFlat, createSession, emailOf, login, memberBySession, resetPin } from './auth';
 import { checkCode, endRecovery, flatsFor, PER_DAY, provenEmail, recoverPin, recoveryOf, startRecovery } from './recovery';
 
 const today = '2026-10-09';
@@ -127,6 +127,18 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     const r = (await startRecovery(db, 'tahsin.moved@gmail.com'))!;
     expect(await checkCode(db, r.token, r.code)).toBe('ok');
     expect((await emailOf(db, tahsin)).ok).toBe(false);
+  });
+
+  it('a PIN reset by the collector removes the email: a thief who planted it can no longer recover the account', async () => {
+    const { flatId, memberId, code, tahsin } = await flat();
+    await login(db, code, tahsin, '5827', null, 'thief@gmail.com');
+    const r = (await startRecovery(db, 'thief@gmail.com'))!;
+    expect(await checkCode(db, r.token, r.code)).toBe('ok');
+    expect(await resetPin(db, flatId, tahsin, '7391', { memberId })).toBe(true);
+    expect((await startRecovery(db, 'thief@gmail.com'))!.send).toBe(false);
+    expect(await flatsFor(db, 'thief@gmail.com')).toEqual([]);
+    expect(await recoverPin(db, r.token, tahsin, '5927')).toBe(false);
+    expect(await emailOf(db, tahsin)).toMatchObject({ ok: false });
   });
 
   it('a double tap on the new PIN works once', async () => {

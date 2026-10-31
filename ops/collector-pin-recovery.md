@@ -6,7 +6,7 @@ working email.
 
 The collector forgot their PIN, or their sign-in is locked. There is no self-service recovery: the app team verifies who is
 asking, then sets a one-time PIN with `scripts/reset-collector-pin.mts`. A flatmate who forgot their PIN doesn't need this:
-the collector resets it on the Flat tab.
+the collector resets it on the Flat tab. A reset also removes the person's email; they add it again from Home.
 
 ## Locks (policy of 2026-10-12)
 
@@ -138,7 +138,8 @@ code on Home (and the phone they used shows Back to the flat on the landing page
    once.
 
    It signs the collector out on every phone, forces a new PIN at the next sign-in, and writes "PIN reset by the
-   BashaBook team" in the flat's history (with your name and the reason stored, not shown). It checks that no month
+   BashaBook team" in the flat's history (with your name and the reason stored, not shown). A reset also removes the
+   person's email; they add it again from Home. It checks that no month
    changed and says so. A `NO` can also mean a flatmate saved an entry at that same moment: look at the flat's history
    before anything else.
 
