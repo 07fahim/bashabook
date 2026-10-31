@@ -858,14 +858,17 @@ export async function recoverSignInAction(_: FormState, d: FormData): Promise<Fo
   redirect(`/${lang}/home`);
 }
 
-/** Step 3, a new PIN: weak ones refused; recoverPin re-checks the proven email and that they still live there. */
+/** Step 3, a new PIN: weak ones refused; counted like a sign-in; recoverPin re-checks the proven email and that they still live there. */
 export async function recoverPinAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), t = getDictionary(lang), e = t.app.errors;
   const pin = pinText(d.get('newPin')), memberId = str(d, 'memberId');
   if (!isPin(pin)) return { error: e.pin };
   if (weakPin(pin)) return { error: e.weakPin };
   if (pin !== pinText(d.get('pin2'))) return { error: e.pinMatch };
-  if (!(await recoverPin(db, await recoverToken(), memberId, pin))) return { error: t.recover.again };
+  if (!(await allow(db, `pin:${await ip()}`, 60))) return { error: e.tooMany };
+  const token = await recoverToken();
+  if (!token || !(await provenEmail(db, token))) return { error: t.recover.again };   // no bcrypt for a step never proven
+  if (!(await recoverPin(db, token, memberId, pin))) return { error: t.recover.again };
   await endStep();
   await startSession(memberId);
   redirect(`/${lang}/home`);
