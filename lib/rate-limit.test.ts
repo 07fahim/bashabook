@@ -18,7 +18,7 @@ describe('per-connection limits on anonymous actions', { timeout: 30000 }, () =>
   });
   it('a day key counts the whole day: an earlier hour of today still counts', async () => {
     await migrate();
-    await db(`insert into rate_limits (key, hour, n) values ('day:test', date_trunc('day', now()), 2)`);
+    await db(`insert into rate_limits (key, hour, n) values ('day:test', date_trunc('day', now(), 'Asia/Dhaka'), 2)`);
     expect(await allow(db, 'day:test', 3, 'day')).toBe(true);
     expect(await allow(db, 'day:test', 3, 'day')).toBe(false);
   });
