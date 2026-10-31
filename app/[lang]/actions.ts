@@ -35,7 +35,8 @@ const ip = async () => firstIp((await headers()).get('x-forwarded-for'));
 /** Sends an email after the response (so a page never waits on it, or shows by its speed whether one went). Three day
  *  budgets, 95 under Resend's free 100 a day: 35 recovery codes, 45 check codes and 15 notices of a PIN or email change.
  *  Anyone can ask for codes with any address, so each kind has its own budget: checks can't starve recovery codes and
- *  neither can silence a notice (sent only after a proven change, so strangers can't drain that budget).
+ *  neither can silence a notice (sent only after a proven change: only someone proving codes from their own inbox can use it up,
+ *  about 15 changes of their own account in a day).
  *  ponytail: a full budget drops mail for the rest of the day; upgrade to a paid Resend plan if real volume nears it. */
 const BUDGET = { recover: 35, check: 45, notice: 15 };
 const mail = (kind: keyof typeof BUDGET, to: string, subject: string, text: string) =>
