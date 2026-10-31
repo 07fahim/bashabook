@@ -5,13 +5,13 @@ import { toCheck } from '@/lib/bazar';
 import { db } from '@/lib/db';
 import { flatMoney, myLatestHandover } from '@/lib/handover';
 import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka, plates, type Meal } from '@/lib/meals';
-import { clearedBefore, listMembers } from '@/lib/auth';
+import { clearedBefore, emailOf, listMembers } from '@/lib/auth';
 import { changedByOthers, countAtLock, loadMeals } from '@/lib/meals-db';
 import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
-import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
+import { acceptHandoverAction, changePinAction, clearLockAction, confirmAgainAction, declineHandoverAction, emailAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { InstallApp } from '../install-app';
@@ -38,16 +38,18 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), a = t.app, m = t.meals;
+  const r = t.recover;
   const noticesP = noticeCount(db, me.flatId, me.memberId, me.role === 'manager');   // the bell's count, read alongside the page
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const [meals, people, mo, waiting, ho, byOthers, iCleared, checks] = await Promise.all([
+  const [meals, people, mo, waiting, ho, byOthers, iCleared, checks, mail] = await Promise.all([
     loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId),
     loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId),
     myLatestHandover(db, me.flatId, me.memberId),
     changedByOthers(db, me.flatId, me.memberId, today),
     clearedBefore(db, me.flatId, me.memberId),
     toCheck(db, me.flatId, me.memberId, today),
+    emailOf(db, me.memberId),
   ]);
   const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
@@ -76,6 +78,19 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
       {/* the person who runs the flat can find the lock time setting from here */}
       {me.role === 'manager' && <> · <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link></>}
     </p>
+  );
+  // the email form: in the Add card while there is no email, else in My account (never both, so its ids, email-hint
+  // included, stay unique)
+  const emailForm = (
+    <ActionForm action={emailAction} className="mt-4" clearOnDone>
+      <input type="hidden" name="lang" value={lang} />
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        {/* keyed on the saved address, so after a save the field shows it as stored */}
+        <Field key={mail.email ?? ''} label={a.email} name="email" type="email" inputMode="email" autoComplete="email" required maxLength={254} hint={a.emailHint} defaultValue={mail.email ?? ''} />
+        <PinField label={a.currentPin} name="pin" autoComplete="current-password" />
+      </div>
+      <button className={`${secondary} sm:w-auto`}>{a.saveEmail}</button>
+    </ActionForm>
   );
 
   return (
@@ -138,6 +153,24 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             <LongList label={m.noticeTitle} keep={3} more={a.showAll.replace('{n}', String(byOthers.length))} less={a.showLess} items={byOthers.map(c => (
               <li key={`${c.date}${c.meal}`} className="py-2">{c.actor} · {fmtDay(c.date, lang)} · {m.names[c.meal]}: {c.own ? m.onOther : m.offOther}</li>
             ))} />
+          </section>
+        )}
+        {/* the email is how a forgotten code or PIN comes back: asked of everyone who joined before it was required */}
+        {!mail.email ? (
+          <section className={`mt-6 ${alertCard}`}>
+            <h2 className="text-xl font-bold">{r.addTitle}</h2>
+            <p className="mt-1 max-w-prose text-[15px] text-muted">{r.addLead}</p>
+            {emailForm}
+          </section>
+        ) : !mail.ok && (
+          <section className={`mt-6 ${card}`}>
+            <h2 className="text-xl font-bold">{r.confirmTitle}</h2>
+            <p className="mt-1 max-w-prose text-[15px] text-muted">{r.confirmLead.replace('{email}', () => mail.email!)}</p>
+            <ActionForm action={confirmAgainAction} className="mt-3">
+              <input type="hidden" name="lang" value={lang} />
+              <button className={`${secondary} sm:w-auto`}>{r.sendAgain}</button>
+            </ActionForm>
+            <p className="mt-2 text-[15px] text-muted">{r.wrongAddress}</p>
           </section>
         )}
         <InstallApp t={t.install} className="mt-6" />
@@ -260,6 +293,13 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
               {/* settings are quiet (outlined): the bright buttons stay for the page's main actions */}
               <button className={`${secondary} sm:w-auto`}>{a.savePhone}</button>
             </ActionForm>
+            {mail.email && (
+              <div className="mt-6 border-t border-line pt-6">
+                <h3 className="text-lg font-bold">{a.email}</h3>
+                <p className="mt-1 text-[15px] text-muted break-all">{mail.email} · {mail.ok ? a.emailOk : a.emailNotOk}</p>
+                {emailForm}
+              </div>
+            )}
             <div className="mt-6 border-t border-line pt-6">
               <Reminders lang={lang} t={t.push} />
             </div>

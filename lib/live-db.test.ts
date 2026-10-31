@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { db, migrate, pg } from '../db/test-db';
-import { createFlat, memberBySession, createSession, newFlatCode } from './auth';
+import { createFlat, memberBySession, createSession, newFlatCode, confirmEmail, confirmLink } from './auth';
 import { openMonth } from './money-db';
 import { markNoticesSeen } from './notices';
 
@@ -64,6 +64,16 @@ describe('live pings (migration 022)', { timeout: 30000 }, () => {
     await markNoticesSeen(db, a.flatId, a.memberId);
     await db(`update members set name = name where flat_id = $1`, [a.flatId]);
     expect(await sent()).toEqual([]);
+  });
+
+  it('sends nothing for an email write (migration 027), but still for a real change made with it', async () => {
+    const a = await mk('Live J');
+    await clear();
+    await db(`update members set email = 'nafis@gmail.com' where id = $1`, [a.memberId]);
+    expect(await confirmEmail(db, (await confirmLink(db, a.memberId))!.token)).toBe(true);
+    expect(await sent()).toEqual([]);
+    await db(`update members set name = 'Nafis R', email = 'nafis2@gmail.com' where id = $1`, [a.memberId]);
+    expect((await sent()).map(s => s.topic)).toEqual([await topicOf(a.flatId)]);
   });
 
   it('still saves the write when the send fails', async () => {

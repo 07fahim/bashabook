@@ -248,8 +248,20 @@ describe('abandoned flats', { timeout: 30000 }, () => {
 describe('rate-limit rows', { timeout: 30000 }, () => {
   it('each run deletes counts older than two hours, so an IP is never kept longer even when nobody visits', async () => {
     await migrate();
-    await db(`insert into rate_limits (key, hour, n) values ('pin:198.51.100.7', date_trunc('hour', now()) - interval '3 hours', 1), ('pin:198.51.100.8', date_trunc('hour', now()), 1)`);
+    await db(`insert into rate_limits (key, hour, n) values ('pin:198.51.100.7', date_trunc('hour', now()) - interval '3 hours', 1), ('pin:198.51.100.8', date_trunc('hour', now()), 1), ('day:mail:code', now() - interval '3 hours', 1)`);
     await runJobs(db, '2026-10-05T12:00', spy().send);
     expect((await db<{ key: string }>(`select key from rate_limits where key like 'pin:198.51.100.%' order by key`)).map(r => r.key)).toEqual(['pin:198.51.100.8']);
+    expect(await db(`select 1 from rate_limits where key = 'day:mail:code'`)).toHaveLength(1);   // a day budget lasts its day
+  });
+});
+
+describe('recovery rows', { timeout: 30000 }, () => {
+  it('each run deletes recovery steps older than a day; a fresh one stays to count codes', async () => {
+    await migrate();
+    await db(`insert into recoveries (token_hash, email, code_hash, expires_at, created_at) values
+      ('sweep-old', 'sweep@gmail.com', 'x', now() - interval '25 hours', now() - interval '25 hours'),
+      ('sweep-new', 'sweep@gmail.com', 'x', now(), now())`);
+    await runJobs(db, '2026-10-05T12:00', spy().send);
+    expect((await db<{ t: string }>(`select token_hash as t from recoveries where email = 'sweep@gmail.com'`)).map(r => r.t)).toEqual(['sweep-new']);
   });
 });

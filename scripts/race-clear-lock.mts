@@ -17,8 +17,8 @@ async function main() {
   const [{ join_code: code }] = await db<{ join_code: string }>(`select join_code from flats where id = $1`, [flatId]);
   const members = (await flatByCode(db, code))!.members;
   const tahsin = members.find(m => m.name === 'Tahsin')!.id, zarif = members.find(m => m.name === 'Zarif')!.id;
-  await login(db, code, tahsin, '5678', null);
-  await login(db, code, zarif, '9999', null);
+  await login(db, code, tahsin, '5678', null, 'x@test.bd');
+  await login(db, code, zarif, '9999', null, 'x@test.bd');
   const state = async () => (await db<{ n: number; lock: string | null; rows: number }>(
     `select failed_pin_count as n, locked_until::text as lock, (select count(*)::int from audit_log where entity_id = m.id::text and after ? 'lockCleared') as rows from members m where id = $1`, [tahsin]))[0];
   const lock = async () => { await db(`update members set failed_pin_count = 25, locked_until = 'infinity' where id = $1`, [tahsin]); await db(`delete from audit_log where entity_id = $1 and after ? 'lockCleared'`, [tahsin]); };
@@ -34,7 +34,7 @@ async function main() {
     await lock();
     const r = await Promise.all([
       ...Array.from({ length: 10 }, () => clearLock(db, flatId, tahsin, zarif)),
-      ...Array.from({ length: 10 }, () => login(db, code, tahsin, '0000', null).then(x => 'error' in x ? x.error : 'in')),
+      ...Array.from({ length: 10 }, () => login(db, code, tahsin, '0000', null, 'x@test.bd').then(x => 'error' in x ? x.error : 'in')),
     ]);
     const s = await state();
     const wrong = r.filter(x => x === 'wrongPin').length;
