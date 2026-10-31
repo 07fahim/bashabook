@@ -105,6 +105,8 @@ export async function runJobs(db: Db, now: string, send: typeof sendPush = sendP
 
   // the privacy page promises an IP in a rate-limit count is kept about 2 hours, even when no visitor triggers allow()'s sweep
   await db(`delete from rate_limits where hour < now() - interval '2 hours'`);
+  // a recovery step lives 15 minutes at most; the row stays a day only to count codes per email
+  await db(`delete from recoveries where created_at < now() - interval '1 day'`);
 
   // A trial nobody came back to: a month old, at most one person claimed a PIN, never a money entry or a meal change, nothing
   // in the history for 30 days. One statement on the database clock (the columns are timestamptz; `now` here is a Dhaka string
