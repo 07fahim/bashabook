@@ -253,3 +253,14 @@ describe('rate-limit rows', { timeout: 30000 }, () => {
     expect((await db<{ key: string }>(`select key from rate_limits where key like 'pin:198.51.100.%' order by key`)).map(r => r.key)).toEqual(['pin:198.51.100.8']);
   });
 });
+
+describe('recovery rows', { timeout: 30000 }, () => {
+  it('each run deletes recovery steps older than a day; a fresh one stays to count codes', async () => {
+    await migrate();
+    await db(`insert into recoveries (token_hash, email, code_hash, expires_at, created_at) values
+      ('sweep-old', 'sweep@gmail.com', 'x', now() - interval '25 hours', now() - interval '25 hours'),
+      ('sweep-new', 'sweep@gmail.com', 'x', now(), now())`);
+    await runJobs(db, '2026-10-05T12:00', spy().send);
+    expect((await db<{ t: string }>(`select token_hash as t from recoveries where email = 'sweep@gmail.com'`)).map(r => r.t)).toEqual(['sweep-new']);
+  });
+});

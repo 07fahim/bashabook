@@ -34,7 +34,7 @@ export async function checkCode(db: Db, token: string, code: string): Promise<'o
   await db(
     `with p as (update recoveries set proven = true, expires_at = now() + interval '${PROVEN_MINUTES} minutes'
        where token_hash = $1 and not proven returning email)
-     update members set email_ok = true, email_token = null where email in (select email from p)`, [hashToken(token)]);
+     update members set email_ok = true, email_token = null where email in (select email from p) and ${STAYING}`, [hashToken(token)]);
   return 'ok';
 }
 
@@ -57,21 +57,23 @@ export const flatsFor = (db: Db, email: string) => db<{ memberId: string; name: 
    where m.email = $1 and ${STAYING} order by f.name, m.name`, [email]);
 
 /** A new PIN for the proven email's own person, still living there, in one statement: the PIN, no one-time PIN, no count,
- *  no lock (a permanent one too: the inbox proved who this is). Every phone of theirs is signed out, the flat's history says
- *  so (by them, "by email") and the step is used up. False when anything doesn't match. */
+ *  no lock (a permanent one too: the inbox proved who this is). Every phone of theirs is signed out and the flat's history
+ *  says so (by them, "by email"). The step is claimed first, under its row lock and only when the member matches (a wrong id
+ *  leaves it usable): a double tap waits on that lock, then finds it retired. False when anything doesn't match. */
 export async function recoverPin(db: Db, token: string, memberId: string, pin: string) {
   if (!UUID.test(memberId)) return false;
   const [r] = await db<{ n: number }>(
-    `with p as (select email from recoveries where token_hash = $1 and proven and expires_at > now()),
+    `with p as (update recoveries r set expires_at = '-infinity' where token_hash = $1 and proven and expires_at > now()
+       and exists (select 1 from members where id = $2 and email = r.email and ${STAYING}) returning email),
      m as (update members set pin_hash = $3, must_change_pin = false, failed_pin_count = 0, locked_until = null
        where id = $2 and email = (select email from p) and ${STAYING} returning id, flat_id),
      s as (delete from sessions where member_id in (select id from m)),
      a as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
-       select flat_id, 'members', id::text, '{"pinReset": true, "email": true}', id from m),
-     d as (delete from recoveries where token_hash = $1 and exists (select 1 from m))
+       select flat_id, 'members', id::text, '{"pinReset": true, "email": true}', id from m)
      select count(*)::int as n from m`, [hashToken(token), memberId, await hashPin(pin)]);
   return r.n > 0;
 }
 
-/** The step is done (signed in) or abandoned (another email). */
-export const endRecovery = (db: Db, token: string) => db(`delete from recoveries where token_hash = $1`, [hashToken(token)]);
+/** The step is done (signed in) or abandoned (another email): retired, not deleted, so it still counts toward PER_DAY until
+ *  the cron sweeps it after a day. '-infinity', not now(): a call whose statement began a moment earlier still sees it ended. */
+export const endRecovery = (db: Db, token: string) => db(`update recoveries set expires_at = '-infinity' where token_hash = $1`, [hashToken(token)]);

@@ -100,6 +100,28 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     expect(await startRecovery(db, 'someone.else@gmail.com')).not.toBeNull();
   });
 
+  it('ending a step does not give back a code: the day cap still counts it', async () => {
+    const email = 'loop.me@gmail.com';
+    for (let i = 0; i < PER_DAY; i++) await endRecovery(db, (await startRecovery(db, email))!.token);
+    expect(await startRecovery(db, email)).toBeNull();
+  });
+
+  it('a moved-out person keeps an unconfirmed email after a right code', async () => {
+    const { code, tahsin } = await flat();
+    await login(db, code, tahsin, '5827', null, 'tahsin.moved@gmail.com');
+    await moveOut(tahsin);
+    const r = (await startRecovery(db, 'tahsin.moved@gmail.com'))!;
+    expect(await checkCode(db, r.token, r.code)).toBe('ok');
+    expect((await emailOf(db, tahsin)).ok).toBe(false);
+  });
+
+  it('a double tap on the new PIN works once', async () => {
+    const a = await flat();
+    const r = (await startRecovery(db, a.email))!;
+    expect(await checkCode(db, r.token, r.code)).toBe('ok');
+    expect((await Promise.all([recoverPin(db, r.token, a.memberId, '5927'), recoverPin(db, r.token, a.memberId, '6038')])).filter(Boolean)).toEqual([true]);
+  });
+
   it('ending a step removes it', async () => {
     const r = (await startRecovery(db, 'end.me@gmail.com'))!;
     await endRecovery(db, r.token);
