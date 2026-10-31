@@ -14,14 +14,14 @@ import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhak
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOtherMeal, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
-import { enDigits, toPoisha } from '@/lib/money';
+import { toPoisha } from '@/lib/money';
 import { addEntry, addRoom, confirmEntry, confirmerOf, endedOpenMonth, monthOf, payDue, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
 import { cashAskMsg, depositMsg, fixAskMsg, fixedMsg, gaveAskMsg, handoverMsg, payoutMsg, rejectedMsg } from '@/lib/notify-text';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
 import { removePush, savePush, type PushSub } from '@/lib/push-db';
 import { allow, firstIp, spent } from '@/lib/rate-limit';
-import { type Check, CHECK_COOKIE, checkCode, checkOf, CODE_MINUTES, endRecovery, flatsFor, PROVEN_MINUTES, provenEmail, RECOVER_COOKIE, recoverPin, startCheck, startRecovery, takeCheck } from '@/lib/recovery';
+import { type Check, CHECK_COOKIE, checkCode, checkOf, codeOf, CODE_MINUTES, endRecovery, flatsFor, PROVEN_MINUTES, provenEmail, RECOVER_COOKIE, recoverPin, startCheck, startRecovery, takeCheck } from '@/lib/recovery';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
@@ -45,6 +45,12 @@ const send = (to: string, subject: string, text: string) => after(() => sendEmai
 /** Counts the budget after the response too: for a recovery code (only a known email gets one) and the PIN-changed notice. */
 const mail = (kind: keyof typeof BUDGET, to: string, subject: string, text: string) =>
   after(async () => { if (await takeMail(kind)) await sendEmail(to, subject, text); });
+/** A code in an email, in two blocks of four for reading ("4829 1736"); the actions keep digits only, so a pasted one works. */
+const spaced = (code: string) => `${code.slice(0, 4)} ${code.slice(4)}`;
+/** 5 codes an hour per connection and email, before the email's own day backstop (lib/recovery PER_DAY): a stranger who
+ *  knows someone's email uses up only their own connection's tries, never the owner's from the owner's phone. An hour key
+ *  (it holds an IP): swept after about 2 hours. */
+const codeAllowed = async (email: string) => allow(db, `code:${await ip()}:${email}`, 5);
 
 /** An email is saved only after a code typed from its inbox proves it: the step waits in this cookie for /check. */
 const checkToken = async () => (await cookies()).get(CHECK_COOKIE)?.value ?? '';
@@ -54,12 +60,12 @@ const keepCheck = async (token: string) =>
  *  one connection can't spend the day's check mail on codes to any address. */
 async function sendCheck(lang: Locale, email: string, purpose: Check, payload: Record<string, unknown>): Promise<FormState> {
   const t = getDictionary(lang), r = t.recover;
-  if (!(await allow(db, `check:${await ip()}`, 10))) return { error: t.app.errors.tooMany };
+  if (!(await allow(db, `check:${await ip()}`, 10)) || !(await codeAllowed(email))) return { error: t.app.errors.tooMany };
   // the address is the person's own: saying no mail goes out today tells nothing about anyone
   if (!(await takeMail('check'))) return { error: r.noMail };
   const c = await startCheck(db, email, purpose, payload);
   if (!c) return { error: t.app.errors.tooMany };
-  send(email, r.checkSubject, r.checkBody.replace('{code}', () => c.code));
+  send(email, r.checkSubject, r.checkBody.replace('{code}', () => spaced(c.code)));
   await keepCheck(c.token);
   redirect(`/${lang}/check`);
 }
@@ -388,8 +394,8 @@ export async function emailAction(_: FormState, d: FormData): Promise<FormState>
 /** The code from a check email: right, the step is taken once and does what it waited for. */
 export async function checkCodeAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), t = getDictionary(lang), r = t.recover;
-  const code = enDigits(str(d, 'code')).replace(/\D/g, '');
-  if (!/^\d{6}$/.test(code)) return { error: r.wrongCode };
+  const code = codeOf(d.get('code'));
+  if (!code) return { error: r.wrongCode };   // not 8 digits: no try used
   const token = await checkToken(), res = await checkCode(db, token, code, 'check');
   if (res === 'expired' || (res !== 'ok' && res.wrong === 0)) return { error: r.expired };
   if (res !== 'ok') return { error: `${r.wrongCode} ${r.left.replace('{n}', () => String(res.wrong))}` };
@@ -895,21 +901,21 @@ export async function forgotEmailAction(_: FormState, d: FormData): Promise<Form
   const lang = langOf(d), t = getDictionary(lang), e = t.app.errors;
   const email = normalizeEmail(d.get('email'));
   if (!email) return { error: e.email };
-  if (!(await allow(db, `forgot:${await ip()}`, 10))) return { error: e.tooMany };
+  if (!(await allow(db, `forgot:${await ip()}`, 10)) || !(await codeAllowed(email))) return { error: e.tooMany };
   // peeked for every email alike (only a known one is counted, after): the screen stays the same for known and unknown
   if (await spent(db, 'day:mail:recover', BUDGET.recover, 'day')) return { error: t.recover.noMail };
   const r = await startRecovery(db, email);
   if (!r) return { error: e.tooMany };
   await keepStep(r.token);
-  if (r.send) mail('recover', email, t.recover.codeSubject, t.recover.codeBody.replace('{code}', () => r.code));
+  if (r.send) mail('recover', email, t.recover.codeSubject, t.recover.codeBody.replace('{code}', () => spaced(r.code)));
   redirect(`/${lang}/forgot`);
 }
 
-/** Step 2: the 6 digits (Bangla digits too; a pasted "code: 123456" works). Proven: the cookie lives as long as the step. */
+/** Step 2: the 8 digits (Bangla digits too; a pasted "code: 4829 1736" works). Proven: the cookie lives as long as the step. */
 export async function forgotCodeAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), r = getDictionary(lang).recover;
-  const code = enDigits(str(d, 'code')).replace(/\D/g, '');
-  if (!/^\d{6}$/.test(code)) return { error: r.wrongCode };
+  const code = codeOf(d.get('code'));
+  if (!code) return { error: r.wrongCode };   // not 8 digits: no try used
   const token = await recoverToken(), res = await checkCode(db, token, code, 'recover');
   if (res === 'expired' || (res !== 'ok' && res.wrong === 0)) return { error: r.expired };
   if (res !== 'ok') return { error: `${r.wrongCode} ${r.left.replace('{n}', () => String(res.wrong))}` };

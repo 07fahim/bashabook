@@ -20,11 +20,11 @@ async function main() {
   let failed = 0;
   const check = (label: string, ok: boolean, detail: unknown) => { if (!ok) failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}  ${JSON.stringify(detail)}`); };
   try {
-    // the day cap is 5 codes per email: two rounds of each race fit, and the rows are cleared between rounds
+    // the rows are cleared between rounds, so the day backstop (PER_DAY codes per email) never gets in the way
     for (let round = 1; round <= 2; round++) {
       await db(`delete from recoveries where email = $1`, [email]);
       const a = (await startRecovery(db, email))!;
-      const wrong = a.code === '000000' ? '000001' : '000000';
+      const wrong = a.code === '00000000' ? '00000001' : '00000000';
       const seen: Record<string, number> = {};
       for (const r of await Promise.all(Array.from({ length: 20 }, () => checkCode(db, a.token, wrong, 'recover')))) {
         const k = typeof r === 'string' ? r : `wrong:${r.wrong}`;

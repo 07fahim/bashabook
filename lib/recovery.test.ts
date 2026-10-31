@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat, createSession, emailOf, login, memberBySession, resetPin } from './auth';
-import { checkCode, checkOf, endRecovery, flatsFor, PER_DAY, provenEmail, recoverPin, recoveryOf, startCheck, startRecovery, takeCheck } from './recovery';
+import { checkCode, checkOf, codeOf, endRecovery, flatsFor, PER_DAY, provenEmail, recoverPin, recoveryOf, startCheck, startRecovery, takeCheck } from './recovery';
 
 const today = '2026-10-09';
 let n = 0;
@@ -16,14 +16,14 @@ async function flat() {
 }
 /** Someone who lived here earlier this year and has moved out. */
 const moveOut = (memberId: string) => db(`update members set joined_on = '2026-01-01', left_on = '2026-02-01' where id = $1`, [memberId]);
-const other = (code: string) => (code === '000000' ? '000001' : '000000');
+const other = (code: string) => (code === '00000000' ? '00000001' : '00000000');
 
 describe('recovery by email code', { timeout: 30000 }, () => {
   it('sends only to an email someone living in a flat has, but makes the same row for any email', async () => {
     const { email } = await flat();
     const known = (await startRecovery(db, email))!;
     expect(known.send).toBe(true);
-    expect(known.code).toMatch(/^\d{6}$/);
+    expect(known.code).toMatch(/^\d{8}$/);
     const unknown = (await startRecovery(db, 'nobody@gmail.com'))!;
     expect(unknown.send).toBe(false);
     expect(await recoveryOf(db, unknown.token)).toEqual({ email: 'nobody@gmail.com', proven: false });
@@ -109,7 +109,8 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     expect(await recoverPin(db, r.token, tahsin, '5927')).toBe(false);
   });
 
-  it(`at most ${PER_DAY} codes per email in 24 hours; another email is separate`, async () => {
+  it(`at most ${PER_DAY} codes per email in 24 hours, a backstop against many connections; another email is separate`, async () => {
+    expect(PER_DAY).toBe(100);   // 100 codes x 5 tries = 500 guesses a day at 100 million codes
     const { email } = await flat();
     for (let i = 0; i < PER_DAY; i++) expect(await startRecovery(db, email)).not.toBeNull();
     expect(await startRecovery(db, email)).toBeNull();
@@ -148,12 +149,29 @@ describe('recovery by email code', { timeout: 30000 }, () => {
   });
 });
 
+describe('the typed code', () => {
+  it('is 8 digits: spaces, a pasted label and Bangla digits are fine; 6 digits are refused before any try', async () => {
+    expect(codeOf('48291736')).toBe('48291736');
+    expect(codeOf('4829 1736')).toBe('48291736');
+    expect(codeOf('code: 4829-1736')).toBe('48291736');
+    expect(codeOf('৪৮২৯১৭৩৬')).toBe('48291736');
+    for (const v of ['482917', '4829173', '482917360', '', null]) expect(codeOf(v)).toBeNull();
+  });
+
+  it('an 8-digit code proves the step', async () => {
+    await migrate();
+    const c = (await startCheck(db, 'eight.digits@gmail.com', 'new', {}))!;
+    expect(codeOf(`${c.code.slice(0, 4)} ${c.code.slice(4)}`)).toBe(c.code);
+    expect(await checkCode(db, c.token, codeOf(`${c.code.slice(0, 4)} ${c.code.slice(4)}`)!, 'check')).toBe('ok');
+  });
+});
+
 describe('checking an email before it is saved', { timeout: 30000 }, () => {
   it('a check step carries its purpose and payload: tries count, the right code proves it, takeCheck hands the payload over once', async () => {
     await migrate();
     const payload = { memberId: 'm-1', pinHash: '$2a$10$hash' };
     const c = (await startCheck(db, 'new.one@gmail.com', 'email', payload))!;
-    expect(c.code).toMatch(/^\d{6}$/);
+    expect(c.code).toMatch(/^\d{8}$/);
     expect(await checkOf(db, c.token)).toEqual({ email: 'new.one@gmail.com', purpose: 'email', payload });
     expect(await takeCheck(db, c.token)).toBeNull();   // not proven yet
     expect(await checkCode(db, c.token, other(c.code), 'check')).toEqual({ wrong: 4 });
