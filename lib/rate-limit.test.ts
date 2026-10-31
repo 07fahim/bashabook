@@ -16,6 +16,19 @@ describe('per-connection limits on anonymous actions', { timeout: 30000 }, () =>
     await allow(db, 'new:9.9.9.9', 5);
     expect(await db(`select 1 from rate_limits where key = 'old:1.1.1.1'`)).toEqual([]);
   });
+  it('a day key counts the whole day: an earlier hour of today still counts', async () => {
+    await migrate();
+    await db(`insert into rate_limits (key, hour, n) values ('day:test', date_trunc('day', now()), 2)`);
+    expect(await allow(db, 'day:test', 3, 'day')).toBe(true);
+    expect(await allow(db, 'day:test', 3, 'day')).toBe(false);
+  });
+  it('the sweep keeps a day row until its day is over, never an hour row past two hours', async () => {
+    await migrate();
+    await db(`insert into rate_limits (key, hour, n) values ('day:today', now() - interval '3 hours', 1),
+      ('day:old', now() - interval '3 days', 1), ('hr:1.1.1.1', date_trunc('hour', now()) - interval '3 hours', 1)`);
+    await allow(db, 'new:9.9.9.9', 5);
+    expect((await db<{ key: string }>(`select key from rate_limits where key in ('day:today', 'day:old', 'hr:1.1.1.1')`)).map(r => r.key)).toEqual(['day:today']);
+  });
   it('reads the client from the first forwarded address, or unknown', () => {
     expect(firstIp('203.0.113.9, 10.0.0.1')).toBe('203.0.113.9');
     expect(firstIp('203.0.113.9')).toBe('203.0.113.9');

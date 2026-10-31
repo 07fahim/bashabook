@@ -32,11 +32,13 @@ const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLo
 /** Anonymous actions are counted per connection and hour (lib/rate-limit): a script can't burn the database. */
 const ip = async () => firstIp((await headers()).get('x-forwarded-for'));
 
-/** Sends an email after the response (so a page never waits on it, or shows by its speed whether one went).
- *  ponytail: the global 40 an hour only bounds bursts; Resend's free plan refuses past 100 a day and sendEmail then logs
- *  and drops. Upgrade to a paid Resend plan or add a day counter if real volume nears 100 a day. */
-const mail = (to: string, subject: string, text: string) =>
-  after(async () => { if (await allow(db, 'mail', 40)) await sendEmail(to, subject, text); });
+/** Sends an email after the response (so a page never waits on it, or shows by its speed whether one went). Two day
+ *  budgets that together stay under Resend's free 100 a day: 35 recovery codes and 60 confirmation links. Anyone can ask
+ *  for confirmations with any address, so they have their own budget and can't starve the codes.
+ *  ponytail: a full budget drops mail for the rest of the day; upgrade to a paid Resend plan if real volume nears it. */
+const BUDGET = { code: 35, confirm: 60 };
+const mail = (kind: keyof typeof BUDGET, to: string, subject: string, text: string) =>
+  after(async () => { if (await allow(db, `day:mail:${kind}`, BUDGET[kind], 'day')) await sendEmail(to, subject, text); });
 
 /** A new confirmation link for my email, mailed in the page's language; 3 an hour per person, counted before the token
  *  turns over so a capped call leaves the last link working. 'none' when nothing waits for confirmation. */
@@ -45,7 +47,7 @@ async function sendConfirm(memberId: string, lang: Locale): Promise<'sent' | 'no
   const c = await confirmLink(db, memberId);
   if (!c) return 'none';
   const r = getDictionary(lang).recover;
-  mail(c.email, r.confirmSubject, r.confirmBody.replace('{name}', () => c.name).replace('{link}', () => `${siteUrl()}/${lang}/confirm/${c.token}`));
+  mail('confirm', c.email, r.confirmSubject, r.confirmBody.replace('{name}', () => c.name).replace('{link}', () => `${siteUrl()}/${lang}/confirm/${c.token}`));
   return 'sent';
 }
 
@@ -817,7 +819,7 @@ export async function forgotEmailAction(_: FormState, d: FormData): Promise<Form
   const r = await startRecovery(db, email);
   if (!r) return { error: e.tooMany };
   await keepStep(r.token);
-  if (r.send) mail(email, t.recover.codeSubject.replace('{code}', r.code), t.recover.codeBody.replace('{code}', r.code));
+  if (r.send) mail('code', email, t.recover.codeSubject.replace('{code}', r.code), t.recover.codeBody.replace('{code}', r.code));
   redirect(`/${lang}/forgot`);
 }
 
