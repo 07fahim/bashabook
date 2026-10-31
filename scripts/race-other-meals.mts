@@ -52,7 +52,6 @@ async function flat() {
   const f = await createFlat(db, { flatName: `Race meals ${++n}`, name: 'Nafis', pin: String(1000 + Math.floor(Math.random() * 9000)), others: ['Fahim', 'Tahsin', 'Zarif'], today: '2026-09-01', lang: 'en' });
   const flatId = f.flatId;
   await db(`update members set pin_hash = 'x' where flat_id = $1 and pin_hash is null`, [flatId]);
-  await db(`update flats set cutoff_time = '23:59:59' where id = $1`, [flatId]);
   await db(`insert into months (flat_id, month) values ($1, '2026-09-01'), ($1, '2026-10-01'), ($1, '2026-11-01') on conflict do nothing`, [flatId]);
   const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [flatId])).map(m => [m.name, m.id])) as Record<'Nafis' | 'Fahim' | 'Tahsin' | 'Zarif', string>;
   return {

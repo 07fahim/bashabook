@@ -102,7 +102,7 @@ try {
     check('rent: saving the rent it already has is not asked and writes nothing', await setRent(db, f.flatId, f.nafis, f.small, 150000, fix(false)) === false);
   }
   {
-    // lock order: a ledger write dated September locks the flat, then September (migration 011). A lock-time-only save at
+    // lock order: a ledger write dated September locks the flat, then September (migration 011). A save of the same weights at
     // the same moment must take the flat first too, or the two deadlock.
     const f = await flat();
     let step!: () => void; const go = new Promise<void>(r => (step = r)); let locked!: () => void; const has = new Promise<void>(r => (locked = r));
@@ -115,7 +115,7 @@ try {
       .then(r => r, x => String((x as { code?: string }).code ?? x));
     await new Promise(r => setTimeout(r, 800)); step();
     const [l, s] = await Promise.all([ledger, save]);
-    check('lock order: a lock-time-only save and a September ledger write at the same moment both finish (no deadlock)', l === 'ok' && s === 'ok', { l, s });
+    check('lock order: a same-weights save and a September ledger write at the same moment both finish (no deadlock)', l === 'ok' && s === 'ok', { l, s });
   }
 } catch (x) {
   check('no errors', false, String(x));

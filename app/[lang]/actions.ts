@@ -115,8 +115,10 @@ const plates = (v: string) => (/^\d{1,2}$/.test(v) && Number(v) <= 10 ? Number(v
 /** Today up to 60 days ahead. */
 const inRange = (date: string) => isDate(date) && date >= todayDhaka() && date <= addDays(todayDhaka(), 60);
 /** A change to today's meals tells everyone else in the flat, after the response (lib/meal-push). */
-const tellToday = (me: { flatId: string; memberId: string }, kind: TodayKind, v: { who?: string; meals: Meal[] }) =>
-  after(() => pushToday(db, me.flatId, me.memberId, todayDhaka(), kind, v));
+const tellToday = (me: { flatId: string; memberId: string }, kind: TodayKind, v: { who?: string; meals: Meal[] }) => {
+  const today = todayDhaka();   // the day the action decided on, even if the push goes out after midnight
+  after(() => pushToday(db, me.flatId, me.memberId, today, kind, v));
+};
 
 /** A meal chip tap. The chip sends the count it wants; repeating the tap is harmless (nothing written, nobody told). */
 export async function setMealAction(d: FormData) {
@@ -263,8 +265,8 @@ export async function noCookCancelAction(d: FormData) {
   const date = str(d, 'date'), meals = str(d, 'meals').split(',').filter(isMeal);
   // today or later, as the screen offers: a past day was already cooked (or not), and un-blocking it would rewrite everyone's meals
   if (editable(date, await openFrom(db, me.flatId, todayDhaka())) && date >= todayDhaka() && meals.length) {
-    await unlessClosed(() => cookAgain(db, me.flatId, me.memberId, date, date, meals, date));
-    if (date === todayDhaka()) tellToday(me, 'cookAgain', { meals });
+    const r = await unlessClosed(() => cookAgain(db, me.flatId, me.memberId, date, date, meals, date));
+    if (r !== 'closed' && date === todayDhaka()) tellToday(me, 'cookAgain', { meals });
   }
   refresh();
 }

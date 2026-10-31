@@ -24,7 +24,8 @@ describe('meal storage', { timeout: 30000 }, () => {
   it('saves a change with an audit row and moves the headcount', async () => {
     const { flatId, tahsin, load } = await flat();
     expect(headcount((await load()).members, [], '2026-10-10')).toEqual({ b: 2, l: 2, d: 2 });
-    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-10', meal: 'l', count: 0, guests: 0 }, false);
+    expect(await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-10', meal: 'l', count: 0, guests: 0 }, false)).toBe(true);
+    expect(await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-10', meal: 'l', count: 0, guests: 0 }, false)).toBe(false);   // the same again: nothing written, nobody told
     await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-10', meal: 'd', count: 3, guests: 2 }, true);
     const { members, changes } = await load();
     expect(headcount(members, changes, '2026-10-10')).toEqual({ b: 2, l: 1, d: 4 });
