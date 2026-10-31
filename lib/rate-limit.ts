@@ -1,7 +1,7 @@
 import type { Db } from './db';
 
 /** Old counts to delete: an hour row after two hours (it can hold an IP; the privacy page says about 2 hours), a day row
- *  ('day:' keys, never an IP) once its day is over. Shared with the cron's sweep (lib/jobs). */
+ *  ('day:' keys, never an IP) two days after its day began, so it counts its whole day. Shared with the cron's sweep (lib/jobs). */
 export const SWEEP = `delete from rate_limits where (hour < now() - interval '2 hours' and key not like 'day:%') or hour < now() - interval '2 days'`;
 
 /** Counts one more try of `key` in the current hour (or day: its key must start 'day:' so the sweep keeps it all day);
