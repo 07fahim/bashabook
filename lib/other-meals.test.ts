@@ -42,6 +42,10 @@ describe('changing a flatmate’s meals', { timeout: 30000 }, () => {
     expect(await set(ids.Tahsin, ids.Fahim, await day(1), 0, 1)).toBe('ok');
     const late = async (d: string) => (await db<{ late: boolean }>(`select late from meal_changes where member_id = $1 and date = $2::date and meal = 'l'`, [ids.Fahim, d]))[0].late;
     expect([await late(today), await late(await day(1))]).toEqual([true, false]);
+    // a row saved earlier (not late) switched today becomes a same-day change too
+    await db(`update meal_changes set late = false where member_id = $1 and date = $2::date`, [ids.Fahim, today]);
+    expect(await set(ids.Tahsin, ids.Fahim, today, 1, 0)).toBe('ok');
+    expect(await late(today)).toBe(true);
   });
 
   it('refused: a past day, past 60 days, no cooking, oneself, a non-member, someone not eating or not living here', async () => {
