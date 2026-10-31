@@ -16,6 +16,7 @@ import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { InstallApp } from '../install-app';
 import { Reminders } from '../reminders';
+import { RememberFlat } from '../remember-flat';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka, fmtTaka2, fmtTime } from '../format';
 import { Header } from '../header';
@@ -66,6 +67,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   const plate = (h: typeof hc, date: string, x: Meal) => { const p = plates(h, meals.noCook, date, x); return p === 'off' ? m.noCook : p; };
   // only after the lock does a change matter: before it, the card already says the count can still move
   const changes = decision === 'open' ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, hc, now), hc);
+  const [codeBefore, codeAfter] = a.codeKeep.split('{code}');
   const status = decision === 'open' ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
   // under the week chart it has to say which day; in the phone card the heading already says tomorrow
   const lockLine = (wide: boolean) => (
@@ -80,6 +82,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
     <>
       <Header t={t} lang={lang} path="/home" notices={await noticesP}><Nav t={t} lang={lang} topic={me.liveTopic} current="home" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
+        <RememberFlat code={me.joinCode} name={me.flatName} />
         {why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{a.notSavedNote}</p>}
         <p className="text-muted">{me.flatName}</p>
         <div className="flex items-center gap-3">
@@ -279,6 +282,10 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
           <input type="hidden" name="lang" value={lang} />
           <button className={`inline-flex min-h-11 items-center text-muted underline-offset-4 hover:underline ${focus}`}>{a.logout}</button>
         </form>
+        {/* seen before leaving: the code is what brings you back */}
+        <p className="text-[15px] text-muted">
+          {codeBefore}<span className="font-bold tracking-widest text-ink">{me.joinCode}</span>{codeAfter}
+        </p>
       </main>
     </>
   );

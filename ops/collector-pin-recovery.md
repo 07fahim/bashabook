@@ -47,6 +47,25 @@ app are checked against the verified numbers in the log, never trusted on their 
 Why numbers and not faces: the app team doesn't know anyone's face, so meeting someone or seeing them on video proves
 nothing by itself. What proves identity is a flatmate reached on their own verified number, whose phone wasn't lost.
 
+## Lost flat code
+
+Someone signed out and lost the flat code. First ask them to check with anyone in the flat: every signed-in person sees the
+code on Home (and the phone they used shows Back to the flat on the landing page). Only when nobody can:
+
+1. Ask the flat's name and the collector's name. Run (read-only)
+   `node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/find-flat.mts "<flat name part>" "<collector name part>"`.
+2. Verify before telling the code: call back a saved number the script prints (the asker's own or the collector's) and
+   tell the code by voice on that call. Never a number the person gives you now. Knowing names is never enough: with the
+   code anyone gets 25 PIN guesses per name and can lock everyone out, and anyone with the code can claim a name the
+   script marks not joined yet and set its PIN.
+3. No saved number to call: a flatmate who is signed in passes the code on in person (they see it on Home under Sign out).
+4. No saved number and nobody else in the flat has joined: the team can't tell who is asking, so don't tell the code. They
+   start a new flat with Create a flat. An empty trial flat (at most one person joined, no money entries, no meal changes,
+   no history for 30 days) is removed on its own after a month. Suggest they save a mobile number on Home (My account) in
+   the new flat so a call-back works next time.
+5. They forgot the PIN too: a flatmate's PIN is reset by the collector on the Flat tab; the collector's PIN follows Steps
+   below.
+
 ## Never
 
 - Never ask for, or accept, the old PIN. Nobody can read it; it is stored only as a hash.
@@ -65,7 +84,7 @@ nothing by itself. What proves identity is a flatmate reached on their own verif
 ## Steps
 
 1. **Request.** The collector writes to the published BashaBook WhatsApp (or email) with the flat's name and join code
-   (every flatmate can see the code on the Flat tab). Note who asked, from which number, and when. If that number is not
+   (every flatmate can see the code on Home under Sign out). Note who asked, from which number, and when. If that number is not
    the collector's verified number, treat it as a warning: the checks below decide, not the message.
 
 2. **Dry run.** It changes nothing and shows the flat, the collector's name, how many phones they are signed in on, the
@@ -75,7 +94,8 @@ nothing by itself. What proves identity is a flatmate reached on their own verif
    node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/reset-collector-pin.mts <join code> "<collector name>" "<reason>" "<your name>"
    ```
 
-   Check the first line says the production database (`ep-noisy-forest-…`), and that the name asking is the collector shown.
+   Check the first line shows the production user name `postgres.ccmueosbxifibfbigowg` and that the name asking is the
+   collector shown.
 
 3. **Choose the check.** Use 4a only if none of these is true; if any is, use 4b:
    - the collector has no verified number in the log, can't be reached on it, or its saved number in the app differs;
@@ -126,4 +146,4 @@ nothing by itself. What proves identity is a flatmate reached on their own verif
 
 ## Tested
 
-Run on a disposable flat on the Neon test copy before relying on it: see the PR that added this file.
+Run on a disposable flat on the TEST Supabase project (bashabook-test) before relying on it: see the PR that added this file.

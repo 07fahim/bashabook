@@ -28,11 +28,13 @@ export async function currentMember() {
 }
 
 /** The logged-in member. flatId comes only from here, never from the URL or a form. */
-/** `why`: from a Server Action, so the page it lands on can say the typed data wasn't saved (a page load says nothing). */
+/** `why`: from a Server Action, so the sign-in page it lands on can say the typed data wasn't saved (a page load goes to the landing page). */
 export async function requireMember(lang: string, why = false) {
   const token = (await cookies()).get(COOKIE)?.value;
   const me = token ? await memberBySession(db, token) : null;
-  if (!me) redirect(`/${lang}/join${why ? '?why=out' : ''}`);
+  // a page opened signed out (the app icon, a bookmark) goes to the landing page: its first screen has Create a flat, Sign
+  // in and Back to the flat; a save that found the session gone goes to sign-in with the note that nothing was saved
+  if (!me) redirect(why ? `/${lang}/join?why=out` : `/${lang}`);
   return me;
 }
 
