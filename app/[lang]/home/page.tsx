@@ -11,7 +11,7 @@ import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
-import { acceptHandoverAction, changePinAction, clearLockAction, confirmAgainAction, declineHandoverAction, emailAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
+import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, emailAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { InstallApp } from '../install-app';
@@ -34,7 +34,7 @@ export default function Home({ params, searchParams }: PageProps<'/[lang]/home'>
 
 async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>, 'params' | 'searchParams'>) {
   const { lang } = await params;
-  const { why, cleared } = await searchParams;
+  const { why, cleared, email } = await searchParams;
   if (!hasLocale(lang)) notFound();
   const me = await requireMember(lang);
   const t = getDictionary(lang), a = t.app, m = t.meals;
@@ -99,6 +99,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         <RememberFlat code={me.joinCode} name={me.flatName} />
         {why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{a.notSavedNote}</p>}
+        {email === 'saved' && <p role="status" className="mb-4 font-semibold text-leaf">{a.emailSaved}</p>}
         <p className="text-muted">{me.flatName}</p>
         <div className="flex items-center gap-3">
           <Avatar id={me.memberId} name={me.name} v={self?.photoV ?? null} size={48} />
@@ -156,21 +157,11 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
           </section>
         )}
         {/* the email is how a forgotten code or PIN comes back: asked of everyone who joined before it was required */}
-        {!mail.email ? (
+        {!mail.email && (
           <section className={`mt-6 ${alertCard}`}>
             <h2 className="text-xl font-bold">{r.addTitle}</h2>
             <p className="mt-1 max-w-prose text-[15px] text-muted">{r.addLead}</p>
             {emailForm}
-          </section>
-        ) : !mail.ok && (
-          <section className={`mt-6 ${card}`}>
-            <h2 className="text-xl font-bold">{r.confirmTitle}</h2>
-            <p className="mt-1 max-w-prose text-[15px] text-muted">{r.confirmLead.replace('{email}', () => mail.email!)}</p>
-            <ActionForm action={confirmAgainAction} className="mt-3">
-              <input type="hidden" name="lang" value={lang} />
-              <button className={`${secondary} sm:w-auto`}>{r.sendAgain}</button>
-            </ActionForm>
-            <p className="mt-2 text-[15px] text-muted">{r.wrongAddress}</p>
           </section>
         )}
         <InstallApp t={t.install} className="mt-6" />
@@ -296,7 +287,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             {mail.email && (
               <div className="mt-6 border-t border-line pt-6">
                 <h3 className="text-lg font-bold">{a.email}</h3>
-                <p className="mt-1 text-[15px] text-muted break-all">{mail.email} · {mail.ok ? a.emailOk : a.emailNotOk}</p>
+                <p className="mt-1 text-[15px] text-muted break-all">{mail.email}</p>
                 {emailForm}
               </div>
             )}

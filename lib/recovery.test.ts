@@ -58,7 +58,10 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     const { email, memberId, code, flatName } = await flat();
     const r = (await startRecovery(db, email))!;
     expect(await provenEmail(db, r.token)).toBeNull();
+    const before = await db(`select * from members where id = $1`, [memberId]);
     expect(await checkCode(db, r.token, r.code, 'recover')).toBe('ok');
+    expect(await db(`select * from members where id = $1`, [memberId])).toEqual(before);   // proving changes no member: the email stays
+    expect(await emailOf(db, memberId)).toEqual({ email });
     expect(await recoveryOf(db, r.token)).toEqual({ email, proven: true });
     expect(await provenEmail(db, r.token)).toBe(email);
     expect(await flatsFor(db, email)).toEqual([{ memberId, name: 'Nafis', flatName, code }]);

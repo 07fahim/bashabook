@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 import { todayDhaka } from '@/lib/meals';
 import { allow, firstIp } from '@/lib/rate-limit';
 import { ActionForm } from '../../action-form';
-import { loginAction } from '../../actions';
+import { claimAction, loginAction } from '../../actions';
 import { getDictionary, hasLocale } from '../../dictionaries';
 import { ForgotCode } from '../../forgot-code';
 import { fmtDay } from '../../format';
@@ -77,7 +77,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
               <p className="mt-2 text-muted">{!me.claimed ? a.setPinLead : me.must_change_pin ? a.changePinLead : a.enterPinLead}</p>
             </div>
             <div>
-            <ActionForm action={loginAction} className="mt-8 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
+            <ActionForm action={me.claimed ? loginAction : claimAction} className="mt-8 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
               <input type="hidden" name="lang" value={lang} />
               <input type="hidden" name="code" value={code} />
               <input type="hidden" name="memberId" value={me.id} />

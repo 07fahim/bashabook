@@ -239,8 +239,9 @@ export async function checkPin(db: Db, memberId: string, pin: string): Promise<{
  *  replaced (the notice goes there), or false when nothing was saved. */
 export async function setEmail(db: Db, memberId: string, email: string, pinHash: string): Promise<{ old: string | null } | false> {
   const [r] = await db<{ old: string | null }>(
-    `update members m set email = $2 from (select email as old from members where id = $1) o
-     where m.id = $1 and m.pin_hash = $3 and ${STAYING} returning o.old`, [memberId, email, pinHash]);
+    // the old address read under the row lock: of two saves at once the second returns the first's address
+    `with o as (select email as old from members where id = $1 for update)
+     update members m set email = $2 from o where m.id = $1 and m.pin_hash = $3 and ${STAYING} returning o.old`, [memberId, email, pinHash]);
   return r ? { old: r.old } : false;
 }
 
