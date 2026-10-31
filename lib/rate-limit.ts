@@ -14,5 +14,12 @@ export async function allow(db: Db, key: string, limit: number, per: 'hour' | 'd
   return n <= limit;
 }
 
+/** True once `key` has used `limit` in the current hour (or day), without counting a try: for a check that must look the
+ *  same whether or not anything is sent after it. */
+export async function spent(db: Db, key: string, limit: number, per: 'hour' | 'day' = 'hour') {
+  const [r] = await db<{ n: number }>(`select n from rate_limits where key = $1 and hour = date_trunc('${per}', now())`, [key]);
+  return (r?.n ?? 0) >= limit;
+}
+
 /** The client address from x-forwarded-for (Vercel sets it; the first entry is the client). */
 export const firstIp = (header: string | null) => header?.split(',')[0].trim() || 'unknown';

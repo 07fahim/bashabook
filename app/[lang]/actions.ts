@@ -4,7 +4,7 @@ import { refresh } from 'next/cache';
 import { cookies, headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
-import { addMember, changePin, checkPin, claimName, cleanName, normalizeEmail, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, flatByCode, hashPin, isPin, weakPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setEmail, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addMember, changePin, checkPin, claimName, emailOf, cleanName, normalizeEmail, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, flatByCode, hashPin, isPin, weakPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setEmail, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems, receiptVersion } from '@/lib/bazar';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, seeCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
@@ -20,7 +20,7 @@ import { cashAskMsg, depositMsg, fixAskMsg, fixedMsg, gaveAskMsg, handoverMsg, p
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
 import { removePush, savePush, type PushSub } from '@/lib/push-db';
-import { allow, firstIp } from '@/lib/rate-limit';
+import { allow, firstIp, spent } from '@/lib/rate-limit';
 import { type Check, CHECK_COOKIE, checkCode, checkOf, CODE_MINUTES, endRecovery, flatsFor, PROVEN_MINUTES, provenEmail, RECOVER_COOKIE, recoverPin, startCheck, startRecovery, takeCheck } from '@/lib/recovery';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -32,15 +32,19 @@ const langOf = (d: FormData): Locale => { const l = str(d, 'lang'); return hasLo
 /** Anonymous actions are counted per connection and hour (lib/rate-limit): a script can't burn the database. */
 const ip = async () => firstIp((await headers()).get('x-forwarded-for'));
 
-/** Sends an email after the response (so a page never waits on it, or shows by its speed whether one went). Three day
- *  budgets, 95 under Resend's free 100 a day: 35 recovery codes, 45 check codes and 15 notices of a PIN or email change.
- *  Anyone can ask for codes with any address, so each kind has its own budget: checks can't starve recovery codes and
- *  neither can silence a notice (sent only after a proven change: only someone proving codes from their own inbox can use it up,
- *  about 15 changes of their own account in a day).
- *  ponytail: a full budget drops mail for the rest of the day; upgrade to a paid Resend plan if real volume nears it. */
+/** Three day budgets of email, 95 under Resend's free 100 a day: 35 recovery codes, 45 check codes and 15 notices of a PIN
+ *  or email change. Anyone can ask for codes with any address, so each kind has its own budget: checks can't starve
+ *  recovery codes and neither can silence a notice (sent only after a proven change: only someone proving codes from their
+ *  own inbox can use it up, and each person makes at most 3 email changes a day). A spent budget is said on screen (noMail):
+ *  a check or an email change is refused before anything is saved; Forgot peeks at it the same way for any address.
+ *  ponytail: upgrade to a paid Resend plan if real volume nears the budgets. */
 const BUDGET = { recover: 35, check: 45, notice: 15 };
+const takeMail = (kind: keyof typeof BUDGET) => allow(db, `day:mail:${kind}`, BUDGET[kind], 'day');
+/** Sends after the response, so a page never waits on it or shows by its speed whether one went. The budget is already taken. */
+const send = (to: string, subject: string, text: string) => after(() => sendEmail(to, subject, text));
+/** Counts the budget after the response too: for a recovery code (only a known email gets one) and the PIN-changed notice. */
 const mail = (kind: keyof typeof BUDGET, to: string, subject: string, text: string) =>
-  after(async () => { if (await allow(db, `day:mail:${kind}`, BUDGET[kind], 'day')) await sendEmail(to, subject, text); });
+  after(async () => { if (await takeMail(kind)) await sendEmail(to, subject, text); });
 
 /** An email is saved only after a code typed from its inbox proves it: the step waits in this cookie for /check. */
 const checkToken = async () => (await cookies()).get(CHECK_COOKIE)?.value ?? '';
@@ -51,9 +55,11 @@ const keepCheck = async (token: string) =>
 async function sendCheck(lang: Locale, email: string, purpose: Check, payload: Record<string, unknown>): Promise<FormState> {
   const t = getDictionary(lang), r = t.recover;
   if (!(await allow(db, `check:${await ip()}`, 10))) return { error: t.app.errors.tooMany };
+  // the address is the person's own: saying no mail goes out today tells nothing about anyone
+  if (!(await takeMail('check'))) return { error: r.noMail };
   const c = await startCheck(db, email, purpose, payload);
   if (!c) return { error: t.app.errors.tooMany };
-  mail('check', email, r.checkSubject, r.checkBody.replace('{code}', () => c.code));
+  send(email, r.checkSubject, r.checkBody.replace('{code}', () => c.code));
   await keepCheck(c.token);
   redirect(`/${lang}/check`);
 }
@@ -109,11 +115,7 @@ export async function loginAction(_: FormState, d: FormData): Promise<FormState>
 }
 
 export async function logoutAction(d: FormData) {
-  await endSession();
-  // a shared phone: the next person can't open the previous person's email step on /check or /forgot
-  const jar = await cookies();
-  jar.delete(CHECK_COOKIE);
-  jar.delete(RECOVER_COOKIE);
+  await endSession();   // also ends any email step on this phone
   redirect(`/${langOf(d)}`);
 }
 
@@ -378,6 +380,8 @@ export async function emailAction(_: FormState, d: FormData): Promise<FormState>
   if (!isPin(d.get('pin'))) return { error: a.errors.pin };
   const r = await checkPin(db, me.memberId, pinText(d.get('pin')));
   if ('error' in r) return { error: a.errors[r.error === 'wrongPin' ? 'wrongCurrentPin' : r.error] + (r.left ? ' ' + a.errors.lastTries.replace('{n}', String(r.left)) : '') };
+  // each change mails the old address: 3 a day per person, so one account can't spend the day's notices
+  if (!(await allow(db, `day:email:${me.memberId}`, 3, 'day'))) return { error: a.errors.tooMany };
   return sendCheck(lang, email, 'email', { memberId: me.memberId, pinHash: r.hash });
 }
 
@@ -395,15 +399,22 @@ export async function checkCodeAction(_: FormState, d: FormData): Promise<FormSt
   // (takeCheck already retired the step)
   const done = async () => (await cookies()).delete(CHECK_COOKIE);
   const p = c.payload as { code: string; memberId: string; pinHash: string; flatName: string; name: string; others: string[]; lang: Locale };
+  // the step is taken: a failed write says start again, not the error page (each redirect stays outside: it throws)
+  const step = async <T>(write: () => Promise<T>): Promise<T | null> => {
+    try { return await write(); } catch (e) { console.warn('check step failed', (e as Error).name); return null; }
+  };
   if (c.purpose === 'new') {
     // joined the day the code is typed
-    const { memberId } = await createFlat(db, { flatName: p.flatName, name: p.name, others: p.others, today: todayDhaka(), lang: p.lang, pinHash: p.pinHash, email: c.email });
+    const made = await step(() => createFlat(db, { flatName: p.flatName, name: p.name, others: p.others, today: todayDhaka(), lang: p.lang, pinHash: p.pinHash, email: c.email }));
+    if (!made) return { error: r.again };
     await done();
-    await startSession(memberId);
+    await startSession(made.memberId);
     redirect(`/${lang}/home`);
   }
   if (c.purpose === 'claim') {
-    if (!(await claimName(db, p.code, p.memberId, p.pinHash, c.email))) return { error: t.app.errors.taken };
+    const claimed = await step(() => claimName(db, p.code, p.memberId, p.pinHash, c.email));
+    if (claimed === null) return { error: r.again };
+    if (!claimed) return { error: t.app.errors.taken };
     await done();
     await startSession(p.memberId);
     redirect(`/${lang}/home`);
@@ -411,11 +422,17 @@ export async function checkCodeAction(_: FormState, d: FormData): Promise<FormSt
   // 'email': only for the person signed in on this browser, the one who asked
   const me = await requireMember(lang, true);
   if (p.memberId !== me.memberId) return { error: r.again };
-  const saved = await setEmail(db, me.memberId, c.email, p.pinHash);
+  // a change always tells the old address: its notice is counted before saving, and no notice means no change
+  const { email: old } = await emailOf(db, me.memberId);
+  if (old && old !== c.email && !(await takeMail('notice'))) return { error: r.noMail };
+  const saved = await step(() => setEmail(db, me.memberId, c.email, p.pinHash));
   if (!saved) return { error: r.again };
   if (saved.old && saved.old !== c.email) {
     const masked = `${c.email[0]}•••@${c.email.split('@')[1]}`;
-    mail('notice', saved.old, r.emailChangedSubject, r.emailChangedBody.replace('{name}', () => me.name).replace('{flat}', () => me.flatName).replace('{email}', () => masked));
+    const text = r.emailChangedBody.replace('{name}', () => me.name).replace('{flat}', () => me.flatName).replace('{email}', () => masked);
+    // counted above; only if another save changed the address between the read and this one is it counted after
+    if (saved.old === old) send(saved.old, r.emailChangedSubject, text);
+    else mail('notice', saved.old, r.emailChangedSubject, text);
   }
   await done();
   redirect(`/${lang}/home?email=saved`);
@@ -879,6 +896,8 @@ export async function forgotEmailAction(_: FormState, d: FormData): Promise<Form
   const email = normalizeEmail(d.get('email'));
   if (!email) return { error: e.email };
   if (!(await allow(db, `forgot:${await ip()}`, 10))) return { error: e.tooMany };
+  // peeked for every email alike (only a known one is counted, after): the screen stays the same for known and unknown
+  if (await spent(db, 'day:mail:recover', BUDGET.recover, 'day')) return { error: t.recover.noMail };
   const r = await startRecovery(db, email);
   if (!r) return { error: e.tooMany };
   await keepStep(r.token);
