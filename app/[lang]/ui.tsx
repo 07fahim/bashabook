@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { CASH_KEYS } from '@/lib/money';
 import type { Method } from '@/lib/money-db';
+import { SecretField } from './secret-field';
 
 /** iPhone or iPad (newer iPads say Mac but have touch). Browser only. */
 export const apple = () => /iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
@@ -56,7 +57,7 @@ export const MethodField = ({ label, labels }: { label: string; labels: Record<M
 );
 
 export const PinField = (p: { label: string; name: string; autoComplete: string }) => (
-  <Field type="password" inputMode="numeric" pattern="[0-9০-৯]{4}" minLength={4} maxLength={4} required {...p} />
+  <SecretField inputMode="numeric" pattern="[0-9০-৯]{4}" minLength={4} maxLength={4} required {...p} />
 );
 
 /** A card that folds away: the title is the button, the content shows when opened. */
