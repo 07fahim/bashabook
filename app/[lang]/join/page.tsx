@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { joinByCodeAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { Header } from '../header';
+import { BackToFlat } from '../remember-flat';
 import { Field, primary } from '../ui';
 
 export async function generateMetadata({ params }: PageProps<'/[lang]/join'>): Promise<Metadata> {
@@ -27,6 +28,7 @@ export default async function JoinByCode({ params, searchParams }: PageProps<'/[
           <p className="mt-2 text-lg text-muted">{a.joinLead}</p>
           {/* the page stays static; only this note reads the query, streamed in */}
           <Suspense fallback={null}><WhyNote searchParams={searchParams} text={a.signedOutNote} /></Suspense>
+          <BackToFlat lang={lang} label={a.backTo} className="mt-4" />
         </div>
         <form action={joinByCodeAction} className="mt-8 space-y-5 md:rounded-3xl md:border md:border-line md:bg-surface md:p-6">
           <input type="hidden" name="lang" value={lang} />

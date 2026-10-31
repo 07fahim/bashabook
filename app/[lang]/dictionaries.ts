@@ -180,7 +180,7 @@ const bn = {
   },
   privacy: {
     title: 'প্রাইভেসি পলিসি',
-    updated: 'শেষ আপডেট: 28 October 2026',
+    updated: 'শেষ আপডেট: 31 October 2026',
     lead: 'বাসাবুক একটা শেয়ার্ড ফ্ল্যাটের মিল আর টাকার হিসাব রাখে। এখানে লেখা আছে আমরা কী রাখি, কে দেখতে পায় আর কীভাবে মুছে ফেলা যায়।',
     keep: { h: 'আমরা কী রাখি', p: [
       'প্রত্যেকের নাম। মোবাইল নম্বর বা ছোট ছবি শুধু তখনই রাখি যদি কেউ নিজে দেয়। আপনার PIN আমরা রাখি না। শুধু তার একটা এলোমেলো রূপ রাখি যেটা থেকে আসল PIN বের করা যায় না।',
@@ -196,6 +196,7 @@ const bn = {
     ] },
     cookies: { h: 'কুকি আর আপনার ডিভাইস', p: [
       'একটা কুকি এই ডিভাইসে আপনাকে 90 দিন পর্যন্ত সাইন ইন রাখে। লাইট বা ডার্ক থিমের পছন্দ শুধু আপনার ডিভাইসেই থাকে।',
+      'শেষ যে ফ্ল্যাটে ঢুকেছেন তার নাম আর কোডও এই ডিভাইসে থাকে যাতে এক ট্যাপে ফিরে যেতে পারেন। এটা কোথাও পাঠানো হয় না।',
     ] },
     analytics: { h: 'Google Analytics', p: [
       'কতজন সাইটে আসে তা গুনতে ওয়েবসাইটটা Google Analytics ব্যবহার করে। এটা আপনার ডিভাইসে নিজের একটা কুকি রাখে। ফ্ল্যাটের কোড লুকিয়ে Google-কে জানায় আপনি কোন পেজ খুলছেন। সাথে ডিভাইসের ধরন, ব্রাউজার আর আপনি মোটামুটি কোন এলাকা থেকে খুলছেন। আপনার নাম, ফোন নম্বর, টাকার অঙ্ক বা আপনি যা লেখেন তা কখনো যায় না।',
@@ -285,6 +286,7 @@ const bn = {
     broughtBack: 'ফিরিয়ে আনা হয়েছে। কাল থেকে আবার তার মিল গোনা হবে।',
     resetDone: 'রিসেট হয়েছে। এককালীন PIN টা তাকে জানিয়ে দিন।',
     logout: 'বের হন',
+    backTo: '{flat}-এ ফিরে যান →',
     myAccount: 'আমার অ্যাকাউন্ট',
     addPhoto: 'ছবি দিন',
     changePhoto: 'ছবি বদলান',
@@ -1012,7 +1014,7 @@ const en: Dict = {
   },
   privacy: {
     title: 'Privacy policy',
-    updated: 'Last updated 28 October 2026',
+    updated: 'Last updated 31 October 2026',
     lead: 'BashaBook keeps a shared flat’s meals and money. This page says what it stores, who can see it and how to remove it.',
     keep: { h: 'What we keep', p: [
       'For each person: their name. A mobile number or a small photo only if they add one. We never store your PIN. We keep only a scrambled form of it that cannot be turned back into the PIN.',
@@ -1028,6 +1030,7 @@ const en: Dict = {
     ] },
     cookies: { h: 'Cookies and your device', p: [
       'One cookie keeps you signed in on this device for up to 90 days. Your light or dark choice is saved on your device only.',
+      'This device also keeps the name and code of the last flat you opened so you can get back in with one tap. It is never sent anywhere.',
     ] },
     analytics: { h: 'Google Analytics', p: [
       'The website uses Google Analytics to count visits. It stores its own cookie on your device. It tells Google which pages you open with flat codes hidden, plus your device type, browser and rough location. It never gets your name, phone number, amounts or anything you type.',
@@ -1117,6 +1120,7 @@ const en: Dict = {
     broughtBack: 'Brought back. They count again from tomorrow.',
     resetDone: 'Done. Tell them the one-time PIN.',
     logout: 'Sign out',
+    backTo: 'Back to {flat} →',
     myAccount: 'My account',
     addPhoto: 'Add a photo',
     changePhoto: 'Change photo',

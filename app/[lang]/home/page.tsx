@@ -16,6 +16,7 @@ import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { InstallApp } from '../install-app';
 import { Reminders } from '../reminders';
+import { RememberFlat } from '../remember-flat';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka, fmtTaka2, fmtTime } from '../format';
 import { Header } from '../header';
@@ -80,6 +81,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
     <>
       <Header t={t} lang={lang} path="/home" notices={await noticesP}><Nav t={t} lang={lang} topic={me.liveTopic} current="home" showFlat={me.role === 'manager'} /></Header>
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
+        <RememberFlat code={me.joinCode} name={me.flatName} />
         {why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{a.notSavedNote}</p>}
         <p className="text-muted">{me.flatName}</p>
         <div className="flex items-center gap-3">

@@ -5,6 +5,7 @@ import { getDictionary, hasLocale } from './dictionaries';
 import { Khata } from './khata';
 import { Header } from './header';
 import { InstallApp } from './install-app';
+import { BackToFlat } from './remember-flat';
 import { focus, ICONS } from './ui';
 import { EMAIL, WHATSAPP } from './contacts';
 
@@ -25,6 +26,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
             <h1 className="font-display text-4xl leading-tight font-bold text-balance sm:text-5xl md:text-6xl">{t.heroTitle}</h1>
             <p className="mt-5 max-w-prose text-lg text-muted">{t.heroBody}</p>
             <p className="mt-3 max-w-prose font-semibold">{t.heroWho}</p>
+            <BackToFlat lang={lang} label={t.app.backTo} className="mt-6" />
             <Link href={`/${lang}/new`} prefetch={false} className={`mt-8 inline-flex min-h-14 items-center rounded-full bg-turmeric px-8 text-lg font-semibold text-on-turmeric hover:brightness-95 ${focus}`}>
               {t.create}
             </Link>
