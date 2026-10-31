@@ -67,11 +67,10 @@ describe('auth', { timeout: 30000 }, () => {
   });
 
   it('claiming a name refuses a weak PIN and leaves the name free', async () => {
-    const { code, id, f } = await flat();
+    const { code, id } = await flat();
     expect(await login(db, code, id('Tahsin'), '1234', null)).toEqual({ error: 'weakPin' });
     expect((await flatByCode(db, code))!.members.find(m => m.name === 'Tahsin')!.claimed).toBe(false);
     expect(await login(db, code, id('Tahsin'), '4827', null)).toEqual({ memberId: id('Tahsin') });
-    expect(f).toBeTruthy();
   });
 
   it('a new PIN after a reset may not be weak, and the one-time PIN still works after the refusal', async () => {

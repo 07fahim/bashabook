@@ -16,7 +16,8 @@ export const isPin = (v: unknown) => /^\d{4}$/.test(pinText(v));
 // the most chosen PINs that no rule below catches (DataGenetics, 3.4 million real 4-digit PINs: the top 20 were a quarter of all)
 const COMMON = new Set(['1212', '1122', '1004', '2000', '6969', '1313', '2001', '1010', '2580']);
 /** A PIN anyone with the flat code would try first: one digit four times, a straight run up or down, or one of COMMON.
- *  Refused wherever a PIN is chosen (a code gives 25 tries per name); a weak PIN chosen before still signs in. */
+ *  Refused wherever a PIN is chosen (a code gives 25 tries per name): here in login for a claim or a new PIN after a reset,
+ *  in the actions for a new flat, a PIN change and the collector's reset. A weak PIN chosen before still signs in. */
 export const weakPin = (v: unknown) => {
   const p = pinText(v), d = [...p].map(Number), step = d[1] - d[0];
   return (Math.abs(step) <= 1 && d.every((x, i) => i === 0 || x - d[i - 1] === step)) || COMMON.has(p);
