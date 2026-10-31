@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { removePushAction, savePushAction } from './actions';
-import { link, secondary } from './ui';
+import { apple, link, secondary } from './ui';
 
 type Copy = { on: string; turnOn: string; turnOff: string; hint: string; denied: string; unsupported: string; ios: string; failed: string };
 type State = 'loading' | 'unsupported' | 'ios' | 'denied' | 'off' | 'on' | 'busy' | 'failed';
@@ -14,8 +14,7 @@ const subscription = async () => (await navigator.serviceWorker.getRegistration(
 /** What this browser can do right now. iPhone or iPad in Safari (not installed) gets the Home Screen hint. A subscription
  *  that already exists is saved again for whoever is signed in now: a shared phone follows the person, not the browser. */
 async function detect(lang: string): Promise<State> {
-  const apple = /iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
-  const ios = apple && !matchMedia('(display-mode: standalone)').matches;
+  const ios = apple() && !matchMedia('(display-mode: standalone)').matches;
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined' || !KEY) return ios ? 'ios' : 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
   const sub = await subscription();

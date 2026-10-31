@@ -339,6 +339,11 @@ const bn = {
       nameUsedSince: 'সে চলে যাওয়ার পর একই নামে আরেকজন এখানে থেকেছে। আলাদা করে চেনার মতো নাম দিয়ে তাকে নতুন করে যোগ করুন।',
     },
   },
+  install: {
+    button: 'অ্যাপটা ইনস্টল করুন',
+    lead: 'তারপর অন্য অ্যাপের মতোই ব্রাউজার ছাড়া খুলবে।',
+    ios: 'iPhone বা iPad-এ অ্যাপ হিসেবে রাখতে: Share চাপুন তারপর Add to Home Screen।',
+  },
   push: {
     on: 'এই ফোনে রিমাইন্ডার: চালু',
     turnOn: 'রিমাইন্ডার চালু করুন',
@@ -347,7 +352,7 @@ const bn = {
     denied: 'ব্রাউজারের সেটিংসে বাসাবুকের নোটিফিকেশন বন্ধ করা আছে। চালু করতে সেখান থেকে অনুমতি দিন।',
     unsupported: 'এই ব্রাউজারে রিমাইন্ডার চলে না।',
     failed: 'রিমাইন্ডার চালু হয়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।',
-    ios: 'iPhone-এ: Safari-র Share থেকে Add to Home Screen করুন, তারপর হোম স্ক্রিনের বাসাবুক থেকে চালু করুন।',
+    ios: 'iPhone বা iPad-এ: Safari-র Share থেকে Add to Home Screen করুন, তারপর হোম স্ক্রিনের বাসাবুক থেকে চালু করুন।',
     mealTitle: 'কালকের মিল আজ {time}-এ লক হবে',
     mealBody: 'যেমন খান তেমনই থাকবে? বদলাতে হলে এখনই বদলান।',
     depositTitle: '{name} বলছে টাকা দিয়েছে',
@@ -1166,6 +1171,11 @@ const en: Dict = {
       nameUsedSince: 'Someone with the same name has lived here since they left. Add them as someone new with a name that tells them apart.',
     },
   },
+  install: {
+    button: 'Install the app',
+    lead: 'It then opens in its own window like any other app.',
+    ios: 'To keep it as an app on iPhone or iPad: tap Share then Add to Home Screen.',
+  },
   push: {
     on: 'Reminders on this phone: on',
     turnOn: 'Turn on reminders',
@@ -1174,7 +1184,7 @@ const en: Dict = {
     denied: 'Notifications for BashaBook are blocked in the browser settings. Allow them there to turn reminders on.',
     unsupported: 'Reminders don’t work in this browser.',
     failed: 'Reminders didn’t turn on. Check your internet and try again.',
-    ios: 'On iPhone: use Safari’s Share, Add to Home Screen, then turn reminders on from the BashaBook on your home screen.',
+    ios: 'On iPhone or iPad: use Safari’s Share, Add to Home Screen, then turn reminders on from the BashaBook on your home screen.',
     mealTitle: 'Tomorrow’s meals lock at {time}',
     mealBody: 'Eating as usual? Change it before then.',
     depositTitle: '{name} says: I gave money',

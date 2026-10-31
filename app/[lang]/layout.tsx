@@ -6,8 +6,9 @@ import { Analytics } from './analytics';
 import { getDictionary, hasLocale, locales } from './dictionaries';
 import '../globals.css';
 
-// Runs before first paint: saved choice, else the phone's setting.
-const themeScript = `try{document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch(e){}`;
+// Runs before first paint: saved choice, else the phone's setting. Also keeps the browser's install offer for the Install
+// button (install-app.tsx), which may come before the page is ready; not prevented, so the browser's own popup still shows.
+const themeScript = `try{document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch(e){}addEventListener('beforeinstallprompt',function(e){window.bip=e});addEventListener('appinstalled',function(){window.bip=null})`;
 
 const hind = Hind_Siliguri({ subsets: ['bengali', 'latin'], weight: ['400', '600', '700'], display: 'swap', variable: '--font-hind' });
 

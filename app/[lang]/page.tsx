@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { getDictionary, hasLocale } from './dictionaries';
 import { Khata } from './khata';
 import { Header } from './header';
+import { InstallApp } from './install-app';
 import { focus, ICONS } from './ui';
 import { EMAIL, WHATSAPP } from './contacts';
 
@@ -33,6 +34,7 @@ export default async function Landing({ params }: PageProps<'/[lang]'>) {
                 {t.joinCta}
               </Link>
             </p>
+            <InstallApp t={t.install} className="mt-6" />
           </div>
           <Khata t={t.khata} />
         </section>

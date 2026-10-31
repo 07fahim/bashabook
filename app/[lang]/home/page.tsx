@@ -14,6 +14,7 @@ import { ActionForm } from '../action-form';
 import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
+import { InstallApp } from '../install-app';
 import { Reminders } from '../reminders';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka, fmtTaka2, fmtTime } from '../format';
@@ -136,6 +137,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             ))} />
           </section>
         )}
+        <InstallApp t={t.install} className="mt-6" />
         {/* side by side the cards are one height, their buttons on one line; a lone card keeps half the row,
             not a button as wide as the screen */}
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
