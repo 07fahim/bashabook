@@ -303,8 +303,10 @@ describe('member cap', { timeout: 30000 }, () => {
 describe('email on accounts', { timeout: 30000 }, () => {
   it('stores a typed email trimmed and lowercase, refuses anything else', () => {
     expect(normalizeEmail('  Nafis@Gmail.COM ')).toBe('nafis@gmail.com');
-    for (const v of ['', 'nafis', 'nafis@gmail', '@gmail.com', 'na fis@gmail.com', 'a@b@c.com', `${'x'.repeat(250)}@b.co`, null])
+    for (const v of ['', 'nafis', 'nafis@gmail', '@gmail.com', 'na fis@gmail.com', 'a@b@c.com', `${'x'.repeat(250)}@b.co`, null,
+      '<a@b.co>', 'a,b@c.co', '"a"@b.co', 'a@b.c', 'a@b..co', 'a@.b.co', 'a@b.c0'])
       expect([v, normalizeEmail(v)]).toEqual([v, null]);
+    for (const v of ['nafis.1+bb@gmail.com', 'a@mail.example.co.uk', 'a_b%c-d@x-y.com']) expect(normalizeEmail(v)).toBe(v);
   });
 
   it('a name is claimed only with an email, written with the PIN; later sign-ins need none', async () => {
@@ -321,6 +323,9 @@ describe('email on accounts', { timeout: 30000 }, () => {
     const { memberId } = await flat();
     await expect(db(`update members set email = 'Nafis@gmail.com' where id = $1`, [memberId])).rejects.toThrow();
     await expect(db(`update members set email = 'nafis' where id = $1`, [memberId])).rejects.toThrow();
+    for (const v of ['<a@b.co>', 'a,b@c.co', '"a"@b.co', 'a@b.c', 'a@b..co'])
+      await expect(db(`update members set email = $2 where id = $1`, [memberId, v])).rejects.toThrow();
+    for (const v of ['nafis.1+bb@gmail.com', 'a@mail.example.co.uk']) await db(`update members set email = $2 where id = $1`, [memberId, v]);
   });
 
   it('creates a flat with the starter’s email', async () => {

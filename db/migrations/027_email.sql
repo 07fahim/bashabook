@@ -1,8 +1,9 @@
 -- Each person's email, mandatory for new sign-ups (the app asks; the column stays nullable for people who joined before):
 -- a forgotten flat code or PIN is recovered with a 6-digit code sent here. Never shown to flatmates.
+-- The shape is the same pattern as normalizeEmail (lib/auth.ts): keep the two in step.
 -- An email is saved only after a code typed from its inbox proved it (recoveries below).
 alter table members
-  add column email text check (email = lower(email) and length(email) <= 254 and email ~ '^[^\s@]+@[^\s@]+\.[^\s@]+$');
+  add column email text check (email = lower(email) and length(email) <= 254 and email ~ '^[a-z0-9._%+-]+@([a-z0-9-]+\.)+[a-z]{2,}$');
 create index members_email on members (email) where email is not null;
 
 -- One row per emailed code: for getting back in ('recover', any email, so the screen never tells whether it is known)

@@ -13,7 +13,8 @@ export const cleanName = (v: unknown) => { const s = cleanText(v); return s.leng
 /** A typed email as stored: trimmed, lowercase, one @ with a dot after it, at most 254 characters; else null. */
 export const normalizeEmail = (v: unknown) => {
   const s = String(v ?? '').trim().toLowerCase();
-  return s.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : null;
+  // the same pattern as the members.email check in 027: plain letters, digits and ._%+- before the @, dotted labels after
+  return s.length <= 254 && /^[a-z0-9._%+-]+@([a-z0-9-]+\.)+[a-z]{2,}$/.test(s) ? s : null;
 };
 /** A typed PIN with Bangla digits as English ones. */
 export const pinText = (v: unknown) => enDigits(String(v ?? ''));
