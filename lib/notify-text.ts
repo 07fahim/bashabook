@@ -1,5 +1,6 @@
 import { getDictionary, type Locale } from '../app/[lang]/dictionaries';
 import { fmtMonth, fmtTime } from '../app/[lang]/format';
+import { MEALS, type Meal } from './meals';
 import type { Msg } from './push';
 
 const t = (lang: Locale) => getDictionary(lang).push;
@@ -8,6 +9,17 @@ const monthName = (month: string) => fmtMonth(month).split(' ')[0];
 
 export const mealMsg = (lang: Locale, cutoff: string): Msg =>
   ({ title: fill(t(lang).mealTitle, { time: fmtTime(cutoff.slice(0, 5)) }), body: t(lang).mealBody, url: `/${lang}/meals` });
+/** Every kind of change to today's meals that tells the flat (lib/meal-push). */
+export type TodayKind = 'on' | 'off' | 'guestsAdd' | 'guestsGone' | 'other' | 'changed' | 'away' | 'back' | 'noCook' | 'cookAgain';
+/** A change to today's meals: who changed what in the title, today's plates in the body to pass to the cook (no money). */
+export const todayMsg = (lang: Locale, kind: TodayKind, v: { actor: string; name: string; meals: Meal[] }, p: Record<Meal, number | 'off'>): Msg => {
+  const x = t(lang), m = getDictionary(lang).meals;
+  return {
+    title: fill(x.today[kind], { actor: v.actor, name: v.name, meal: v.meals.map(y => x.mealNames[y]).join(', ') }),
+    body: fill(x.todayBody, { plates: MEALS.map(y => `${m.names[y]} ${p[y] === 'off' ? m.noCook : p[y]}`).join(' · ') }),
+    url: `/${lang}/home`,
+  };
+};
 export const depositMsg = (lang: Locale, name: string): Msg =>
   ({ title: fill(t(lang).depositTitle, { name }), body: t(lang).depositBody, url: `/${lang}/money` });
 export const payoutMsg = (lang: Locale, name: string): Msg =>
