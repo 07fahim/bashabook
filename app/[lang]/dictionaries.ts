@@ -184,7 +184,7 @@ const bn = {
     lead: 'বাসাবুক একটা শেয়ার্ড ফ্ল্যাটের মিল আর টাকার হিসাব রাখে। এখানে লেখা আছে আমরা কী রাখি, কে দেখতে পায় আর কীভাবে মুছে ফেলা যায়।',
     keep: { h: 'আমরা কী রাখি', p: [
       'প্রত্যেকের নাম। মোবাইল নম্বর বা ছোট ছবি শুধু তখনই রাখি যদি কেউ নিজে দেয়। আপনার PIN আমরা রাখি না। শুধু তার একটা এলোমেলো রূপ রাখি যেটা থেকে আসল PIN বের করা যায় না।',
-      'আপনার ইমেইল ঠিকানা। শুধু দুটো কাজে লাগে: কোড বা PIN ভুলে গেলে কোড পাঠানো আর ইমেইলটা নিশ্চিত করার লিংক পাঠানো। ফ্ল্যাটের অন্যরা এটা দেখতে পায় না।',
+      'আপনার ইমেইল ঠিকানা। শুধু দুটো কাজে লাগে: কোড বা PIN ভুলে গেলে কোড পাঠানো আর ইমেইলটা নিশ্চিত করার লিংক পাঠানো। ফ্ল্যাটের অন্যরা এটা দেখতে পায় না। ভুলে যাওয়ার পাতায় লেখা ইমেইল বারবার চেষ্টা ঠেকাতে এক দিন রাখা হয়।',
       'প্রতিটা ফ্ল্যাটের মিল, বাজার আর তাতে কী কেনা হয়েছে, বিল, কেউ দিলে বাজার বা বিলের রসিদের ছবি, জমা, ফ্ল্যাট থেকে দেওয়া টাকা আর কে কখন কী বদলেছে তার ইতিহাস।',
       'রিমাইন্ডার চালু করলে সেগুলো পাঠানোর জন্য আপনার ব্রাউজারের ঠিকানা।',
       'কোড বা PIN আন্দাজ করে ঢোকা ঠেকাতে আপনার ইন্টারনেট (IP) ঠিকানা মোটামুটি 2 ঘণ্টা রাখি।',
@@ -1074,7 +1074,7 @@ const en: Dict = {
     lead: 'BashaBook keeps a shared flat’s meals and money. This page says what it stores, who can see it and how to remove it.',
     keep: { h: 'What we keep', p: [
       'For each person: their name. A mobile number or a small photo only if they add one. We never store your PIN. We keep only a scrambled form of it that cannot be turned back into the PIN.',
-      'Your email address. It is used only to send you a code if you forget the flat code or your PIN and a link to confirm it. Your flatmates don’t see it.',
+      'Your email address. It is used only to send you a code if you forget the flat code or your PIN and a link to confirm it. Your flatmates don’t see it. An email typed on the Forgot page is kept for a day to stop repeated tries.',
       'For each flat: meals, bazar and what it bought, bills, receipt photos someone adds to a bazar or bill, deposits, money paid out from the flat and a history of who changed what and when.',
       'Your browser’s address for reminders if you turn them on.',
       'Your internet (IP) address for about 2 hours to stop anyone guessing codes or PINs.',
@@ -1277,7 +1277,7 @@ const en: Dict = {
     check: 'Continue',
     other: 'Use another email or get a new code',
     wrongCode: 'That code isn’t right.',
-    left: '{n} tries left.',
+    left: 'Tries left: {n}.',
     expired: 'This code has expired. Ask for a new one.',
     flatsTitle: 'Your flat',
     codeLine: 'Your flat code is {code}. Keep it somewhere safe.',
