@@ -8,7 +8,7 @@ const fill = (s: string, v: Record<string, string>) => s.replace(/\{(\w+)\}/g, (
 const monthName = (month: string) => fmtMonth(month).split(' ')[0];
 
 /** Every kind of change to today's meals that tells the flat (lib/meal-push). */
-export type TodayKind = 'on' | 'off' | 'guestsAdd' | 'guestsGone' | 'other' | 'changed' | 'away' | 'back' | 'noCook' | 'cookAgain';
+export type TodayKind = 'on' | 'off' | 'guestsAdd' | 'guestsGone' | 'other' | 'changed' | 'away' | 'noCook' | 'cookAgain';
 /** A change to today's meals: who changed what in the title, today's plates in the body to pass to the cook (no money). */
 export const todayMsg = (lang: Locale, kind: TodayKind, v: { actor: string; name: string; meals: Meal[] }, p: Record<Meal, number | 'off'>): Msg => {
   const x = t(lang), m = getDictionary(lang).meals;

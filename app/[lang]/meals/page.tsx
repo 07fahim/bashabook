@@ -43,7 +43,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const [meals, history, aways, guestList, gridData] = await Promise.all([
     loadMeals(db, me.flatId, week[0], week[6]),
     loadHistory(db, me.flatId, mine ? me.memberId : null, shownRows + 1),
-    upcomingAway(db, me.flatId, me.memberId, today),
+    upcomingAway(db, me.flatId, me.memberId, addDays(today, 1)),
     myGuests(db, me.flatId, me.memberId, today),
     loadMeals(db, me.flatId, gridDays[0], gridDays.at(-1)!),
   ]);
@@ -104,7 +104,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     // rows saved before guests had their own column: plates above one were guests, as in migration 004
     const g = a.guests ?? Math.max(a.count! - 1, 0), was = h.before?.guests ?? Math.max((h.before?.count ?? 0) - 1, 0);
     const value = g !== was ? m.guestsChange.replace('{a}', String(was)).replace('{b}', String(g)) : a.count! - g ? m.onOther : m.offOther;
-    const tag = a.late && dhakaDate(h.at) >= date ? ` · ${m.lateSameDay}` : '';
+    const tag = a.late && dhakaDate(h.at) === date ? ` · ${m.lateSameDay}` : '';
     return `${actor === who ? who : `${actor} → ${who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${tag}`;
   };
   const h2 = 'text-xl font-bold';
@@ -199,11 +199,11 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           </Fold>
 
           <Fold title={m.awayTitle} lead={m.awayLead}>
-            {aways.some(([, t]) => t >= today) && (
+            {aways.length > 0 && (
               <div className="mt-4">
                 <p className="font-semibold">{m.awayList}</p>
                 <ul className="mt-2 divide-y divide-line">
-                  {aways.filter(([, t]) => t >= today).map(([f, t]) => (
+                  {aways.map(([f, t]) => (
                     <li key={`${f}${t}`} className="flex items-center justify-between gap-3 py-2">
                       <span>{range([f, t])}</span>
                       <ActionForm action={cancelAwayAction}>

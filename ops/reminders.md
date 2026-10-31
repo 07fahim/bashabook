@@ -6,11 +6,10 @@ How BashaBook's reminders work and what to check when they don't.
   with the session's member; Turn off removes it. Deleting a flat or member removes theirs (cascade). A leaver stops
   getting reminders the day after `left_on`.
 - Timed reminders run from `GET /api/cron` (`Authorization: Bearer CRON_SECRET`), called every 5 minutes by cron-job.org
-  (job "BashaBook reminders", failure e-mails to the app team). Each flat: the meal reminder in the hour before its cutoff
-  (everyone still living there, skipped when nothing is cooked tomorrow); the month-ready reminder to the collector once per
+  (job "BashaBook reminders", failure e-mails to the app team). Each flat: the month-ready reminder to the collector once per
   month, from the 1st at 10:00. A reminder is claimed in `sent_jobs (flat, date or month, job)` before it is sent: two
   overlapping runs can't both send.
-- Event reminders (deposit to confirm, payout to confirm, handover offered) are sent by the server action itself after the
+- Event reminders (deposit to confirm, payout to confirm, handover offered, a change to today's meals) are sent by the server action itself after the
   write, via `after()`. A push failure never fails or undoes the write.
 - No amounts, PINs, phone numbers or balances ever appear in a notification: names and times only.
 - Delivery is best effort. Nothing is retried: Home shows the same facts.
@@ -31,4 +30,4 @@ How BashaBook's reminders work and what to check when they don't.
 
 ## The bell (2026-10-15)
 
-The same events also show inside the app: the bell beside the theme button lists, newest first, deposits and payouts waiting for the person, a handover offer and its answer, a month ready to close (collector), meals someone changed for them, and account changes done to them (PIN reset, lock cleared, name, last day, brought back). It is a query over existing rows (`lib/notices.ts`), not a store; the only new column is `members.notices_seen_at` (migration 017), set when the person opens the bell. Unread = newer than that. Pending rows stay listed until resolved. The hour-before-lock reminder is push only.
+The same events also show inside the app: the bell beside the theme button lists, newest first, deposits and payouts waiting for the person, a handover offer and its answer, a month ready to close (collector), meals someone changed for them, and account changes done to them (PIN reset, lock cleared, name, last day, brought back). It is a query over existing rows (`lib/notices.ts`), not a store; the only new column is `members.notices_seen_at` (migration 017), set when the person opens the bell. Unread = newer than that. Pending rows stay listed until resolved. A change to today's meals is push only.

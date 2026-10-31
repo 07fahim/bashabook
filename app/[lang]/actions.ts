@@ -115,10 +115,8 @@ const plates = (v: string) => (/^\d{1,2}$/.test(v) && Number(v) <= 10 ? Number(v
 /** Today up to 60 days ahead. */
 const inRange = (date: string) => isDate(date) && date >= todayDhaka() && date <= addDays(todayDhaka(), 60);
 /** A change to today's meals tells everyone else in the flat, after the response (lib/meal-push). */
-const tellToday = (me: { flatId: string; memberId: string }, kind: TodayKind, v: { who?: string; meals: Meal[] }) => {
-  const today = todayDhaka();   // the day the action decided on, even if the push goes out after midnight
+const tellToday = (me: { flatId: string; memberId: string }, today: string, kind: TodayKind, v: { who?: string; meals: Meal[] }) =>
   after(() => pushToday(db, me.flatId, me.memberId, today, kind, v));
-};
 
 /** A meal chip tap. The chip sends the count it wants; repeating the tap is harmless (nothing written, nobody told). */
 export async function setMealAction(d: FormData) {
@@ -126,7 +124,7 @@ export async function setMealAction(d: FormData) {
   // a chip switches only my own plate; my guests stay
   const date = str(d, 'date'), meal = str(d, 'meal'), own = str(d, 'own');
   const r = inRange(date) && isMeal(meal) && (own === '0' || own === '1') ? await setOwn(db, me.flatId, me.memberId, date, meal, own === '1' ? 1 : 0, nowDhaka()) : 'closed';
-  if (r === 'late') tellToday(me, own === '1' ? 'on' : 'off', { meals: [meal as Meal] });
+  if (r === 'late') tellToday(me, date, own === '1' ? 'on' : 'off', { meals: [meal as Meal] });
   return back(lang, r === 'closed' ? 'notSaved' : undefined);
 }
 
@@ -134,7 +132,7 @@ export async function setMealAction(d: FormData) {
 export async function removeGuestsAction(d: FormData) {
   const me = await requireMember(langOf(d), true);
   const date = str(d, 'date'), meal = str(d, 'meal');
-  if (inRange(date) && isMeal(meal) && await removeGuests(db, me.flatId, me.memberId, date, meal, nowDhaka()) === 'late') tellToday(me, 'guestsGone', { meals: [meal] });
+  if (inRange(date) && isMeal(meal) && await removeGuests(db, me.flatId, me.memberId, date, meal, nowDhaka()) === 'late') tellToday(me, date, 'guestsGone', { meals: [meal] });
   refresh();
 }
 
@@ -149,7 +147,7 @@ export async function guestAction(_: FormState, d: FormData): Promise<FormState>
   const r = await addGuests(db, me.flatId, me.memberId, date, meal, guests, now, key);
   if (r === 'full') return { error: m.errors.tooManyGuests };
   if (r === 'closed') return { error: guests < 1 ? m.errors.todayAddOnly : m.errors.closed };
-  if (r === 'late') tellToday(me, 'guestsAdd', { meals: [meal] });
+  if (r === 'late') tellToday(me, date, 'guestsAdd', { meals: [meal] });
   refresh();
   return { done: m.saved };
 }
@@ -161,7 +159,7 @@ export async function awayAction(_: FormState, d: FormData): Promise<FormState> 
   if (!inRange(from) || !isDate(to) || to < from) return { error: m.errors.bad };
   if (to > addDays(from, 59)) return { error: m.errors.range };
   const dropped = await setAway(db, me.flatId, me.memberId, from, to);
-  if (from === todayDhaka()) tellToday(me, 'away', { meals: [] });
+  if (from === todayDhaka()) tellToday(me, from, 'away', { meals: [] });
   refresh();
   if (!dropped.length) return { done: m.saved };
   // same shape as the guest list; dates hold commas, so items are split by semicolons
@@ -207,19 +205,19 @@ export async function noCookAction(_: FormState, d: FormData): Promise<FormState
   if (to > addDays(from, 59)) return { error: m.errors.range };
   if (!meals.length) return { error: m.errors.pickMeal };
   if (await unlessClosed(() => noCooking(db, me.flatId, me.memberId, from, to, meals, todayDhaka())) === 'closed') return { error: m.errors.monthClosed };
-  if (from <= todayDhaka() && to >= todayDhaka()) tellToday(me, 'noCook', { meals });
+  { const today = todayDhaka(); if (from <= today && to >= today) tellToday(me, today, 'noCook', { meals }); }
   refresh();
   return { done: m.saved };
 }
 
-/** Cancels my away from today on; days already past stay as they were. */
+/** Cancels my away from tomorrow on. Today stays as it is: cancelling it would put back meals already past, so today's
+ *  meals are switched on with the chips (which tells the flat). */
 export async function cancelAwayAction(_: FormState, d: FormData): Promise<FormState> {
   const lang = langOf(d), m = getDictionary(lang).meals;
   const me = await requireMember(lang, true);
-  const today = todayDhaka(), from = str(d, 'from'), to = str(d, 'to');
-  if (!isDate(from) || !isDate(to) || to < today) return { error: m.errors.bad };
-  await cancelAway(db, me.flatId, me.memberId, from < today ? today : from, to);
-  if (from <= today) tellToday(me, 'back', { meals: [] });
+  const first = addDays(todayDhaka(), 1), from = str(d, 'from'), to = str(d, 'to');
+  if (!isDate(from) || !isDate(to) || to < first) return { error: m.errors.bad };
+  await cancelAway(db, me.flatId, me.memberId, from < first ? first : from, to);
   refresh();
   return { done: m.saved };
 }
@@ -234,7 +232,7 @@ export async function adminSetAction(d: FormData) {
   if (member && editable(date, await openFrom(db, me.flatId, todayDhaka())) && isPresent(member, date) && isMeal(meal) && (own === '0' || own === '1') && guests !== null && guests <= 9) {
     const today = todayDhaka();
     const w = await unlessClosed(() => saveMeal(db, me.flatId, me.memberId, { memberId, date, meal, count: Number(own) + guests, guests }, date <= today));
-    if (w === true && date === today) tellToday(me, memberId === me.memberId ? 'changed' : 'other', { who: memberId, meals: [meal] });
+    if (w === true && date === today) tellToday(me, date, memberId === me.memberId ? 'changed' : 'other', { who: memberId, meals: [meal] });
     return back(lang, w === 'closed' ? 'notSaved' : undefined);
   }
   return back(lang, 'notSaved');
@@ -254,7 +252,7 @@ export async function otherMealAction(_: FormState, d: FormData): Promise<FormSt
     const [c] = await db<{ name: string }>(`select name from members where flat_id = $1 and role = 'manager'`, [me.flatId]);
     return { error: m.otherClosed.replace('{name}', c?.name ?? '') };
   }
-  if (date === todayDhaka()) tellToday(me, 'other', { who: target, meals: [meal] });
+  if (date === todayDhaka()) tellToday(me, date, 'other', { who: target, meals: [meal] });
   refresh();
   return { done: m.saved };
 }
@@ -266,7 +264,7 @@ export async function noCookCancelAction(d: FormData) {
   // today or later, as the screen offers: a past day was already cooked (or not), and un-blocking it would rewrite everyone's meals
   if (editable(date, await openFrom(db, me.flatId, todayDhaka())) && date >= todayDhaka() && meals.length) {
     const r = await unlessClosed(() => cookAgain(db, me.flatId, me.memberId, date, date, meals, date));
-    if (r !== 'closed' && date === todayDhaka()) tellToday(me, 'cookAgain', { meals });
+    if (r !== 'closed' && date === todayDhaka()) tellToday(me, date, 'cookAgain', { meals });
   }
   refresh();
 }

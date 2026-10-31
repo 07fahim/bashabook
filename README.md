@@ -63,7 +63,7 @@ flowchart TD
   F -. "a mistake found later" .-> K["Correction in an open month; the closed month never changes"]
 ```
 
-**Reminders.** Web push: when someone changes today's meals, when money needs your confirmation, and when a month is ready to close. No amounts in a notification.
+**Reminders.** Web push: when someone changes today's meals, when money needs your confirmation and when a month is ready to close. No amounts in a notification.
 
 ## How the money is counted
 

@@ -19,7 +19,7 @@ export async function pushToday(db: Db, flatId: string, actor: string, today: st
     const name = (id: string) => members.find(x => x.id === id)?.name ?? '';
     const who = v.who ?? actor;
     const tag = kind === 'noCook' || kind === 'cookAgain' ? `cook:${today}:${v.meals.join('')}`
-      : `${kind === 'away' || kind === 'back' ? 'away' : 'meal'}:${who}:${today}:${v.meals.join('')}`;
+      : `${kind === 'away' ? 'away' : 'meal'}:${who}:${today}:${v.meals.join('')}`;
     // kept only until Dhaka midnight: a phone that was off overnight never shows yesterday's "today"
     const ttl = Math.max(60, Math.round((Date.parse(`${today}T00:00:00+06:00`) + 864e5 - Date.now()) / 1000));
     const people = await db<{ id: string; lang: Locale | null }>(

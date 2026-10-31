@@ -4,6 +4,7 @@ import { db, migrate } from '../db/test-db';
 import { createFlat } from './auth';
 import { pushToday } from './meal-push';
 import { noCooking, saveMeal } from './meals-db';
+import { todayMsg, type TodayKind } from './notify-text';
 import type { Msg } from './push';
 
 const TODAY = '2026-10-09';
@@ -72,5 +73,14 @@ describe('today’s meal pushes', { timeout: 30000 }, () => {
     await pushToday(db, flatId, ids.Nafis, TODAY, 'noCook', { meals: ['d'] }, s.send);
     expect(s.calls[0].msg.tag).toBe(`cook:${TODAY}:d`);
     expect(s.calls[0].msg.ttl).toBe(60);   // a past day: the shortest life
+  });
+
+  it('every kind has a filled title in both languages, never money or a role word', () => {
+    const kinds: TodayKind[] = ['on', 'off', 'guestsAdd', 'guestsGone', 'other', 'changed', 'away', 'noCook', 'cookAgain'];
+    for (const lang of ['en', 'bn'] as const) for (const k of kinds) {
+      const m = todayMsg(lang, k, { actor: 'Nafis', name: 'Tahsin', meals: ['l'] }, { b: 5, l: 4, d: 'off' });
+      expect(m.title).not.toMatch(/[{}]|৳|ম্যানেজার|manager|মেস|mess/i);
+      expect(m.title.length).toBeGreaterThan(5);
+    }
   });
 });
