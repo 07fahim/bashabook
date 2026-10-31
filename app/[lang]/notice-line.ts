@@ -1,4 +1,6 @@
+import type { Meal } from '@/lib/meals';
 import type { Notice } from '@/lib/notices';
+import { todayTitle, type TodayKind } from '../../lib/notify-text';   // relative: tests import this file without the @ alias
 import type { Dict, Locale } from './dictionaries';
 import { fmtDay, fmtMonth, fmtTaka } from './format';
 
@@ -19,6 +21,8 @@ export function noticeLine(n: Notice, t: Dict, lang: Locale, today: string): [st
       const week = Math.floor((Date.parse(n.date!) - Date.parse(today)) / 864e5 / 7);
       return [fill(d.guestsChanged ? x.guests : Number(d.own) > 0 ? x.mealOn : x.mealOff), `/${lang}/meals${week ? `?week=${week}` : ''}`];
     }
+    // someone else's change to today's meals: the push's own words, to the plates on Home
+    case 'today': return [todayTitle(lang, d.k as TodayKind, { actor: n.actor ?? '', name: String(d.who ?? ''), meals: String(d.meals ?? '').split(',').filter(Boolean) as Meal[] }), `/${lang}/home`];
     case 'account': {
       const home = `/${lang}/home`;
       if ('pinReset' in d) return [fill(n.actor ? x.pinReset : x.pinResetTeam), home];

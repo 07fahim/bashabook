@@ -10,10 +10,13 @@ const monthName = (month: string) => fmtMonth(month).split(' ')[0];
 /** Every kind of change to today's meals that tells the flat (lib/meal-push). */
 export type TodayKind = 'on' | 'off' | 'guestsAdd' | 'guestsGone' | 'other' | 'changed' | 'away' | 'noCook' | 'cookAgain';
 /** A change to today's meals: who changed what in the title, today's plates in the body to pass to the cook (no money). */
+/** Who changed what today; the push title and the bell's line use the same words. */
+export const todayTitle = (lang: Locale, kind: TodayKind, v: { actor: string; name: string; meals: Meal[] }) =>
+  fill(t(lang).today[kind], { actor: v.actor, name: v.name, meal: v.meals.map(y => t(lang).mealNames[y]).join(', ') });
 export const todayMsg = (lang: Locale, kind: TodayKind, v: { actor: string; name: string; meals: Meal[] }, p: Record<Meal, number | 'off'>): Msg => {
   const x = t(lang), m = getDictionary(lang).meals;
   return {
-    title: fill(x.today[kind], { actor: v.actor, name: v.name, meal: v.meals.map(y => x.mealNames[y]).join(', ') }),
+    title: todayTitle(lang, kind, v),
     body: fill(x.todayBody, { plates: MEALS.map(y => `${m.names[y]} ${p[y] === 'off' ? m.noCook : p[y]}`).join(' · ') }),
     url: `/${lang}/home`,
   };
