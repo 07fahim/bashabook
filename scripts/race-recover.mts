@@ -1,12 +1,13 @@
 // Real-Postgres races for email recovery, on the Supabase test project only. From a pool of 10 connections: 20 wrong codes
-// at once count exactly 5 tries; 10 taps of Set my new PIN on one proven step at once set it once (one history row). Rounds
+// at once count exactly 5 tries; 10 taps of Set my new PIN on one proven step at once set it once (one history row); 10 takes
+// of one proven email check at once hand its payload out once. Rounds
 // repeat to give the races a chance. The flat it makes is deleted at the end.
 // node --env-file=.env.branch node_modules/tsx/dist/cli.mjs scripts/race-recover.mts
 import postgres from 'postgres';
 import { createFlat } from '../lib/auth';
 import type { Db } from '../lib/db';
 import { deleteFlat } from '../lib/delete-flat';
-import { checkCode, recoverPin, startRecovery, TRIES } from '../lib/recovery';
+import { checkCode, recoverPin, startCheck, startRecovery, takeCheck, TRIES } from '../lib/recovery';
 
 const url = process.env.DATABASE_URL ?? '';
 if (decodeURIComponent(new URL(url).username) !== 'postgres.wgvoshlmhauxcymwdwjt') throw new Error('not the Supabase test project; refusing');   // the pooler host is shared with production
@@ -38,6 +39,10 @@ async function main() {
       const done = await Promise.all(Array.from({ length: 10 }, (_, i) => recoverPin(db, b.token, memberId, String(5927 + i))));
       const [{ rows }] = await db<{ rows: number }>(`select count(*)::int as rows from audit_log where entity_id = $1 and after ? 'pinReset'`, [memberId]);
       check(`round ${round}: 10 new PINs at once on one step: set once, one history row`, done.filter(Boolean).length === 1 && rows === 1, { set: done.filter(Boolean).length, rows });
+      const c = (await startCheck(db, email, 'email', { memberId }))!;
+      check(`round ${round}: the right code proves the email check`, (await checkCode(db, c.token, c.code, 'check')) === 'ok', null);
+      const took = (await Promise.all(Array.from({ length: 10 }, () => takeCheck(db, c.token)))).filter(Boolean).length;
+      check(`round ${round}: 10 takes of one proven check at once: handed out once`, took === 1, { took });
     }
   } finally {
     await db(`delete from recoveries where email = $1`, [email]);
