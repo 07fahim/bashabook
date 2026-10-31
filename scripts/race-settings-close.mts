@@ -94,7 +94,7 @@ try {
   }
   {
     const f = await flat();
-    const r1 = await f.close(db, async () => { await updateSettings(db, f.flatId, f.ids.Nafis, { cutoff: '22:00', weights: W1 }, NOW, true); });
+    const r1 = await f.close(db, async () => { await updateSettings(db, f.flatId, f.ids.Nafis, { weights: W1 }, NOW, true); });
     const r2 = await f.close();
     check('3 ticked meal weights commit between the close’s read and write: changed, and the retry closes with ৳2,250 food',
       r1.result === 'changed' && r2.result === 'ok' && (await f.frozen())?.food === 225000, { r1: r1.result, r2: r2.result, frozen: await f.frozen() });

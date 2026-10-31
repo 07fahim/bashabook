@@ -33,10 +33,10 @@ for (let i = 0; i < ROUNDS; i++) {
     setAway(db, f.flatId, ids.Tahsin, from, to).catch(note),
     setDefaults(db, f.flatId, ids.Zarif, { b: i % 2 === 0, l: true, d: true }, thisMonth, today, null).catch(note),
     setRent(db, f.flatId, nafis, room, 300000 + i).catch(note),
-    updateSettings(db, f.flatId, ids.Nafis, { cutoff: '22:00', weights: { b: 50 + (i % 2), l: 100, d: 100 } }, `${today}T10:00`).catch(note),
+    updateSettings(db, f.flatId, ids.Nafis, { weights: { b: 50 + (i % 2), l: 100, d: 100 } }, `${today}T10:00`).catch(note),
     setAway(db, f.flatId, ids.Fahim, from, to).catch(note),
   ]);
-  await Promise.all([cancelAway(db, f.flatId, ids.Tahsin, from, to).catch(note), cancelAway(db, f.flatId, ids.Fahim, from, to).catch(note)]);
+  await Promise.all([cancelAway(db, f.flatId, ids.Tahsin, from, to, today).catch(note), cancelAway(db, f.flatId, ids.Fahim, from, to, today).catch(note)]);
 }
 console.log(`${ROUNDS} rounds, 5 writers over 3 open months: ${deadlocks} deadlocks, ${other} other errors`);
 await sql.end();

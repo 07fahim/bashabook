@@ -2,8 +2,9 @@ import webpush from 'web-push';
 import type { Db } from './db';
 import { subsFor } from './push-db';
 
-/** `ttl`: seconds the push service keeps it for a phone that is off (default a day); a meal reminder is useless after the lock. */
-export type Msg = { title: string; body: string; url: string; ttl?: number };
+/** `ttl`: seconds the push service keeps it for a phone that is off (default a day). `tag`: a later push with the same tag
+ *  replaces this one on the phone instead of adding another. */
+export type Msg = { title: string; body: string; url: string; ttl?: number; tag?: string };
 
 let configured = false;
 const configure = () => {

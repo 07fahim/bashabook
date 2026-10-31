@@ -3,7 +3,7 @@ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', e => {
   let m = { title: 'BashaBook', body: '', url: '/' };
   try { m = e.data ? e.data.json() : m; } catch { /* not ours: show the plain title */ }
-  e.waitUntil(self.registration.showNotification(m.title, { body: m.body, icon: '/icon-192.png', badge: '/icon-192.png', data: { url: m.url } }));
+  e.waitUntil(self.registration.showNotification(m.title, { body: m.body, icon: '/icon-192.png', badge: '/icon-192.png', tag: m.tag || '', data: { url: m.url } }));
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();

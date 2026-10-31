@@ -13,7 +13,6 @@ async function flat() {
   const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [f.flatId])).map(m => [m.name, m.id])) as Record<'Nafis' | 'Fahim' | 'Tahsin' | 'Zarif', string>;
   const [{ today }] = await db<{ today: string }>(`select ((now() at time zone 'Asia/Dhaka')::date)::text as today`);
   const day = async (n: number) => (await db<{ d: string }>(`select ($1::date + $2::int)::text as d`, [today, n]))[0].d;
-  await db(`update flats set cutoff_time = '23:59:59' where id = $1`, [f.flatId]);   // tomorrow open unless a test says otherwise
   const set = (actor: string, target: string, date: string, own: 0 | 1, seen: 0 | 1, meal: 'b' | 'l' | 'd' = 'l') =>
     setOtherMeal(db, f.flatId, actor, target, date, meal, own, seen);
   const row = async (target: string, date: string, meal = 'l') =>
@@ -24,7 +23,7 @@ async function flat() {
 }
 
 describe('changing a flatmate’s meals', { timeout: 30000 }, () => {
-  it('allowed before the lock; the history row names the actor and the target, with before and after', async () => {
+  it('allowed today and later; the history row names the actor and the target, with before and after', async () => {
     const { flatId, ids, day, set, row } = await flat();
     const t = await day(3);
     expect(await set(ids.Tahsin, ids.Fahim, t, 0, 1)).toBe('ok');
@@ -34,16 +33,28 @@ describe('changing a flatmate’s meals', { timeout: 30000 }, () => {
     // `before` is built from the guard, not a second read of the row: the own plate just before the write was exactly
     // `seen` (1, Fahim's usual lunch default), and the write touched no guests (0), so before.count = seen + guests = 1.
     expect([a.by, a.id, a.before, a.after.count]).toEqual([ids.Tahsin, `${ids.Fahim}|${t}|l`, { count: 1, guests: 0 }, 0]);
-    expect(await set(ids.Tahsin, ids.Fahim, await day(1), 0, 1)).toBe('ok');   // tomorrow, before the cutoff
+    expect(await set(ids.Tahsin, ids.Fahim, await day(1), 0, 1)).toBe('ok');   // tomorrow, at any hour
   });
 
-  it('refused: after the cutoff, today, past 60 days, no cooking, oneself, a non-member, someone not eating or not living here', async () => {
-    const { flatId, ids, today, day, set } = await flat();
-    expect(await set(ids.Tahsin, ids.Fahim, today, 0, 1)).toBe('closed');
+  it('today is a same-day change (late); a later day is not', async () => {
+    const { ids, today, day, set } = await flat();
+    expect(await set(ids.Tahsin, ids.Fahim, today, 0, 1)).toBe('ok');
+    expect(await set(ids.Tahsin, ids.Fahim, await day(1), 0, 1)).toBe('ok');
+    const late = async (d: string) => (await db<{ late: boolean }>(`select late from meal_changes where member_id = $1 and date = $2::date and meal = 'l'`, [ids.Fahim, d]))[0].late;
+    expect([await late(today), await late(await day(1))]).toEqual([true, false]);
+    // a row saved earlier (not late) switched today becomes a same-day change too
+    await db(`update meal_changes set late = false where member_id = $1 and date = $2::date`, [ids.Fahim, today]);
+    expect(await set(ids.Tahsin, ids.Fahim, today, 1, 0)).toBe('ok');
+    expect(await late(today)).toBe(true);
+  });
+
+  it('refused: a past day, past 60 days, no cooking, oneself, a non-member, someone not eating or not living here', async () => {
+    const { flatId, ids, day, set } = await flat();
+    expect(await set(ids.Tahsin, ids.Fahim, await day(-1), 0, 1)).toBe('closed');
     expect(await set(ids.Tahsin, ids.Fahim, await day(61), 0, 1)).toBe('closed');
     expect(await set(ids.Tahsin, ids.Tahsin, await day(3), 0, 1)).toBe('closed');
-    await db(`update flats set cutoff_time = '00:00' where id = $1`, [flatId]);                     // tomorrow is locked now
-    expect(await set(ids.Tahsin, ids.Fahim, await day(1), 0, 1)).toBe('closed');
+    await db(`update flats set cutoff_time = '00:00' where id = $1`, [flatId]);                     // the old lock time is no longer read
+    expect(await set(ids.Tahsin, ids.Fahim, await day(1), 0, 1)).toBe('ok');
     const t = await day(4);
     await db(`insert into no_cook (flat_id, date, meal) values ($1, $2::date, 'l')`, [flatId, t]);
     expect(await set(ids.Tahsin, ids.Fahim, t, 0, 1)).toBe('closed');
@@ -115,7 +126,7 @@ describe('away days', { timeout: 30000 }, () => {
     expect(await audits(ids.Tahsin)).toBe(0);
     expect(await changedByOthers(db, flatId, ids.Fahim, today)).toEqual([]);
     expect(await set(ids.Tahsin, ids.Fahim, outside, 0, 1)).toBe('ok');   // outside the away range: still works
-    await cancelAway(db, flatId, ids.Fahim, t3, t3);
+    await cancelAway(db, flatId, ids.Fahim, t3, t3, today);
     expect(await set(ids.Tahsin, ids.Fahim, t3, 0, 1)).toBe('ok');   // cancelled: works again
   });
 
@@ -332,7 +343,7 @@ describe('final review fixes', { timeout: 30000 }, () => {
     await addGuests(db, flatId, ids.Fahim, t, 'l', 2, now);
     // a flatmate changes the guest count after removeGuests' read, before its write
     const change = () => db(`update meal_changes set count = count + 1, guests = 3 where member_id = $1 and date = $2::date and meal = 'l'`, [ids.Fahim, t]);
-    expect(await removeGuests(racing(change), flatId, ids.Fahim, t, 'l', now)).toBe('open');
+    expect(await removeGuests(racing(change), flatId, ids.Fahim, t, 'l', now)).toBe('same');
     expect(await row(ids.Fahim, t)).toEqual({ count: 4, guests: 3 });   // stale read (2 guests): nothing written
   });
 });

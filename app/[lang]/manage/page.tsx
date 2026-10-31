@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { listGone, listMembers } from '@/lib/auth';
 import { closeInfo, openFrom } from '@/lib/close';
 import { db } from '@/lib/db';
 import { currentOffer, flatMoney, lastOutcome, pendingCount } from '@/lib/handover';
-import { addDays, indexChanges, isDate, isLocked, isPresent, mealCount, MEALS, nowDhaka, todayDhaka } from '@/lib/meals';
+import { addDays, indexChanges, isDate, isPresent, mealCount, MEALS, todayDhaka } from '@/lib/meals';
 import { loadMeals, loadNoCookDays } from '@/lib/meals-db';
 import { listRepeats, loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireManager } from '@/lib/session';
@@ -16,7 +15,7 @@ import { addMemberAction, newCodeAction, addRoomAction, adminSetAction, cancelHa
 import { Avatar } from '../avatar';
 import { CloseCard } from '../close-card';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { fmtDay, fmtTaka, fmtTaka2, fmtTime } from '../format';
+import { fmtDay, fmtTaka, fmtTaka2 } from '../format';
 import { DateField } from '../date-field';
 import { FocusHere } from '../focus-here';
 import { Header, withQuery } from '../header';
@@ -61,7 +60,6 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
   const t = getDictionary(lang), a = t.app, m = t.meals, mn = t.money;
   const noticesP = noticeCount(db, me.flatId, me.memberId, me.role === 'manager');   // the bell's count, read alongside the page
   const own = new Set(meals.members.filter(x => !x.inMeals).map(x => x.id));
-  const firstOpen = isLocked(tomorrow, nowDhaka(), meals.flat.cutoff) ? addDays(tomorrow, 1) : tomorrow;
   const person = picked.members.find(x => x.id === who) ?? picked.members.find(x => x.id === me.memberId)!;
   const idx = indexChanges(picked.changes);
   // tells two people with one name apart: the one leaving and the one moving in
@@ -76,9 +74,6 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         {sp.why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{a.notSavedNote}</p>}
         <h1 className="font-display text-3xl font-bold">{me.flatName}</h1>
-        <p className="mt-1 flex flex-wrap items-center gap-x-3 text-muted">
-          <span>{m.lockTime.replace('{t}', fmtTime(meals.flat.cutoff))}</span> <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link>
-        </p>
 
         {/* phone: to do, money, meals, settings, people (the reading order is the visual order everywhere).
             Tablet and small laptops (below 1280): to do across the top | money, meals | settings, people below.
@@ -253,7 +248,6 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
               {'rules' in sp && <FocusHere />}
               <ActionForm action={settingsAction} className="mt-4">
                 <input type="hidden" name="lang" value={lang} />
-                <Field label={m.cutoff} name="cutoff" type="time" required min="01:00" defaultValue={meals.flat.cutoff.slice(0, 5)} />
                 <fieldset>
                   <legend className="font-semibold">{m.weights}</legend>
                   <p className="text-[15px] text-muted">{m.weightsHint}</p>
@@ -441,7 +435,7 @@ async function ManageBody({ params, searchParams }: Pick<Props, 'params' | 'sear
             <ActionForm action={addMemberAction} className="mt-3">
               <input type="hidden" name="lang" value={lang} />
               <Field label={a.memberName} name="name" required maxLength={40} autoComplete="off" />
-              <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={firstOpen} />
+              <DateField lang={lang} label={m.joinedOn} name="joinedOn" required min={today} max={to} defaultValue={tomorrow} />
               <button className={primary}>{a.addBtn}</button>
             </ActionForm>
           </Fold>

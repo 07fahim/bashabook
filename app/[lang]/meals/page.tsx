@@ -10,7 +10,7 @@ import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
 import { awayAction, cancelAwayAction, guestAction, otherMealAction, removeGuestsAction, usualAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { dhakaDate, fmtDay, fmtExact, fmtMonth, fmtRange, fmtTime, fmtWhen } from '../format';
+import { dhakaDate, fmtDay, fmtExact, fmtMonth, fmtRange, fmtWhen } from '../format';
 import { Header, withQuery } from '../header';
 import { Nav } from '../nav';
 import { ShowForm } from '../show-form';
@@ -43,21 +43,20 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const [meals, history, aways, guestList, gridData] = await Promise.all([
     loadMeals(db, me.flatId, week[0], week[6]),
     loadHistory(db, me.flatId, mine ? me.memberId : null, shownRows + 1),
-    upcomingAway(db, me.flatId, me.memberId, addDays(today, 1)),
+    upcomingAway(db, me.flatId, me.memberId, addDays(today, 1)),   // what Cancel can still reach: tomorrow on
     myGuests(db, me.flatId, me.memberId, today),
     loadMeals(db, me.flatId, gridDays[0], gridDays.at(-1)!),
   ]);
-  const starter = meals.members.find(x => x.role === 'manager');
   const self = meals.members.find(x => x.id === me.memberId)!;
-  const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
-  const firstOpen = [1, 2].map(n => addDays(today, n)).find(d => decide(d) === 'open')!;   // tomorrow or the day after
+  const decide = (date: string) => mealDecision(date, today);
+  const tomorrow = addDays(today, 1);
   // "Someone else's meals": the person and day come from ?who=&day=, like the collector's fold on the Flat tab
-  const others = meals.members.filter(x => x.id !== me.memberId && x.inMeals && (!x.leftOn || x.leftOn >= firstOpen));
-  const pickDay = isDate(sp.day) && sp.day >= firstOpen && sp.day <= addDays(today, 60) ? sp.day : firstOpen;
+  const others = meals.members.filter(x => x.id !== me.memberId && x.inMeals && (!x.leftOn || x.leftOn >= today));
+  const pickDay = isDate(sp.day) && sp.day >= today && sp.day <= addDays(today, 60) ? sp.day : today;
   const pick = others.find(x => x.id === sp.who) ?? others[0];
-  const [pickData, pickAwayList] = await Promise.all([pick ? loadMeals(db, me.flatId, pickDay, pickDay) : null, pick ? upcomingAway(db, me.flatId, pick.id, firstOpen) : []]);
+  const [pickData, pickAwayList] = await Promise.all([pick ? loadMeals(db, me.flatId, pickDay, pickDay) : null, pick ? upcomingAway(db, me.flatId, pick.id, today) : []]);
   const pickAway = pickAwayList.some(([f, t]) => pickDay >= f && pickDay <= t);
-  const guestDays = week.filter(d => d === today || decide(d) !== 'closed');   // today too: a host may add surprise guests
+  const guestDays = week.filter(d => decide(d) !== 'closed');
   const href = (n: number, only: boolean, more = 0) => `/${lang}/meals?${new URLSearchParams({ ...(n ? { week: String(n) } : {}), ...(only ? { mine: '1' } : {}), ...(more ? { older: String(more) } : {}) })}`;
   const hasOlder = history.length > shownRows;
   const arrow = `inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-full border border-muted px-3 font-semibold hover:bg-surface aria-disabled:pointer-events-none aria-disabled:opacity-40 sm:px-4 ${focus}`;
@@ -67,7 +66,6 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
   const describe = (h: HistoryRow) => {
     const actor = h.actor ?? '?', who = h.who ?? '?', a = h.after;
     const mealList = (x: string) => x.split(',').map(y => m.names[y as Meal]).join(', ');
-    if (h.entity === 'cook') return `${actor} ${m.toldHistory} · ${fmtDay(a.told!, lang)}: ${MEALS.map(x => `${m.names[x]} ${a.plates?.[x] ?? 0}`).join(', ')}`;
     // rooms and rent: old → new, the old value saved from the database at the change. A rent row with no old value is a new room
     // (rent changes before this was saved exist only in test flats)
     if (h.entity === 'rooms') {
@@ -84,7 +82,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
       return `${actor} · ${a.removed ? m.repeatStopped : m.repeatStarted}: ${x?.name ?? '?'} · ${fmtExact(x?.amount_poisha ?? 0)}`;
     }
     if (h.entity === 'flats' && a.codeChanged) return `${actor} ${m.codeChangedHistory}`;
-    if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${fmtTime(a.cutoff ?? '22:00')} · ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
+    if (h.entity === 'flats') return `${actor} ${m.rulesChanged}: ${MEALS.map(x => `${m.names[x]} ${(a.weights?.[x] ?? 0) / 100}`).join(', ')}`;
     if (h.entity === 'members') {
       if (a.pinReset) return a.admin ? `${who} · ${m.pinResetTeam}` : a.email ? `${who} · ${m.pinResetEmail}` : `${actor} · ${who} · ${m.pinResetHistory}`;
       if (a.locked) return `${who} · ${m.lockedHistory}`;
@@ -106,11 +104,10 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
     // rows saved before guests had their own column: plates above one were guests, as in migration 004
     const g = a.guests ?? Math.max(a.count! - 1, 0), was = h.before?.guests ?? Math.max((h.before?.count ?? 0) - 1, 0);
     const value = g !== was ? m.guestsChange.replace('{a}', String(was)).replace('{b}', String(g)) : a.count! - g ? m.onOther : m.offOther;
-    const tag = !a.late ? '' : ` · ${dhakaDate(h.at) >= date ? m.lateSameDay : m.lateAfter.replace('{t}', fmtTime(meals.flat.cutoff))}`;
+    const tag = a.late && dhakaDate(h.at) === date ? ` · ${m.lateSameDay}` : '';
     return `${actor === who ? who : `${actor} → ${who}`} · ${fmtDay(date, lang)} · ${m.names[meal as Meal]}: ${value}${tag}`;
   };
   const h2 = 'text-xl font-bold';
-  const todayNote = starter?.id === me.memberId ? m.todayLockedSelf : m.todayLocked.replace('{name}', starter?.name ?? '');
 
   return (
     <>
@@ -118,7 +115,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
       <main className="mx-auto max-w-md px-5 pt-6 pb-28 md:max-w-7xl md:px-8 md:pt-10 md:pb-16">
         {sp.why === 'notSaved' && <p role="status" className="mb-4 font-semibold text-chili">{t.app.notSavedNote}</p>}
         <h1 className="font-display text-3xl font-bold">{m.mealsTitle}</h1>
-        <p className="mt-2 max-w-prose text-muted">{w < 0 ? m.pastLead : m.weekLead.replace('{t}', fmtTime(meals.flat.cutoff))
+        <p className="mt-2 max-w-prose text-muted">{w < 0 ? m.pastLead : m.weekLead
           .replace('{b}', String(meals.flat.weights.b / 100)).replace('{l}', String(meals.flat.weights.l / 100)).replace('{d}', String(meals.flat.weights.d / 100))}</p>
         <nav aria-label={m.weekNav} className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           {/* at either end the arrow stays in place, greyed out, so keyboard focus is not lost */}
@@ -127,7 +124,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           <Link href={href(Math.min(7, w + 1), mine)} scroll={false} aria-label={m.nextWeek} aria-disabled={w === 7 || undefined} className={`justify-self-end ${arrow}`}><span aria-hidden="true" className="hidden sm:inline">{m.nextWeek}</span><span aria-hidden="true">→</span></Link>
         </nav>
         <div className="mt-4">
-          <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={todayNote} {...meals} />
+          <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} {...meals} />
         </div>
 
         {/* the month as a calendar: my three meals a day as dots, the flat's plates in the corner, each day a link to its week */}
@@ -175,15 +172,12 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                   {guestList.map(g => (
                     <li key={`${g.date}${g.meal}`} className="flex flex-wrap items-center justify-between gap-x-3 py-2">
                       <span>{fmtDay(g.date, lang)} · {m.names[g.meal]} · {g.guests === 1 ? m.guestOne : m.guestMany.replace('{n}', String(g.guests))}</span>
-                      {/* removing today's guests stays with the person who runs the flat */}
-                      {g.date === today ? <span className="text-[15px] text-muted">{starter?.id === me.memberId ? m.todayGuestsKeepSelf : m.todayGuestsKeep.replace('{name}', starter?.name ?? '')}</span> : (
-                        <form action={removeGuestsAction}>
-                          <input type="hidden" name="lang" value={lang} />
-                          <input type="hidden" name="date" value={g.date} />
-                          <input type="hidden" name="meal" value={g.meal} />
-                          <button className={`min-h-11 px-2 font-semibold ${link}`}>{m.removeGuests}</button>
-                        </form>
-                      )}
+                      <form action={removeGuestsAction}>
+                        <input type="hidden" name="lang" value={lang} />
+                        <input type="hidden" name="date" value={g.date} />
+                        <input type="hidden" name="meal" value={g.meal} />
+                        <button className={`min-h-11 px-2 font-semibold ${link}`}>{m.removeGuests}</button>
+                      </form>
                     </li>
                   ))}
                 </ul>
@@ -205,13 +199,13 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
           </Fold>
 
           <Fold title={m.awayTitle} lead={m.awayLead}>
-            {aways.some(([, t]) => t >= firstOpen) && (
+            {aways.length > 0 && (
               <div className="mt-4">
                 <p className="font-semibold">{m.awayList}</p>
                 <ul className="mt-2 divide-y divide-line">
-                  {aways.filter(([, t]) => t >= firstOpen).map(([f, t]) => (
+                  {aways.map(([f, t]) => (
                     <li key={`${f}${t}`} className="flex items-center justify-between gap-3 py-2">
-                      <span>{range([f, t])}</span>
+                      <span>{range([f < tomorrow ? tomorrow : f, t])}</span>{/* shows what Cancel changes */}
                       <ActionForm action={cancelAwayAction}>
                         <input type="hidden" name="lang" value={lang} />
                         <input type="hidden" name="from" value={f} />
@@ -225,8 +219,8 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
             )}
             <ActionForm action={awayAction} className="mt-4">
               <input type="hidden" name="lang" value={lang} />
-              <DateField lang={lang} label={m.from} name="from" required min={firstOpen} max={addDays(today, 60)} defaultValue={firstOpen} />
-              <DateField lang={lang} label={m.to} name="to" required min={firstOpen} max={addDays(today, 60)} defaultValue={firstOpen} />
+              <DateField lang={lang} label={m.from} name="from" required min={today} max={addDays(today, 60)} defaultValue={tomorrow} />
+              <DateField lang={lang} label={m.to} name="to" required min={today} max={addDays(today, 60)} defaultValue={tomorrow} />
               <button className={primary}>{m.awayBtn}</button>
             </ActionForm>
           </Fold>
@@ -296,7 +290,7 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
                     {others.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
                   </select>
                 </label>
-                <DateField lang={lang} label={m.day} name="day" required min={firstOpen} max={addDays(today, 60)} defaultValue={pickDay} />
+                <DateField lang={lang} label={m.day} name="day" required min={today} max={addDays(today, 60)} defaultValue={pickDay} />
                 <button className={secondary}>{m.show}</button>
               </ShowForm>
             </>)}

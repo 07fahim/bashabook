@@ -72,14 +72,6 @@ export function headcount(members: MealMember[], changes: MealChange[], date: st
 export const plates = (hc: Record<Meal, number>, noCook: { date: string; meal: string }[], date: string, meal: Meal) =>
   hc[meal] === 0 && noCook.some(n => n.date === date && n.meal === meal) ? 'off' as const : hc[meal];
 
-/** A date is locked if it is today or earlier, or it is tomorrow and the Dhaka clock has passed the cutoff.
- *  `nowDhaka` = 'YYYY-MM-DDTHH:MM' in Asia/Dhaka; `cutoff` = 'HH:MM' or 'HH:MM:SS' (Postgres time). */
-export function isLocked(date: string, nowDhaka: string, cutoff: string): boolean {
-  const [today, time] = nowDhaka.split('T');
-  if (date <= today) return true;
-  return date === addDays(today, 1) && time.slice(0, 5) >= cutoff.slice(0, 5);
-}
-
 export const addDays = (date: string, n: number) => {
   const t = new Date(`${date}T00:00:00Z`);
   t.setUTCDate(t.getUTCDate() + n);
@@ -102,16 +94,9 @@ export const isDate = (v: unknown): v is string =>
 
 export type Decision = 'open' | 'late' | 'closed';
 
-/** What a member's change to `date` becomes: saved, saved as late (tomorrow after the cutoff), or refused (today and before). */
-export function mealDecision(date: string, now: string, cutoff: string): Decision {
-  if (date <= now.slice(0, 10)) return 'closed';
-  if (!isLocked(date, now, cutoff)) return 'open';
-  return 'late';
-}
+/** What a member's change to `date` becomes: saved ('open'), saved as a same-day change that tells the flat ('late': today),
+ *  or refused ('closed': a day already past). There is no lock time. `today` = todayDhaka(). */
+export const mealDecision = (date: string, today: string): Decision => (date < today ? 'closed' : date === today ? 'late' : 'open');
 
 /** First day the person who runs the flat can still fix: the 1st of last month. Plan 6 moves this to the open month. */
 export const editFrom = (today: string) => `${addDays(`${today.slice(0, 8)}01`, -1).slice(0, 8)}01`;
-
-/** Meals whose plate count differs between two counts, in day order. */
-export const countChanges = (before: Record<Meal, number>, now: Record<Meal, number>) =>
-  MEALS.filter(m => before[m] !== now[m]).map(m => ({ meal: m, from: before[m], to: now[m] }));

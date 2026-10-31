@@ -5,7 +5,11 @@ import { acceptHandover, flatMoney, offerHandover } from './handover';
 import { saveMeal } from './meals-db';
 import { addEntry, confirmEntry, openMonth, rejectEntry, type NewEntry } from './money-db';
 import { listNotices, markNoticesSeen, noticeCount } from './notices';
-import { addDays, todayDhaka } from './meals';
+import { addDays, nowDhaka, todayDhaka } from './meals';
+import { setOwn } from './meals-db';
+import { setMealPush } from './push-db';
+import { noticeLine } from '../app/[lang]/notice-line';
+import { getDictionary } from '../app/[lang]/dictionaries';
 
 // The bell (spec 2026-10-15): one query over rows the app already writes, addressed to one person; opening marks seen,
 // pending rows stay until resolved.
@@ -78,7 +82,8 @@ describe('notices', { timeout: 60000 }, () => {
     await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: `${ym}-03`, meal: 'l', count: 0, guests: 0 }, false);
     const mine = await listNotices(db, flatId, tahsin, false);
     expect(mine.map(n => [n.kind, n.actor, n.date, n.meal])).toEqual([['meal', 'Nafis', `${ym}-02`, 'd']]);
-    expect(await listNotices(db, flatId, nafis, true)).toEqual([]);
+    // a today row appears only when the real date is one of these days; it has its own test below
+    expect((await listNotices(db, flatId, nafis, true)).filter(n => n.kind !== 'today')).toEqual([]);
   });
 
   it('a PIN reset and a lock clear are mine; unread until I open the bell, pending rows stay', async () => {
@@ -137,5 +142,18 @@ describe('notices', { timeout: 60000 }, () => {
     expect(await addEntry(db, flatId, member(tahsin), e({ type: 'deposit', amount: 50000, date: today, memberId: tahsin }))).toBe('ok');
     expect(await listNotices(db, other.flatId, other.memberId, true)).toEqual([]);
     expect(await noticeCount(db, flatId, nafis, true)).toBe(1);
+  });
+
+  it('someone else’s change to today’s meals is listed for the day in the push’s words; not to its maker, not when muted', async () => {
+    const { flatId, nafis, tahsin, zarif } = await flat();
+    const now = nowDhaka(), day = now.slice(0, 10);
+    expect(await setOwn(db, flatId, tahsin, day, 'l', 0, now)).toBe('late');
+    const today = (await listNotices(db, flatId, nafis, true)).filter(n => n.kind === 'today');
+    expect(today.map(n => [n.actor, n.detail])).toEqual([['Tahsin', { k: 'off', who: 'Tahsin', meals: 'l' }]]);
+    expect(noticeLine(today[0], getDictionary('en'), 'en', day)![0]).toBe('Tahsin is skipping lunch today');
+    expect(await noticeCount(db, flatId, zarif, false)).toBeGreaterThan(0);                                   // new for the others
+    expect((await listNotices(db, flatId, tahsin, false)).filter(n => n.kind === 'today')).toEqual([]);      // never to its maker
+    await setMealPush(db, zarif, false);
+    expect((await listNotices(db, flatId, zarif, false)).filter(n => n.kind === 'today')).toEqual([]);       // muted
   });
 });

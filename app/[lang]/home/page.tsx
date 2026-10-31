@@ -4,23 +4,22 @@ import { Suspense } from 'react';
 import { toCheck } from '@/lib/bazar';
 import { db } from '@/lib/db';
 import { flatMoney, myLatestHandover } from '@/lib/handover';
-import { addDays, countChanges, headcount, mealDecision, MEALS, nowDhaka, plates, type Meal } from '@/lib/meals';
+import { addDays, headcount, mealDecision, MEALS, nowDhaka, plates, type Meal } from '@/lib/meals';
 import { clearedBefore, emailOf, listMembers } from '@/lib/auth';
-import { changedByOthers, countAtLock, loadMeals } from '@/lib/meals-db';
+import { changedByOthers, loadMeals } from '@/lib/meals-db';
 import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { noticeCount } from '@/lib/notices';
 import { ActionForm } from '../action-form';
-import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, emailAction, logoutAction, phoneAction, photoAction, removePhotoAction } from '../actions';
+import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, emailAction, logoutAction, mealPushAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { InstallApp } from '../install-app';
 import { Reminders } from '../reminders';
 import { RememberFlat } from '../remember-flat';
 import { getDictionary, hasLocale } from '../dictionaries';
-import { countText, fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka, fmtTaka2, fmtTime } from '../format';
+import { countText, fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka, fmtTaka2 } from '../format';
 import { Header } from '../header';
-import { LockChange } from '../lock-change';
 import { MealRow } from '../meal-row';
 import { balanceText, CheckList, ConfirmList } from '../money/bits';
 import { Nav } from '../nav';
@@ -59,26 +58,13 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   // after a clear the action comes back here with ?cleared=; the line goes once they are locked again (a reloaded old URL)
   const justCleared = typeof cleared === 'string' ? people.find(p => p.id === cleared && !p.locked) : undefined;
   const self = people.find(p => p.id === me.memberId), myPhone = self?.phone ?? '';   // the invite card only matters while someone hasn't joined
-  const decide = (date: string) => mealDecision(date, now, meals.flat.cutoff);
-  const decision = decide(tomorrow);
+  const decide = (date: string) => mealDecision(date, today);
   const starter = meals.members.find(x => x.role === 'manager');
-  const note = starter?.id === me.memberId ? m.todayLockedSelf : m.todayLocked.replace('{name}', starter?.name ?? '');
   const hc = headcount(meals.members, meals.changes, tomorrow);
   // today's count is what the cook asks for on arrival or on the phone: everyone sees it, not only the collector
   const tod = headcount(meals.members, meals.changes, today);
   const plate = (h: typeof hc, date: string, x: Meal) => { const p = plates(h, meals.noCook, date, x); return p === 'off' ? m.noCook : p; };
-  // only after the lock does a change matter: before it, the card already says the count can still move
-  const changes = decision === 'open' ? [] : countChanges(await countAtLock(db, me.flatId, tomorrow, hc, now), hc);
   const [codeBefore, codeAfter] = a.codeKeep.split('{code}');
-  const status = decision === 'open' ? m.finalAt.replace('{t}', fmtTime(meals.flat.cutoff)) : m.final;
-  // under the week chart it has to say which day; in the phone card the heading already says tomorrow
-  const lockLine = (wide: boolean) => (
-    <p className="mt-1 text-[15px] text-muted">
-      {(decision === 'open' ? (wide ? m.lockTime : m.locksAt) : `${wide ? `${m.tomorrow}: ` : ''}${m.lockedLate}`).replace('{t}', fmtTime(meals.flat.cutoff))}
-      {/* the person who runs the flat can find the lock time setting from here */}
-      {me.role === 'manager' && <> · <Link href={`/${lang}/manage?rules=1#rules`} className={`inline-flex min-h-11 items-center ${link}`}>{m.changeTime}</Link></>}
-    </p>
-  );
   // the email form: in the Add card while there is no email, else in My account (never both, so its ids, email-hint
   // included, stay unique)
   const emailForm = (
@@ -168,28 +154,32 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
         {/* side by side the cards are one height, their buttons on one line; a lone card keeps half the row,
             not a button as wide as the screen */}
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* phones only: wider screens change tomorrow in the week chart, with the lock time above it */}
+          {/* phones only: wider screens switch meals in the week chart */}
           <section className={`${card} md:hidden`}>
-            <h2 className="text-xl font-bold">{m.tomorrow} · {fmtDay(tomorrow, lang)}</h2>
-            {lockLine(false)}
-            <MealRow lang={lang} m={m} meId={me.memberId} date={tomorrow} decision={decision} {...meals} />
+            <h2 className="text-xl font-bold">{m.mealsTitle}</h2>
+            {[today, tomorrow].map(d => (
+              <div key={d} className="mt-4">
+                <h3 className="font-semibold">{d === today ? m.today : m.tomorrow} · {fmtDay(d, lang)}</h3>
+                <MealRow lang={lang} m={m} meId={me.memberId} date={d} decision={decide(d)} {...meals} />
+              </div>
+            ))}
+            <p className="mt-3 text-[15px] text-muted">{m.todayNotifies}</p>
             <Link href={`/${lang}/meals`} className={`mt-3 inline-flex min-h-11 items-center ${link}`}>{m.seeWeek}</Link>
           </section>
           <section className={`flex flex-col ${focal}`}>
             <h2 className="text-xl font-bold">{m.headcountTitle}</h2>
-            <p className="mt-1 text-[15px] text-muted">{m.tomorrow} · {fmtDay(tomorrow, lang)} · {status}</p>
+            <p className="mt-1 text-[15px] text-muted">{m.today} · {fmtDay(today, lang)}</p>
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
               {MEALS.map(x => (
                 <div key={x} className="rounded-xl bg-paper py-3">
                   <dt className="text-[15px] text-muted">{m.names[x]}</dt>
-                  <dd className={`font-bold tabular-nums ${plates(hc, meals.noCook, tomorrow, x) === 'off' ? 'py-1.5 text-lg' : 'text-3xl'}`}>{plate(hc, tomorrow, x)}</dd>
+                  <dd className={`font-bold tabular-nums ${plates(tod, meals.noCook, today, x) === 'off' ? 'py-1.5 text-lg' : 'text-3xl'}`}>{plate(tod, today, x)}</dd>
                 </div>
               ))}
             </dl>
-            <p className="mt-3 text-[15px] text-muted">{m.today}: {MEALS.map(x => `${m.names[x]} ${plate(tod, today, x)}`).join(' · ')}</p>
-            <LockChange m={m} lang={lang} date={tomorrow} hc={hc} changes={changes} />
+            <p className="mt-3 text-[15px] text-muted">{m.tomorrow}: {MEALS.map(x => `${m.names[x]} ${plate(hc, tomorrow, x)}`).join(' · ')}</p>
             <div className="grow" />
-            <ShareButton text={countText(me.flatName, m, tomorrow, hc, status, lang, meals.noCook)} label={m.share} copied={m.copied} />
+            <ShareButton text={countText(me.flatName, m, today, tod, tomorrow, hc, lang, meals.noCook)} label={m.share} copied={m.copied} />
           </section>
           {bal && <section className={`flex flex-col ${card}`}>
             <h2 className="text-xl font-bold">{x.title}</h2>
@@ -233,8 +223,8 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             <h2 className="text-2xl font-bold">{m.weekTitle}</h2>
             <Link href={`/${lang}/meals?week=1`} className={`inline-flex min-h-11 items-center gap-2 ${link}`}>{m.nextWeek} <span aria-hidden="true">→</span></Link>
           </div>
-          <div className="mb-4">{lockLine(true)}</div>
-          <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} note={note} {...meals} />
+          <p className="mb-4 text-[15px] text-muted">{m.todayNotifies}</p>
+          <WeekChart lang={lang} m={m} meId={me.memberId} today={today} week={week} decide={decide} {...meals} />
         </div>
         <div className="mt-10 grid gap-x-6 md:grid-cols-2 md:items-start">
           <Fold title={a.flatmates}>
@@ -293,6 +283,13 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             )}
             <div className="mt-6 border-t border-line pt-6">
               <Reminders lang={lang} t={t.push} />
+              {/* only the today-meal notices: muting them keeps the money ones (turning reminders off would lose both) */}
+              <form action={mealPushAction} className="mt-3">
+                <input type="hidden" name="lang" value={lang} />
+                <input type="hidden" name="on" value={self?.mealPush ? '0' : '1'} />
+                <p className="text-[15px]">{self?.mealPush ? t.push.mealOn : t.push.mealOff} · <button className={`min-h-11 text-[15px] ${link}`}>{self?.mealPush ? t.push.mealMute : t.push.mealUnmute}</button></p>
+                <p className="text-[15px] text-muted">{t.push.mealHint}</p>
+              </form>
             </div>
             <div className="mt-8 border-t border-line pt-6">
               <h3 className="text-lg font-bold">{a.changePin}</h3>

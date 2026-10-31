@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { addDays, countChanges, firstWeek, isDate, mealDecision, daysOfMonth, weightedMeals, daysPresent, headcount, isLocked, nowDhaka, ownPlate, plates, todayDhaka, type MealMember, type MealChange } from './meals';
+import { addDays, firstWeek, isDate, mealDecision, daysOfMonth, weightedMeals, daysPresent, headcount, nowDhaka, ownPlate, plates, todayDhaka, type MealMember, type MealChange } from './meals';
 
 const all = { b: true, l: true, d: true };
 const members: MealMember[] = [
@@ -41,25 +41,15 @@ describe('meals', () => {
     expect(headcount(members, changes, '2026-10-12')).toEqual({ b: 1, l: 2, d: 3 });
     expect(headcount(members, [], '2026-10-10')).toEqual({ b: 1, l: 1, d: 1 });   // D not joined yet
   });
-
-  it('locks tomorrow at the cutoff, across month and year ends', () => {
-    expect(isLocked('2026-10-10', '2026-10-09T21:59', '22:00')).toBe(false);
-    expect(isLocked('2026-10-10', '2026-10-09T22:00', '22:00')).toBe(true);
-    expect(isLocked('2026-10-10', '2026-10-09T22:00', '22:00:00')).toBe(true);   // Postgres time format
-    expect(isLocked('2026-10-09', '2026-10-09T08:00', '22:00')).toBe(true);
-    expect(isLocked('2026-10-11', '2026-10-09T23:00', '22:00')).toBe(false);
-    expect(isLocked('2027-01-01', '2026-12-31T22:00', '22:00')).toBe(true);
-  });
 });
 
 describe('meal rules', () => {
-  it('opens before the cutoff, then late; today and past days are closed', () => {
-    expect(mealDecision('2026-10-10', '2026-10-09T21:59', '22:00')).toBe('open');
-    expect(mealDecision('2026-10-10', '2026-10-09T22:00', '22:00')).toBe('late');
-    expect(mealDecision('2026-10-10', '2026-10-09T22:00', '22:00:00')).toBe('late');
-    expect(mealDecision('2026-10-09', '2026-10-09T08:00', '22:00')).toBe('closed');   // today is locked for members
-    expect(mealDecision('2026-10-08', '2026-10-09T08:00', '22:00')).toBe('closed');
-    expect(mealDecision('2026-10-11', '2026-10-09T23:00', '22:00')).toBe('open');
+  it('later days are open, today is a same-day change, past days are closed; there is no lock time', () => {
+    expect(mealDecision('2026-10-10', '2026-10-09')).toBe('open');
+    expect(mealDecision('2026-11-30', '2026-10-09')).toBe('open');
+    expect(mealDecision('2026-10-09', '2026-10-09')).toBe('late');
+    expect(mealDecision('2026-10-08', '2026-10-09')).toBe('closed');
+    expect(mealDecision('2026-12-31', '2027-01-01')).toBe('closed');   // across a year end
   });
 
   it('adds days across month and year ends and checks dates', () => {
@@ -79,13 +69,6 @@ describe('first week', () => {
     expect(firstWeek('2026-10-10', '2026-10-03')).toBe(-1);   // the first day of last week
     expect(firstWeek('2026-10-10', '2026-10-02')).toBe(-2);
     expect(firstWeek('2026-10-10', '2026-12-01')).toBe(0);    // someone moving in later never pushes this week out
-  });
-});
-
-describe('count changes', () => {
-  it('lists the meals whose count moved', () => {
-    expect(countChanges({ b: 6, l: 8, d: 9 }, { b: 6, l: 8, d: 9 })).toEqual([]);
-    expect(countChanges({ b: 6, l: 8, d: 9 }, { b: 5, l: 8, d: 10 })).toEqual([{ meal: 'b', from: 6, to: 5 }, { meal: 'd', from: 9, to: 10 }]);
   });
 });
 
@@ -149,11 +132,11 @@ describe('the cook card', () => {
     expect(plates({ b: 0, l: 0, d: 9 }, noCook, '2026-10-10', 'b')).toBe(0);   // breakfast isn't blocked
   });
 
-  it('Share says no cooking too, the same as the card', async () => {
+  it('Share sends today’s plates then tomorrow’s, and says no cooking like the card', async () => {
     const { countText } = await import('../app/[lang]/format');
     const { getDictionary } = await import('../app/[lang]/dictionaries');
     const m = getDictionary('en').meals;
-    expect(countText('Flat 4B', m, '2026-10-10', { b: 9, l: 0, d: 9 }, 'Final', 'en', [{ date: '2026-10-10', meal: 'l' }]))
-      .toBe('Flat 4B · Tomorrow, Sat, 10 October\nBreakfast 9 · Lunch No cooking · Dinner 9\nFinal');
+    expect(countText('Flat 4B', m, '2026-10-10', { b: 9, l: 0, d: 9 }, '2026-10-11', { b: 8, l: 8, d: 7 }, 'en', [{ date: '2026-10-10', meal: 'l' }]))
+      .toBe('Flat 4B · Today, Sat, 10 October\nBreakfast 9 · Lunch No cooking · Dinner 9\nTomorrow, Sun, 11 October: Breakfast 8 · Lunch 8 · Dinner 7');
   });
 });

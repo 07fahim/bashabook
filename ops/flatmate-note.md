@@ -20,7 +20,7 @@ from the Flat tab, and `<collector>` with the name of the person who keeps the f
 **<collector> নিজে আটকে গেলে** ফ্ল্যাটের কেউ খুলতে পারবে না; বাসাবুক টিমকে হোয়াটসঅ্যাপে লিখতে হবে (সাইটের নিচে নম্বর আছে)। টিম ফোনে চিনে নিয়ে তারপর খুলে দেয়; মেসেজে PIN কখনো পাঠানো হয় না।
 
 **রোজকার কাজ**
-- কাল খাবেন না? রাত 10টার আগে মিলে গিয়ে বন্ধ করে দিন (সময়টা ফ্ল্যাটের ঠিক করা)। বন্ধ হওয়ার পর কুককে বলা সংখ্যাই চূড়ান্ত।
+- আজ বা কাল খাবেন না? যেকোনো সময় মিলে গিয়ে বন্ধ করে দিন। আজকের মিল বদলালে ফ্ল্যাটের সবাই নোটিফিকেশন পায় আর <collector> রাঁধুনিকে জানায়।
 - বাজার করলেন বা বিল দিলেন? টাকায় গিয়ে লিখুন, ছবি লাগে না। যার টাকা, সে কনফার্ম করলে হিসাবে উঠবে।
 - নিজের হিসাব হোমে সবসময় দেখা যায়; কোন টাকাটা কোথা থেকে এলো, “টাকার হিসাব দেখুন”-এ।
 
@@ -43,7 +43,7 @@ BashaBook: our flat's meals, bazar, bills and money in one place. It runs in the
 **If <collector> is locked out**, nobody in the flat can open it; message the BashaBook team on WhatsApp (number at the bottom of the site). The team checks by phone first and never sends a PIN in a message.
 
 **Day to day**
-- Not eating tomorrow? Turn it off under Meals before 10 pm (the flat sets the time). After that, the number told to the cook is final.
+- Not eating today or tomorrow? Switch it off under Meals any time. A change for today notifies the flat and <collector> tells the cook.
 - Did bazar or paid a bill? Write it under Money; no photo needed. It counts once the person whose money it is confirms it.
 - Your own balance is always on Home; where each amount comes from is under “See money”.
 

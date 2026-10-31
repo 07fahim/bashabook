@@ -17,42 +17,12 @@ const claimed = async (flatId: string, date: string) =>
   (await db(`select 1 from sent_jobs where flat_id = $1 and date = $2::date and job_type = 'check'`, [flatId, date])).length > 0;
 
 describe('timed reminders', { timeout: 30000 }, () => {
-  it('meal: once per flat in the hour before its cutoff, to everyone, not on a no-cook day', async () => {
+  it('no meal reminder: meals have no lock time, so the evening run sends nothing about meals', async () => {
     await migrate();
-    const f = await createFlat(db, { flatName: 'J1', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-10-05', lang: 'bn' });
+    await createFlat(db, { flatName: 'J1', name: 'Nafis', pin: '1234', others: ['Tahsin'], today: '2026-10-05', lang: 'bn' });
     const s = spy();
-    expect((await runJobs(db, '2026-10-05T20:59', s.send)).meal).toBe(0);
-    expect((await runJobs(db, '2026-10-05T21:00', s.send)).meal).toBe(1);
-    expect((await runJobs(db, '2026-10-05T21:05', s.send)).meal).toBe(0);   // claimed already
-    expect(s.calls.length).toBe(1);
-    const [t] = await db<{ id: string }>(`select id from members where flat_id = $1 and role = 'member'`, [f.flatId]);
-    expect(s.calls[0].ids.sort()).toEqual([f.memberId, t.id].sort());
-    expect(s.calls[0].msg.title).toContain('10:00 pm');
-    expect(s.calls[0].msg.url).toBe('/bn/meals');
-    // another cutoff moves the window
-    await db(`update flats set cutoff_time = '19:30' where id = $1`, [f.flatId]);
-    expect((await runJobs(db, '2026-10-06T18:29', s.send)).meal).toBe(0);
-    expect((await runJobs(db, '2026-10-06T18:30', s.send)).meal).toBe(1);
-    // nothing cooked tomorrow: no reminder
-    await db(`insert into no_cook (flat_id, date, meal) values ($1, '2026-10-08', 'b'), ($1, '2026-10-08', 'l'), ($1, '2026-10-08', 'd')`, [f.flatId]);
-    expect((await runJobs(db, '2026-10-07T19:00', s.send)).meal).toBe(0);
-    await db(`delete from no_cook where flat_id = $1 and meal = 'd'`, [f.flatId]);
-    expect((await runJobs(db, '2026-10-07T19:01', s.send)).meal).toBe(1);
-    // a leaver whose last day is today has no meals tomorrow; someone cooking for themselves has none to lock
-    await db(`update members set left_on = '2026-10-08' where id = $1`, [t.id]);
-    await db(`update members set in_meals = false where id = $1`, [f.memberId]);
-    expect((await runJobs(db, '2026-10-08T19:00', s.send)).meal).toBe(1);
-    expect(s.calls.at(-1)!.ids).toEqual([]);
-    // someone moving in after tomorrow has no meals to set yet
-    await db(`update members set in_meals = true, left_on = null where flat_id = $1`, [f.flatId]);
-    await db(`update members set joined_on = '2026-10-11' where id = $1`, [t.id]);
-    expect((await runJobs(db, '2026-10-09T19:00', s.send)).meal).toBe(1);
-    expect(s.calls.at(-1)!.ids).toEqual([f.memberId]);
-    await db(`update members set joined_on = '2026-10-05' where id = $1`, [t.id]);
-    // two runs at once: the claim, not the filter, keeps it to one
-    await db(`update members set in_meals = true, left_on = null where flat_id = $1`, [f.flatId]);
-    const both = await Promise.all([runJobs(db, '2026-10-10T19:00', s.send), runJobs(db, '2026-10-10T19:00', s.send)]);
-    expect(both[0].meal + both[1].meal).toBe(1);
+    for (const t of ['2026-10-05T20:59', '2026-10-05T21:00', '2026-10-05T21:55']) expect('meal' in await runJobs(db, t, s.send)).toBe(false);
+    expect(s.calls.filter(c => c.msg.url.endsWith('/meals'))).toEqual([]);
   });
 
   it('close: once per month to the collector from the 1st at 10:00, and says how many confirmations are missing', async () => {

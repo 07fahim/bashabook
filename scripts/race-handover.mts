@@ -272,7 +272,7 @@ async function main() {
       await Promise.all([
         sql.begin(async tx => { const t: Db = (q, p = []) => tx.unsafe(q, p as never[]) as never; await f.deposit(t, Z); await t(`select pg_sleep(0.02)`); await f.deposit(t, N); }).catch(note('ledger')),
         f.leave(d, N, Z, i % 2 ? '2026-12-31' : null).catch(note('moveOut')),
-        updateSettings(d, f.flatId, N, { cutoff: '21:00', weights: { b: i % 2 ? 50 : 60, l: 100, d: 100 } }, '2026-10-10T12:00').catch(note('settings')),
+        updateSettings(d, f.flatId, N, { weights: { b: i % 2 ? 50 : 60, l: 100, d: 100 } }, '2026-10-10T12:00').catch(note('settings')),
         setDefaults(d, f.flatId, Z, { b: i % 2 === 0, l: true, d: true }, '2026-09-01', '2026-10-10').catch(note('usualMeals')),
       ]);
     }

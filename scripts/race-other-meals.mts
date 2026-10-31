@@ -6,7 +6,7 @@ import postgres from 'postgres';
 import { createFlat } from '../lib/auth';
 import { closeMonth } from '../lib/close';
 import type { Db } from '../lib/db';
-import { addGuests, changedByOthers, cookAgain, noCooking, removeGuests, saveMeal, seedLock, setAway, cancelAway, setDefaults, setOtherMeal, setOwn, updateSettings } from '../lib/meals-db';
+import { addGuests, changedByOthers, cookAgain, noCooking, removeGuests, saveMeal, setAway, cancelAway, setDefaults, setOtherMeal, setOwn, updateSettings } from '../lib/meals-db';
 import { nowDhaka, type Meal } from '../lib/meals';
 
 const url = process.env.DATABASE_URL ?? '';
@@ -52,7 +52,6 @@ async function flat() {
   const f = await createFlat(db, { flatName: `Race meals ${++n}`, name: 'Nafis', pin: String(1000 + Math.floor(Math.random() * 9000)), others: ['Fahim', 'Tahsin', 'Zarif'], today: '2026-09-01', lang: 'en' });
   const flatId = f.flatId;
   await db(`update members set pin_hash = 'x' where flat_id = $1 and pin_hash is null`, [flatId]);
-  await db(`update flats set cutoff_time = '23:59:59' where id = $1`, [flatId]);
   await db(`insert into months (flat_id, month) values ($1, '2026-09-01'), ($1, '2026-10-01'), ($1, '2026-11-01') on conflict do nothing`, [flatId]);
   const ids = Object.fromEntries((await db<{ id: string; name: string }>(`select id, name from members where flat_id = $1`, [flatId])).map(m => [m.name, m.id])) as Record<'Nafis' | 'Fahim' | 'Tahsin' | 'Zarif', string>;
   return {
@@ -215,7 +214,7 @@ async function main() {
   {
     const f = await flat(); const { Fahim: F, Tahsin: T } = f.ids;
     await setAway(db, f.flatId, F, D, D);
-    const h = hold(tx => cancelAway(tx, f.flatId, F, D, D)); await h.started;
+    const h = hold(tx => cancelAway(tx, f.flatId, F, D, D, today)); await h.started;
     const b = f.other(db, T, F, D, 1, 0);
     await waits(b); h.release(); await h.done;
     check('6c cancel away in flight: flatmate closed (away still committed)', await b === 'closed' && await f.audits(T) === 0, { b: await b });
@@ -251,22 +250,13 @@ async function main() {
     const w = await waits(b); h.release(); await h.done;
     check('8b accept holds the flat, flatmate waits: ok', w && await b === 'ok', { w, b: await b });
   }
-  // 9a. the lock time moves to now (tomorrow locks) while the flatmate edits tomorrow
+  // 9a. a meal weights save holds the flat while the flatmate edits tomorrow (there is no lock time)
   {
     const f = await flat(); const { Nafis: N, Fahim: F, Tahsin: T } = f.ids;
-    const h = hold(tx => updateSettings(tx, f.flatId, N, { cutoff: '00:00', weights: { b: 50, l: 100, d: 100 } }, now)); await h.started;
+    const h = hold(tx => updateSettings(tx, f.flatId, N, { weights: { b: 50, l: 100, d: 100 } }, now)); await h.started;
     const b = f.other(db, T, F, day(1), 0, 1);
     const w = await waits(b); h.release(); await h.done;
-    check('9a cutoff moves to now (holds), flatmate on tomorrow waits: closed', w && await b === 'closed', { w, b: await b });
-  }
-  // 9b. seedLock with tomorrow locked, against a flatmate on a later day
-  {
-    const f = await flat(); const { Fahim: F, Tahsin: T } = f.ids;
-    await db(`update flats set cutoff_time = '00:00' where id = $1`, [f.flatId]);
-    const h = hold(tx => seedLock(tx, f.flatId, nowDhaka())); await h.started;
-    const b = f.other(db, T, F, D, 0, 1);
-    await waits(b); h.release(); await h.done;
-    check('9b seedLock vs flatmate on a later day: ok, no error', await b === 'ok', { b: await b });
+    check('9a weights save holds the flat, flatmate on tomorrow waits: ok', w && await b === 'ok', { w, b: await b });
   }
   // 10. a deposit while the flatmate's call holds the flat and the month row
   {
