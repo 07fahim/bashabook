@@ -19,10 +19,10 @@ const rows = await db<{ id: string; name: string; code: string; created: string;
 if (!rows.length) console.log('no flat matches');
 for (const r of rows) {
   // everyone living there now, with saved numbers: call back one of these, never a number the person asking gives you
-  const people = await db<{ name: string; role: string; phone: string | null }>(
-    `select name, role, phone from members where flat_id = $1 and joined_on <= (now() at time zone 'Asia/Dhaka')::date
+  const people = await db<{ name: string; role: string; phone: string | null; notJoined: boolean }>(
+    `select name, role, phone, pin_hash is null as "notJoined" from members where flat_id = $1 and joined_on <= (now() at time zone 'Asia/Dhaka')::date
        and (left_on is null or left_on >= (now() at time zone 'Asia/Dhaka')::date) order by name`, [r.id]);
   console.log(`${r.name} · code ${r.code} · collector ${r.collector ?? 'none'} · saved number ${r.phone ?? 'none'} · ${people.length} living there · started ${r.created}`);
-  for (const p of people) console.log(`  ${p.name}${p.role === 'manager' ? ' (collector)' : ''} · saved number ${p.phone ?? 'none'}`);
+  for (const p of people) console.log(`  ${p.name}${p.role === 'manager' ? ' (collector)' : ''}${p.notJoined ? ' (not joined yet)' : ''} · saved number ${p.phone ?? 'none'}`);
 }
 process.exit(0);

@@ -54,11 +54,15 @@ code on Home (and the phone they used shows Back to the flat on the landing page
 
 1. Ask the flat's name and the collector's name. Run (read-only)
    `node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/find-flat.mts "<flat name part>" "<collector name part>"`.
-2. Verify before telling the code: call back a saved number the script prints (the asker's own or the collector's), never
-   a number the person gives you now. No saved number: ask the names of two people living in the flat and check them
+2. Verify before telling the code: call back a saved number the script prints (the asker's own or the collector's).
+   Never a number the person gives you now. No saved number: ask the names of two people living in the flat and check them
    against the script's list.
-3. Tell the code on that call. The code alone opens nothing: it shows the flat's name and names; the PIN is still needed.
-4. They forgot the PIN too: a flatmate's PIN is reset by the collector on the Flat tab; the collector's PIN follows Steps
+3. Look for names the script marks not joined yet. Anyone with the code can take such a name and set its PIN, so the code
+   opens the flat. When any name shows not joined yet: tell the code only after a call-back to a saved number the script
+   prints (the names check alone is not enough) or ask the collector to remove or claim that name first. When every name
+   has joined: the code alone opens nothing because the PIN is still needed, so the names check is enough.
+4. Tell the code by voice on that call.
+5. They forgot the PIN too: a flatmate's PIN is reset by the collector on the Flat tab; the collector's PIN follows Steps
    below.
 
 ## Never
@@ -141,4 +145,4 @@ code on Home (and the phone they used shows Back to the flat on the landing page
 
 ## Tested
 
-Run on a disposable flat on the Neon test copy before relying on it: see the PR that added this file.
+Run on a disposable flat on the TEST Supabase project (bashabook-test) before relying on it: see the PR that added this file.
