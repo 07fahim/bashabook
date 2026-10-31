@@ -2,6 +2,9 @@ import type { ComponentProps, ReactNode } from 'react';
 import { CASH_KEYS } from '@/lib/money';
 import type { Method } from '@/lib/money-db';
 
+/** iPhone or iPad (newer iPads say Mac but have touch). Browser only. */
+export const apple = () => /iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+
 /** Line icons (24px grid) for the landing cards and the notices rows. */
 export const ICONS = {
   meal: 'M7 3v8M5 3v4a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 5s1 4 3 4v9',

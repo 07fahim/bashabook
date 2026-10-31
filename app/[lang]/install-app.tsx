@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useSyncExternalStore } from 'react';
-import { apple } from './reminders';
-import { secondary } from './ui';
+import { apple, secondary } from './ui';
 
 type Prompt = Event & { prompt: () => Promise<void> };
 declare global { interface Window { bip?: Prompt | null } }
@@ -24,7 +23,8 @@ export function InstallApp({ t, className }: { t: { button: string; lead: string
   // an offer works once: if it is turned down the browser makes a new one later and the button comes back with it
   const [used, setUsed] = useState<Prompt | null>(null);
   const ready = offer && offer !== used && !installed() ? offer : null;
-  const install = () => { setUsed(ready); ready?.prompt().catch(() => {}); };
+  // cleared for the whole tab too: another page's button must not offer it again
+  const install = () => { window.bip = null; setUsed(ready); ready?.prompt().catch(() => {}); };
   if (ready) return (
     <div className={className}>
       <button type="button" onClick={install} className={`${secondary} sm:w-auto`}>{t.button}</button>

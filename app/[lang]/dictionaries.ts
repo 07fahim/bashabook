@@ -341,8 +341,8 @@ const bn = {
   },
   install: {
     button: 'অ্যাপটা ইনস্টল করুন',
-    lead: 'ফোনের হোম স্ক্রিন থেকে অন্য অ্যাপের মতোই খুলবে।',
-    ios: 'iPhone-এ অ্যাপ হিসেবে রাখতে: Share চাপুন তারপর Add to Home Screen।',
+    lead: 'অন্য অ্যাপের মতোই নিজে আলাদা হয়ে খুলবে।',
+    ios: 'iPhone বা iPad-এ অ্যাপ হিসেবে রাখতে: Share চাপুন তারপর Add to Home Screen।',
   },
   push: {
     on: 'এই ফোনে রিমাইন্ডার: চালু',
@@ -1173,8 +1173,8 @@ const en: Dict = {
   },
   install: {
     button: 'Install the app',
-    lead: 'It opens from your home screen like any other app.',
-    ios: 'To keep it as an app on iPhone: tap Share then Add to Home Screen.',
+    lead: 'It opens on its own like any other app.',
+    ios: 'To keep it as an app on iPhone or iPad: tap Share then Add to Home Screen.',
   },
   push: {
     on: 'Reminders on this phone: on',

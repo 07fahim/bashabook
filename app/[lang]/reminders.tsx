@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { removePushAction, savePushAction } from './actions';
-import { link, secondary } from './ui';
+import { apple, link, secondary } from './ui';
 
 type Copy = { on: string; turnOn: string; turnOff: string; hint: string; denied: string; unsupported: string; ios: string; failed: string };
 type State = 'loading' | 'unsupported' | 'ios' | 'denied' | 'off' | 'on' | 'busy' | 'failed';
 
 const KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 const toKey = (b64: string) => Uint8Array.from(atob(b64.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(b64.length / 4) * 4, '=')), c => c.charCodeAt(0));
-/** iPhone or iPad (newer iPads say Mac but have touch). */
-export const apple = () => /iPhone|iPad/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
 const subscription = async () => (await navigator.serviceWorker.getRegistration('/sw.js'))?.pushManager.getSubscription();
 
 /** What this browser can do right now. iPhone or iPad in Safari (not installed) gets the Home Screen hint. A subscription
