@@ -281,6 +281,10 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
           <input type="hidden" name="lang" value={lang} />
           <button className={`inline-flex min-h-11 items-center text-muted underline-offset-4 hover:underline ${focus}`}>{a.logout}</button>
         </form>
+        {/* seen before leaving: the code is what brings you back */}
+        <p className="text-[15px] text-muted">
+          {a.codeKeep.split('{code}')[0]}<span className="font-bold tracking-widest text-ink">{me.joinCode}</span>{a.codeKeep.split('{code}')[1]}
+        </p>
       </main>
     </>
   );

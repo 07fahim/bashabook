@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { joinByCodeAction } from '../actions';
 import { getDictionary, hasLocale } from '../dictionaries';
+import { ForgotCode } from '../forgot-code';
 import { Header } from '../header';
 import { BackToFlat } from '../remember-flat';
 import { Field, primary } from '../ui';
@@ -35,6 +36,7 @@ export default async function JoinByCode({ params, searchParams }: PageProps<'/[
           <Field label={a.code} name="code" required maxLength={12} autoComplete="off" autoCapitalize="characters" className="uppercase tracking-widest" />
           <button className={primary}>{a.joinBtn}</button>
         </form>
+        <ForgotCode t={t} className="mt-8" />
       </main>
     </>
   );

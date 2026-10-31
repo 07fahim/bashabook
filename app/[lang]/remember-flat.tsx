@@ -21,7 +21,7 @@ export function BackToFlat({ lang, label, className }: { lang: string; label: st
   if (!flat) return null;
   return (
     <p className={className}>
-      <Link href={`/${lang}/j/${flat.code}`} prefetch={false} className={`inline-flex min-h-11 items-center text-lg ${link}`}>{label.replace('{flat}', flat.name)}</Link>
+      <Link href={`/${lang}/j/${flat.code}`} prefetch={false} className={`inline-flex min-h-11 items-center text-lg ${link}`}>{label.replace('{flat}', () => flat.name)}</Link>
     </p>
   );
 }

@@ -10,6 +10,7 @@ import { allow, firstIp } from '@/lib/rate-limit';
 import { ActionForm } from '../../action-form';
 import { loginAction } from '../../actions';
 import { getDictionary, hasLocale } from '../../dictionaries';
+import { ForgotCode } from '../../forgot-code';
 import { fmtDay } from '../../format';
 import { Header } from '../../header';
 import { focus, link, PinField, primary, PageSkeleton } from '../../ui';
@@ -48,6 +49,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
             <h1 className={h1}>{a.joinTitle}</h1>
             <p role="alert" className="mt-3 font-semibold text-chili">{ok ? a.errors.badCode : a.errors.tooMany}</p>
             <Link href={`/${lang}/join`} className={`mt-6 inline-flex min-h-11 items-center ${link}`}>{a.tryCode}</Link>
+            <ForgotCode t={t} className="mt-8" />
           </div>
         ) : !me ? (
           <>
