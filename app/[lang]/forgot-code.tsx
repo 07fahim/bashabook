@@ -1,15 +1,18 @@
+import Link from 'next/link';
 import { EMAIL, WHATSAPP } from './contacts';
-import type { Dict } from './dictionaries';
+import type { Dict, Locale } from './dictionaries';
 import { link } from './ui';
 
 const contact = `inline-flex min-h-11 items-center ${link}`;
 
-/** What to do when the flat code is lost: ask a flatmate first, else the app team (ops/collector-pin-recovery.md). */
-export function ForgotCode({ t, className }: { t: Dict; className?: string }) {
+/** A lost flat code or PIN: a code by email first; without an email a flatmate or the app team (ops/collector-pin-recovery.md). */
+export function ForgotCode({ t, lang, className }: { t: Dict; lang: Locale; className?: string }) {
   return (
     <div className={className}>
       <h2 className="font-semibold">{t.app.forgotTitle}</h2>
       <p className="mt-1 text-[15px] text-muted">{t.app.forgotLead}</p>
+      <Link href={`/${lang}/forgot`} className={contact}>{t.app.forgotLink}</Link>
+      <p className="mt-3 text-[15px] text-muted">{t.app.forgotNoEmail}</p>
       <div className="flex flex-wrap gap-x-6">
         {WHATSAPP && <a href={WHATSAPP} target="_blank" rel="noopener noreferrer" className={contact}>{t.footer.whatsapp}</a>}
         {EMAIL && <a href={EMAIL} className={contact}>{t.footer.email}</a>}

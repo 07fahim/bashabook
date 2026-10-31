@@ -49,7 +49,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
             <h1 className={h1}>{a.joinTitle}</h1>
             <p role="alert" className="mt-3 font-semibold text-chili">{ok ? a.errors.badCode : a.errors.tooMany}</p>
             <Link href={`/${lang}/join`} className={`mt-6 inline-flex min-h-11 items-center ${link}`}>{a.tryCode}</Link>
-            <ForgotCode t={t} className="mt-8" />
+            <ForgotCode t={t} lang={lang} className="mt-8" />
           </div>
         ) : !me ? (
           <>
@@ -99,6 +99,7 @@ async function JoinBody({ params, searchParams }: Pick<Props, 'params' | 'search
               <button className={primary}>{a.enterBtn}</button>
             </ActionForm>
             <Link href={`/${lang}/j/${code}`} className={`mt-6 inline-flex min-h-11 items-center ${link}`}>{a.notYou}</Link>
+            {me.claimed && <Link href={`/${lang}/forgot`} className={`mt-2 flex min-h-11 items-center ${link}`}>{a.forgotPin}</Link>}
             </div>
           </>
         )}

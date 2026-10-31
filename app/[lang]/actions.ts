@@ -1,7 +1,7 @@
 'use server';
 
 import { refresh } from 'next/cache';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
 import { addMember, changeEmail, changePin, cleanName, confirmLink, normalizeEmail, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, isPin, weakPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
@@ -14,13 +14,14 @@ import { addDays, headcount, isDate, isLocked, isMeal, isPresent, MEALS, nowDhak
 import {
   addGuests, cancelAway, cookAgain, isInMeals, loadMeals, mealRules, noCooking, removeGuests, saveMeal, seedLock, setAway, setDefaults, setOtherMeal, setOwn, toldCook, updateSettings,
 } from '@/lib/meals-db';
-import { toPoisha } from '@/lib/money';
+import { enDigits, toPoisha } from '@/lib/money';
 import { addEntry, addRoom, confirmEntry, confirmerOf, endedOpenMonth, monthOf, payDue, putBack, rejectEntry, removeEntry, setRent, setRoom, stopRepeat } from '@/lib/money-db';
 import { cashAskMsg, depositMsg, fixAskMsg, fixedMsg, gaveAskMsg, handoverMsg, payoutMsg, rejectedMsg } from '@/lib/notify-text';
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
 import { removePush, savePush, type PushSub } from '@/lib/push-db';
 import { allow, firstIp } from '@/lib/rate-limit';
+import { checkCode, endRecovery, flatsFor, PROVEN_MINUTES, provenEmail, RECOVER_COOKIE, recoverPin, startRecovery } from '@/lib/recovery';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
 import { getDictionary, hasLocale, type Locale } from './dictionaries';
@@ -799,4 +800,69 @@ export async function savePushAction(lang: string, sub: PushSub) {
 export async function removePushAction(lang: string, endpoint: string) {
   const me = await requireMember(hasLocale(lang) ? lang : 'en');
   if (typeof endpoint === 'string') await removePush(db, me.memberId, endpoint);
+}
+
+const recoverToken = async () => (await cookies()).get(RECOVER_COOKIE)?.value ?? '';
+const endStep = async () => (await cookies()).delete(RECOVER_COOKIE);
+
+/** Forgot the code or PIN, step 1: the same work for any email, so nothing tells whether it is known; the code goes out
+ *  after the response, and only to an email someone living in a flat has. */
+export async function forgotEmailAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), t = getDictionary(lang), e = t.app.errors;
+  const email = normalizeEmail(d.get('email'));
+  if (!email) return { error: e.email };
+  if (!(await allow(db, `forgot:${await ip()}`, 10))) return { error: e.tooMany };
+  const r = await startRecovery(db, email);
+  if (!r) return { error: e.tooMany };
+  (await cookies()).set(RECOVER_COOKIE, r.token, { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: PROVEN_MINUTES * 60 });
+  if (r.send) mail(email, t.recover.codeSubject.replace('{code}', r.code), t.recover.codeBody.replace('{code}', r.code));
+  redirect(`/${lang}/forgot`);
+}
+
+/** Step 2: the 6 digits (Bangla digits too). */
+export async function forgotCodeAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), r = getDictionary(lang).recover;
+  const code = enDigits(str(d, 'code')).replace(/\s/g, '');
+  if (!/^\d{6}$/.test(code)) return { error: r.wrongCode };
+  const res = await checkCode(db, await recoverToken(), code);
+  if (res === 'expired' || (res !== 'ok' && res.wrong === 0)) return { error: r.expired };
+  if (res !== 'ok') return { error: `${r.wrongCode} ${r.left.replace('{n}', String(res.wrong))}` };
+  redirect(`/${lang}/forgot`);
+}
+
+/** Another email or a new code: back to step 1. */
+export async function forgotRestartAction(d: FormData) {
+  await endRecovery(db, await recoverToken());
+  await endStep();
+  redirect(`/${langOf(d)}/forgot`);
+}
+
+/** Step 3, the PIN still known: the usual sign-in (same lock, same limit) on the flat the proven email belongs to. */
+export async function recoverSignInAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), t = getDictionary(lang), e = t.app.errors;
+  const pin = pinText(d.get('pin'));
+  if (!isPin(pin)) return { error: e.pin };
+  if (!(await allow(db, `pin:${await ip()}`, 60))) return { error: e.tooMany };
+  const token = await recoverToken(), email = await provenEmail(db, token);
+  const f = email ? (await flatsFor(db, email)).find(x => x.memberId === str(d, 'memberId')) : undefined;
+  if (!f) return { error: t.recover.again };
+  const r = await login(db, f.code, f.memberId, pin, null, null);
+  if ('error' in r) return { error: e[r.error] + (r.left ? ' ' + e.lastTries.replace('{n}', String(r.left)) : '') };
+  await endRecovery(db, token);
+  await endStep();
+  await startSession(r.memberId);
+  redirect(`/${lang}/home`);
+}
+
+/** Step 3, a new PIN: weak ones refused; recoverPin re-checks the proven email and that they still live there. */
+export async function recoverPinAction(_: FormState, d: FormData): Promise<FormState> {
+  const lang = langOf(d), t = getDictionary(lang), e = t.app.errors;
+  const pin = pinText(d.get('newPin')), memberId = str(d, 'memberId');
+  if (!isPin(pin)) return { error: e.pin };
+  if (weakPin(pin)) return { error: e.weakPin };
+  if (pin !== pinText(d.get('pin2'))) return { error: e.pinMatch };
+  if (!(await recoverPin(db, await recoverToken(), memberId, pin))) return { error: t.recover.again };
+  await endStep();
+  await startSession(memberId);
+  redirect(`/${lang}/home`);
 }

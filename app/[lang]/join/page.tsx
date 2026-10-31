@@ -36,7 +36,7 @@ export default async function JoinByCode({ params, searchParams }: PageProps<'/[
           <Field label={a.code} name="code" required maxLength={12} autoComplete="off" autoCapitalize="characters" className="uppercase tracking-widest" />
           <button className={primary}>{a.joinBtn}</button>
         </form>
-        <ForgotCode t={t} className="mt-8" />
+        <ForgotCode t={t} lang={lang} className="mt-8" />
       </main>
     </>
   );

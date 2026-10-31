@@ -1,5 +1,9 @@
 # Collector PIN recovery (app team, pilot)
 
+First: anyone with an email in BashaBook gets back in alone with **Forgot the code or PIN?** on the sign-in page (a 6-digit
+code by email, then their flat's code, their PIN or a new one). Ask them to try that. What follows is for someone with no
+working email.
+
 The collector forgot their PIN, or their sign-in is locked. There is no self-service recovery: the app team verifies who is
 asking, then sets a one-time PIN with `scripts/reset-collector-pin.mts`. A flatmate who forgot their PIN doesn't need this:
 the collector resets it on the Flat tab.
@@ -48,6 +52,8 @@ Why numbers and not faces: the app team doesn't know anyone's face, so meeting s
 nothing by itself. What proves identity is a flatmate reached on their own verified number, whose phone wasn't lost.
 
 ## Lost flat code
+
+Try **Forgot the code or PIN?** first (it needs the email they gave BashaBook).
 
 Someone signed out and lost the flat code. First ask them to check with anyone in the flat: every signed-in person sees the
 code on Home (and the phone they used shows Back to the flat on the landing page). Only when nobody can:
