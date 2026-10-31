@@ -12,18 +12,18 @@ export function SecretField({ label, className = '', ...input }: { label: string
   const { lang } = useParams<{ lang: string }>();
   const id = useId();
   return (
-    <label className="block font-semibold">
-      {/* labelledby: the button sits inside the label, so without it the field's name would include "Show" */}
-      <span id={id}>{label}</span>
+    <div className="font-semibold">
+      <label id={`${id}l`} htmlFor={id}>{label}</label>
       <span className="relative block">
         {/* ms-reveal: Edge's own eye, which would sit next to this one */}
-        <input {...input} aria-labelledby={id} type={shown ? 'text' : 'password'} className={`${field} pr-14 [&::-ms-reveal]:hidden ${className}`} />
-        {/* the mousedown keeps focus (and the phone keyboard) in the field; the name is one word, the field comes right before it */}
+        <input {...input} id={id} type={shown ? 'text' : 'password'} className={`${field} pr-14 [&::-ms-reveal]:hidden ${className}`} />
+        {/* the mousedown keeps focus (and the phone keyboard) in the field; one-word name, the field's label describes it */}
         <button
           type="button"
           onMouseDown={e => e.preventDefault()}
           onClick={() => setShown(s => !s)}
           aria-label={(lang === 'bn' ? copy.bn : copy.en)[shown ? 1 : 0]}
+          aria-describedby={`${id}l`}
           className={`absolute top-1.5 right-1 bottom-0 grid w-12 place-items-center rounded-full text-muted hover:text-ink ${focus}`}
         >
           <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -33,6 +33,6 @@ export function SecretField({ label, className = '', ...input }: { label: string
           </svg>
         </button>
       </span>
-    </label>
+    </div>
   );
 }
