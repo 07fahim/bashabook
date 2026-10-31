@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { createFlat, createSession, emailOf, login, memberBySession, resetPin } from './auth';
-import { checkCode, endRecovery, flatsFor, PER_DAY, provenEmail, recoverPin, recoveryOf, startRecovery } from './recovery';
+import { checkCode, checkOf, endRecovery, flatsFor, PER_DAY, provenEmail, recoverPin, recoveryOf, startCheck, startRecovery, takeCheck } from './recovery';
 
 const today = '2026-10-09';
 let n = 0;
@@ -41,8 +41,8 @@ describe('recovery by email code', { timeout: 30000 }, () => {
   it('five tries at a code, then even the right one is refused', async () => {
     const { email } = await flat();
     const r = (await startRecovery(db, email))!;
-    for (let left = 4; left >= 0; left--) expect(await checkCode(db, r.token, other(r.code))).toEqual({ wrong: left });
-    expect(await checkCode(db, r.token, r.code)).toBe('expired');
+    for (let left = 4; left >= 0; left--) expect(await checkCode(db, r.token, other(r.code), 'recover')).toEqual({ wrong: left });
+    expect(await checkCode(db, r.token, r.code, 'recover')).toBe('expired');
     expect(await recoveryOf(db, r.token)).toBeNull();
   });
 
@@ -50,20 +50,19 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     const { email } = await flat();
     const r = (await startRecovery(db, email))!;
     await db(`update recoveries set expires_at = now() - interval '1 second' where email = $1`, [email]);
-    expect(await checkCode(db, r.token, r.code)).toBe('expired');
+    expect(await checkCode(db, r.token, r.code, 'recover')).toBe('expired');
     expect(await recoveryOf(db, r.token)).toBeNull();
   });
 
-  it('the right code proves the email, confirms it and lists the flats with their codes', async () => {
+  it('the right code proves the email and lists the flats with their codes', async () => {
     const { email, memberId, code, flatName } = await flat();
     const r = (await startRecovery(db, email))!;
     expect(await provenEmail(db, r.token)).toBeNull();
-    expect(await checkCode(db, r.token, r.code)).toBe('ok');
+    expect(await checkCode(db, r.token, r.code, 'recover')).toBe('ok');
     expect(await recoveryOf(db, r.token)).toEqual({ email, proven: true });
     expect(await provenEmail(db, r.token)).toBe(email);
-    expect((await emailOf(db, memberId)).ok).toBe(true);
     expect(await flatsFor(db, email)).toEqual([{ memberId, name: 'Nafis', flatName, code }]);
-    expect(await checkCode(db, r.token, r.code)).toBe('expired');   // a proven step takes no more tries
+    expect(await checkCode(db, r.token, r.code, 'recover')).toBe('expired');   // a proven step takes no more tries
   });
 
   it('a restart landing between the try and the proof stays retired', async () => {
@@ -75,7 +74,7 @@ describe('recovery by email code', { timeout: 30000 }, () => {
       if (first) { first = false; await endRecovery(db, r.token); }
       return rows as never;
     };
-    await checkCode(between, r.token, r.code);
+    await checkCode(between, r.token, r.code, 'recover');
     expect(await provenEmail(db, r.token)).toBeNull();
     expect(await recoveryOf(db, r.token)).toBeNull();
   });
@@ -84,7 +83,7 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     const a = await flat(), b = await flat();
     const r = (await startRecovery(db, a.email))!;
     expect(await recoverPin(db, r.token, a.memberId, '5927')).toBe(false);   // not proven yet
-    expect(await checkCode(db, r.token, r.code)).toBe('ok');
+    expect(await checkCode(db, r.token, r.code, 'recover')).toBe('ok');
     expect(await recoverPin(db, r.token, b.memberId, '5927')).toBe(false);   // someone else's account
     expect(await recoverPin(db, r.token, 'not-a-uuid', '5927')).toBe(false);
     await db(`update members set failed_pin_count = 25, locked_until = 'infinity', must_change_pin = true where id = $1`, [a.memberId]);
@@ -102,7 +101,7 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     const { code, tahsin } = await flat();
     await login(db, code, tahsin, '5827', null, 'tahsin.leaving@gmail.com');
     const r = (await startRecovery(db, 'tahsin.leaving@gmail.com'))!;
-    expect(await checkCode(db, r.token, r.code)).toBe('ok');
+    expect(await checkCode(db, r.token, r.code, 'recover')).toBe('ok');
     await moveOut(tahsin);
     expect(await recoverPin(db, r.token, tahsin, '5927')).toBe(false);
   });
@@ -120,31 +119,22 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     expect(await startRecovery(db, email)).toBeNull();
   });
 
-  it('a moved-out person keeps an unconfirmed email after a right code', async () => {
-    const { code, tahsin } = await flat();
-    await login(db, code, tahsin, '5827', null, 'tahsin.moved@gmail.com');
-    await moveOut(tahsin);
-    const r = (await startRecovery(db, 'tahsin.moved@gmail.com'))!;
-    expect(await checkCode(db, r.token, r.code)).toBe('ok');
-    expect((await emailOf(db, tahsin)).ok).toBe(false);
-  });
-
   it('a PIN reset by the collector removes the email: a thief who planted it can no longer recover the account', async () => {
     const { flatId, memberId, code, tahsin } = await flat();
     await login(db, code, tahsin, '5827', null, 'thief@gmail.com');
     const r = (await startRecovery(db, 'thief@gmail.com'))!;
-    expect(await checkCode(db, r.token, r.code)).toBe('ok');
+    expect(await checkCode(db, r.token, r.code, 'recover')).toBe('ok');
     expect(await resetPin(db, flatId, tahsin, '7391', { memberId })).toBe(true);
     expect((await startRecovery(db, 'thief@gmail.com'))!.send).toBe(false);
     expect(await flatsFor(db, 'thief@gmail.com')).toEqual([]);
     expect(await recoverPin(db, r.token, tahsin, '5927')).toBe(false);
-    expect(await emailOf(db, tahsin)).toMatchObject({ ok: false });
+    expect(await emailOf(db, tahsin)).toEqual({ email: null });
   });
 
   it('a double tap on the new PIN works once', async () => {
     const a = await flat();
     const r = (await startRecovery(db, a.email))!;
-    expect(await checkCode(db, r.token, r.code)).toBe('ok');
+    expect(await checkCode(db, r.token, r.code, 'recover')).toBe('ok');
     expect((await Promise.all([recoverPin(db, r.token, a.memberId, '5927'), recoverPin(db, r.token, a.memberId, '6038')])).filter(Boolean)).toEqual([true]);
   });
 
@@ -152,5 +142,58 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     const r = (await startRecovery(db, 'end.me@gmail.com'))!;
     await endRecovery(db, r.token);
     expect(await recoveryOf(db, r.token)).toBeNull();
+  });
+});
+
+describe('checking an email before it is saved', { timeout: 30000 }, () => {
+  it('a check step carries its purpose and payload: tries count, the right code proves it, takeCheck hands the payload over once', async () => {
+    await migrate();
+    const payload = { memberId: 'm-1', pinHash: '$2a$10$hash' };
+    const c = (await startCheck(db, 'new.one@gmail.com', 'email', payload))!;
+    expect(c.code).toMatch(/^\d{6}$/);
+    expect(await checkOf(db, c.token)).toEqual({ email: 'new.one@gmail.com', purpose: 'email', payload });
+    expect(await takeCheck(db, c.token)).toBeNull();   // not proven yet
+    expect(await checkCode(db, c.token, other(c.code), 'check')).toEqual({ wrong: 4 });
+    expect(await checkCode(db, c.token, c.code, 'check')).toBe('ok');
+    expect(await checkOf(db, c.token)).toBeNull();   // proven: nothing left to type
+    expect(await takeCheck(db, c.token)).toEqual({ email: 'new.one@gmail.com', purpose: 'email', payload });
+    expect(await takeCheck(db, c.token)).toBeNull();   // once only
+  });
+
+  it('a double tap on a proven check takes it once', async () => {
+    const c = (await startCheck(db, 'double.check@gmail.com', 'claim', { x: 1 }))!;
+    expect(await checkCode(db, c.token, c.code, 'check')).toBe('ok');
+    expect((await Promise.all([takeCheck(db, c.token), takeCheck(db, c.token)])).filter(Boolean)).toHaveLength(1);
+  });
+
+  it('a token of one kind never works for the other', async () => {
+    const { email, memberId } = await flat();
+    const c = (await startCheck(db, email, 'new', { a: 1 }))!;
+    expect(await checkCode(db, c.token, c.code, 'recover')).toBe('expired');
+    expect(await recoveryOf(db, c.token)).toBeNull();
+    expect(await checkCode(db, c.token, c.code, 'check')).toBe('ok');
+    expect(await provenEmail(db, c.token)).toBeNull();
+    expect(await recoverPin(db, c.token, memberId, '5927')).toBe(false);
+    const r = (await startRecovery(db, email))!;
+    expect(await checkOf(db, r.token)).toBeNull();
+    expect(await checkCode(db, r.token, r.code, 'check')).toBe('expired');
+    expect(await checkCode(db, r.token, r.code, 'recover')).toBe('ok');
+    expect(await takeCheck(db, r.token)).toBeNull();
+    expect(await provenEmail(db, r.token)).toBe(email);
+  });
+
+  it(`check and recover steps share the ${PER_DAY} codes a day`, async () => {
+    const email = 'shared.cap@gmail.com';
+    for (let i = 0; i < 3; i++) expect(await startCheck(db, email, 'email', {})).not.toBeNull();
+    for (let i = 3; i < PER_DAY; i++) expect(await startRecovery(db, email)).not.toBeNull();
+    expect(await startCheck(db, email, 'email', {})).toBeNull();
+    expect(await startRecovery(db, email)).toBeNull();
+  });
+
+  it('ending a check step retires it', async () => {
+    const c = (await startCheck(db, 'end.check@gmail.com', 'new', {}))!;
+    await endRecovery(db, c.token);
+    expect(await checkOf(db, c.token)).toBeNull();
+    expect(await checkCode(db, c.token, c.code, 'check')).toBe('expired');
   });
 });

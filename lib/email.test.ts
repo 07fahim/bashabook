@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { sendEmail, siteUrl } from './email';
+import { sendEmail } from './email';
 
 describe('sending email', () => {
   it('posts one plain-text email to Resend with the key', async () => {
@@ -53,11 +53,5 @@ describe('sending email', () => {
     expect(log).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith('email not sent: no RESEND_API_KEY');
     log.mockRestore(); warn.mockRestore();
-  });
-
-  it('links point to production, to a preview or to this machine, never the request host', () => {
-    expect(siteUrl({ VERCEL_ENV: 'production', VERCEL_URL: 'x.vercel.app' })).toBe('https://bashabook.fahimfaiyaz.dev');
-    expect(siteUrl({ VERCEL_ENV: 'preview', VERCEL_URL: 'x.vercel.app' })).toBe('https://x.vercel.app');
-    expect(siteUrl({})).toBe('http://localhost:3000');
   });
 });

@@ -35,8 +35,10 @@ export const STAYING = "(left_on is null or left_on >= (now() at time zone 'Asia
 const nameClash = (e: unknown) => ['23505', '23P01'].includes((e as { code?: string }).code ?? '');
 const newJoinCode = () => Array.from({ length: 6 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join('');
 
-/** Flat, its starter (role manager, already claimed) and unclaimed names, in one statement. */
-export async function createFlat(db: Db, f: { flatName: string; name: string; pin: string; others: string[]; today: string; lang: 'bn' | 'en'; email?: string }) {
+/** Flat, its starter (role manager, already claimed) and unclaimed names, in one statement. The starter's PIN comes typed
+ *  (`pin`) or already hashed (`pinHash`, kept in a check step while the email is proven). */
+export async function createFlat(db: Db, f: { flatName: string; name: string; pin?: string; pinHash?: string; others: string[]; today: string; lang: 'bn' | 'en'; email?: string }) {
+  if (!f.pinHash && !f.pin) throw new Error('createFlat needs a pin or a pinHash');
   const others = [...new Set(f.others)].filter(n => n !== f.name);
   // ponytail: a join code clash (31^6 codes) fails the insert; add a retry if flats reach the hundreds of thousands
   const [row] = await db<{ flat_id: string; member_id: string }>(
@@ -44,7 +46,7 @@ export async function createFlat(db: Db, f: { flatName: string; name: string; pi
      m as (insert into members (flat_id, name, pin_hash, role, joined_on, email) select id, $3::text, $4::text, 'manager', $5::date, $8::text from f returning id),
      o as (insert into members (flat_id, name, joined_on) select f.id, n, $5::date from f, json_array_elements_text($6::text::json) n)
      select f.id as flat_id, m.id as member_id from f, m`,
-    [f.flatName, newJoinCode(), f.name, await hashPin(f.pin), f.today, JSON.stringify(others), f.lang, f.email ?? null]);
+    [f.flatName, newJoinCode(), f.name, f.pinHash ?? await hashPin(f.pin!), f.today, JSON.stringify(others), f.lang, f.email ?? null]);
   return { flatId: row.flat_id, memberId: row.member_id };
 }
 
@@ -119,8 +121,7 @@ export async function login(db: Db, code: string, memberId: string, pin: string,
   if (m.pin_hash === null) {
     if (!email) return { error: 'email' };
     if (weakPin(pin)) return { error: 'weakPin' };
-    const claimed = await db(`update members set pin_hash = $2, email = $3 where id = $1 and pin_hash is null returning id`, [memberId, await hashPin(pin), email]);
-    return claimed.length ? { memberId } : { error: 'taken' };
+    return (await claimName(db, code, memberId, await hashPin(pin), email)) ? { memberId } : { error: 'taken' };
   }
   const may = await countTry(db, memberId);
   if (typeof may === 'string') return { error: may };
@@ -223,42 +224,40 @@ export async function changePin(db: Db, memberId: string, current: string, next:
   return 'ok';
 }
 
-/** My email, added or changed with my current PIN (wrong tries count toward the lock, as for a PIN change): someone holding
- *  my unlocked phone can't plant their own address for a later takeover. A new address waits for confirmation again; the
- *  same address keeps its state. A PIN reset landing at the same moment wins: nothing changes. */
-export async function changeEmail(db: Db, memberId: string, pin: string, email: string): Promise<'ok' | { error: 'locked' | 'lockedForGood' | 'wrongPin'; left?: number }> {
+/** My current PIN, checked before adding or changing my email: wrong tries count toward the lock, a right one clears the
+ *  count. Returns the hash that was checked, so the later write can insist it is unchanged (a reset in between wins). */
+export async function checkPin(db: Db, memberId: string, pin: string): Promise<{ hash: string } | { error: 'locked' | 'lockedForGood' | 'wrongPin'; left?: number }> {
   const [m] = await db<{ pin_hash: string | null }>(`select pin_hash from members where id = $1`, [memberId]);
   const may = await countTry(db, memberId);
   if (typeof may === 'string') return { error: may };
   if (!m?.pin_hash || !(await bcrypt.compare(pin, m.pin_hash))) return wrongPin(db, memberId, may);
-  // every right-hand side reads the row as it was, so "same address" compares with the old email;
-  // pin_hash = the one we checked, so a reset that lands at the same moment wins (and the email stays as it was)
-  const done = await db(`update members set failed_pin_count = 0, locked_until = null, email = $2,
-      email_ok = email_ok and email is not distinct from $2,
-      email_token = case when email is not distinct from $2 then email_token end
-    where id = $1 and pin_hash = $3 returning id`, [memberId, email, m.pin_hash]);
-  return done.length ? 'ok' : { error: 'wrongPin' };
+  await db(`update members set failed_pin_count = 0, locked_until = null where id = $1 and pin_hash = $2`, [memberId, m.pin_hash]);
+  return { hash: m.pin_hash };
 }
 
-/** A new confirmation link for my email, replacing any earlier one; null when there is no email or it is confirmed. */
-export async function confirmLink(db: Db, memberId: string): Promise<{ email: string; name: string; token: string } | null> {
-  const token = randomBytes(32).toString('base64url');
-  const [r] = await db<{ email: string; name: string }>(
-    `update members set email_token = $2 where id = $1 and email is not null and not email_ok returning email, name`, [memberId, hashToken(token)]);
-  return r ? { ...r, token } : null;
+/** My proven email, saved only while my PIN is still the one checked and I still live here. Returns the address it
+ *  replaced (the notice goes there), or false when nothing was saved. */
+export async function setEmail(db: Db, memberId: string, email: string, pinHash: string): Promise<{ old: string | null } | false> {
+  const [r] = await db<{ old: string | null }>(
+    `update members m set email = $2 from (select email as old from members where id = $1) o
+     where m.id = $1 and m.pin_hash = $3 and ${STAYING} returning o.old`, [memberId, email, pinHash]);
+  return r ? { old: r.old } : false;
 }
 
-/** The link in the confirmation email was opened: that address is confirmed. A link works once. */
-export async function confirmEmail(db: Db, token: string) {
-  if (!token || token.length > 100) return false;
-  const rows = await db(`update members set email_ok = true, email_token = null where email_token = $1 returning id`, [hashToken(token)]);
+/** Claims an unclaimed name with a PIN hash and the person's proven email, only while it is still unclaimed and they live here. */
+export async function claimName(db: Db, code: string, memberId: string, pinHash: string, email: string) {
+  if (!UUID.test(memberId)) return false;
+  const rows = await db(
+    `update members m set pin_hash = $3, email = $4 from flats f
+     where f.id = m.flat_id and f.join_code = $1 and m.id = $2 and m.pin_hash is null and ${STAYING} returning m.id`,
+    [code.toUpperCase(), memberId, pinHash, email]);
   return rows.length > 0;
 }
 
-/** My own email and whether it is confirmed (Home's cards and My account). Nobody else's: flatmates never see an email. */
+/** My own email (Home's cards and My account). Nobody else's: flatmates never see an email. */
 export async function emailOf(db: Db, memberId: string) {
-  const [r] = await db<{ email: string | null; ok: boolean }>(`select email, email_ok as ok from members where id = $1`, [memberId]);
-  return r ?? { email: null, ok: false };
+  const [r] = await db<{ email: string | null }>(`select email from members where id = $1`, [memberId]);
+  return r ?? { email: null };
 }
 
 /** The person who runs the flat fixes a name. Refused if someone in the flat already has it; the change goes in the history. */
@@ -334,7 +333,7 @@ export async function resetPin(db: Db, flatId: string, memberId: string, pin: st
   if (team && (!team.admin.trim() || !team.reason.trim())) return false;
   const [r] = await db<{ n: number }>(
     `with m as (update members set pin_hash = $3, must_change_pin = true, failed_pin_count = 0, locked_until = null,
-         email = null, email_ok = false, email_token = null
+         email = null
        where flat_id = $1 and id = $2 and ${STAYING} and case when $5::text is null
          then id <> $4::uuid and exists (select 1 from members c where c.flat_id = $1 and c.id = $4::uuid and c.role = 'manager')
          else role = 'manager' end returning id),

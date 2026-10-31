@@ -25,7 +25,7 @@ async function main() {
       const a = (await startRecovery(db, email))!;
       const wrong = a.code === '000000' ? '000001' : '000000';
       const seen: Record<string, number> = {};
-      for (const r of await Promise.all(Array.from({ length: 20 }, () => checkCode(db, a.token, wrong)))) {
+      for (const r of await Promise.all(Array.from({ length: 20 }, () => checkCode(db, a.token, wrong, 'recover')))) {
         const k = typeof r === 'string' ? r : `wrong:${r.wrong}`;
         seen[k] = (seen[k] ?? 0) + 1;
       }
@@ -33,7 +33,7 @@ async function main() {
       check(`round ${round}: 20 wrong codes at once count exactly ${TRIES} tries`, tries === TRIES && seen.expired === 20 - TRIES && [4, 3, 2, 1, 0].every(n => seen[`wrong:${n}`] === 1), { tries, seen });
 
       const b = (await startRecovery(db, email))!;
-      check(`round ${round}: the right code proves the step`, (await checkCode(db, b.token, b.code)) === 'ok', null);
+      check(`round ${round}: the right code proves the step`, (await checkCode(db, b.token, b.code, 'recover')) === 'ok', null);
       await db(`delete from audit_log where entity_id = $1 and after ? 'pinReset'`, [memberId]);
       const done = await Promise.all(Array.from({ length: 10 }, (_, i) => recoverPin(db, b.token, memberId, String(5927 + i))));
       const [{ rows }] = await db<{ rows: number }>(`select count(*)::int as rows from audit_log where entity_id = $1 and after ? 'pinReset'`, [memberId]);

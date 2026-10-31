@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { openMonth } from './money-db';
-import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listGone, addMember, isPin, pinText, weakPin, changeEmail, confirmEmail, confirmLink, emailOf, normalizeEmail } from './auth';
+import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listGone, addMember, isPin, pinText, weakPin, checkPin, claimName, emailOf, hashPin, normalizeEmail, setEmail } from './auth';
 
 const today = '2026-10-09';
 
@@ -312,9 +312,9 @@ describe('email on accounts', { timeout: 30000 }, () => {
     expect(await login(db, code, id('Tahsin'), '5827', null, null)).toEqual({ error: 'email' });
     expect((await flatByCode(db, code))!.members.find(m => m.name === 'Tahsin')!.claimed).toBe(false);
     expect(await login(db, code, id('Tahsin'), '5827', null, 'tahsin@gmail.com')).toEqual({ memberId: id('Tahsin') });
-    expect(await emailOf(db, id('Tahsin'))).toEqual({ email: 'tahsin@gmail.com', ok: false });
+    expect(await emailOf(db, id('Tahsin'))).toEqual({ email: 'tahsin@gmail.com' });
     expect(await login(db, code, id('Tahsin'), '5827', null, null)).toEqual({ memberId: id('Tahsin') });
-    expect(await emailOf(db, id('Tahsin'))).toEqual({ email: 'tahsin@gmail.com', ok: false });
+    expect(await emailOf(db, id('Tahsin'))).toEqual({ email: 'tahsin@gmail.com' });
   });
 
   it('the database refuses an email the app would not store', async () => {
@@ -326,55 +326,70 @@ describe('email on accounts', { timeout: 30000 }, () => {
   it('creates a flat with the starter’s email', async () => {
     await migrate();
     const { memberId } = await createFlat(db, { flatName: 'Flat 9', name: 'Nafis', pin: '4827', others: [], today, lang: 'en', email: 'nafis@gmail.com' });
-    expect(await emailOf(db, memberId)).toEqual({ email: 'nafis@gmail.com', ok: false });
+    expect(await emailOf(db, memberId)).toEqual({ email: 'nafis@gmail.com' });
   });
 
-  it('changing the email needs the PIN and counts a wrong one; a new address needs a new confirmation', async () => {
+  it('creates a flat from a PIN hash: that PIN signs in', async () => {
+    await migrate();
+    const { flatId, memberId } = await createFlat(db, { flatName: 'Flat H', name: 'Nafis', pinHash: await hashPin('4827'), others: [], today, lang: 'en', email: 'h@gmail.com' });
+    const [{ join_code: code }] = await db<{ join_code: string }>(`select join_code from flats where id = $1`, [flatId]);
+    expect(await login(db, code, memberId, '4827', null, null)).toEqual({ memberId });
+    await expect(createFlat(db, { flatName: 'Flat X', name: 'Nafis', others: [], today, lang: 'en' })).rejects.toThrow();
+  });
+
+  it('a PIN reset clears the email', async () => {
+    const { flatId, memberId, code, id } = await flat();
+    await login(db, code, id('Tahsin'), '5827', null, 'tahsin@gmail.com');
+    expect(await resetPin(db, flatId, id('Tahsin'), '7391', { memberId })).toBe(true);
+    expect(await emailOf(db, id('Tahsin'))).toEqual({ email: null });
+  });
+
+  it('checkPin: a wrong PIN counts a try, a locked account is refused, the right one gives the hash and clears the count', async () => {
     const { memberId } = await flat();   // Nafis, PIN 1234
-    expect(await emailOf(db, memberId)).toEqual({ email: null, ok: false });
-    expect(await changeEmail(db, memberId, '9999', 'x@gmail.com')).toEqual({ error: 'wrongPin' });
-    expect((await db<{ n: number }>(`select failed_pin_count as n from members where id = $1`, [memberId]))[0].n).toBe(1);
-    expect(await emailOf(db, memberId)).toEqual({ email: null, ok: false });
-    expect(await changeEmail(db, memberId, '1234', 'nafis@gmail.com')).toBe('ok');
-    expect((await db<{ n: number }>(`select failed_pin_count as n from members where id = $1`, [memberId]))[0].n).toBe(0);
-    const c = (await confirmLink(db, memberId))!;
-    expect([c.email, c.name]).toEqual(['nafis@gmail.com', 'Nafis']);
-    expect(await confirmEmail(db, c.token)).toBe(true);
-    expect(await emailOf(db, memberId)).toEqual({ email: 'nafis@gmail.com', ok: true });
-    expect(await confirmEmail(db, c.token)).toBe(false);   // a link works once
-    expect(await confirmLink(db, memberId)).toBeNull();   // nothing left to confirm
-    expect(await changeEmail(db, memberId, '1234', 'nafis@gmail.com')).toBe('ok');   // the same address stays confirmed
-    expect((await emailOf(db, memberId)).ok).toBe(true);
-    expect(await changeEmail(db, memberId, '1234', 'nafis2@gmail.com')).toBe('ok');
-    expect(await emailOf(db, memberId)).toEqual({ email: 'nafis2@gmail.com', ok: false });
-  });
-
-  it('a newer confirmation link replaces the older one; a link for an old address stops working', async () => {
-    const { memberId } = await flat();
-    await changeEmail(db, memberId, '1234', 'nafis@gmail.com');
-    const old = (await confirmLink(db, memberId))!, fresh = (await confirmLink(db, memberId))!;
-    expect(await confirmEmail(db, old.token)).toBe(false);
-    await changeEmail(db, memberId, '1234', 'nafis3@gmail.com');
-    expect(await confirmEmail(db, fresh.token)).toBe(false);
-    expect(await confirmEmail(db, '')).toBe(false);
-  });
-
-  it('a locked account cannot change its email, a too-long link is refused', async () => {
-    const { memberId } = await flat();
+    const count = async () => (await db<{ n: number }>(`select failed_pin_count as n from members where id = $1`, [memberId]))[0].n;
+    expect(await checkPin(db, memberId, '9999')).toEqual({ error: 'wrongPin' });
+    expect(await count()).toBe(1);
+    const [{ h }] = await db<{ h: string }>(`select pin_hash as h from members where id = $1`, [memberId]);
+    expect(await checkPin(db, memberId, '1234')).toEqual({ hash: h });
+    expect(await count()).toBe(0);
     await db(`update members set locked_until = now() + interval '15 minutes' where id = $1`, [memberId]);
-    expect(await changeEmail(db, memberId, '1234', 'nafis@gmail.com')).toEqual({ error: 'locked' });
-    expect(await emailOf(db, memberId)).toEqual({ email: null, ok: false });
-    expect(await confirmEmail(db, 'x'.repeat(101))).toBe(false);
+    expect(await checkPin(db, memberId, '1234')).toEqual({ error: 'locked' });
   });
 
-  it('a PIN reset that lands while the email is being changed wins', async () => {
+  it('setEmail saves with the checked hash and returns the old address', async () => {
     const { memberId } = await flat();
-    // the reset lands between the PIN check and the write
-    const racing: typeof db = async (text, params) => {
-      if (text.includes('email = $2')) await db(`update members set pin_hash = 'reset' where id = $1`, [memberId]);
-      return db(text, params);
-    };
-    expect(await changeEmail(racing, memberId, '1234', 'nafis@gmail.com')).toEqual({ error: 'wrongPin' });
-    expect(await emailOf(db, memberId)).toEqual({ email: null, ok: false });
+    const { hash } = (await checkPin(db, memberId, '1234')) as { hash: string };
+    expect(await setEmail(db, memberId, 'nafis@gmail.com', hash)).toEqual({ old: null });
+    expect(await setEmail(db, memberId, 'nafis2@gmail.com', hash)).toEqual({ old: 'nafis@gmail.com' });
+    expect(await emailOf(db, memberId)).toEqual({ email: 'nafis2@gmail.com' });
+  });
+
+  it('setEmail refuses after a PIN reset changed the hash, and for someone who moved out', async () => {
+    const { flatId, memberId, code, id } = await flat();
+    await login(db, code, id('Tahsin'), '5827', null, 'tahsin@gmail.com');
+    const { hash } = (await checkPin(db, id('Tahsin'), '5827')) as { hash: string };
+    expect(await resetPin(db, flatId, id('Tahsin'), '7391', { memberId })).toBe(true);
+    expect(await setEmail(db, id('Tahsin'), 'thief@gmail.com', hash)).toBe(false);
+    expect(await emailOf(db, id('Tahsin'))).toEqual({ email: null });
+    const zarif = id('Zarif');
+    await login(db, code, zarif, '6938', null, 'zarif@gmail.com');
+    const z = (await checkPin(db, zarif, '6938')) as { hash: string };
+    await db(`update members set joined_on = '2026-01-01', left_on = '2026-02-01' where id = $1`, [zarif]);
+    expect(await setEmail(db, zarif, 'zarif2@gmail.com', z.hash)).toBe(false);
+    expect(await emailOf(db, zarif)).toEqual({ email: 'zarif@gmail.com' });
+  });
+
+  it('claimName claims once with the email; refuses a claimed name, a moved-out name, a wrong join code', async () => {
+    const { code, id } = await flat();
+    const hash = await hashPin('5827');
+    expect(await claimName(db, 'ZZZZZZ', id('Tahsin'), hash, 'tahsin@gmail.com')).toBe(false);
+    expect(await claimName(db, code.toLowerCase(), id('Tahsin'), hash, 'tahsin@gmail.com')).toBe(true);
+    expect(await emailOf(db, id('Tahsin'))).toEqual({ email: 'tahsin@gmail.com' });
+    expect(await login(db, code, id('Tahsin'), '5827', null, null)).toEqual({ memberId: id('Tahsin') });
+    expect(await claimName(db, code, id('Tahsin'), await hashPin('7391'), 'thief@gmail.com')).toBe(false);
+    expect(await emailOf(db, id('Tahsin'))).toEqual({ email: 'tahsin@gmail.com' });
+    await db(`update members set joined_on = '2026-01-01', left_on = '2026-02-01' where id = $1`, [id('Zarif')]);
+    expect(await claimName(db, code, id('Zarif'), hash, 'zarif@gmail.com')).toBe(false);
+    expect(await claimName(db, code, 'not-a-uuid', hash, 'zarif@gmail.com')).toBe(false);
   });
 });

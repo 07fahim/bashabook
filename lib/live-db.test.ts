@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { db, migrate, pg } from '../db/test-db';
-import { createFlat, memberBySession, createSession, newFlatCode, confirmEmail, confirmLink } from './auth';
+import { createFlat, memberBySession, createSession, newFlatCode } from './auth';
 import { openMonth } from './money-db';
 import { markNoticesSeen } from './notices';
 
@@ -70,7 +70,8 @@ describe('live pings (migration 022)', { timeout: 30000 }, () => {
     const a = await mk('Live J');
     await clear();
     await db(`update members set email = 'nafis@gmail.com' where id = $1`, [a.memberId]);
-    expect(await confirmEmail(db, (await confirmLink(db, a.memberId))!.token)).toBe(true);
+    await expect(db(`select email_ok from members`)).rejects.toThrow();   // no confirmation link any more: an email is proven before it is saved
+    await expect(db(`select email_token from members`)).rejects.toThrow();
     expect(await sent()).toEqual([]);
     await db(`update members set name = 'Nafis R', email = 'nafis2@gmail.com' where id = $1`, [a.memberId]);
     expect((await sent()).map(s => s.topic)).toEqual([await topicOf(a.flatId)]);
