@@ -159,7 +159,7 @@ const bn = {
     lead: 'বন্ধুদের ফ্ল্যাট হোক বা অচেনা লোকের, নিয়ম সবার জন্য এক। কে কী বদলাল নাম আর সময়সহ সবাই দেখে।',
     points: [
       ['আজকের মিল বদল', 'যেকোনো সময় করা যায়। সবাই নোটিফিকেশন পায় আর সময়সহ বদলটা দেখে'],
-      ['অন্যের মিল', 'ফ্ল্যাটের যে কেউ তার হয়ে বদলে দিতে পারে। নোটিফিকেশনে আর ইতিহাসে দুজনের নামই থাকে'],
+      ['অন্যের মিল', 'ফ্ল্যাটের যে কেউ তার হয়ে বদলে দিতে পারে। ইতিহাসে আর সেদিনের নোটিফিকেশনে দুজনের নামই থাকে'],
       ['বাজার আর টাকা', 'প্রতিটা এন্ট্রিতে কে দিয়েছে লেখা থাকে। যার কাছে ফ্ল্যাটের টাকা থাকে সে প্রতিটা বাজার আর বিল চেক করে। তার নিজেরগুলো চেক করে অন্য একজন। সব চেক না হলে আর ক্যাশ না মিললে মাস ক্লোজ হয় না'],
     ] as [string, string][],
   },
@@ -993,7 +993,7 @@ const en: Dict = {
     lead: 'Friends or strangers, the rules are the same for everyone. Every change shows who made it and when.',
     points: [
       ["Changing today's meals", 'Allowed any time. Everyone is notified and the change shows with its time'],
-      ["Someone else's meal", 'A flatmate can switch it for them. Both names show in the notification and in the history'],
+      ["Someone else's meal", 'A flatmate can switch it for them. Both names show in the history and in a same-day notification'],
       ['Bazar and money', 'Every entry shows who added it. The person who keeps the flat money checks every bazar and bill; a flatmate checks theirs. The month closes only when all are checked and the cash matches'],
     ] as [string, string][],
   },

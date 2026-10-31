@@ -35,7 +35,7 @@ Every flat has one person who holds the money and keeps the khata. BashaBook is 
 
 - **The collector** holds the flat's money, saves bazar and bills, confirms deposits, closes the month and hands over to the next collector when they move out.
 - **Flatmates** mark their own meals and guests, deposit money, and watch their own line add up through the month.
-- **The cook** gets tomorrow's plate count as a message anyone can forward from their phone.
+- **The cook** gets today's and tomorrow's plate count as a message anyone can forward from their phone.
 
 ## What it does
 
