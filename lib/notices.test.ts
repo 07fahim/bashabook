@@ -17,7 +17,7 @@ async function flat() {
   const members = (await flatByCode(db, code))!.members;
   const id = (name: string) => members.find(m => m.name === name)!.id;
   const tahsin = id('Tahsin'), zarif = id('Zarif');
-  await login(db, code, tahsin, '5678', null); await login(db, code, zarif, '9999', null);
+  await login(db, code, tahsin, '5827', null); await login(db, code, zarif, '9024', null);
   await openMonth(db, flatId, '2026-10-01');
   // the flat was created a moment ago: push everyone's seen mark back so the rows below count as new
   await db(`update members set notices_seen_at = now() - interval '1 hour' where flat_id = $1`, [flatId]);

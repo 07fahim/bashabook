@@ -12,7 +12,7 @@ async function flat() {
   const { flatId, memberId } = await createFlat(db, { flatName: 'Flat 4B', name: 'Nafis', pin: '1234', others: ['Tahsin'], today, lang: 'bn' });
   const [{ join_code: code }] = await db<{ join_code: string }>(`select join_code from flats where id = $1`, [flatId]);
   const tahsin = (await flatByCode(db, code))!.members.find(m => m.name === 'Tahsin')!.id;
-  expect(await login(db, code, tahsin, '5678', null)).toEqual({ memberId: tahsin });   // claims the name
+  expect(await login(db, code, tahsin, '5827', null)).toEqual({ memberId: tahsin });   // claims the name
   await openMonth(db, flatId, '2026-10-01');
   return { flatId, memberId, code, tahsin };
 }
@@ -28,14 +28,14 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
     expect(await state(tahsin)).toEqual({ n: 24, forGood: false });
     expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'lockedForGood' });   // the 25th says so at once
     expect(await state(tahsin)).toEqual({ n: 25, forGood: true });
-    expect(await login(db, code, tahsin, '5678', null)).toEqual({ error: 'lockedForGood' });
+    expect(await login(db, code, tahsin, '5827', null)).toEqual({ error: 'lockedForGood' });
     expect(await lockRows(tahsin)).toBe(1);   // once, and never again on later tries
   });
 
   it('1b: the right PIN on the 25th try signs in, and no lock goes in the history', async () => {
     const { code, tahsin } = await flat();
     await wrong(code, tahsin, 24);
-    expect(await login(db, code, tahsin, '5678', null)).toEqual({ memberId: tahsin });
+    expect(await login(db, code, tahsin, '5827', null)).toEqual({ memberId: tahsin });
     expect(await state(tahsin)).toEqual({ n: 0, forGood: false });
     expect(await lockRows(tahsin)).toBe(0);
   });
@@ -61,8 +61,8 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
     const { code, tahsin } = await flat();
     const token = await createSession(db, tahsin);   // a phone signed in before the lock
     await wrong(code, tahsin, 25);
-    expect(await login(db, code, tahsin, '5678', null)).toEqual({ error: 'lockedForGood' });
-    expect(await changePin(db, tahsin, '5678', '9999', token)).toEqual({ error: 'lockedForGood' });
+    expect(await login(db, code, tahsin, '5827', null)).toEqual({ error: 'lockedForGood' });
+    expect(await changePin(db, tahsin, '5827', '9999', token)).toEqual({ error: 'lockedForGood' });
     await setPhone(db, tahsin, '01712345678');
     expect(await state(tahsin)).toEqual({ n: 25, forGood: true });
   });
@@ -98,7 +98,7 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
     expect(lock?.after).toEqual({ locked: 25 });
     expect((await listMembers(db, flatId)).find(m => m.id === tahsin)).toMatchObject({ locked: true, failed: 25 });
     const everything = JSON.stringify(await db(`select after, before from audit_log where flat_id = $1`, [flatId]));
-    for (const pin of ['5678', '0000', '1234']) expect(everything).not.toContain(pin);
+    for (const pin of ['5827', '0000', '1234']) expect(everything).not.toContain(pin);
   });
 
   it('6: both languages say what a permanent lock means', () => {
@@ -125,10 +125,10 @@ describe('permanent PIN lock', { timeout: 60000 }, () => {
     await wrong(code, tahsin, 25);
     expect(await newFlatCode(db, flatId, { memberId, role: 'manager' })).toMatch(/^[A-Z0-9]{6}$/);
     expect(await flatByCode(db, code)).toBeNull();
-    expect(await login(db, code, tahsin, '5678', null)).toEqual({ error: 'notFound' });
+    expect(await login(db, code, tahsin, '5827', null)).toEqual({ error: 'notFound' });
     expect(await login(db, code, memberId, '1234', null)).toEqual({ error: 'notFound' });
     const [{ join_code: fresh }] = await db<{ join_code: string }>(`select join_code from flats where id = $1`, [flatId]);
-    expect(await login(db, fresh, tahsin, '5678', null)).toEqual({ error: 'lockedForGood' });
+    expect(await login(db, fresh, tahsin, '5827', null)).toEqual({ error: 'lockedForGood' });
     expect(await login(db, fresh, memberId, '1234', null)).toEqual({ memberId });
   });
 });

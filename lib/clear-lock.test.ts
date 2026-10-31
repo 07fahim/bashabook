@@ -15,8 +15,8 @@ async function flat() {
   const members = (await flatByCode(db, code))!.members;
   const id = (name: string) => members.find(m => m.name === name)!.id;
   const tahsin = id('Tahsin'), zarif = id('Zarif');
-  expect(await login(db, code, tahsin, '5678', null)).toEqual({ memberId: tahsin });
-  expect(await login(db, code, zarif, '9999', null)).toEqual({ memberId: zarif });
+  expect(await login(db, code, tahsin, '5827', null)).toEqual({ memberId: tahsin });
+  expect(await login(db, code, zarif, '9024', null)).toEqual({ memberId: zarif });
   await openMonth(db, flatId, '2026-10-01');
   return { flatId, nafis: memberId, code, tahsin, zarif };
 }
@@ -33,7 +33,7 @@ describe('a flatmate clears a lock', { timeout: 60000 }, () => {
     expect(await clearLock(db, flatId, tahsin, zarif)).toBe(true);
     expect(await state(tahsin)).toEqual({ n: 20, lock: null, hash });
     expect(await login(db, code, tahsin, '0000', null)).toEqual({ error: 'wrongPin', left: 4 });
-    expect(await login(db, code, tahsin, '5678', null)).toEqual({ memberId: tahsin });   // the right PIN still works
+    expect(await login(db, code, tahsin, '5827', null)).toEqual({ memberId: tahsin });   // the right PIN still works
     await wrong(code, tahsin, 25);
     expect(await clearLock(db, flatId, tahsin, nafis)).toBe(true);   // another helper: Zarif's one clear is used up
     for (let i = 0; i < 4; i++) await login(db, code, tahsin, '0000', null);   // 4 more wrong tries are allowed
@@ -47,11 +47,11 @@ describe('a flatmate clears a lock', { timeout: 60000 }, () => {
   it('a timed lock: lifted, the count stays', async () => {
     const { flatId, code, tahsin, zarif } = await flat();
     for (let i = 0; i < 5; i++) await login(db, code, tahsin, '0000', null);
-    expect(await login(db, code, tahsin, '5678', null)).toEqual({ error: 'locked' });
+    expect(await login(db, code, tahsin, '5827', null)).toEqual({ error: 'locked' });
     expect(await clearLock(db, flatId, tahsin, zarif)).toBe(true);
     expect((await state(tahsin)).n).toBe(5);
     expect(await clears(tahsin)).toBe(1);
-    expect(await login(db, code, tahsin, '5678', null)).toEqual({ memberId: tahsin });
+    expect(await login(db, code, tahsin, '5827', null)).toEqual({ memberId: tahsin });
   });
 
   it('refused: own lock, the collector, someone not locked, someone who moved out, an actor who moved out, another flat', async () => {
@@ -121,7 +121,7 @@ describe('a flatmate clears a lock', { timeout: 60000 }, () => {
     expect(await clearLock(db, flatId, tahsin, zarif)).toBe(true);
     expect(await snap()).toEqual(was);
     const everything = JSON.stringify(await db(`select after, before from audit_log where flat_id = $1`, [flatId]));
-    for (const pin of ['5678', '9999', '0000', '1234']) expect(everything).not.toContain(pin);
+    for (const pin of ['5827', '9024', '0000', '1234']) expect(everything).not.toContain(pin);
     expect((await listMembers(db, flatId)).find(m => m.id === tahsin)).toMatchObject({ locked: false, collector: false });
   });
 

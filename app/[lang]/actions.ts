@@ -4,7 +4,7 @@ import { refresh } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
-import { addMember, changePin, cleanName, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, isPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addMember, changePin, cleanName, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, isPin, weakPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems, receiptVersion } from '@/lib/bazar';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, seeCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
@@ -38,6 +38,7 @@ export async function createFlatAction(_: FormState, d: FormData): Promise<FormS
   if (!name) return { error: e.name };
   if (others.includes(null) || others.length >= MAX_MEMBERS) return { error: e.others };
   if (!isPin(d.get('pin'))) return { error: e.pin };
+  if (weakPin(d.get('pin'))) return { error: e.weakPin };
   if (pinText(d.get('pin')) !== pinText(d.get('pin2'))) return { error: e.pinMatch };
   if (!(await allow(db, `new:${await ip()}`, 5))) return { error: e.tooMany };
   const { memberId } = await createFlat(db, { flatName, name, pin: pinText(d.get('pin')), others: others as string[], today: todayDhaka(), lang });
@@ -94,6 +95,7 @@ export async function resetPinAction(_: FormState, d: FormData): Promise<FormSta
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireManager(lang, true);
   if (!isPin(d.get('pin'))) return { error: a.errors.pin };
+  if (weakPin(d.get('pin'))) return { error: a.errors.weakPin };
   if (!(await resetPin(db, me.flatId, str(d, 'memberId'), pinText(d.get('pin')), { memberId: me.memberId }))) return { error: a.errors.notFound };
   refresh();
   return { done: a.resetDone };
@@ -298,6 +300,7 @@ export async function changePinAction(_: FormState, d: FormData): Promise<FormSt
   const lang = langOf(d), a = getDictionary(lang).app;
   const me = await requireMember(lang, true);
   if (!isPin(d.get('pin')) || !isPin(d.get('newPin'))) return { error: a.errors.pin };
+  if (weakPin(d.get('newPin'))) return { error: a.errors.weakPin };
   if (pinText(d.get('newPin')) !== pinText(d.get('pin2'))) return { error: a.errors.pinMatch };
   const r = await changePin(db, me.memberId, pinText(d.get('pin')), pinText(d.get('newPin')), await currentToken());
   if (r !== 'ok') return { error: a.errors[r.error === 'wrongPin' ? 'wrongCurrentPin' : r.error] + (r.left ? ' ' + a.errors.lastTries.replace('{n}', String(r.left)) : '') };

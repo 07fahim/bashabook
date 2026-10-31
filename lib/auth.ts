@@ -13,6 +13,14 @@ export const cleanName = (v: unknown) => { const s = cleanText(v); return s.leng
 /** A typed PIN with Bangla digits as English ones. */
 export const pinText = (v: unknown) => enDigits(String(v ?? ''));
 export const isPin = (v: unknown) => /^\d{4}$/.test(pinText(v));
+// the most chosen PINs that no rule below catches (DataGenetics, 3.4 million real 4-digit PINs: the top 20 were a quarter of all)
+const COMMON = new Set(['1212', '1122', '1004', '2000', '6969', '1313', '2001', '1010', '2580']);
+/** A PIN anyone with the flat code would try first: one digit four times, a straight run up or down, or one of COMMON.
+ *  Refused wherever a PIN is chosen (a code gives 25 tries per name); a weak PIN chosen before still signs in. */
+export const weakPin = (v: unknown) => {
+  const p = pinText(v), d = [...p].map(Number), step = d[1] - d[0];
+  return (Math.abs(step) <= 1 && d.every((x, i) => i === 0 || x - d[i - 1] === step)) || COMMON.has(p);
+};
 const hashPin = (pin: string) => bcrypt.hash(pin, 10);
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 /** Still living here: no last day, or it hasn't passed yet (in Dhaka). Someone who moved out can't sign in or be picked. */
@@ -64,7 +72,7 @@ export async function flatByCode(db: Db, code: string) {
   return { ...flat, members };
 }
 
-export type LoginError = 'notFound' | 'taken' | 'locked' | 'lockedForGood' | 'wrongPin' | 'newPinNeeded';
+export type LoginError = 'notFound' | 'taken' | 'locked' | 'lockedForGood' | 'wrongPin' | 'newPinNeeded' | 'weakPin';
 
 /** Counts a PIN try before it is checked, in one statement, so parallel guesses can't slip past the lock.
  *  Every 5th wrong try locks for longer (15 min, 30, 1 h …); the 25th locks for good, until a PIN reset (policy approved
@@ -102,15 +110,16 @@ export async function login(db: Db, code: string, memberId: string, pin: string,
     `select m.pin_hash, m.must_change_pin from members m join flats f on f.id = m.flat_id where f.join_code = $1 and m.id = $2 and ${STAYING}`, [code.toUpperCase(), memberId]);
   if (!m) return { error: 'notFound' };
   if (m.pin_hash === null) {
+    if (weakPin(pin)) return { error: 'weakPin' };
     const claimed = await db(`update members set pin_hash = $2 where id = $1 and pin_hash is null returning id`, [memberId, await hashPin(pin)]);
     return claimed.length ? { memberId } : { error: 'taken' };
   }
   const may = await countTry(db, memberId);
   if (typeof may === 'string') return { error: may };
   if (!(await bcrypt.compare(pin, m.pin_hash))) return wrongPin(db, memberId, may);
-  if (m.must_change_pin && !newPin) {
+  if (m.must_change_pin && (!newPin || weakPin(newPin))) {
     await db(`update members set failed_pin_count = 0, locked_until = null where id = $1`, [memberId]);
-    return { error: 'newPinNeeded' };
+    return { error: newPin ? 'weakPin' : 'newPinNeeded' };
   }
   // pin_hash = the one we checked, so a reset that lands mid-login wins
   const done = await db(

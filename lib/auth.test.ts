@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
 import { openMonth } from './money-db';
-import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listGone, addMember, isPin, pinText } from './auth';
+import { changePin, createFlat, createSession, flatByCode, listMembers, login, memberBySession, newFlatCode, normalizePhone, renameMember, resetPin, setLeaving, setPhone, bringBack, listGone, addMember, isPin, pinText, weakPin } from './auth';
 
 const today = '2026-10-09';
 
@@ -21,6 +21,16 @@ describe('PIN text', () => {
   });
 });
 
+describe('weak PIN', () => {
+  it('refuses one digit four times, straight runs and the commonest others, in either digit script', () => {
+    for (const p of ['0000', '1111', '9999', '1234', '6789', '0123', '4321', '9876', '3210', '1212', '1122', '1004', '2000', '6969', '1313', '2001', '1010', '2580', '১২৩৪'])
+      expect([p, weakPin(p)]).toEqual([p, true]);
+  });
+  it('lets ordinary PINs through', () => {
+    for (const p of ['4827', '1357', '7391', '0426', '2468', '9024', '1235', '8642']) expect([p, weakPin(p)]).toEqual([p, false]);
+  });
+});
+
 describe('auth', { timeout: 30000 }, () => {
   it('creates a flat with its starter and unclaimed names', async () => {
     const { f, code } = await flat(['Tahsin', 'Zarif', 'Tahsin', 'Nafis']);
@@ -31,10 +41,10 @@ describe('auth', { timeout: 30000 }, () => {
 
   it('lets a name be claimed once, then asks for its PIN', async () => {
     const { code, id } = await flat();
-    expect(await login(db, code, id('Tahsin'), '5555', null)).toEqual({ memberId: id('Tahsin') });
-    expect(await login(db, code, id('Tahsin'), '6666', null)).toEqual({ error: 'wrongPin' });
-    expect(await login(db, code, id('Tahsin'), '5555', null)).toEqual({ memberId: id('Tahsin') });
-    expect(await login(db, code, 'not-a-uuid', '5555', null)).toEqual({ error: 'notFound' });
+    expect(await login(db, code, id('Tahsin'), '5827', null)).toEqual({ memberId: id('Tahsin') });
+    expect(await login(db, code, id('Tahsin'), '6380', null)).toEqual({ error: 'wrongPin' });
+    expect(await login(db, code, id('Tahsin'), '5827', null)).toEqual({ memberId: id('Tahsin') });
+    expect(await login(db, code, 'not-a-uuid', '5827', null)).toEqual({ error: 'notFound' });
   });
 
   it('locks after 5 wrong PINs and doubles the wait each time', async () => {
@@ -56,18 +66,36 @@ describe('auth', { timeout: 30000 }, () => {
     expect(await wait()).toBe(120);   // the 20th: the last timed lock; the 25th locks for good (pin-lock.test.ts)
   });
 
+  it('claiming a name refuses a weak PIN and leaves the name free', async () => {
+    const { code, id, f } = await flat();
+    expect(await login(db, code, id('Tahsin'), '1234', null)).toEqual({ error: 'weakPin' });
+    expect((await flatByCode(db, code))!.members.find(m => m.name === 'Tahsin')!.claimed).toBe(false);
+    expect(await login(db, code, id('Tahsin'), '4827', null)).toEqual({ memberId: id('Tahsin') });
+    expect(f).toBeTruthy();
+  });
+
+  it('a new PIN after a reset may not be weak, and the one-time PIN still works after the refusal', async () => {
+    const { flatId, code, id } = await flat();
+    const tahsin = id('Tahsin');
+    await login(db, code, tahsin, '4827', null);
+    await resetPin(db, flatId, tahsin, '7391', { memberId: id('Nafis') });
+    expect(await login(db, code, tahsin, '7391', '0000')).toEqual({ error: 'weakPin' });
+    expect(await login(db, code, tahsin, '7391', null)).toEqual({ error: 'newPinNeeded' });
+    expect(await login(db, code, tahsin, '7391', '5820')).toEqual({ memberId: tahsin });
+  });
+
   it('reset sets a one-time PIN, ends sessions and forces a new PIN', async () => {
     const { flatId, code, id } = await flat();
     const tahsin = id('Tahsin');
-    await login(db, code, tahsin, '5555', null);
+    await login(db, code, tahsin, '5827', null);
     const token = await createSession(db, tahsin);
     expect((await memberBySession(db, token))?.memberId).toBe(tahsin);
     expect(await resetPin(db, flatId, tahsin, '9999', { memberId: id('Nafis') })).toBe(true);
     expect(await memberBySession(db, token)).toBeNull();
-    expect(await login(db, code, tahsin, '5555', null)).toEqual({ error: 'wrongPin' });
+    expect(await login(db, code, tahsin, '5827', null)).toEqual({ error: 'wrongPin' });
     expect(await login(db, code, tahsin, '9999', null)).toEqual({ error: 'newPinNeeded' });
-    expect(await login(db, code, tahsin, '9999', '4321')).toEqual({ memberId: tahsin });
-    expect(await login(db, code, tahsin, '4321', null)).toEqual({ memberId: tahsin });
+    expect(await login(db, code, tahsin, '9999', '4382')).toEqual({ memberId: tahsin });
+    expect(await login(db, code, tahsin, '4382', null)).toEqual({ memberId: tahsin });
   });
 
   it('the collector reset is in the flat history, by whom', async () => {
