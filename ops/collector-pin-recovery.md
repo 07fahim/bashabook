@@ -1,6 +1,6 @@
 # Collector PIN recovery (app team, pilot)
 
-First: anyone with an email in BashaBook gets back in alone with **Forgot the code or PIN?** on the sign-in page (a 6-digit
+First: anyone with an email in BashaBook gets back in alone with **Forgot the code or PIN?** on the sign-in page (an 8-digit
 code by email, then their flat's code, their PIN or a new one). Ask them to try that. What follows is for someone with no
 working email.
 

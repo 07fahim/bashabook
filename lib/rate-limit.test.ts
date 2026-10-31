@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, migrate } from '../db/test-db';
-import { allow, firstIp, spent } from './rate-limit';
+import { allow, firstIp } from './rate-limit';
 
 describe('per-connection limits on anonymous actions', { timeout: 30000 }, () => {
   it('lets `limit` tries through in an hour and refuses the next; another key is separate', async () => {
@@ -28,18 +28,6 @@ describe('per-connection limits on anonymous actions', { timeout: 30000 }, () =>
       ('day:old', now() - interval '3 days', 1), ('hr:1.1.1.1', date_trunc('hour', now()) - interval '3 hours', 1)`);
     await allow(db, 'new:9.9.9.9', 5);
     expect((await db<{ key: string }>(`select key from rate_limits where key in ('day:today', 'day:old', 'hr:1.1.1.1')`)).map(r => r.key)).toEqual(['day:today']);
-  });
-  it('spent peeks at the current bucket without counting', async () => {
-    await migrate();
-    expect(await spent(db, 'day:peek', 2, 'day')).toBe(false);
-    expect(await db(`select 1 from rate_limits where key = 'day:peek'`)).toEqual([]);
-    await allow(db, 'day:peek', 2, 'day');
-    expect(await spent(db, 'day:peek', 2, 'day')).toBe(false);
-    await allow(db, 'day:peek', 2, 'day');
-    expect(await spent(db, 'day:peek', 2, 'day')).toBe(true);
-    expect(await allow(db, 'day:peek', 2, 'day')).toBe(false);
-    await db(`insert into rate_limits (key, hour, n) values ('hr:peek', date_trunc('hour', now()) - interval '1 hour', 9)`);
-    expect(await spent(db, 'hr:peek', 2)).toBe(false);
   });
   it('reads the client from the first forwarded address, or unknown', () => {
     expect(firstIp('203.0.113.9, 10.0.0.1')).toBe('203.0.113.9');

@@ -4,7 +4,7 @@ import { refresh } from 'next/cache';
 import { cookies, headers } from 'next/headers';
 import { redirect, RedirectType } from 'next/navigation';
 import { after } from 'next/server';
-import { addMember, changePin, checkPin, claimName, emailOf, cleanName, normalizeEmail, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, flatByCode, hashPin, isPin, weakPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setEmail, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
+import { addMember, changePin, checkPin, claimName, emailOf, hashToken, cleanName, normalizeEmail, cleanText, clearLock, pinText, clearedBefore, UUID, createFlat, flatByCode, hashPin, isPin, weakPin, login, MAX_MEMBERS, newFlatCode, normalizePhone, renameMember, resetPin, setEmail, setLeaving, setPhone, bringBack, listMembers } from '@/lib/auth';
 import { addReceipt, checkEntry, fixAskTo, fixEntry, parseItems, receiptVersion } from '@/lib/bazar';
 import { addCorrection, CASH_KEYS, closeMonth, coverGap, openFrom, openStart, parseCash, seeCash, type Correction } from '@/lib/close';
 import { db } from '@/lib/db';
@@ -20,7 +20,7 @@ import { cashAskMsg, depositMsg, fixAskMsg, fixedMsg, gaveAskMsg, handoverMsg, p
 import { fromDataUrl, removePhoto, setPhoto } from '@/lib/photo';
 import { sendPush } from '@/lib/push';
 import { removePush, savePush, type PushSub } from '@/lib/push-db';
-import { allow, firstIp, spent } from '@/lib/rate-limit';
+import { allow, firstIp } from '@/lib/rate-limit';
 import { type Check, CHECK_COOKIE, checkCode, checkOf, codeOf, CODE_MINUTES, endRecovery, flatsFor, PROVEN_MINUTES, provenEmail, RECOVER_COOKIE, recoverPin, startCheck, startRecovery, takeCheck } from '@/lib/recovery';
 import { currentToken, endSession, requireManager, requireMember, startSession } from '@/lib/session';
 import type { FormState } from './action-form';
@@ -36,13 +36,14 @@ const ip = async () => firstIp((await headers()).get('x-forwarded-for'));
  *  or email change. Anyone can ask for codes with any address, so each kind has its own budget: checks can't starve
  *  recovery codes and neither can silence a notice (sent only after a proven change: only someone proving codes from their
  *  own inbox can use it up, and each person makes at most 3 email changes a day). A spent budget is said on screen (noMail):
- *  a check or an email change is refused before anything is saved; Forgot peeks at it the same way for any address.
+ *  a check, a Forgot request or an email change is refused before anything is saved. Forgot takes its budget for every
+ *  address, known or not, so the budget never tells whether an email is known.
  *  ponytail: upgrade to a paid Resend plan if real volume nears the budgets. */
 const BUDGET = { recover: 35, check: 45, notice: 15 };
 const takeMail = (kind: keyof typeof BUDGET) => allow(db, `day:mail:${kind}`, BUDGET[kind], 'day');
 /** Sends after the response, so a page never waits on it or shows by its speed whether one went. The budget is already taken. */
 const send = (to: string, subject: string, text: string) => after(() => sendEmail(to, subject, text));
-/** Counts the budget after the response too: for a recovery code (only a known email gets one) and the PIN-changed notice. */
+/** Counts the budget after the response: for the PIN-changed notice (the PIN is already changed, nothing to refuse). */
 const mail = (kind: keyof typeof BUDGET, to: string, subject: string, text: string) =>
   after(async () => { if (await takeMail(kind)) await sendEmail(to, subject, text); });
 /** A code in an email, in two blocks of four for reading ("4829 1736"); the actions keep digits only, so a pasted one works. */
@@ -50,7 +51,7 @@ const spaced = (code: string) => `${code.slice(0, 4)} ${code.slice(4)}`;
 /** 5 codes an hour per connection and email, before the email's own day backstop (lib/recovery PER_DAY): a stranger who
  *  knows someone's email uses up only their own connection's tries, never the owner's from the owner's phone. An hour key
  *  (it holds an IP): swept after about 2 hours. */
-const codeAllowed = async (email: string) => allow(db, `code:${await ip()}:${email}`, 5);
+const codeAllowed = async (email: string) => allow(db, `code:${await ip()}:${hashToken(email)}`, 5);   // never an IP beside a readable email
 
 /** An email is saved only after a code typed from its inbox proves it: the step waits in this cookie for /check. */
 const checkToken = async () => (await cookies()).get(CHECK_COOKIE)?.value ?? '';
@@ -902,12 +903,12 @@ export async function forgotEmailAction(_: FormState, d: FormData): Promise<Form
   const email = normalizeEmail(d.get('email'));
   if (!email) return { error: e.email };
   if (!(await allow(db, `forgot:${await ip()}`, 10)) || !(await codeAllowed(email))) return { error: e.tooMany };
-  // peeked for every email alike (only a known one is counted, after): the screen stays the same for known and unknown
-  if (await spent(db, 'day:mail:recover', BUDGET.recover, 'day')) return { error: t.recover.noMail };
+  // counted for every email alike, sent or not: the budget can't tell a known email from an unknown one
+  if (!(await takeMail('recover'))) return { error: t.recover.noMail };
   const r = await startRecovery(db, email);
   if (!r) return { error: e.tooMany };
   await keepStep(r.token);
-  if (r.send) mail('recover', email, t.recover.codeSubject, t.recover.codeBody.replace('{code}', () => spaced(r.code)));
+  if (r.send) send(email, t.recover.codeSubject, t.recover.codeBody.replace('{code}', () => spaced(r.code)));
   redirect(`/${lang}/forgot`);
 }
 
