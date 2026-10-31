@@ -5,10 +5,14 @@ import { acceptHandover, flatMoney, offerHandover } from './handover';
 import { saveMeal } from './meals-db';
 import { addEntry, confirmEntry, openMonth, rejectEntry, type NewEntry } from './money-db';
 import { listNotices, markNoticesSeen, noticeCount } from './notices';
+import { addDays, todayDhaka } from './meals';
 
 // The bell (spec 2026-10-15): one query over rows the app already writes, addressed to one person; opening marks seen,
 // pending rows stay until resolved.
-const today = '2026-10-09';
+// the current month on the real clock: the month-to-close notice reads the database clock, so a fixed month turns into
+// a finished one (and an extra notice) once the calendar passes it
+const ym = todayDhaka().slice(0, 7), prev = `${addDays(`${ym}-01`, -1).slice(0, 7)}-01`;
+const today = `${ym}-01`;   // never after the real date: a handover needs someone already moved in
 const e = (p: Partial<NewEntry> & Pick<NewEntry, 'type' | 'amount' | 'date'>): NewEntry => ({ note: null, paidBy: null, memberId: null, split: null, selected: [], ...p });
 async function flat() {
   await migrate();
@@ -18,7 +22,7 @@ async function flat() {
   const id = (name: string) => members.find(m => m.name === name)!.id;
   const tahsin = id('Tahsin'), zarif = id('Zarif');
   await login(db, code, tahsin, '5827', null, 'x@test.bd'); await login(db, code, zarif, '9024', null, 'x@test.bd');
-  await openMonth(db, flatId, '2026-10-01');
+  await openMonth(db, flatId, `${ym}-01`);
   // the flat was created a moment ago: push everyone's seen mark back so the rows below count as new
   await db(`update members set notices_seen_at = now() - interval '1 hour' where flat_id = $1`, [flatId]);
   const boss = { memberId, role: 'manager' as const }, member = (m: string) => ({ memberId: m, role: 'member' as const });
@@ -70,10 +74,10 @@ describe('notices', { timeout: 60000 }, () => {
 
   it('someone changing my meal is mine; my own tap is not', async () => {
     const { flatId, nafis, tahsin } = await flat();
-    await saveMeal(db, flatId, nafis, { memberId: tahsin, date: '2026-10-10', meal: 'd', count: 0, guests: 0 }, false);
-    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-11', meal: 'l', count: 0, guests: 0 }, false);
+    await saveMeal(db, flatId, nafis, { memberId: tahsin, date: `${ym}-02`, meal: 'd', count: 0, guests: 0 }, false);
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: `${ym}-03`, meal: 'l', count: 0, guests: 0 }, false);
     const mine = await listNotices(db, flatId, tahsin, false);
-    expect(mine.map(n => [n.kind, n.actor, n.date, n.meal])).toEqual([['meal', 'Nafis', '2026-10-10', 'd']]);
+    expect(mine.map(n => [n.kind, n.actor, n.date, n.meal])).toEqual([['meal', 'Nafis', `${ym}-02`, 'd']]);
     expect(await listNotices(db, flatId, nafis, true)).toEqual([]);
   });
 
@@ -92,7 +96,7 @@ describe('notices', { timeout: 60000 }, () => {
 
   it('a finished month still open is the collector\'s to close', async () => {
     const { flatId, nafis, tahsin } = await flat();
-    await openMonth(db, flatId, '2026-09-01');
+    await openMonth(db, flatId, prev);
     expect(kinds(await listNotices(db, flatId, nafis, true))).toEqual(['closeMonth']);
     expect(await listNotices(db, flatId, tahsin, false)).toEqual([]);
   });
@@ -113,15 +117,15 @@ describe('notices', { timeout: 60000 }, () => {
   it('name, last day (set and taken back), brought back, a team PIN reset; newest first', async () => {
     const { flatId, nafis, tahsin } = await flat();
     expect(await renameMember(db, flatId, nafis, tahsin, 'Tahsin Ahmed')).toBe('ok');
-    expect(await setLeaving(db, flatId, nafis, tahsin, '2026-10-20', today)).toBe('ok');
+    expect(await setLeaving(db, flatId, nafis, tahsin, `${ym}-12`, today)).toBe('ok');
     expect(await setLeaving(db, flatId, nafis, tahsin, null, today)).toBe('ok');
-    expect(await setLeaving(db, flatId, nafis, tahsin, '2026-10-10', today)).toBe('ok');
-    expect(await bringBack(db, flatId, nafis, tahsin, '2026-10-12', '2026-10-01')).toBe('ok');   // two days after the last day
+    expect(await setLeaving(db, flatId, nafis, tahsin, `${ym}-02`, today)).toBe('ok');
+    expect(await bringBack(db, flatId, nafis, tahsin, `${ym}-04`, `${ym}-01`)).toBe('ok');   // two days after the last day
     expect(await resetPin(db, flatId, nafis, '2468', { admin: 'fahim', reason: 'phone check' })).toBe(true);
     const mine = await listNotices(db, flatId, tahsin, false);
     expect(mine.map(n => [n.kind, n.actor, Object.keys(n.detail!)[0]])).toEqual([
       ['account', 'Nafis', 'back'], ['account', 'Nafis', 'left'], ['account', 'Nafis', 'left'], ['account', 'Nafis', 'left'], ['account', 'Nafis', 'rename']]);
-    expect(mine[1].detail).toEqual({ left: '2026-10-10' });
+    expect(mine[1].detail).toEqual({ left: `${ym}-02` });
     expect(mine[2].detail).toEqual({ left: null });
     const boss = await listNotices(db, flatId, nafis, true);
     expect(boss.map(n => [n.kind, n.actor, 'pinReset' in n.detail!])).toEqual([['account', null, true]]);
