@@ -3,7 +3,7 @@ import type { FlatInfo, Member, NoCook, SavedChange } from '@/lib/meals-db';
 import { setMealAction } from './actions';
 import { ChipButton } from './chip-button';
 import type { Dict, Locale } from './dictionaries';
-import { fmtDay, fmtTime } from './format';
+import { fmtDay } from './format';
 
 type Props = {
   lang: Locale; m: Dict['meals']; meId: string; date: string; decision: Decision;
@@ -13,7 +13,7 @@ type Props = {
 };
 
 /** My three meals for one date. No-cooking meals are closed and labelled. */
-export function MealRow({ lang, m, meId, date, decision, flat, members, changes, noCook, chart }: Props) {
+export function MealRow({ lang, m, meId, date, decision, members, changes, noCook, chart }: Props) {
   const self = members.find(x => x.id === meId)!;
   const idx = indexChanges(changes);
   const closed = decision === 'closed' || !isPresent(self, date);
@@ -24,8 +24,8 @@ export function MealRow({ lang, m, meId, date, decision, flat, members, changes,
         const count = mealCount(self, idx, date, meal);
         const own = ownPlate(self, changes, date, meal), guests = count - own;
         const off = noCook.some(n => n.date === date && n.meal === meal);
-        // a late change made on the meal's own day (surprise guest, the starter's fix) or after the night-before cutoff
-        const badge = off ? m.noCook : late ? (date <= todayDhaka() ? m.lateSameDay : m.lateAfter.replace('{t}', fmtTime(flat.cutoff))) : null;
+        // a same-day change: made on the meal's own day (or the collector's later fix)
+        const badge = off ? m.noCook : late && date <= todayDhaka() ? m.lateSameDay : null;
         return (
           <form key={meal} action={setMealAction}>
             <input type="hidden" name="lang" value={lang} />

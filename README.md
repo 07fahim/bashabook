@@ -41,13 +41,13 @@ Every flat has one person who holds the money and keeps the khata. BashaBook is 
 
 **Home.** Today's plates, your line (owe or get back), money waiting for your tap, the week's meals, and reminders you can turn on.
 
-**Meals.** Breakfast, lunch and dinner per person per day. Tomorrow's meals lock at the flat's cutoff time so the cook knows how many plates to make. Guests count as extra plates on your line. No-cooking days, days away, moving in and out mid-month, and a history of every change. A month grid shows the whole month at once.
+**Meals.** Breakfast, lunch and dinner per person per day. Anyone can switch a meal on or off for today or any later day; a change for today notifies the flat with today's plates so the cook can be told. Guests count as extra plates on your line. No-cooking days, days away, moving in and out mid-month, and a history of every change. A month grid shows the whole month at once.
 
 **Money.** One page for the month: Add bazar, Add bill (rent by room, equal, by meals, or for chosen people), I paid; Give money (an advance from the flat) on the Flat tab. Money paid in or given out can say how it moved: cash, bKash, Nagad or bank. Every entry shows who saved it and when; the receiver confirms any money between two people. Your balance breakdown shows how your line adds up, to the poisha. The collector can open anyone's breakdown and share it.
 
 **Charts.** The month as a dashboard: a strip of numbers, the spend climbing through the month, where the money went, your meals and your month as a receipt that adds up, the last six months, and for the collector everyone's cost. A forecast of where the month ends at this pace, and, only when there is something to ask, questions about an entry saved twice, a bazar bigger than any before, or a usual bill that has not come.
 
-**Flat.** For the collector: people and rooms, rent shares, meal weights and the cutoff, the join code, handover of the money and the role, and the close card.
+**Flat.** For the collector: people and rooms, rent shares, meal weights, the join code, handover of the money and the role, and the close card.
 
 **Month end.** The collector counts cash, bKash, Nagad and bank. The month closes only when the total matches what the app says the flat holds. Balances freeze, each person's line carries into next month, and the settle-up lines say who pays whom. Mistakes found later go in as corrections that never change a closed month's cash. The collector can download a closed month as a CSV: its entries, then each person's line.
 
@@ -63,7 +63,7 @@ flowchart TD
   F -. "a mistake found later" .-> K["Correction in an open month; the closed month never changes"]
 ```
 
-**Reminders.** Web push: an hour before the meal lock, when money needs your confirmation, and when a month is ready to close. No amounts in a notification.
+**Reminders.** Web push: when someone changes today's meals, when money needs your confirmation, and when a month is ready to close. No amounts in a notification.
 
 ## How the money is counted
 

@@ -35,10 +35,12 @@ export function fmtWhen(at: Date | string, lang: Locale) {
   return `${fmtDay(d.slice(0, 10), lang)}, ${fmtTime(d.slice(11, 16))}`;
 }
 
-/** The count as a message anyone can send the cook from their own phone. */
-export const countText = (flatName: string, m: Dict['meals'], date: string, hc: Record<Meal, number>, status: string, lang: Locale,
-  noCook: { date: string; meal: string }[]) =>
-  `${flatName} · ${m.tomorrow}, ${fmtDay(date, lang)}\n${MEALS.map(x => { const p = plates(hc, noCook, date, x); return `${m.names[x]} ${p === 'off' ? m.noCook : p}`; }).join(' · ')}\n${status}`;
+/** The plates card as a message for the cook: today's plates, then tomorrow's. */
+export const countText = (flatName: string, m: Dict['meals'], today: string, tod: Record<Meal, number>, tomorrow: string, hc: Record<Meal, number>, lang: Locale,
+  noCook: { date: string; meal: string }[]) => {
+  const line = (date: string, h: Record<Meal, number>) => MEALS.map(x => { const p = plates(h, noCook, date, x); return `${m.names[x]} ${p === 'off' ? m.noCook : p}`; }).join(' · ');
+  return `${flatName} · ${m.today}, ${fmtDay(today, lang)}\n${line(today, tod)}\n${m.tomorrow}, ${fmtDay(tomorrow, lang)}: ${line(tomorrow, hc)}`;
+};
 
 /** Poisha -> '৳2,450': whole taka, no sign (the words around it say owe or get back). */
 export const fmtTaka = (p: number) => `৳${Math.round(Math.abs(p) / 100).toLocaleString('en-US')}`;

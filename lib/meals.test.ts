@@ -132,11 +132,11 @@ describe('the cook card', () => {
     expect(plates({ b: 0, l: 0, d: 9 }, noCook, '2026-10-10', 'b')).toBe(0);   // breakfast isn't blocked
   });
 
-  it('Share says no cooking too, the same as the card', async () => {
+  it('Share sends today’s plates then tomorrow’s, and says no cooking like the card', async () => {
     const { countText } = await import('../app/[lang]/format');
     const { getDictionary } = await import('../app/[lang]/dictionaries');
     const m = getDictionary('en').meals;
-    expect(countText('Flat 4B', m, '2026-10-10', { b: 9, l: 0, d: 9 }, 'Final', 'en', [{ date: '2026-10-10', meal: 'l' }]))
-      .toBe('Flat 4B · Tomorrow, Sat, 10 October\nBreakfast 9 · Lunch No cooking · Dinner 9\nFinal');
+    expect(countText('Flat 4B', m, '2026-10-10', { b: 9, l: 0, d: 9 }, '2026-10-11', { b: 8, l: 8, d: 7 }, 'en', [{ date: '2026-10-10', meal: 'l' }]))
+      .toBe('Flat 4B · Today, Sat, 10 October\nBreakfast 9 · Lunch No cooking · Dinner 9\nTomorrow, Sun, 11 October: Breakfast 8 · Lunch 8 · Dinner 7');
   });
 });
