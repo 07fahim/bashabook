@@ -39,31 +39,33 @@ Every flat has one person who holds the money and keeps the khata. BashaBook is 
 
 ## What it does
 
-**Home.** Today's plates, your line (owe or get back), money waiting for your tap, the week's meals, and reminders you can turn on.
+**Getting in.** The collector creates the flat and adds everyone's names; each person opens the flat's link, picks their name, proves their email with an 8-digit code and chooses a 4-digit PIN (easy ones like 1234, 1111 or a year are refused). Forgot the flat code or the PIN? A code comes to that email. The phone remembers the last flat it opened, and the app can be installed from the browser.
 
-**Meals.** Breakfast, lunch and dinner per person per day. Anyone can switch a meal on or off for today or any later day; a change for today notifies the flat with today's plates so the cook can be told. Guests count as extra plates on your line. No-cooking days, days away, moving in and out mid-month, and a history of every change. A month grid shows the whole month at once.
+**Home.** Today's and tomorrow's meals, today's plates for the cook, your line (owe or get back), money and checks waiting for your tap, and the bell with what changed for you. Pages update by themselves when someone else saves something.
 
-**Money.** One page for the month: Add bazar, Add bill (rent by room, equal, by meals, or for chosen people), I paid; Give money (an advance from the flat) on the Flat tab. Money paid in or given out can say how it moved: cash, bKash, Nagad or bank. Every entry shows who saved it and when; the receiver confirms any money between two people. Your balance breakdown shows how your line adds up, to the poisha. The collector can open anyone's breakdown and share it.
+**Meals.** Breakfast, lunch and dinner per person per day. Anyone can switch a meal on or off for today or any later day; a change for today notifies everyone with reminders on, with today's plates so the cook can be told. Guests count as extra plates on your line. No-cooking days, days away (from tomorrow on), moving in and out mid-month, and a history of every change. A month grid shows the whole month at once.
+
+**Money.** One page for the month: Add bazar, Add bill (rent by room, equal, by meals, or for chosen people), I paid; Give money (an advance from the flat) on the Flat tab. Money paid in or given out can say how it moved: cash, bKash, Nagad or bank. Every entry shows who saved it and when; the receiver confirms any money between two people. A bazar can list what was bought and carry a receipt photo. The collector checks every bazar and bill (a flatmate checks the collector's own) and can send one back for a fix; an amount far above the usual is flagged. Monthly bills arrive as due until the collector marks them paid. Your balance breakdown shows how your line adds up, to the poisha. The collector can open anyone's breakdown and share it.
 
 **Charts.** The month as a dashboard: a strip of numbers, the spend climbing through the month, where the money went, your meals and your month as a receipt that adds up, the last six months, and for the collector everyone's cost. A forecast of where the month ends at this pace, and, only when there is something to ask, questions about an entry saved twice, a bazar bigger than any before, or a usual bill that has not come.
 
 **Flat.** For the collector: people and rooms, rent shares, meal weights, the join code, handover of the money and the role, and the close card.
 
-**Month end.** The collector counts cash, bKash, Nagad and bank. The month closes only when the total matches what the app says the flat holds. Balances freeze, each person's line carries into next month, and the settle-up lines say who pays whom. Mistakes found later go in as corrections that never change a closed month's cash. The collector can download a closed month as a CSV: its entries, then each person's line.
+**Month end.** The collector counts cash, bKash, Nagad and bank. The month closes only when the total matches what the app says the flat holds and every bazar and bill is checked (from the 4th it can close anyway, marked "closed without a check" for everyone to see). Flatmates are asked whether they saw the cash. Balances freeze, each person's line carries into next month, and the settle-up lines say who pays whom. Mistakes found later go in as corrections that never change a closed month's cash. The collector can download a closed month as a CSV: its entries, then each person's line.
 
 ```mermaid
 flowchart TD
   M["Meals marked by each person"] --> L["Each person's line adds up through the month"]
   E["Bazar, bills, deposits, advances"] --> L
   L --> C{"After the month ends, the collector counts cash, bKash, Nagad and bank"}
-  C -- "matches, and no entry waits for a tap" --> F["Month closes and balances freeze"]
+  C -- "matches, every entry checked, none waits for a tap" --> F["Month closes and balances freeze"]
   C -- "does not match, or an entry still waits" --> O["Month stays open until it does"]
   F --> S["Settle-up lines: who pays whom"]
   F --> N["Each line carries into next month"]
   F -. "a mistake found later" .-> K["Correction in an open month; the closed month never changes"]
 ```
 
-**Reminders.** Web push: when someone changes today's meals, when money needs your confirmation and when a month is ready to close. No amounts in a notification.
+**Reminders.** Web push, once you turn it on: when someone changes today's meals, when money or a handover needs your answer, when a bazar or bill waits for a check and when a month is ready to close. Today's meal notices can be muted on their own; a change someone makes to your own meal still reaches you. No amounts in a notification. Changes to your meals, money waiting for you and today's meal changes also show on the bell, for anyone who keeps push off.
 
 ## How the money is counted
 
@@ -97,6 +99,7 @@ erDiagram
     uuid id
     text name
     text pin_hash "bcrypt"
+    text email "saved only after a code proves it"
     date joined_on
     date left_on
   }
@@ -116,7 +119,7 @@ erDiagram
     bigint amount_poisha
     text split "bills only: equal, meals, room, selected"
     text method "deposits and payouts only: cash, bkash, nagad, bank"
-    text status "ok or pending"
+    text status "ok, pending (waits for a tap) or due (a monthly bill not paid yet)"
   }
   month_balances {
     bigint opening
@@ -131,13 +134,13 @@ erDiagram
 
 ## Privacy
 
-A flatmate sees the flat's entries and everyone's balance, and only their own line-by-line breakdown (the collector can open anyone's). Nothing is sent to any AI service. The live site counts visits with Google Analytics 4, which sets its own cookie and collects what its tag always does (device, browser, rough location from the IP, time on page). The app tells it page addresses with a join link's flat code hidden and no query strings, and never names, phone numbers, amounts or anything typed in. Setup: `ops/analytics.md`. The full policy is on the site's [privacy page](https://bashabook.fahimfaiyaz.dev/en/privacy). The app is free and says so; there is no plan behind it.
+A flatmate sees the flat's entries and everyone's balance, and only their own line-by-line breakdown (the collector can open anyone's). Each person's email is used only to send codes (to prove the address, or when the flat code or PIN is forgotten) and to say when their PIN or email changed; flatmates never see it. Codes are stored only as hashes. Nothing is sent to any AI service. The live site counts visits with Google Analytics 4, which sets its own cookie and collects what its tag always does (device, browser, rough location from the IP, time on page). The app tells it page addresses with a join link's flat code hidden and no query strings, and never names, phone numbers, amounts or anything typed in. Setup: `ops/analytics.md`. The full policy is on the site's [privacy page](https://bashabook.fahimfaiyaz.dev/en/privacy). The app is free and says so; there is no plan behind it.
 
-Limits: a flat holds up to 30 names, counting people who moved out. Creating flats, join-code lookups and PIN tries are rate-limited per IP address, and the counts are deleted after about two hours. A trial flat nobody used (no entries, no meal changes, at most one person set a PIN, nothing in its history for a month) is deleted once it is a month old.
+Limits: a flat holds up to 30 names, counting people who moved out. Creating flats, join-code lookups, PIN tries and email codes are rate-limited per IP address, and those counts are deleted after about two hours. Email codes also have a daily cap per connection, kept for two days as a keyed hash that can't be turned back into the address. Email goes through Resend's free plan (100 a day), split into day budgets for codes and notices; when a budget runs out the screen says so. A trial flat nobody used (no entries, no meal changes, at most one person set a PIN, nothing in its history for a month) is deleted once it is a month old.
 
 ## Stack
 
-Next.js 16 (App Router, server components and actions), React 19, TypeScript, Tailwind CSS 4, Postgres on Supabase through postgres.js with plain SQL migrations, bcryptjs for PINs, web-push for reminders. Charts are hand-drawn SVG; there is no chart or UI library. Six runtime dependencies.
+Next.js 16 (App Router, server components and actions), React 19, TypeScript, Tailwind CSS 4, Postgres on Supabase through postgres.js with plain SQL migrations, bcryptjs for PINs, web-push for reminders. Live page updates listen to Supabase Realtime over a plain WebSocket, and email goes to Resend's HTTP API; neither needs an SDK. Charts are hand-drawn SVG; there is no chart or UI library. Six runtime dependencies.
 
 ```mermaid
 flowchart TD
@@ -147,8 +150,13 @@ flowchart TD
   P["Browser push service"]
   C["cron-job.org, every 5 minutes"]
   G["Google Analytics 4"]
+  R["Supabase Realtime"]
+  M["Resend"]
   B <--> V
   V <--> D
+  D -- "a change in a flat" --> R
+  R -- "refresh signal on the flat's secret topic, no data" --> B
+  V -- "codes and notices" --> M
   C -- "GET /api/cron with a secret: reminders and clean-up" --> V
   V -- "web push, no amounts" --> P
   P --> B
@@ -167,7 +175,7 @@ npm test
 npm run build
 ```
 
-Environment: `DATABASE_URL`; for reminders `VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET` (see `ops/reminders.md`); for analytics `NEXT_PUBLIC_GA_ID`, production only (see `ops/analytics.md`). A cron job calls `GET /api/cron` every five minutes with the secret.
+Environment: `DATABASE_URL`; for reminders `VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET` (see `ops/reminders.md`); for email `RESEND_API_KEY` (locally, without a key, `EMAIL_LOG=1` prints the mail instead; never set it on Vercel); for live updates `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; for analytics `NEXT_PUBLIC_GA_ID`, production only (see `ops/analytics.md`). A cron job calls `GET /api/cron` every five minutes with the secret.
 
 ## Layout of the repo
 
@@ -179,4 +187,4 @@ Environment: `DATABASE_URL`; for reminders `VAPID_PUBLIC_KEY`, `NEXT_PUBLIC_VAPI
 
 ## Status
 
-Live since October 2026. Not now, by decision: an AI assistant, live sync with spreadsheets, a personal spending diary. Features come from what flats ask for.
+Live since October 2026; the first real flat starts in November 2026. Not now, by decision: an AI assistant, live sync with spreadsheets, a personal spending diary. Features come from what flats ask for.
