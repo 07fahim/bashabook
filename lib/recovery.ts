@@ -90,6 +90,7 @@ export async function recoverPin(db: Db, token: string, memberId: string, pin: s
      m as (update members set pin_hash = $3, must_change_pin = false, failed_pin_count = 0, locked_until = null
        where id = $2 and email = (select email from p) and ${STAYING} returning id, flat_id),
      s as (delete from sessions where member_id in (select id from m)),
+     n as (delete from push_subs where member_id in (select id from m)),
      a as (insert into audit_log (flat_id, entity, entity_id, after, by_member)
        select flat_id, 'members', id::text, '{"pinReset": true, "email": true}', id from m)
      select count(*)::int as n from m`, [hashToken(token), memberId, await hashPin(pin)]);

@@ -18,9 +18,18 @@ describe('per-connection limits on anonymous actions', { timeout: 30000 }, () =>
   });
   it('a day key counts the whole day: an earlier hour of today still counts', async () => {
     await migrate();
-    await db(`insert into rate_limits (key, hour, n) values ('day:test', date_trunc('day', now()), 2)`);
+    await db(`insert into rate_limits (key, hour, n) values ('day:test', date_trunc('day', now(), 'Asia/Dhaka'), 2)`);
     expect(await allow(db, 'day:test', 3, 'day')).toBe(true);
     expect(await allow(db, 'day:test', 3, 'day')).toBe(false);
+  });
+  it('a day is Dhaka’s day even when the database runs in UTC (Supabase does)', async () => {
+    await migrate();
+    await db(`set TimeZone = 'UTC'`);
+    try {
+      await allow(db, 'day:dhaka', 3, 'day');
+      const [r] = await db<{ ok: boolean }>(`select hour = (date_trunc('day', now() at time zone 'Asia/Dhaka') at time zone 'Asia/Dhaka') as ok from rate_limits where key = 'day:dhaka'`);
+      expect(r.ok).toBe(true);
+    } finally { await db(`reset TimeZone`); }
   });
   it('the sweep keeps a day row until its day is over, never an hour row past two hours', async () => {
     await migrate();

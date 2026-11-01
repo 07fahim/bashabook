@@ -10,12 +10,13 @@ import { changedByOthers, loadMeals } from '@/lib/meals-db';
 import { loadMonth, monthOf, toConfirm } from '@/lib/money-db';
 import { requireMember } from '@/lib/session';
 import { noticeCount } from '@/lib/notices';
+import { hasPush } from '@/lib/push-db';
 import { ActionForm } from '../action-form';
-import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, emailAction, logoutAction, mealPushAction, phoneAction, photoAction, removePhotoAction } from '../actions';
+import { acceptHandoverAction, changePinAction, clearLockAction, declineHandoverAction, emailAction, mealPushAction, phoneAction, photoAction, removePhotoAction } from '../actions';
 import { Avatar } from '../avatar';
 import { PhotoPicker } from '../photo-picker';
 import { InstallApp } from '../install-app';
-import { Reminders } from '../reminders';
+import { Reminders, SignOut } from '../reminders';
 import { RememberFlat } from '../remember-flat';
 import { getDictionary, hasLocale } from '../dictionaries';
 import { countText, fmtDay, fmtMeals, fmtMonth, fmtRate, fmtTaka, fmtTaka2 } from '../format';
@@ -25,7 +26,7 @@ import { balanceText, CheckList, ConfirmList } from '../money/bits';
 import { Nav } from '../nav';
 import { WeekChart } from '../week-chart';
 import { ShareButton } from '../share-button';
-import { alertCard, card, Field, focal, Fold, focus, link, LongList, PageSkeleton, PinField, primary, secondary } from '../ui';
+import { alertCard, card, Field, focal, Fold, link, LongList, PageSkeleton, PinField, primary, secondary } from '../ui';
 
 export default function Home({ params, searchParams }: PageProps<'/[lang]/home'>) {
   return <Suspense fallback={<PageSkeleton />}><HomeBody params={params} searchParams={searchParams} /></Suspense>;
@@ -41,7 +42,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   const noticesP = noticeCount(db, me.flatId, me.memberId, me.role === 'manager');   // the bell's count, read alongside the page
   const now = nowDhaka(), today = now.slice(0, 10), tomorrow = addDays(today, 1);
   const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const [meals, people, mo, waiting, ho, byOthers, iCleared, checks, mail] = await Promise.all([
+  const [meals, people, mo, waiting, ho, byOthers, iCleared, checks, mail, pushed] = await Promise.all([
     loadMeals(db, me.flatId, today, week[6]), listMembers(db, me.flatId),
     loadMonth(db, me.flatId, monthOf(today), today), toConfirm(db, me.flatId, me.memberId),
     myLatestHandover(db, me.flatId, me.memberId),
@@ -49,6 +50,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
     clearedBefore(db, me.flatId, me.memberId),
     toCheck(db, me.flatId, me.memberId, today),
     emailOf(db, me.memberId),
+    me.role === 'manager' && hasPush(db, me.memberId),
   ]);
   const x = t.money, mine = mo.result.perMember.find(p => p.id === me.memberId), bal = mine && balanceText(x, mine.balance);
   const totalMeals = [...mo.meals.values()].reduce((a, b) => a + b, 0);
@@ -58,6 +60,8 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
   // after a clear the action comes back here with ?cleared=; the line goes once they are locked again (a reloaded old URL)
   const justCleared = typeof cleared === 'string' ? people.find(p => p.id === cleared && !p.locked) : undefined;
   const self = people.find(p => p.id === me.memberId), myPhone = self?.phone ?? '';   // the invite card only matters while someone hasn't joined
+  // the collector relays changes to the cook: until a phone of theirs gets reminders, Home asks (muting meal notices hides it)
+  const ask = me.role === 'manager' && pushed === false && !!self?.mealPush;
   const decide = (date: string) => mealDecision(date, today);
   const starter = meals.members.find(x => x.role === 'manager');
   const hc = headcount(meals.members, meals.changes, tomorrow);
@@ -150,6 +154,15 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             {emailForm}
           </section>
         )}
+        {/* the collector relays changes to the cook: until a phone of theirs gets reminders, ask here, not only in My account
+            (muting meal notices hides it too) */}
+        {ask && (
+          <section className={`mt-6 ${alertCard}`}>
+            <h2 className="text-xl font-bold">{m.remindTitle}</h2>
+            <p className="mt-1 mb-4 max-w-prose text-[15px] text-muted">{m.remindLead}</p>
+            <Reminders lang={lang} t={t.push} redraw />
+          </section>
+        )}
         <InstallApp t={t.install} className="mt-6" />
         {/* side by side the cards are one height, their buttons on one line; a lone card keeps half the row,
             not a button as wide as the screen */}
@@ -185,7 +198,10 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             <h2 className="text-xl font-bold">{x.title}</h2>
             <p className={`mt-1 text-lg font-bold ${bal.tone}`}>{bal.text}</p>
             {/* the balance jumps when the earlier month closes: say why beforehand, as the Money page does */}
-            {mo.earlierOpen && <p className="mt-2 text-[15px] text-muted">{x.notClosedYet.replace('{month}', fmtMonth(mo.earlierOpen)).replace('{name}', starter?.name ?? '')}</p>}
+            {mo.earlierOpen && <>
+              <p className="mt-2 text-[15px] text-muted">{x.notClosedYet.replace('{month}', fmtMonth(mo.earlierOpen)).replace('{name}', starter?.name ?? '')}</p>
+              <Link href={`/${lang}/money?m=${mo.earlierOpen.slice(0, 7)}`} className={`inline-flex min-h-11 items-center gap-2 text-[15px] ${link}`}>{x.seeOpen.replace('{month}', fmtMonth(mo.earlierOpen))} <span aria-hidden="true">→</span></Link>
+            </>}
             {/* the same shape as the plates card beside it: three numbers in tiles, the button at the bottom */}
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
               {([[x.mealRate, fmtRate(mo.result.mealRate, totalMeals)], [x.myMeals, fmtMeals((mo.meals.get(me.memberId) ?? 0) - (mo.guestMeals.get(me.memberId) ?? 0))],
@@ -282,14 +298,16 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
               </div>
             )}
             <div className="mt-6 border-t border-line pt-6">
-              <Reminders lang={lang} t={t.push} />
+              <Reminders lang={lang} t={t.push} redraw={ask} />
               {/* only the today-meal notices: muting them keeps the money ones (turning reminders off would lose both) */}
-              <form action={mealPushAction} className="mt-3">
+              <ActionForm action={mealPushAction} className="mt-3">
                 <input type="hidden" name="lang" value={lang} />
                 <input type="hidden" name="on" value={self?.mealPush ? '0' : '1'} />
-                <p className="text-[15px]">{self?.mealPush ? t.push.mealOn : t.push.mealOff} · <button className={`min-h-11 text-[15px] ${link}`}>{self?.mealPush ? t.push.mealMute : t.push.mealUnmute}</button></p>
-                <p className="text-[15px] text-muted">{t.push.mealHint}</p>
-              </form>
+                <div>
+                  <p className="text-[15px]">{self?.mealPush ? t.push.mealOn : t.push.mealOff} · <button className={`min-h-11 text-[15px] ${link}`}>{self?.mealPush ? t.push.mealMute : t.push.mealUnmute}</button></p>
+                  <p className="text-[15px] text-muted">{t.push.mealHint}</p>
+                </div>
+              </ActionForm>
             </div>
             <div className="mt-8 border-t border-line pt-6">
               <h3 className="text-lg font-bold">{a.changePin}</h3>
@@ -306,10 +324,7 @@ async function HomeBody({ params, searchParams }: Pick<PageProps<'/[lang]/home'>
             </div>
           </Fold>
         </div>
-        <form action={logoutAction} className="mt-8">
-          <input type="hidden" name="lang" value={lang} />
-          <button className={`inline-flex min-h-11 items-center text-muted underline-offset-4 hover:underline ${focus}`}>{a.logout}</button>
-        </form>
+        <SignOut lang={lang} label={a.logout} />
         {/* seen before leaving: the code is what brings you back */}
         <p className="text-[15px] text-muted">
           {codeBefore}<span className="font-bold tracking-widest text-ink">{me.joinCode}</span>{codeAfter}

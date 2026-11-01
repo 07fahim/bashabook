@@ -7,7 +7,7 @@ import { fmtDay, fmtMonth, fmtTaka } from './format';
 /** One line per notice and the screen it leads to; null for a row this version has no words for. */
 export function noticeLine(n: Notice, t: Dict, lang: Locale, today: string): [string, string] | null {
   const x = t.notices, d = n.detail ?? {};
-  const meal = n.meal ? t.meals.names[n.meal as 'b' | 'l' | 'd'] : '';
+  const name = n.meal ? t.meals.names[n.meal as 'b' | 'l' | 'd'] : '', meal = lang === 'en' ? name.toLowerCase() : name;   // mid-sentence
   const date = n.date ? fmtDay(n.date, lang) : '';
   const fill = (s: string) => s.replace('{name}', n.actor ?? '').replace('{amount}', fmtTaka(n.amount ?? 0)).replace('{meal}', meal).replace('{date}', date).replace('{month}', n.month ? fmtMonth(n.month) : '');
   switch (n.kind) {

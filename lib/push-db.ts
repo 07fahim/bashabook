@@ -20,6 +20,9 @@ export const setMealPush = async (db: Db, memberId: string, on: boolean) => {
   await db(`update members set meal_push = $2 where id = $1`, [memberId, on]);
 };
 
+/** Does any browser of mine get reminders? */
+export const hasPush = async (db: Db, memberId: string) => (await db(`select 1 from push_subs where member_id = $1 limit 1`, [memberId])).length > 0;
+
 export const removePush = async (db: Db, memberId: string, endpoint: string) => {
   await db(`delete from push_subs where member_id = $1 and endpoint = $2`, [memberId, endpoint]);
 };

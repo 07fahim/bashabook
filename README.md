@@ -88,7 +88,6 @@ erDiagram
   flats {
     uuid id
     text join_code
-    time cutoff_time
   }
   rooms {
     text name

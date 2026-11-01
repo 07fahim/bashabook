@@ -3,7 +3,13 @@ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', e => {
   let m = { title: 'BashaBook', body: '', url: '/' };
   try { m = e.data ? e.data.json() : m; } catch { /* not ours: show the plain title */ }
-  e.waitUntil(self.registration.showNotification(m.title, { body: m.body, icon: '/icon-192.png', badge: '/icon-192.png', tag: m.tag || '', data: { url: m.url } }));
+  e.waitUntil((async () => {
+    // the same tag replaces the shown notification: quietly for a quick correction, with a buzz when the one it replaces is
+    // over 5 minutes old (someone may have passed that count on already)
+    const old = m.tag ? (await self.registration.getNotifications({ tag: m.tag }))[0] : undefined;
+    const renotify = !!old && Date.now() - old.timestamp > 5 * 60 * 1000;
+    await self.registration.showNotification(m.title, { body: m.body, icon: '/icon-192.png', badge: '/icon-192.png', tag: m.tag || '', renotify, data: { url: m.url } });
+  })());
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();

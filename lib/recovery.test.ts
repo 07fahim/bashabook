@@ -91,8 +91,10 @@ describe('recovery by email code', { timeout: 30000 }, () => {
     expect(await recoverPin(db, r.token, 'not-a-uuid', '5927')).toBe(false);
     await db(`update members set failed_pin_count = 25, locked_until = 'infinity', must_change_pin = true where id = $1`, [a.memberId]);
     const session = await createSession(db, a.memberId);
+    await db(`insert into push_subs (flat_id, member_id, endpoint, p256dh, auth) select flat_id, id, 'https://fcm.googleapis.com/fcm/send/thief', 'k', 'a' from members where id = $1`, [a.memberId]);
     expect(await recoverPin(db, r.token, a.memberId, '5927')).toBe(true);
     expect(await memberBySession(db, session)).toBeNull();
+    expect(await db(`select 1 from push_subs where member_id = $1`, [a.memberId])).toEqual([]);   // and every phone's notifications
     expect(await login(db, a.code, a.memberId, '5927', null, null)).toEqual({ memberId: a.memberId });
     const rows = await db<{ after: unknown; by: string }>(`select after, by_member as by from audit_log where entity_id = $1 and after ? 'pinReset'`, [a.memberId]);
     expect(rows).toEqual([{ after: { pinReset: true, email: true }, by: a.memberId }]);

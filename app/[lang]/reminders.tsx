@@ -1,8 +1,9 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { removePushAction, savePushAction } from './actions';
-import { apple, link, secondary } from './ui';
+import { logoutAction, removePushAction, savePushAction } from './actions';
+import { apple, focus, link, secondary } from './ui';
 
 type Copy = { on: string; turnOn: string; turnOff: string; hint: string; denied: string; unsupported: string; ios: string; failed: string };
 type State = 'loading' | 'unsupported' | 'ios' | 'denied' | 'off' | 'on' | 'busy' | 'failed';
@@ -23,10 +24,12 @@ async function detect(lang: string): Promise<State> {
   return 'on';
 }
 
-/** Reminders on this browser: one button, four states. */
-export function Reminders({ lang, t }: { lang: string; t: Copy }) {
+/** Reminders on this browser: one button, four states. `redraw`: once on, the page is drawn again (Home's ask card goes). */
+export function Reminders({ lang, t, redraw }: { lang: string; t: Copy; redraw?: boolean }) {
   const [state, setState] = useState<State>('loading');
+  const router = useRouter();
   useEffect(() => { detect(lang).then(setState, () => setState('unsupported')); }, [lang]);
+  useEffect(() => { if (redraw && state === 'on') router.refresh(); }, [redraw, state, router]);
   const on = async () => {
     setState('busy');
     try {
@@ -54,5 +57,22 @@ export function Reminders({ lang, t }: { lang: string; t: Copy }) {
       <button type="button" onClick={on} disabled={state === 'busy'} className={`${secondary} sm:w-auto`}>{t.turnOn}</button>
       <p role={state === 'failed' ? 'alert' : undefined} className={`mt-2 text-[15px] ${state === 'failed' ? 'font-semibold text-chili' : 'text-muted'}`}>{state === 'failed' ? t.failed : t.hint}</p>
     </>
+  );
+}
+
+/** Sign out also stops this browser's reminders: on a shared phone the next person must not get mine. */
+export function SignOut({ lang, label }: { lang: string; label: string }) {
+  const out = async (d: FormData) => {
+    try {
+      const sub = await subscription();
+      if (sub) { await removePushAction(lang, sub.endpoint); await sub.unsubscribe(); }
+    } catch { /* no push here, or it is gone already: sign out anyway */ }
+    await logoutAction(d);
+  };
+  return (
+    <form action={out} className="mt-8">
+      <input type="hidden" name="lang" value={lang} />
+      <button className={`inline-flex min-h-11 items-center text-muted underline-offset-4 hover:underline ${focus}`}>{label}</button>
+    </form>
   );
 }

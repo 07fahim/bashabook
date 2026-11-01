@@ -10,10 +10,10 @@ const n = (p: Partial<Notice>): Notice => ({ at: '2026-10-15 10:00:00+00', kind:
 
 describe('noticeLine', () => {
   it('a plate switched off while guests stay says the plate, not the guests', () => {
-    expect(noticeLine(n({ date: '2026-10-16', meal: 'd', detail: { own: 0, guestsChanged: false } }), t, 'en', today)).toEqual(['Nafis turned your Dinner off for Fri, 16 October', '/en/meals']);
-    expect(noticeLine(n({ date: '2026-10-25', meal: 'b', detail: { own: 1, guestsChanged: false } }), t, 'en', today)![0]).toBe('Nafis turned your Breakfast on for Sun, 25 October');
+    expect(noticeLine(n({ date: '2026-10-16', meal: 'd', detail: { own: 0, guestsChanged: false } }), t, 'en', today)).toEqual(['Nafis turned your dinner off for Fri, 16 October', '/en/meals']);
+    expect(noticeLine(n({ date: '2026-10-25', meal: 'b', detail: { own: 1, guestsChanged: false } }), t, 'en', today)![0]).toBe('Nafis turned your breakfast on for Sun, 25 October');
     expect(noticeLine(n({ date: '2026-10-25', meal: 'b', detail: { own: 1, guestsChanged: false } }), t, 'en', today)![1]).toBe('/en/meals?week=1');
-    expect(noticeLine(n({ date: '2026-10-16', meal: 'l', detail: { own: 1, guestsChanged: true } }), t, 'en', today)![0]).toBe('Nafis changed your guests for Fri, 16 October Lunch');
+    expect(noticeLine(n({ date: '2026-10-16', meal: 'l', detail: { own: 1, guestsChanged: true } }), t, 'en', today)![0]).toBe('Nafis changed your guests for Fri, 16 October lunch');
   });
 
   it('a last day set, taken back, and the other account rows', () => {

@@ -26,6 +26,10 @@ describe('weak PIN', () => {
     for (const p of ['0000', '1111', '9999', '1234', '6789', '0123', '4321', '9876', '3210', '1212', '1122', '1004', '2000', '6969', '1313', '2001', '1010', '2580', '১২৩৪'])
       expect([p, weakPin(p)]).toEqual([p, true]);
   });
+  it('refuses a birth year or any year 1950-2029', () => {
+    for (const p of ['1950', '1985', '1996', '1999', '2004', '2008', '2014', '2029']) expect([p, weakPin(p)]).toEqual([p, true]);
+    for (const p of ['1949', '2030', '2468']) expect([p, weakPin(p)]).toEqual([p, false]);
+  });
   it('lets ordinary PINs through', () => {
     for (const p of ['4827', '1357', '7391', '0426', '2468', '9024', '1235', '8642']) expect([p, weakPin(p)]).toEqual([p, false]);
   });
@@ -89,8 +93,11 @@ describe('auth', { timeout: 30000 }, () => {
     await login(db, code, tahsin, '5827', null, 'x@test.bd');
     const token = await createSession(db, tahsin);
     expect((await memberBySession(db, token))?.memberId).toBe(tahsin);
+    await db(`insert into push_subs (flat_id, member_id, endpoint, p256dh, auth) values ($1, $2, 'https://fcm.googleapis.com/fcm/send/thief', 'k', 'a')`, [flatId, tahsin]);
     expect(await resetPin(db, flatId, tahsin, '9999', { memberId: id('Nafis') })).toBe(true);
     expect(await memberBySession(db, token)).toBeNull();
+    // a reset is the remedy for a stolen name: the thief's browser stops getting this person's notifications too
+    expect(await db(`select 1 from push_subs where member_id = $1`, [tahsin])).toEqual([]);
     expect(await login(db, code, tahsin, '5827', null, 'x@test.bd')).toEqual({ error: 'wrongPin' });
     expect(await login(db, code, tahsin, '9999', null, 'x@test.bd')).toEqual({ error: 'newPinNeeded' });
     expect(await login(db, code, tahsin, '9999', '4382', 'x@test.bd')).toEqual({ memberId: tahsin });

@@ -219,8 +219,8 @@ async function MealsBody({ params, searchParams }: Pick<PageProps<'/[lang]/meals
             )}
             <ActionForm action={awayAction} className="mt-4">
               <input type="hidden" name="lang" value={lang} />
-              <DateField lang={lang} label={m.from} name="from" required min={today} max={addDays(today, 60)} defaultValue={tomorrow} />
-              <DateField lang={lang} label={m.to} name="to" required min={today} max={addDays(today, 60)} defaultValue={tomorrow} />
+              <DateField lang={lang} label={m.from} name="from" required min={tomorrow} max={addDays(today, 60)} defaultValue={tomorrow} />
+              <DateField lang={lang} label={m.to} name="to" required min={tomorrow} max={addDays(today, 60)} defaultValue={tomorrow} />
               <button className={primary}>{m.awayBtn}</button>
             </ActionForm>
           </Fold>

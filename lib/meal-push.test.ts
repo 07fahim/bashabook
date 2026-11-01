@@ -61,19 +61,28 @@ describe('today’s meal pushes', { timeout: 30000 }, () => {
     expect(to(ids.Zarif)).toMatchObject({ title: 'Tahsin আজ দুপুরে খাবে না', body: 'আজকের প্লেট: সকাল 5 · দুপুর 4 · রাত রান্না বন্ধ', url: '/bn/home' });
   });
 
-  it('names both people for someone else’s meal; away, no cooking and cooking again read right', async () => {
+  it('names both people for someone else’s meal; no cooking and cooking again read right', async () => {
     const { flatId, ids } = await flat();
     const s = spy();
     await pushToday(db, flatId, ids.Nafis, TODAY, 'other', { who: ids.Tahsin, meals: ['l'] }, s.send);
     expect(s.calls.map(c => c.ids[0])).toContain(ids.Tahsin);                     // the person whose meal changed is told too
     expect(s.calls[0].msg.title).toBe('Nafis changed Tahsin’s lunch today');
-    await pushToday(db, flatId, ids.Tahsin, TODAY, 'away', { meals: [] }, s.send);
-    expect(s.calls.at(-1)!.msg).toMatchObject({ title: 'Tahsin is away from today', tag: `away:${ids.Tahsin}:${TODAY}:` });
     await pushToday(db, flatId, ids.Nafis, TODAY, 'noCook', { meals: ['l', 'd'] }, s.send);
     expect(s.calls.at(-1)!.msg.title).toBe('No cooking today: lunch, dinner');
     await pushToday(db, flatId, ids.Nafis, TODAY, 'cookAgain', { meals: ['d'] }, s.send);
     expect(s.calls.at(-1)!.msg.title).toBe('Cooking again today: dinner');
+    await db(`update members set language = 'bn' where id = $1`, [ids.Zarif]);
+    await pushToday(db, flatId, ids.Nafis, TODAY, 'noCook', { meals: ['b', 'l'] }, s.send);
+    expect(s.calls.find(c => c.ids[0] === ids.Zarif && c.msg.title.includes('সকালে'))!.msg.title).toBe('আজ সকালে আর দুপুরে রান্না বন্ধ');   // আর, not a comma
     for (const c of s.calls) expect(`${c.msg.title} ${c.msg.body}`).not.toMatch(/৳|ম্যানেজার|manager|মেস|mess/i);
+  });
+
+  it('someone cooking for themselves still hears when someone changes their own plates today', async () => {
+    const { flatId, ids } = await flat();
+    await db(`update members set in_meals = false where id = $1`, [ids.Zarif]);
+    const s = spy();
+    await pushToday(db, flatId, ids.Nafis, TODAY, 'other', { who: ids.Zarif, meals: ['d'] }, s.send);
+    expect(s.calls.map(c => c.ids[0])).toContain(ids.Zarif);
   });
 
   it('never throws, so the change it follows is never undone', async () => {
@@ -92,7 +101,7 @@ describe('today’s meal pushes', { timeout: 30000 }, () => {
   });
 
   it('every kind has a filled title in both languages, never money or a role word', () => {
-    const kinds: TodayKind[] = ['on', 'off', 'guestsAdd', 'guestsGone', 'other', 'changed', 'away', 'noCook', 'cookAgain'];
+    const kinds: TodayKind[] = ['on', 'off', 'guestsAdd', 'guestsGone', 'other', 'noCook', 'cookAgain'];
     for (const lang of ['en', 'bn'] as const) for (const k of kinds) {
       const m = todayMsg(lang, k, { actor: 'Nafis', name: 'Tahsin', meals: ['l'] }, { b: 5, l: 4, d: 'off' });
       expect(m.title).not.toMatch(/[{}]|৳|ম্যানেজার|manager|মেস|mess/i);

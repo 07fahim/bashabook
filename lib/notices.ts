@@ -50,7 +50,6 @@ const SOURCES = `
   select a.at, 'today', b.name, null, null, null, null,
          jsonb_build_object('who', w.name, 'meals', coalesce(a.after->>'meals', split_part(a.entity_id, '|', 3)), 'k', case
            when a.entity_id = 'flat|nocook' then case when a.after ? 'nocook' then 'noCook' else 'cookAgain' end
-           when a.entity_id like '%|away' then 'away'
            when split_part(a.entity_id, '|', 1) <> a.by_member::text then 'other'
            when coalesce((a.after->>'guests')::int, 0) > coalesce((a.before->>'guests')::int, 0) then 'guestsAdd'
            when coalesce((a.after->>'guests')::int, 0) < coalesce((a.before->>'guests')::int, 0) then 'guestsGone'
@@ -62,12 +61,11 @@ const SOURCES = `
      and (a.at at time zone 'Asia/Dhaka')::date = today.d
      and exists (select 1 from members v where v.flat_id = $1 and v.id = $2 and v.meal_push and (v.in_meals or v.role = 'manager'))
      and ((a.entity_id ~ '^[^|]+[|][0-9]{4}-[0-9]{2}-[0-9]{2}[|][bld]$' and split_part(a.entity_id, '|', 2)::date = today.d)
-          or (a.entity_id like '%|away' and (a.after->'away'->>0)::date = today.d)
           or (a.entity_id = 'flat|nocook' and today.d between coalesce(a.after->'nocook'->>0, a.after->'cookAgain'->>0)::date
                                                        and coalesce(a.after->'nocook'->>1, a.after->'cookAgain'->>1)::date))`;
 
 export const listNotices = (db: Db, flatId: string, memberId: string, boss: boolean, limit = 50) => db<Notice>(
-  `select at::text as at, kind, actor, amount, date, meal, month, detail, pending from (${SOURCES}) n order by at desc limit $4::int`,
+  `select at::text as at, kind, actor, amount, date, meal, month, detail, pending from (${SOURCES}) n order by pending desc, kind = 'closeMonth' desc, at desc limit $4::int`,
   [flatId, memberId, boss, limit]);
 
 export const noticeCount = async (db: Db, flatId: string, memberId: string, boss: boolean) =>
@@ -75,6 +73,9 @@ export const noticeCount = async (db: Db, flatId: string, memberId: string, boss
     `select count(*)::int as n from (${SOURCES}) n where n.at > (select notices_seen_at from members where flat_id = $1 and id = $2)`,
     [flatId, memberId, boss]))[0].n;
 
-export const markNoticesSeen = async (db: Db, flatId: string, memberId: string) => {
-  await db(`update members set notices_seen_at = now() where flat_id = $1 and id = $2`, [flatId, memberId]);
+/** Seen up to `upTo`, the newest notice the page showed (now when it showed none): one that came in after the page was
+ *  drawn stays new. Never moves back, and never past now. */
+export const markNoticesSeen = async (db: Db, flatId: string, memberId: string, upTo: string | null = null) => {
+  await db(`update members set notices_seen_at = greatest(notices_seen_at, least(coalesce($3::text::timestamptz, now()), now()))
+            where flat_id = $1 and id = $2`, [flatId, memberId, upTo]);
 };

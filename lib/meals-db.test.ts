@@ -202,6 +202,40 @@ describe('meal storage', { timeout: 30000 }, () => {
     expect(await count('2026-10-15', 'd')).toBe(0);
   });
 
+  it('a meal switched back on during time away comes back when cooking starts again', async () => {
+    const { flatId, memberId, tahsin, count } = await flat();
+    await setAway(db, flatId, tahsin, '2026-10-14', '2026-10-16');
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-15', meal: 'd', count: 1, guests: 0 }, true);   // home early
+    await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-15', ['d'], '2026-10-09');
+    await cookAgain(db, flatId, memberId, '2026-10-15', '2026-10-15', ['d'], '2026-10-10');
+    expect(await count('2026-10-15', 'd')).toBe(1);
+    expect(await count('2026-10-16', 'd')).toBe(0);   // the rest of the away stays
+  });
+
+  it('an away set and cancelled during no cooking leaves the meal to come back', async () => {
+    const { flatId, memberId, tahsin, count } = await flat();
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-15', meal: 'd', count: 1, guests: 0 }, false);
+    await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-15', ['d'], '2026-10-09');
+    await setAway(db, flatId, tahsin, '2026-10-14', '2026-10-16');
+    await cancelAway(db, flatId, tahsin, '2026-10-14', '2026-10-16', '2026-10-09');
+    await noCooking(db, flatId, memberId, '2026-10-15', '2026-10-17', ['d'], '2026-10-09');
+    await cookAgain(db, flatId, memberId, '2026-10-15', '2026-10-15', ['d'], '2026-10-10');
+    expect(await count('2026-10-15', 'd')).toBe(1);
+  });
+
+  it('cooking again uses this block’s plates, never an older block’s', async () => {
+    const { flatId, memberId, tahsin, count } = await flat();
+    await saveMeal(db, flatId, tahsin, { memberId: tahsin, date: '2026-10-20', meal: 'd', count: 3, guests: 2 }, false);
+    await noCooking(db, flatId, memberId, '2026-10-20', '2026-10-20', ['d'], '2026-10-09');
+    await cookAgain(db, flatId, memberId, '2026-10-20', '2026-10-20', ['d'], '2026-10-10');
+    expect(await count('2026-10-20', 'd')).toBe(3);
+    await setAway(db, flatId, tahsin, '2026-10-19', '2026-10-21');
+    await cancelAway(db, flatId, tahsin, '2026-10-19', '2026-10-21', '2026-10-09');   // the guests went with the away: usual meal 1
+    await noCooking(db, flatId, memberId, '2026-10-20', '2026-10-20', ['d'], '2026-10-09');
+    await cookAgain(db, flatId, memberId, '2026-10-20', '2026-10-20', ['d'], '2026-10-10');
+    expect(await count('2026-10-20', 'd')).toBe(1);
+  });
+
   it('overlapping away ranges are listed as one; cooking for yourself and back keeps away', async () => {
     const { flatId, tahsin, count } = await flat();
     await setAway(db, flatId, tahsin, '2026-10-12', '2026-10-20');

@@ -35,6 +35,7 @@ export function Header({ t, lang, path, notices, children }: { t: Dict; lang: Lo
         {notices !== undefined && (
           <Link
             href={`/${lang}/notices`}
+            prefetch={false}
             aria-label={badge ? t.notices.bellNew.replace('{n}', String(notices)) : t.notices.bell}
             title={t.notices.bell}
             className={`relative grid size-11 place-items-center rounded-lg text-muted hover:text-ink ${focus}`}

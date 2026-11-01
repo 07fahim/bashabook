@@ -1,17 +1,19 @@
 // App team only: deletes one flat and everything in it, on the flat's request (ops/data-retention.md), or a test flat.
 // Usage (dry run, prints what would go and changes nothing):
 //   node --env-file=.env.local node_modules/tsx/dist/cli.mjs scripts/delete-flat.mts <join code> "<flat name>"
-// Add --apply at the end to delete. The database host is printed first: check it is the one you mean. The name must match
-// exactly, so a code typed for the wrong flat deletes nothing.
+// Add --apply at the end to delete; on any database but TEST also --prod. The database is printed first: check it is the
+// one you mean. The name must match exactly, so a code typed for the wrong flat deletes nothing.
 import { db } from '../lib/db';
 import { deleteFlat, flatRowCounts } from '../lib/delete-flat';
 
-const args = process.argv.slice(2), apply = args.at(-1) === '--apply';
-const [code, name] = apply ? args.slice(0, -1) : args;
-if (!code || !name) { console.log('usage: <join code> "<flat name>" [--apply]'); process.exit(1); }
+const args = process.argv.slice(2), apply = args.includes('--apply'), prod = args.includes('--prod');
+const [code, name] = args.filter(a => !a.startsWith('--'));
+if (!code || !name) { console.log('usage: <join code> "<flat name>" [--apply] [--prod]'); process.exit(1); }
 
-const u = new URL(process.env.DATABASE_URL ?? ''), host = u.hostname.split('.')[0];
-console.log(`database: ${host} ${u.username} (${host.startsWith('ep-muddy-mud-') ? 'TEST COPY' : 'PRODUCTION'})`);
+// the pooler host is shared with production: only the username tells TEST apart
+const u = new URL(process.env.DATABASE_URL ?? ''), host = u.hostname.split('.')[0], test = decodeURIComponent(u.username) === 'postgres.wgvoshlmhauxcymwdwjt';
+console.log(`database: ${host} ${u.username} (${test ? 'TEST' : 'PRODUCTION'})`);
+if (apply && !test && !prod) { console.log('refused: this is not TEST; add --prod to delete here'); process.exit(1); }
 const [f] = await db<{ id: string; name: string; created: string }>(`select id, name, created_at::text as created from flats where join_code = $1`, [code.toUpperCase()]);
 if (!f) { console.log('no flat with that join code'); process.exit(1); }
 if (f.name !== name) { console.log(`refused: that code belongs to "${f.name}", not "${name}"`); process.exit(1); }
