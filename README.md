@@ -45,6 +45,16 @@ Every flat has one person who holds the money and keeps the khata. BashaBook is 
 
 **Meals.** Breakfast, lunch and dinner per person per day. Anyone can switch a meal on or off for today or any later day; a change for today notifies everyone with reminders on, with today's plates so the cook can be told. Guests count as extra plates on your line. No-cooking days, days away (from tomorrow on), moving in and out mid-month, and a history of every change. A month grid shows the whole month at once.
 
+```mermaid
+flowchart LR
+  T["Tahsin switches today's lunch off, at any time of day"] --> S["Saved as a same-day change"]
+  S --> H["Home: today's plates go down by one for everyone"]
+  S --> P["Push to everyone with reminders on, with today's plates"]
+  S --> B["The bell and Recent changes, with the time"]
+  P --> K["Whoever is home tells the cook"]
+  H --> K
+```
+
 **Money.** One page for the month: Add bazar, Add bill (rent by room, equal, by meals, or for chosen people), I paid; Give money (an advance from the flat) on the Flat tab. Money paid in or given out can say how it moved: cash, bKash, Nagad or bank. Every entry shows who saved it and when; the receiver confirms any money between two people. A bazar can list what was bought and carry a receipt photo. The collector checks every bazar and bill (a flatmate checks the collector's own) and can send one back for a fix; an amount far above the usual is flagged. Monthly bills arrive as due until the collector marks them paid. Your balance breakdown shows how your line adds up, to the poisha. The collector can open anyone's breakdown and share it.
 
 **Charts.** The month as a dashboard: a strip of numbers, the spend climbing through the month, where the money went, your meals and your month as a receipt that adds up, the last six months, and for the collector everyone's cost. A forecast of where the month ends at this pace, and, only when there is something to ask, questions about an entry saved twice, a bazar bigger than any before, or a usual bill that has not come.
@@ -57,11 +67,18 @@ Every flat has one person who holds the money and keeps the khata. BashaBook is 
 flowchart TD
   M["Meals marked by each person"] --> L["Each person's line adds up through the month"]
   E["Bazar, bills, deposits, advances"] --> L
+  E --> V["The collector checks each bazar and bill; a flatmate checks the collector's own"]
   L --> C{"After the month ends, the collector counts cash, bKash, Nagad and bank"}
-  C -- "matches, every entry checked, none waits for a tap" --> F["Month closes and balances freeze"]
-  C -- "does not match, or an entry still waits" --> O["Month stays open until it does"]
+  C -- "does not match, or money still waits for a tap" --> O["Month stays open"]
+  C -- "matches" --> Q{"Every bazar and bill checked?"}
+  V --> Q
+  Q -- "yes" --> F["Month closes and balances freeze"]
+  Q -- "no, before the 4th" --> O
+  Q -- "no, from the 4th" --> X["Closes anyway, marked closed without a check for everyone"]
+  X --> F
   F --> S["Settle-up lines: who pays whom"]
   F --> N["Each line carries into next month"]
+  F --> A["Each flatmate is asked: did you see the cash?"]
   F -. "a mistake found later" .-> K["Correction in an open month; the closed month never changes"]
 ```
 
@@ -74,19 +91,29 @@ flowchart TD
 - Each person's line is opening balance + paid in − food − bill share − advances + corrections. The sum of all lines always equals the flat's money; the app refuses to close a month where it does not.
 - A closed month is a snapshot. Nothing recalculates it later.
 
-The core tables (the full schema is in `db/migrations/`). Rows point at members, rooms and months through composite foreign keys (the flat's id plus the row's key), so the database refuses a link to another flat's person, room or month; the few links it cannot express are checked by the app.
+The core tables (the full schema is in `db/migrations/`). Rows point at members, rooms and months through composite foreign keys (the flat's id plus the row's key), so the database refuses a link to another flat's person, room or month; the few links it cannot express are checked by the app. Dotted lines are links without a foreign key, on purpose: a check and a receipt outlive a removed entry, so putting it back keeps them, and a monthly bill is copied into each month rather than linked.
 
 ```mermaid
 erDiagram
   flats ||--o{ rooms : has
   flats ||--o{ members : has
   flats ||--o{ months : has
+  flats ||--o{ no_cook : "no-cooking meals"
+  flats ||--o{ bill_templates : "monthly bills"
+  flats ||--o{ handovers : "money and role"
+  flats ||--o{ audit_log : "history of every change"
   rooms |o--o{ members : "rent share"
   members ||--o{ meal_changes : marks
+  members ||--o{ push_subs : "reminders, per browser"
   months ||--o{ ledger : holds
   members |o--o{ ledger : "pays or receives"
+  ledger ||..o| entry_checks : "checked: ok or fix"
+  ledger ||..o| receipts : "receipt photo"
+  ledger ||--o{ bazar_items : "what was bought"
+  bill_templates ||..o{ ledger : "copied each month as due"
   months ||--o{ month_balances : "frozen at close"
   members ||--o{ month_balances : has
+  months ||--o{ cash_seen : "I saw the cash"
   flats {
     uuid id
     text join_code
@@ -129,6 +156,19 @@ erDiagram
     bigint payouts
     bigint adjustments
     bigint balance
+  }
+  entry_checks {
+    text state "ok or fix"
+    text note "the fix asked for"
+  }
+  handovers {
+    bigint amount
+    text status "offered, accepted, declined, cancelled or overridden"
+  }
+  audit_log {
+    text entity
+    jsonb before
+    jsonb after
   }
 ```
 
